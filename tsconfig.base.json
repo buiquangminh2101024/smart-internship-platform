@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    // Recommended Options (Strict Typechecking)
+    "strict": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedSideEffectImports": true,
+
+    // Module & Target
+    "module": "nodenext",
+    "target": "esnext",
+
+    // Output
+    "sourceMap": true,
+    "declaration": true,
+    "declarationMap": true,
+
+    // JSX & Module Resolution
+    "jsx": "react-jsx",
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force"
+  },
+  "exclude": ["node_modules", "dist", "build", "coverage", "tests", ".next"]
+}

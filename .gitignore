@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+.next/
+
+# Environment
+.env
+.env.local
+.env.*.local
+.env.production.local
+.env.production
+.env.development.local
+.env.development
+.env.test.local
+.env.test
+
+# Editor & OS
+.DS_Store
+AGENTS.md
+CLAUDE.md
+Thumbs.db
+.vscode/settings.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Internal project docs (private)
+.github/
+agents/
+codex/
+claude/
+gemini/
+docs/todo
+output/
+.cursor/
+
+#folder 
+Agent Skill/
