@@ -3,12 +3,11 @@
   "compilerOptions": {
     "rootDir": "./src",
     "outDir": "./dist",
-    "ignoreDeprecations": "6.0",
     "module": "CommonJS",
     "moduleResolution": "node",
-    "paths": {
-      "@sip/shared-types": ["../../packages/shared-types/src/index.ts"]
-    }
+    "ignoreDeprecations": "5.0",
+    "esModuleInterop": true,
+    "verbatimModuleSyntax": false
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist", "tests"]

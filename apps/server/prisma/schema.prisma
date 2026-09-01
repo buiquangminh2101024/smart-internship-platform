@@ -1,0 +1,449 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────
+
+enum Role {
+  CANDIDATE
+  EMPLOYER
+  ADMIN
+}
+
+enum UserStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+}
+
+enum JobPostType {
+  INTERNSHIP
+  PART_TIME
+  FULL_TIME
+  CONTRACT
+}
+
+enum JobPostStatus {
+  DRAFT
+  PENDING
+  PUBLISHED
+  EXPIRED
+  CLOSED
+  TAKEN_DOWN
+}
+
+enum ModerationActionType {
+  SUBMITTED
+  APPROVED
+  REJECTED
+  RETRACTED
+}
+
+enum ApplicationStatus {
+  PENDING
+  REVIEWING
+  SHORTLISTED
+  INTERVIEWING
+  ACCEPTED
+  REJECTED
+}
+
+enum NotificationType {
+  APPLICATION_STATUS_CHANGED
+  JOB_POST_APPROVED
+  JOB_POST_REJECTED
+  JOB_POST_TAKEN_DOWN
+  COMPANY_VERIFIED
+}
+
+// ─── users ──────────────────────────────────────────────────────────────
+// No refresh-token/OTP tables: JWT blacklist + OTP codes live in Redis (Phase 2),
+// not Postgres — both are ephemeral, TTL-bound data.
+
+model User {
+  id              String     @id @default(cuid())
+  email           String     @unique
+  passwordHash    String
+  role            Role
+  status          UserStatus @default(PENDING_VERIFICATION)
+  emailVerifiedAt DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  student           Student?
+  employer          Employer?
+  moderationActions JobPostModerationAction[]
+  conversations     ConversationParticipant[]
+  messages          Message[]
+  notifications     Notification[]
+
+  @@map("users")
+}
+
+// ─── catalog ────────────────────────────────────────────────────────────
+// Admin-managed lookup lists. `Skill` is included here alongside the four
+// named in PROJECT_STRUCTURE.md, since StudentSkill needs a catalog to
+// reference and it fits the same small admin-CRUD-list shape.
+
+model Major {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  students Student[]
+
+  @@map("majors")
+}
+
+model University {
+  id       String    @id @default(cuid())
+  name     String    @unique
+  students Student[]
+
+  @@map("universities")
+}
+
+model Industry {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  companies Company[]
+  jobPosts  JobPost[]
+
+  @@map("industries")
+}
+
+model City {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  students  Student[]
+  companies Company[]
+  jobPosts  JobPost[]
+
+  @@map("cities")
+}
+
+model CompanyType {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  companies Company[]
+
+  @@map("company_types")
+}
+
+model Skill {
+  id            String         @id @default(cuid())
+  name          String         @unique
+  studentSkills StudentSkill[]
+
+  @@map("skills")
+}
+
+// ─── students ───────────────────────────────────────────────────────────
+
+model Student {
+  id             String      @id @default(cuid())
+  userId         String      @unique
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  headline       String?
+  bio            String?
+  phone          String?
+  dateOfBirth    DateTime?
+  avatarUrl      String?
+  universityId   String?
+  university     University? @relation(fields: [universityId], references: [id])
+  majorId        String?
+  major          Major?      @relation(fields: [majorId], references: [id])
+  graduationYear Int?
+  cityId         String?
+  city           City?       @relation(fields: [cityId], references: [id])
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  educations      Education[]
+  workExperiences WorkExperience[]
+  projects        Project[]
+  certificates    Certificate[]
+  awards          Award[]
+  skills          StudentSkill[]
+  cvs             Cv[]
+  savedJobs       SavedJob[]
+  applications    Application[]
+
+  @@map("students")
+}
+
+model Education {
+  id          String   @id @default(cuid())
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  school      String
+  degree      String?
+  major       String?
+  startYear   Int?
+  endYear     Int?
+  description String?
+  createdAt   DateTime @default(now())
+
+  @@map("educations")
+}
+
+model WorkExperience {
+  id          String    @id @default(cuid())
+  studentId   String
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  company     String
+  position    String
+  startDate   DateTime?
+  endDate     DateTime?
+  isCurrent   Boolean   @default(false)
+  description String?
+  createdAt   DateTime  @default(now())
+
+  @@map("work_experiences")
+}
+
+model Project {
+  id          String    @id @default(cuid())
+  studentId   String
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  url         String?
+  startDate   DateTime?
+  endDate     DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@map("projects")
+}
+
+model Certificate {
+  id            String    @id @default(cuid())
+  studentId     String
+  student       Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  name          String
+  issuer        String?
+  issueDate     DateTime?
+  credentialUrl String?
+  createdAt     DateTime  @default(now())
+
+  @@map("certificates")
+}
+
+model Award {
+  id          String    @id @default(cuid())
+  studentId   String
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  name        String
+  issuer      String?
+  date        DateTime?
+  description String?
+  createdAt   DateTime  @default(now())
+
+  @@map("awards")
+}
+
+model StudentSkill {
+  studentId         String
+  student           Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  skillId           String
+  skill             Skill   @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  yearsOfExperience Float   @default(0)
+
+  @@id([studentId, skillId])
+  @@map("student_skills")
+}
+
+// ─── companies / employers ──────────────────────────────────────────────
+// Company.retractionCount is intentionally NOT a column here: it is derived
+// at query time from JobPostModerationAction (count where action = RETRACTED)
+// so it can never drift from the audit log. See INITIAL_ARCHITECTURE_PLAN.md
+// section 12; write-path lands in Phase 5.
+
+model Company {
+  id               String       @id @default(cuid())
+  name             String
+  description      String?
+  logoUrl          String?
+  bannerUrl        String?
+  website          String?
+  industryId       String?
+  industry         Industry?    @relation(fields: [industryId], references: [id])
+  companyTypeId    String?
+  companyType      CompanyType? @relation(fields: [companyTypeId], references: [id])
+  cityId           String?
+  city             City?        @relation(fields: [cityId], references: [id])
+  address          String?
+  isVerified       Boolean      @default(false)
+  requiresApproval Boolean      @default(true)
+  verifiedAt       DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  employers Employer[]
+  jobPosts  JobPost[]
+
+  @@map("companies")
+}
+
+model Employer {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId      String
+  company        Company  @relation(fields: [companyId], references: [id])
+  isCompanyAdmin Boolean  @default(false)
+  title          String?
+  phone          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@map("employers")
+}
+
+// ─── job-posts ──────────────────────────────────────────────────────────
+
+model JobPost {
+  id          String        @id @default(cuid())
+  companyId   String
+  company     Company       @relation(fields: [companyId], references: [id])
+  title       String
+  description String
+  jobType     JobPostType
+  status      JobPostStatus @default(DRAFT)
+  salaryMin   Int?
+  salaryMax   Int?
+  cityId      String?
+  city        City?         @relation(fields: [cityId], references: [id])
+  industryId  String?
+  industry    Industry?     @relation(fields: [industryId], references: [id])
+  publishedAt DateTime?
+  expiresAt   DateTime?
+  closedAt    DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  moderationActions JobPostModerationAction[]
+  applications      Application[]
+  savedBy           SavedJob[]
+  conversations     Conversation[]
+
+  @@map("job_posts")
+}
+
+model JobPostModerationAction {
+  id        String               @id @default(cuid())
+  jobPostId String
+  jobPost   JobPost              @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  action    ModerationActionType
+  actorId   String?
+  actor     User?                @relation(fields: [actorId], references: [id])
+  reason    String?
+  createdAt DateTime             @default(now())
+
+  @@map("job_post_moderation_actions")
+}
+
+// ─── cv / saved-jobs ────────────────────────────────────────────────────
+
+model Cv {
+  id         String   @id @default(cuid())
+  studentId  String
+  student    Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  fileUrl    String
+  fileName   String
+  isDefault  Boolean  @default(false)
+  uploadedAt DateTime @default(now())
+
+  applications Application[]
+
+  @@map("cvs")
+}
+
+model SavedJob {
+  id        String   @id @default(cuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  jobPostId String
+  jobPost   JobPost  @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([studentId, jobPostId])
+  @@map("saved_jobs")
+}
+
+// ─── applications ───────────────────────────────────────────────────────
+
+model Application {
+  id            String            @id @default(cuid())
+  jobPostId     String
+  jobPost       JobPost           @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  studentId     String
+  student       Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  cvId          String
+  cv            Cv                @relation(fields: [cvId], references: [id])
+  status        ApplicationStatus @default(PENDING)
+  employerNotes String?
+  rating        Int?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@unique([jobPostId, studentId])
+  @@map("applications")
+}
+
+// ─── messaging ──────────────────────────────────────────────────────────
+
+model Conversation {
+  id        String   @id @default(cuid())
+  jobPostId String?
+  jobPost   JobPost? @relation(fields: [jobPostId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt     DateTime?
+
+  @@id([conversationId, userId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id])
+  content        String
+  createdAt      DateTime     @default(now())
+
+  @@map("messages")
+}
+
+// ─── notifications ──────────────────────────────────────────────────────
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String?
+  link      String?
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@map("notifications")
+}
