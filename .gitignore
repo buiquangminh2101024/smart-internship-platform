@@ -21,8 +21,8 @@ build/
 
 # Editor & OS
 .DS_Store
-AGENTS.md
-CLAUDE.md
+apps/web/AGENTS.md
+apps/web/CLAUDE.md
 Thumbs.db
 .vscode/settings.json
 *.suo
@@ -40,5 +40,8 @@ docs/todo
 output/
 .cursor/
 
-#folder 
+#folder
 Agent Skill/
+
+# Claude Code local working workspace (temporary, never source of truth)
+.claude-workspace/

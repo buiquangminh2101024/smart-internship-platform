@@ -1,0 +1,136 @@
+# Project Phases — Roadmap
+
+Roadmap này điều chỉnh theo domain thực tế của hệ thống tuyển dụng thực tập sinh (không dùng nguyên mẫu generic), và theo các quyết định đã chốt với người dùng: Nginx + Redis được thiết lập sớm (Phase 0/2) thay vì trì hoãn, cơ chế duyệt/thu hồi tin tuyển dụng (D4) được đưa vào Phase 4/5.
+
+Không bắt buộc phải tuân thủ tuyệt đối thứ tự/số lượng phase này khi implementation thực tế phát sinh thay đổi hợp lý.
+
+---
+
+## Phase 0 — Foundation & Environment
+
+- **Goal:** Repo hygiene và tooling nền tảng, không viết business logic.
+- **Main modules:** Không có (chỉ infra/docs).
+- **Deliverables:** `.gitignore` đã sửa (scope `apps/web/CLAUDE.md`/`apps/web/AGENTS.md`, thêm `.claude-workspace/`), bộ tài liệu `docs/` khởi tạo, `.claude-workspace/`, root `CLAUDE.md`, Nginx + Redis được thêm vào `infra/docker-compose.yaml` (chỉ setup hạ tầng, chưa cần dùng thật trong code).
+- **Dependencies:** Không có.
+- **Definition of Done:** `npm install`, `npm run dev:server`, `npm run dev:web` chạy được; `docker compose up` khởi động Nginx + Redis không lỗi.
+- **Risks/Notes:** Thấp. Rủi ro duy nhất là cấu hình Nginx route sai khiến dev experience khó chịu — nên kiểm tra sớm.
+
+## Phase 1 — Core Architecture & Data Layer
+
+- **Goal:** Thiết lập nền backend mà tất cả các module nghiệp vụ sẽ dựa vào.
+- **Main modules:** Cross-cutting — Prisma schema toàn domain, awilix composition root, quy ước error handling/logging, seed data danh mục (`catalog`).
+- **Deliverables:** Prisma schema đầy đủ (bao gồm delta D4: `Company.requiresApproval`, `Company.retractionCount`, entity `JobPostModerationAction`, `JobPostStatus.TAKEN_DOWN`); kết nối Neon; thay thế toàn bộ nội dung `packages/shared-types/src/index.ts` (bỏ leftover từ dự án Zync) bằng type domain thật; base Express app + quy ước đăng ký module qua awilix; load env qua `dotenv`.
+- **Dependencies:** Phase 0.
+- **Definition of Done:** Một endpoint health-check chạy được với schema Postgres thật và type-safe qua Prisma Client.
+- **Risks/Notes:** Các quyết định schema ở đây (đặc biệt `JobPost.jobType` enum, `WorkExperience.company` typing — xem Open Questions) cần được chốt trước khi implement, vì sửa sau sẽ tốn kém.
+
+## Phase 2 — Identity & Access
+
+- **Goal:** Xác thực và vòng đời user cơ bản cho cả 4 actor.
+- **Main modules:** `auth`, `users`.
+- **Deliverables:** Đăng ký/đăng nhập, JWT issue/refresh/revoke, xác thực OTP qua Resend với `OTP_HARDCODE`/`OTP_HARDCODE_VALUE` cho dev, model Role/Status. Rate-limit OTP và JWT blacklist **dùng Redis thật ngay từ phase này** (theo quyết định D3), không dùng in-memory tạm.
+- **Dependencies:** Phase 1.
+- **Definition of Done:** Cả 4 vai trò đăng ký/đăng nhập được; luồng OTP hoạt động đúng với cả `OTP_HARDCODE=true/false`; rate-limit OTP hoạt động qua Redis.
+- **Risks/Notes:** Redis phải sẵn sàng (đã có từ Phase 0 qua docker-compose) trước khi phase này bắt đầu.
+
+## Phase 3 — Candidate Profile
+
+- **Goal:** Domain hồ sơ ứng viên.
+- **Main modules:** `students`.
+- **Deliverables:** CRUD hồ sơ cá nhân, học vấn, kỹ năng (với số năm kinh nghiệm), kinh nghiệm làm việc, dự án nổi bật, chứng chỉ, giải thưởng.
+- **Dependencies:** Phase 2, dữ liệu danh mục `catalog` (Major/University) đã seed từ Phase 1.
+- **Definition of Done:** Một ứng viên có thể hoàn thiện toàn bộ hồ sơ cá nhân qua API.
+- **Risks/Notes:** Thấp.
+
+## Phase 4 — Employer & Company Module
+
+- **Goal:** Domain tổ chức phía nhà tuyển dụng, bao gồm cơ chế kiểm soát duyệt tin.
+- **Main modules:** `employers`, `companies`.
+- **Deliverables:** Đăng ký/cập nhật hồ sơ doanh nghiệp, liên kết Employer ↔ Company (`isCompanyAdmin`), quy trình Admin `verify()`/`unverify()`, cờ **`Company.requiresApproval`** (Admin bật/tắt theo từng công ty), field **`Company.retractionCount`** (đếm số lần bị Admin thu hồi tin — xem chi tiết cơ chế D4 trong `INITIAL_ARCHITECTURE_PLAN.md`).
+- **Dependencies:** Phase 2.
+- **Definition of Done:** Một Employer account không thể đăng tin công khai cho tới khi `Company.isVerified = true`; Admin có thể bật/tắt `requiresApproval` cho một công ty và thấy `retractionCount` trong màn quản lý.
+- **Risks/Notes:** Cần chốt rule: công ty chưa verified có được tạo `DRAFT` job post hay không (giả định hiện tại: được phép DRAFT, chặn từ bước submit/publish).
+
+## Phase 5 — Job Recruitment Module
+
+- **Goal:** Vòng đời tin tuyển dụng đầy đủ, bao gồm cơ chế duyệt/thu hồi hoàn chỉnh.
+- **Main modules:** `job-posts` (+ tra cứu `catalog` cho Industry/City/Major khi filter).
+- **Deliverables:**
+  - Vòng đời: `DRAFT` → `submitForApproval()`/`publish()` → (nếu `Company.requiresApproval=true`: `PENDING` → Admin `APPROVED`/`REJECTED`; nếu `false`: thẳng `PUBLISHED`) → `EXPIRED` (tự động hết hạn)/`CLOSED` (employer tự đóng)/`TAKEN_DOWN` (Admin chủ động thu hồi, kèm lý do bắt buộc, tăng `Company.retractionCount`).
+  - Entity `JobPostModerationAction` ghi log đầy đủ mọi hành động duyệt/từ chối/thu hồi.
+  - Tìm kiếm/lọc công khai theo lương, ngành nghề, địa điểm cho Guest.
+- **Dependencies:** Phase 4.
+- **Definition of Done:** Một Employer thuộc công ty đã verified publish được tin (tự động hoặc qua duyệt tuỳ cờ `requiresApproval`); Admin thu hồi được một tin đang `PUBLISHED` kèm lý do và thấy `retractionCount` tăng; Guest tìm được tin qua bộ lọc.
+- **Risks/Notes:** `JobPost.jobType` cần enum rõ ràng trước khi hoàn thiện schema phase này (Open Question).
+
+## Phase 6 — CV & Saved Jobs
+
+- **Goal:** Tính năng hỗ trợ phía ứng viên gắn với tin tuyển dụng.
+- **Main modules:** `cv`, `saved-jobs`.
+- **Deliverables:** Upload/quản lý CV qua boundary Cloudinary (`MediaStorageService`), đặt CV mặc định; lưu/huỷ lưu tin tuyển dụng.
+- **Dependencies:** Phase 3, Phase 5.
+- **Definition of Done:** Ứng viên upload được CV và lưu/bỏ lưu một tin tuyển dụng đã đăng.
+- **Risks/Notes:** Đảm bảo `students`/`applications` không import trực tiếp SDK Cloudinary — chỉ qua interface.
+
+## Phase 7 — Application Module
+
+- **Goal:** Luồng giao dịch trung tâm nối Student + JobPost + CV.
+- **Main modules:** `applications`.
+- **Deliverables:** Nộp/huỷ ứng tuyển, vòng đời trạng thái (`PENDING → REVIEWING → SHORTLISTED → INTERVIEWING → ACCEPTED/REJECTED`), ghi chú nội bộ + rating của nhà tuyển dụng (không hiển thị cho ứng viên — Open Question).
+- **Dependencies:** Phase 3, Phase 5, Phase 6.
+- **Definition of Done:** Luồng ứng tuyển → xét duyệt → quyết định chạy trọn vẹn end-to-end cho một tin tuyển dụng.
+- **Risks/Notes:** Xác nhận rõ tính hiển thị của `rating`/`employerNotes` trước khi expose qua API cho ứng viên.
+
+## Phase 8 — Realtime Communication
+
+- **Goal:** Nhắn tin giữa ứng viên và nhà tuyển dụng.
+- **Main modules:** `messaging` (gộp Conversation + Message), Socket.IO gateway (chạy chung process với Express, không tách service riêng).
+- **Deliverables:** Tạo hội thoại (gắn tin tuyển dụng, cân nhắc cho phép `jobPost` optional — Open Question), gửi/nhận tin nhắn realtime, trạng thái đã đọc.
+- **Dependencies:** Phase 7 (hoặc tối thiểu Phase 5 nếu cho phép liên hệ chung không qua ứng tuyển).
+- **Definition of Done:** Hai user đăng nhập trao đổi tin nhắn realtime thành công giữa hai phiên trình duyệt khác nhau.
+- **Risks/Notes:** Cần xác nhận ràng buộc `jobPost` trên Conversation trước khi chốt schema.
+
+## Phase 9 — Notification & Email
+
+- **Goal:** Thông báo xuyên suốt các module.
+- **Main modules:** `notifications`, tích hợp Resend.
+- **Deliverables:** Notification trong ứng dụng + email cho: cập nhật trạng thái ứng tuyển, tin tuyển dụng được duyệt/bị thu hồi, công ty được xác minh.
+- **Dependencies:** Phase 4, Phase 5, Phase 7.
+- **Definition of Done:** Một thay đổi trạng thái ứng tuyển tạo ra cả bản ghi notification trong DB và email (nếu cấu hình).
+- **Risks/Notes:** Resend nên dùng chung một interface `EmailSender` với luồng OTP ở Phase 2.
+
+## Phase 10 — AI Features Boundary
+
+- **Goal:** Chỉ định nghĩa và nối sẵn boundary mở rộng AI, **không triển khai AI thật**.
+- **Main modules:** `ai` (chia `ports/` và `adapters/`).
+- **Deliverables:** Type `AIProvider`/`AIProviderType` (tái sử dụng shape đã có sẵn trong `packages/shared-types` hiện tại, kiểu `gemini`/`openrouter`), 4 port use-case (`CvAnalyzer`, `JobMatcher`, `CandidateRanker`, `CvImprover`), một adapter mẫu, feature flag bật/tắt toàn bộ AI.
+- **Dependencies:** Phase 3, 5, 6, 7 (cần dữ liệu Student/JobPost/CV/Application để AI vận hành trên đó).
+- **Definition of Done:** Tắt feature flag AI thì toàn bộ phase trước vẫn hoạt động bình thường, không module nghiệp vụ nào import trực tiếp adapter/SDK AI.
+- **Risks/Notes:** Rủi ro lớn nhất là mở rộng quá đà sang việc "xây AI thật" — nằm ngoài phạm vi phase này.
+
+## Phase 11 — Integration & Security Hardening
+
+- **Goal:** Rà soát và cứng hoá bảo mật, review lại Nginx/Redis đã dựng từ Phase 0/2 (không phải setup mới).
+- **Main modules:** Cross-cutting.
+- **Deliverables:** Cấu hình Nginx (rate-limit qua `limit_req`, CORS header) nếu cần cho demo; JWT/auth vẫn xử lý ở tầng backend (Nginx không có plugin auth như Kong); audit input validation trên toàn bộ module; rà soát việc dùng Redis (rate-limit/cache) có hợp lý không.
+- **Dependencies:** Tất cả các phase trước.
+- **Definition of Done:** Security checklist đạt; Nginx/Redis được ghi rõ là "đã áp dụng" kèm rationale (không phải thêm ngẫu nhiên).
+- **Risks/Notes:** Phase đầu tiên có thể cắt giảm nếu tiến độ khoá luận gấp.
+
+## Phase 12 — Testing & Quality
+
+- **Goal:** Lấp đầy `apps/server/tests/{unit,integration,load}` hiện đang trống.
+- **Main modules:** Cross-cutting.
+- **Deliverables:** Unit test theo module, integration test cho luồng ứng tuyển/duyệt tin/nhắn tin, một load test cơ bản.
+- **Dependencies:** Tất cả các phase nghiệp vụ.
+- **Definition of Done:** `npm test` chạy một bộ test có ý nghĩa (thay vì script placeholder hiện tại).
+- **Risks/Notes:** Ưu tiên thấp hơn dưới áp lực thời gian nhưng cần thiết cho tính thuyết phục của khoá luận.
+
+## Phase 13 — Deployment & Thesis Preparation
+
+- **Goal:** Có một bản demo chạy được cho buổi bảo vệ.
+- **Main modules:** Infra.
+- **Deliverables:** Hoàn thiện `infra/docker-compose.yaml` cho production-like setup, cấu hình env production (Neon/Redis Cloud/Cloudinary/Resend/Nginx), tài liệu triển khai, kịch bản demo bảo vệ khoá luận.
+- **Dependencies:** Tất cả các phase trước.
+- **Definition of Done:** Từ một bản clone mới, làm theo tài liệu là chạy được bản demo.
+- **Risks/Notes:** Rủi ro chung của việc triển khai lần đầu — nên thử sớm, không để tới sát ngày bảo vệ.

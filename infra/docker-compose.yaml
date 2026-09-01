@@ -1,0 +1,18 @@
+services:
+  # Redis dùng Redis Cloud (managed), không chạy container local — xem REDIS_URL trong .env.
+  # Giữ lại definition để bật lại nếu cần test Redis local.
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: sip-redis
+  #   ports:
+  #     - "6379:6379"
+  #   restart: unless-stopped
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: sip-nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    restart: unless-stopped
