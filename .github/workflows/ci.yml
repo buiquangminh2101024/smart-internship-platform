@@ -23,5 +23,11 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Generate Prisma Client
+        run: npm run db:generate --workspace=apps/server
+
+      - name: Build shared-types
+        run: npm run build --workspace=packages/shared-types
+
       - name: Build all packages
         run: npm run build
