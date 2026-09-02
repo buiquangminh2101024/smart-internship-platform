@@ -6,6 +6,58 @@
 
 ---
 
+## 0. Setup — chạy dự án sau khi clone
+
+**Yêu cầu:** Node.js ≥ 20, npm, Docker (cho Nginx gateway).
+
+1. **Cài dependency** (chạy ở thư mục gốc — monorepo dùng npm workspaces):
+   ```bash
+   npm install
+   ```
+
+2. **Tạo file env gốc** từ template và điền giá trị thật:
+   ```bash
+   cp .env.example .env
+   ```
+   Chỉ có **một** file `.env` duy nhất ở thư mục gốc — dùng chung cho `apps/server` và `apps/web` (xem chi tiết trong `.env.example`). Cần điền:
+   - `DATABASE_URL` — connection string PostgreSQL từ [Neon.tech](https://neon.tech) (Create Project → copy connection string).
+   - `REDIS_URL` — connection string từ Redis Cloud.
+   - `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` — chuỗi bí mật bất kỳ (dev có thể tự sinh, vd. `openssl rand -hex 32`).
+   - `RESEND_API_KEY` — API key từ [Resend](https://resend.com) (dev có thể để trống nếu bật `OTP_HARDCODE=true`).
+   - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `NEXT_PUBLIC_GOOGLE_CLIENT_ID` — từ Google Cloud Console (OAuth 2.0 Client), chỉ bắt buộc nếu test đăng nhập Google.
+   - `CLOUDINARY_*` — từ [Cloudinary](https://cloudinary.com) dashboard, chỉ bắt buộc khi test upload media thật.
+   - `OTP_HARDCODE=true` + `OTP_HARDCODE_VALUE=123456` — để dev không cần gửi email OTP thật.
+   - `ADMIN_EMAIL` / `ADMIN_PASSWORD` — dùng riêng cho script tạo Admin (bước 5), không phải biến runtime của server.
+
+3. **Chạy Nginx API Gateway** (bắt buộc — frontend gọi API qua Nginx, xem `NEXT_PUBLIC_API_URL=http://localhost:8080/api`):
+   ```bash
+   docker compose -f infra/docker-compose.yaml up -d
+   ```
+
+4. **Khởi tạo database** (Prisma, từ Phase 1 trở đi):
+   ```bash
+   npm run db:generate --workspace=apps/server
+   npm run db:migrate --workspace=apps/server
+   ```
+
+5. **(Tuỳ chọn) Tạo tài khoản Admin** — Admin không có luồng đăng ký, chỉ tạo qua script nội bộ, cần `ADMIN_EMAIL`/`ADMIN_PASSWORD` trong `.env`:
+   ```bash
+   npm run create-admin --workspace=apps/server
+   ```
+
+6. **Chạy backend và frontend** (2 terminal riêng, ở thư mục gốc):
+   ```bash
+   npm run dev:server   # Express API, http://localhost:4000
+   npm run dev:web       # Next.js, http://localhost:3000
+   ```
+   `apps/web` không có `.env` riêng — mỗi lần `dev`/`build`/`start` sẽ tự copy `.env` gốc sang `apps/web/.env.local` (script `predev`/`prebuild`/`prestart`), nên chỉ cần sửa `.env` ở gốc.
+
+7. Truy cập ứng dụng qua **Nginx gateway**: `http://localhost:8080` (không gọi thẳng `localhost:4000` — Nginx là single entry point cho API, xem `infra/nginx/nginx.conf`).
+
+Nếu port 4000/3000/8080 đã bị chiếm hoặc cần đổi, cập nhật `PORT`, `CORS_ORIGIN`, `NEXT_PUBLIC_API_URL` tương ứng trong `.env`.
+
+---
+
 ## 1. Project name
 
 **Phát triển hệ thống tuyển dụng thực tập sinh thông minh tích hợp Trí tuệ nhân tạo** (tên repo: `smart-internship-platform`).

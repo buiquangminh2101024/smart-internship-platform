@@ -31,7 +31,6 @@ Thumbs.db
 *.sln
 
 # Internal project docs (private)
-.github/
 agents/
 codex/
 claude/
