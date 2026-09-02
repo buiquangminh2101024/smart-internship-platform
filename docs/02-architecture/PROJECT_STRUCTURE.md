@@ -28,21 +28,26 @@ smart-internship-platform/
 
 ## 3. Frontend structure (`apps/web`)
 
-Next.js App Router. Route groups theo actor để mỗi nhóm có layout/guard riêng:
+Next.js App Router. **Không** dùng route group thuần cho `employer`/`admin` — hai khu vực này có prefix URL thật (`/employer/*`, `/admin/*`) vì đây là 3 homepage tách biệt theo actor, không phải cùng một trang đổi nội dung (xem quyết định `docs/02-architecture/ARCHITECTURE_DECISIONS.md` mục AD-1):
 
 ```text
 apps/web/src/app/
-├── (public)/       # Guest: landing, tìm kiếm tin, chi tiết tin, chi tiết doanh nghiệp
-├── (auth)/         # Đăng ký, đăng nhập — dùng chung cho mọi actor
-├── (candidate)/    # Hồ sơ, CV, ứng tuyển, tin đã lưu, nhắn tin
-├── (employer)/     # Hồ sơ doanh nghiệp, quản lý tin, xét duyệt hồ sơ ứng tuyển, tìm ứng viên, nhắn tin
-├── (admin)/        # Quản lý người dùng, nhà tuyển dụng, ngành nghề
+├── page.tsx           # "/" — Candidate homepage: guest marketing ⇄ Candidate đã đăng nhập, đổi nội dung theo session, KHÔNG tách route riêng
+├── (auth)/
+│   ├── login/          # Đăng nhập dùng chung Candidate + Employer (Admin đăng nhập riêng ở /admin, không có nút Google)
+│   └── register/       # Đăng ký — chỉ Candidate/Employer (email/password hoặc Google)
+├── (candidate)/        # Route group, KHÔNG thêm prefix URL — đã đăng nhập: /profile, /cv, /applications, /saved-jobs, /messages
+├── employer/
+│   ├── page.tsx         # "/employer" — Employer homepage công khai riêng, ưu tiên hành vi Recruiter (KHÔNG phải bản đổi nội dung của Candidate homepage)
+│   └── (portal)/         # "/employer/..." — đã đăng nhập: hồ sơ doanh nghiệp, quản lý tin, xét duyệt hồ sơ ứng tuyển, tìm ứng viên, nhắn tin
+├── admin/
+│   ├── page.tsx         # "/admin" — chỉ form đăng nhập, KHÔNG có link/nút kích hoạt trỏ tới từ / hay /employer
+│   └── (console)/        # "/admin/..." — đã đăng nhập: quản lý người dùng, nhà tuyển dụng, ngành nghề
 ├── layout.tsx
-├── page.tsx
-└── provider.tsx    # React Query / global providers
+└── provider.tsx        # React Query / global providers
 ```
 
-Role guard thực hiện qua `middleware.ts` ở root `apps/web/src/`, kiểm tra JWT/role trước khi cho vào route group tương ứng (sẽ tạo khi implement Phase 2).
+Role guard thực hiện qua `middleware.ts` ở root `apps/web/src/` (sẽ tạo khi implement Phase 2), theo prefix: `/employer/(portal)/*` yêu cầu `role=EMPLOYER`, `/admin/(console)/*` yêu cầu `role=ADMIN`, `(candidate)/*` yêu cầu `role=CANDIDATE`. Chi tiết routing/redirect sau đăng nhập xem `docs/05-frontend/phases/phase-02-identity-access/PLAN.md`.
 
 `apps/web/CLAUDE.md` và `apps/web/AGENTS.md` do `next dev` tự sinh lại (breaking-change notice của Next 16) — giữ trong `.gitignore`, không commit, dù chính file đó khuyến nghị nên commit; đây là lựa chọn có chủ đích để tránh nhiễu diff mỗi lần chạy dev.
 
@@ -68,6 +73,12 @@ apps/server/src/
 ├── infrastructure/        # Kết nối DB (Prisma/Neon), Redis, Cloudinary, Resend, email
 ├── shared/                # Utilities, middleware (auth guard, validation, rate-limit), error types
 └── main.ts                # Entry point, awilix composition root
+
+apps/server/
+├── prisma/                # schema.prisma, migrations/
+└── scripts/               # Script chạy tay, KHÔNG phải route API:
+    ├── seed.ts             #   seed dữ liệu danh mục (catalog) — chuyển từ prisma/seed.ts
+    └── create-admin.ts     #   bootstrap tài khoản Admin (hash password + upsert User role=ADMIN)
 ```
 
 ## 5. Module organization
@@ -78,7 +89,7 @@ Mỗi module domain là một thư mục độc lập trong `modules/`, tự ch�
 - **`catalog`** gộp Major/University/Industry/City/CompanyType — dữ liệu danh mục nhỏ, admin-managed, CRUD gần giống nhau; tách riêng từng module là over-fragmentation cho quy mô khoá luận.
 - **`companies`** và **`employers`** giữ tách biệt — vòng đời khác nhau: `Company.verify()/unverify()` là quy trình do Admin gate độc lập với từng Employer user, và một Company có thể có nhiều Employer (`isCompanyAdmin`).
 - **`auth`** và **`users`** giữ tách biệt về tầng service dù cùng thao tác trên bảng `User` — `auth` lo xác thực/token, `users` lo hồ sơ/quản trị tài khoản.
-- **Không có module `admin` riêng** — quyền admin là các endpoint được gate bằng Role trên module có sẵn (`users`, `companies`, `catalog`), vì không có entity `Admin` riêng trong domain model.
+- **Không có module `admin` riêng** — quyền admin là các endpoint được gate bằng Role trên module có sẵn (`users`, `companies`, `catalog`), vì không có entity `Admin` riêng trong domain model. Việc **tạo** tài khoản Admin cũng nằm ngoài mọi module nghiệp vụ/route API — xử lý bằng script độc lập `apps/server/scripts/create-admin.ts` (xem mục 4 và `INITIAL_ARCHITECTURE_PLAN.md` mục 12b).
 
 ## 6. Shared code strategy
 
@@ -92,10 +103,23 @@ Mỗi module domain là một thư mục độc lập trong `modules/`, tự ch�
 docs/
 ├── 01-project/
 │   ├── PROJECT_OVERVIEW.md
-│   └── PROJECT_PHASES.md
+│   ├── PROJECT_PHASES.md             # Roadmap tóm tắt — không chứa kế hoạch chi tiết từng phase
+│   └── PROJECT_STATUS.md             # Trạng thái hiện tại của từng phase
 ├── 02-architecture/
 │   ├── PROJECT_STRUCTURE.md          # File này
-│   └── INITIAL_ARCHITECTURE_PLAN.md
+│   ├── INITIAL_ARCHITECTURE_PLAN.md
+│   └── ARCHITECTURE_DECISIONS.md     # Log quyết định kiến trúc phát sinh trong lúc triển khai
+├── 03-database/
+│   └── DATABASE_DESIGN.md            # Tóm tắt schema.prisma — không phải nguồn sự thật
+├── 04-api/
+│   └── API_CONVENTIONS.md            # Quy ước chung API frontend/backend — tạo lần đầu ở Phase 2, bổ sung dần
+├── phases/
+│   ├── README.md                     # Hướng dẫn thiết kế file kế hoạch cho từng phase (backend)
+│   └── phase-NN-slug/                # Tạo ngay trước khi triển khai phase đó, không tạo trước
+├── 05-frontend/
+│   ├── README.md                     # Quy ước viết tài liệu kiến trúc frontend theo phase
+│   ├── FRONTEND_PHASES.md            # Roadmap tóm tắt các phase frontend
+│   └── phases/phase-NN-slug/         # Tạo ngay trước khi triển khai phase đó, không tạo trước
 └── designs/
     ├── class-diagram-v2.jpg          # Class Diagram tham khảo (bản tạm thời)
     └── use-case-diagram-v3.png       # Use Case Diagram tham khảo (bản tạm thời)

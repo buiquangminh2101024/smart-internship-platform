@@ -19,7 +19,7 @@ Không bắt buộc phải tuân thủ tuyệt đối thứ tự/số lượng p
 
 - **Goal:** Thiết lập nền backend mà tất cả các module nghiệp vụ sẽ dựa vào.
 - **Main modules:** Cross-cutting — Prisma schema toàn domain, awilix composition root, quy ước error handling/logging, seed data danh mục (`catalog`).
-- **Deliverables:** Prisma schema đầy đủ (bao gồm delta D4: `Company.requiresApproval`, `Company.retractionCount`, entity `JobPostModerationAction`, `JobPostStatus.TAKEN_DOWN`); kết nối Neon; thay thế toàn bộ nội dung `packages/shared-types/src/index.ts` (bỏ leftover từ dự án Zync) bằng type domain thật; base Express app + quy ước đăng ký module qua awilix; load env qua `dotenv`.
+- **Deliverables:** Prisma schema đầy đủ (bao gồm delta D4: `Company.requiresApproval`, `Company.retractionCount`, entity `JobPostModerationAction`, `JobPostStatus.TAKEN_DOWN`); kết nối Neon; thay thế toàn bộ nội dung `packages/shared-types/src/index.ts` (bỏ leftover từ dự án Zync) bằng type domain thật; base Express app + quy ước đăng ký module qua awilix; load env qua `dotenv`. Delta bổ sung cho auth (chốt cùng đợt điều chỉnh Identity & Access): `User.passwordHash` đổi thành optional, thêm `User.googleId` (optional, unique) để chuẩn bị cho đăng nhập Google ở Phase 2.
 - **Dependencies:** Phase 0.
 - **Definition of Done:** Một endpoint health-check chạy được với schema Postgres thật và type-safe qua Prisma Client.
 - **Risks/Notes:** Các quyết định schema ở đây (đặc biệt `JobPost.jobType` enum, `WorkExperience.company` typing — xem Open Questions) cần được chốt trước khi implement, vì sửa sau sẽ tốn kém.
@@ -28,10 +28,10 @@ Không bắt buộc phải tuân thủ tuyệt đối thứ tự/số lượng p
 
 - **Goal:** Xác thực và vòng đời user cơ bản cho cả 4 actor.
 - **Main modules:** `auth`, `users`.
-- **Deliverables:** Đăng ký/đăng nhập, JWT issue/refresh/revoke, xác thực OTP qua Resend với `OTP_HARDCODE`/`OTP_HARDCODE_VALUE` cho dev, model Role/Status. Rate-limit OTP và JWT blacklist **dùng Redis thật ngay từ phase này** (theo quyết định D3), không dùng in-memory tạm.
+- **Deliverables:** Đăng ký/đăng nhập cho **Candidate/Employer** qua 2 phương thức — (1) email/password kèm xác thực OTP qua Resend (`OTP_HARDCODE`/`OTP_HARDCODE_VALUE` cho dev), (2) Google OAuth (verify token qua `google-auth-library`, tự động liên kết vào `User` có sẵn nếu email trùng, tạo mới nếu chưa có — role bắt buộc client gửi kèm là `CANDIDATE`/`EMPLOYER`, backend từ chối mọi giá trị khác). JWT issue/refresh/revoke, model Role/Status dùng chung cho cả 2 phương thức đăng nhập. Rate-limit OTP và JWT blacklist **dùng Redis thật ngay từ phase này** (theo quyết định D3), không dùng in-memory tạm. **Không có deliverable đăng ký Admin** — route `/auth/register` chặn cứng `role=ADMIN` ở tầng validation; tài khoản Admin được bootstrap riêng qua `apps/server/scripts/create-admin.ts` (ngoài phạm vi Express, xem Phase 1 delta + `INITIAL_ARCHITECTURE_PLAN.md`).
 - **Dependencies:** Phase 1.
-- **Definition of Done:** Cả 4 vai trò đăng ký/đăng nhập được; luồng OTP hoạt động đúng với cả `OTP_HARDCODE=true/false`; rate-limit OTP hoạt động qua Redis.
-- **Risks/Notes:** Redis phải sẵn sàng (đã có từ Phase 0 qua docker-compose) trước khi phase này bắt đầu.
+- **Definition of Done:** Candidate/Employer đăng ký/đăng nhập được qua cả email/password và Google; luồng OTP hoạt động đúng với cả `OTP_HARDCODE=true/false`; rate-limit OTP hoạt động qua Redis; gọi `/auth/register` với `role=ADMIN` bị từ chối; một tài khoản Admin được tạo sẵn qua script đăng nhập được bằng email/password.
+- **Risks/Notes:** Redis phải sẵn sàng (đã có từ Phase 0 qua docker-compose hoặc redis cloud) trước khi phase này bắt đầu.
 
 ## Phase 3 — Candidate Profile
 

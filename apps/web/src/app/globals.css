@@ -12,6 +12,65 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/*
+ * Token màu thương hiệu InternHub — tham chiếu docs/template_ui/readme.md
+ * (bảng màu) + docs/template_ui/styles.css. Pine = Candidate (primary), Indigo
+ * = Employer, Plum = Admin, Marigold = accent ấm duy nhất (CTA marketing, chờ
+ * xử lý) — không dùng làm màu chính/destructive. Xem AD-3 trong
+ * docs/02-architecture/ARCHITECTURE_DECISIONS.md.
+ */
+@theme {
+  --color-pine-50: #eaf5f2;
+  --color-pine-100: #d2e9e2;
+  --color-pine-200: #a6d3c5;
+  --color-pine-300: #79bda9;
+  --color-pine-400: #3d9c85;
+  --color-pine-500: #0e7a67;
+  --color-pine-600: #0c6957;
+  --color-pine-700: #0a5747;
+  --color-pine-800: #063b33;
+  --color-pine-900: #04241f;
+
+  --color-indigo-50: #eef0fc;
+  --color-indigo-100: #dadef9;
+  --color-indigo-200: #b4bdf3;
+  --color-indigo-300: #8e9ced;
+  --color-indigo-400: #6c7ee6;
+  --color-indigo-500: #4f5fde;
+  --color-indigo-600: #3f4cc0;
+  --color-indigo-700: #333ca0;
+  --color-indigo-800: #262c78;
+
+  --color-plum-50: #f6eef7;
+  --color-plum-100: #e9d6ec;
+  --color-plum-200: #d3add9;
+  --color-plum-300: #bc84c5;
+  --color-plum-400: #a05fae;
+  --color-plum-500: #833e92;
+  --color-plum-600: #6c3278;
+  --color-plum-700: #55285f;
+  --color-plum-800: #3d1c44;
+
+  --color-marigold-100: #fdf0d8;
+  --color-marigold-300: #f9ce7a;
+  --color-marigold-500: #f0a93a;
+  --color-marigold-700: #c6821f;
+
+  --color-surface-page: #f4f6f6;
+  --color-surface-card: #ffffff;
+  --color-surface-brand-deep: #063b33;
+  --color-surface-brand-soft: #eaf5f2;
+  --color-surface-hover: #eef2f1;
+
+  --color-border-subtle: #e8ecec;
+  --color-border-default: #d5dbda;
+
+  --color-text-strong: #0b1f1b;
+  --color-text-body: #33413e;
+  --color-text-muted: #64726f;
+  --color-text-subtle: #94a19e;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;

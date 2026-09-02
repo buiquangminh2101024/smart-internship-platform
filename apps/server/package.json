@@ -13,17 +13,20 @@
     "db:migrate": "dotenv -e ../../.env -- prisma migrate dev",
     "db:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
     "db:seed": "dotenv -e ../../.env -- prisma db seed",
-    "db:studio": "dotenv -e ../../.env -- prisma studio"
+    "db:studio": "dotenv -e ../../.env -- prisma studio",
+    "create-admin": "dotenv -e ../../.env -- tsx scripts/create-admin.ts"
   },
   "prisma": {
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx scripts/seed.ts"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20.19.43",
     "dotenv-cli": "^11.0.0",
     "prisma": "^6.19.3",
@@ -34,9 +37,14 @@
     "@prisma/client": "^6.19.3",
     "@sip/shared-types": "^1.0.0",
     "awilix": "^13.0.5",
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
     "express": "^5.2.1",
+    "google-auth-library": "^11.0.2",
+    "ioredis": "^6.0.0",
+    "jsonwebtoken": "^9.0.3",
+    "resend": "^6.25.0",
     "zod": "^4.5.4"
   }
 }

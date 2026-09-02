@@ -50,3 +50,68 @@ export interface HealthCheckResult {
   status: "ok";
   db: "connected";
 }
+
+// ─── Auth & Users (Phase 2) ──────────────────────────────────────────────
+// Role đăng ký được qua API luôn giới hạn CANDIDATE/EMPLOYER — ADMIN chỉ
+// tồn tại qua bootstrap script (apps/server/scripts/create-admin.ts).
+export type RegistrableRole = Exclude<Role, "ADMIN">;
+
+export interface RegisterRequest {
+  email: string;
+  password: string;
+  role: RegistrableRole;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface VerifyOtpRequest {
+  email: string;
+  otp: string;
+}
+
+export interface ResendOtpRequest {
+  email: string;
+}
+
+export interface GoogleAuthRequest {
+  idToken: string;
+  role: RegistrableRole;
+}
+
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ResetPasswordRequest {
+  email: string;
+  otp: string;
+  newPassword: string;
+}
+
+export interface RefreshRequest {
+  refreshToken: string;
+}
+
+export interface LogoutRequest {
+  refreshToken?: string;
+}
+
+export interface AuthTokensResponse {
+  accessToken: string;
+  refreshToken: string;
+}
+
+export interface RefreshResponse {
+  accessToken: string;
+}
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  role: Role;
+  status: UserStatus;
+  emailVerifiedAt: string | null;
+}

@@ -45,3 +45,8 @@ Agent Skill/
 
 # Claude Code local working workspace (temporary, never source of truth)
 .claude-workspace/
+
+# folders in docs
+docs/template_ui
+docs/05-frontend
+docs/06-backend

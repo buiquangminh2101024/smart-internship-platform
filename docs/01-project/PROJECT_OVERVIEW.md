@@ -33,7 +33,7 @@ Sinh viên tìm kiếm cơ hội thực tập và nhà tuyển dụng tìm kiế
 
 ## 5. Scope
 
-- Đăng ký/đăng nhập, phân quyền theo vai trò.
+- Đăng ký/đăng nhập, phân quyền theo vai trò. Candidate/Employer đăng ký & đăng nhập bằng email/password (kèm OTP) hoặc Google OAuth (liên kết theo email nếu trùng); Admin **không có luồng đăng ký** — tài khoản Admin chỉ được khởi tạo qua script nội bộ (`apps/server/scripts/create-admin.ts`), đăng nhập bằng email/password.
 - Hồ sơ ứng viên (học vấn, kỹ năng, kinh nghiệm, dự án nổi bật, chứng chỉ, giải thưởng), quản lý CV.
 - Hồ sơ doanh nghiệp, quy trình xác minh nhà tuyển dụng bởi Admin.
 - Vòng đời tin tuyển dụng đầy đủ: nháp → (chờ duyệt/đăng ngay) → công khai → hết hạn/đóng/bị thu hồi.
@@ -85,6 +85,7 @@ Nguyên tắc: core business logic (`students`, `job-posts`, `applications`) kh�
 | Realtime | Socket.IO (chạy chung process với Express) |
 | Media/File storage | Cloudinary (avatar, logo, CV, banner) |
 | Email | Resend (có `OTP_HARDCODE`/`OTP_HARDCODE_VALUE` cho dev) |
+| Auth phương thức thứ 2 | Google OAuth 2.0 (chỉ Candidate/Employer, `google-auth-library` verify token phía backend) |
 | Monorepo | npm workspaces (`apps/*`, `packages/*`) |
 
 ## 10. High-level architecture
@@ -116,6 +117,7 @@ Chi tiết đầy đủ và các quyết định (Nginx dev setup, vai trò Redi
 | Cloudinary | Lưu trữ media: avatar, logo doanh nghiệp, CV, banner |
 | Resend | Gửi email (OTP, thông báo giao dịch) |
 | Nginx | API Gateway (dev + chuẩn bị cho production) |
+| Google OAuth | Đăng ký/đăng nhập thay thế cho Candidate/Employer (không áp dụng cho Admin) |
 
 ## 12. Key architectural principles
 
@@ -129,6 +131,8 @@ Chi tiết đầy đủ và các quyết định (Nginx dev setup, vai trò Redi
 
 - Kiến trúc monorepo hiện có (`apps/server`, `apps/web`, `packages/shared-types`, `infra/`) được giữ nguyên tên gọi, không đổi thành `apps/api` dù đó là gợi ý mặc định ban đầu.
 - Admin không phải là một entity/class riêng trong dữ liệu — được mô hình hoá như `User` với Role `ADMIN`.
+- Admin không bao giờ được tạo qua API/route đăng ký công khai — tài khoản Admin luôn được khởi tạo bằng script nội bộ chạy thủ công (`apps/server/scripts/create-admin.ts`, hash password rồi insert/upsert thẳng vào bảng `users`), không có UI/endpoint đăng ký Admin ở bất kỳ giai đoạn nào.
+- Tài khoản Google và tài khoản email/password của Candidate/Employer được liên kết theo **email trùng khớp**: nếu email đăng nhập Google trùng với một `User` đã tồn tại (đăng ký bằng password), hệ thống gắn `googleId` vào `User` đó thay vì tạo bản ghi mới; một `User` có thể có cả `passwordHash` lẫn `googleId` cùng lúc.
 - Use Case Diagram và Class Diagram hiện tại là **bản tạm thời**, không phải source of truth tuyệt đối — các điểm mâu thuẫn được ghi ở mục 14.
 - `WorkExperience.company` mặc định là chuỗi tự do (không bắt buộc liên kết tới entity `Company` đã đăng ký trên hệ thống).
 - Nhà tuyển dụng/công ty chưa được xác minh (`isVerified = false`) vẫn được tạo tin tuyển dụng ở trạng thái `DRAFT`, nhưng bị chặn từ bước gửi duyệt/đăng công khai.

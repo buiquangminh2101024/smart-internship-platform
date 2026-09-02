@@ -64,11 +64,20 @@ enum NotificationType {
 // ─── users ──────────────────────────────────────────────────────────────
 // No refresh-token/OTP tables: JWT blacklist + OTP codes live in Redis (Phase 2),
 // not Postgres — both are ephemeral, TTL-bound data.
+//
+// passwordHash/googleId are both optional because a Candidate/Employer can
+// authenticate via email+password, Google OAuth, or both (linked by matching
+// email — see INITIAL_ARCHITECTURE_PLAN.md §8b). "at least one of the two
+// must be set" is enforced in the auth service, not as a DB constraint.
+// Admin accounts always have passwordHash set and googleId null — they are
+// bootstrapped only via apps/server/scripts/create-admin.ts, never through
+// the register/Google endpoints (see §12b).
 
 model User {
   id              String     @id @default(cuid())
   email           String     @unique
-  passwordHash    String
+  passwordHash    String?
+  googleId        String?    @unique
   role            Role
   status          UserStatus @default(PENDING_VERIFICATION)
   emailVerifiedAt DateTime?
