@@ -30,7 +30,7 @@ Khác với gợi ý mặc định ban đầu (API Gateway/Redis "cân nhắc th
 
 - Render UI theo 4 nhóm actor (route groups `(public)/(auth)/(candidate)/(employer)/(admin)`).
 - Gọi API qua Nginx gateway (không gọi thẳng `apps/server` trong môi trường có Nginx chạy), dùng React Query cho data fetching, Zustand cho state client-side cần thiết (auth session, UI state).
-- Kết nối Socket.IO client cho tính năng nhắn tin realtime (Phase 8).
+- Kết nối Socket.IO client cho tính năng nhắn tin realtime (Phase 9).
 - Không chứa business logic (validate nghiệp vụ, tính toán trạng thái...) — chỉ hiển thị và gọi API.
 
 ## 3. Backend responsibilities
@@ -47,7 +47,7 @@ Khác với gợi ý mặc định ban đầu (API Gateway/Redis "cân nhắc th
 
 - Route `/api/*` → `apps/server` (Express).
 - Route còn lại → `apps/web` (Next.js) — cho phép demo một entry point duy nhất giống môi trường production.
-- Vai trò trong dev: routing tập trung; rate-limit cơ bản qua `limit_req_zone`/`limit_req`; CORS qua `add_header` khi cần demo capability của gateway ở Phase 11. **Lưu ý:** Nginx không có hệ plugin JWT/key-auth như Kong — xác thực/phân quyền vẫn hoàn toàn nằm ở tầng backend Express, Nginx chỉ đóng vai trò reverse proxy + rate-limit/CORS cơ bản.
+- Vai trò trong dev: routing tập trung; rate-limit cơ bản qua `limit_req_zone`/`limit_req`; CORS qua `add_header` khi cần demo capability của gateway ở Phase 12. **Lưu ý:** Nginx không có hệ plugin JWT/key-auth như Kong — xác thực/phân quyền vẫn hoàn toàn nằm ở tầng backend Express, Nginx chỉ đóng vai trò reverse proxy + rate-limit/CORS cơ bản.
 
 **Rủi ro cần lưu ý (ghi rõ theo yêu cầu):** Next.js dev server dùng HMR qua WebSocket. Nếu proxy toàn bộ `apps/web` qua Nginx, cần đảm bảo Nginx forward đúng WebSocket upgrade request (`proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade";`), nếu không HMR sẽ không hoạt động hoặc chậm — quy tắc này áp dụng tương tự cho việc proxy Socket.IO. Giải pháp dự phòng: cho phép developer truy cập thẳng port Next.js khi cần iterate UI nhanh, và dùng đường qua Nginx chủ yếu để test luồng API end-to-end + demo gateway capability. Việc này sẽ được xác nhận thực tế khi implement Phase 0.
 
@@ -64,7 +64,7 @@ Lý do: dự án triển khai single-instance cho phạm vi khoá luận — m�
 Vai trò cụ thể:
 - Rate-limit OTP (theo IP + theo identifier) — thay thế in-memory limiter.
 - JWT blacklist/revocation khi logout hoặc thu hồi phiên.
-- (Tuỳ chọn, Phase 5+) Cache kết quả tìm kiếm tin tuyển dụng nếu cần.
+- (Tuỳ chọn, Phase 6+) Cache kết quả tìm kiếm tin tuyển dụng nếu cần.
 - (Tuỳ chọn, nếu scale ngang) Socket.IO adapter cho multi-instance realtime.
 
 Ngay cả khi dùng Redis thật từ đầu, nên bọc qua interface mỏng (`RateLimiter`, `TokenBlacklist`) để unit test không cần Redis thật chạy.
@@ -77,7 +77,7 @@ Bọc qua một service interface duy nhất (ví dụ `MediaStorageService` tro
 
 Bọc qua interface `EmailSender` dùng chung cho:
 - OTP đăng ký/đăng nhập/quên mật khẩu (Phase 2), có `OTP_HARDCODE`/`OTP_HARDCODE_VALUE` để bỏ qua gửi email thật khi dev.
-- Email giao dịch (Phase 9): cập nhật trạng thái ứng tuyển, tin tuyển dụng được duyệt/bị thu hồi, công ty được xác minh.
+- Email giao dịch (Phase 10): cập nhật trạng thái ứng tuyển, tin tuyển dụng được duyệt/bị thu hồi, công ty được xác minh.
 
 ## 8b. Google OAuth integration direction (chỉ Candidate/Employer)
 
@@ -97,9 +97,9 @@ Module `apps/server/src/modules/ai/` chia hai lớp:
 - **`ports/`** — interface thuần TypeScript, không import bất kỳ SDK AI nào: `CvAnalyzer.analyze(cvText)`, `JobMatcher.matchScore(studentProfile, jobPost)`, `CandidateRanker.rank(applications)`, `CvImprover.suggestImprovements(cvText)`.
 - **`adapters/`** — implementation cụ thể (ví dụ Gemini, OpenRouter), đăng ký qua `awilix` container.
 
-Các module nghiệp vụ (`students`, `job-posts`, `applications`) chỉ được phép phụ thuộc vào port interface qua dependency injection, **không bao giờ** phụ thuộc trực tiếp vào adapter cụ thể hoặc SDK AI. Type `AIProvider`/`AIProviderType` (`'gemini' | 'openrouter'`) sẽ tái sử dụng đúng shape đã tồn tại trong `packages/shared-types/src/index.ts` hiện tại (dù hiện là leftover của dự án khác, shape này là một pattern hợp lý để tái dùng khi build AI thật ở Phase 10).
+Các module nghiệp vụ (`students`, `job-posts`, `applications`) chỉ được phép phụ thuộc vào port interface qua dependency injection, **không bao giờ** phụ thuộc trực tiếp vào adapter cụ thể hoặc SDK AI. Type `AIProvider`/`AIProviderType` (`'gemini' | 'openrouter'`) sẽ tái sử dụng đúng shape đã tồn tại trong `packages/shared-types/src/index.ts` hiện tại (dù hiện là leftover của dự án khác, shape này là một pattern hợp lý để tái dùng khi build AI thật ở Phase 11).
 
-Một feature flag (`AI_FEATURES_ENABLED` hoặc theo từng feature) phải cho phép tắt hoàn toàn AI mà không ảnh hưởng các module nghiệp vụ khác — đây là tiêu chí Definition-of-Done của Phase 10.
+Một feature flag (`AI_FEATURES_ENABLED` hoặc theo từng feature) phải cho phép tắt hoàn toàn AI mà không ảnh hưởng các module nghiệp vụ khác — đây là tiêu chí Definition-of-Done của Phase 11.
 
 ## 10. Security considerations
 
@@ -109,12 +109,12 @@ Một feature flag (`AI_FEATURES_ENABLED` hoặc theo từng feature) phải cho
 - Role-based authorization ở tầng middleware, kiểm tra trước khi vào route group tương ứng cả ở frontend (`middleware.ts`) lẫn backend (route guard).
 - Không có endpoint nào (kể cả `/auth/register`, `/auth/google`) chấp nhận `role=ADMIN` — validation ở tầng DTO (Zod) chặn cứng giá trị này; tài khoản Admin chỉ tồn tại nếu được tạo qua script bootstrap (xem mục dưới).
 - Không log secrets/token/OTP thật ra log thông thường.
-- Nginx có thể đóng vai trò lớp bảo mật bổ sung (rate-limit/CORS ở tầng reverse proxy) ở Phase 11, không thay thế cho auth ở tầng backend.
+- Nginx có thể đóng vai trò lớp bảo mật bổ sung (rate-limit/CORS ở tầng reverse proxy) ở Phase 12, không thay thế cho auth ở tầng backend.
 
 ## 11. Potential risks
 
 - Next.js dev HMR qua Nginx (mục 4) — cần xác nhận sớm, không để tới gần deadline.
-- Redis là single point of failure cho rate-limit/blacklist nếu không có fallback — chấp nhận được ở quy mô khoá luận, nhưng nên ghi rõ trong tài liệu triển khai (Phase 13).
+- Redis là single point of failure cho rate-limit/blacklist nếu không có fallback — chấp nhận được ở quy mô khoá luận, nhưng nên ghi rõ trong tài liệu triển khai (Phase 14).
 - Schema chưa chốt (`JobPost.jobType` enum, `WorkExperience.company` typing) có thể gây phải migrate lại nếu không quyết định sớm ở Phase 1.
 - Cơ chế duyệt/thu hồi tin (mục 12) là delta mới so với Class Diagram gốc — cần cập nhật chính thức diagram trước khi đưa vào báo cáo khoá luận, tránh mâu thuẫn tài liệu.
 
@@ -151,6 +151,18 @@ Không xây dựng ngưỡng tự động hoá (auto-threshold — ví dụ tự
 - Dùng `upsert` (không phải `create`) để script idempotent — chạy lại nhiều lần với cùng email chỉ cập nhật password/role, không tạo trùng.
 - Admin đăng nhập bằng route đăng nhập chung (`/auth/login`, email/password) — không dùng Google OAuth (mục 8b).
 
+## 12c. Payment/Subscription integration boundary
+
+**Quyết định:** Không dùng message queue (RabbitMQ/Redpanda/Kafka) cho luồng thanh toán. Xử lý IPN callback từ VNPay/Momo trực tiếp trong 1 Prisma transaction (verify chữ ký → update `Payment`/`Transaction`/`CompanySubscription` → response) trong cùng process Express.
+
+Lý do: dự án tham khảo kiến trúc microservices (`event-ticketing-platform`) dùng RabbitMQ vì `payment-service` phải báo tin bất đồng bộ cho các service khác (`booking-service`, `event-service`) — các process/DB hoàn toàn tách biệt. Ở đây `apps/server` là monolith 1 process/1 database, không có ranh giới service nào cần decouple; toàn bộ thao tác nằm trên cùng 1 DB nên gộp vào 1 transaction là đủ, tránh thêm infra chưa cần thiết.
+
+Boundary tích hợp cổng thanh toán: bọc qua interface theo từng `PaymentMethod.processorType` (ví dụ `VnPayGateway`/`MoMoGateway`) trong `apps/server/src/modules/payments/`, tương tự cách `MediaStorageService` bọc Cloudinary (mục 7) — module `payments` không phụ thuộc trực tiếp SDK/HTTP client cụ thể của từng cổng ngoài lớp adapter này.
+
+Idempotency: chống xử lý trùng 1 callback IPN dựa vào `Transaction.providerTransactionId` unique — callback gọi lại nhiều lần với cùng mã giao dịch chỉ xử lý 1 lần; mọi callback nhận được (kể cả không khớp được `Transaction`) đều ghi vào `PaymentCallbackLog` trước, tách biệt khỏi luồng xử lý nghiệp vụ.
+
+Chi tiết đầy đủ mô hình dữ liệu: `docs/designs/SUBSCRIPTION_BILLING_DESIGN.md`.
+
 ## 13. Architecture decisions that still need approval
 
 - Cập nhật chính thức Class Diagram để phản ánh cơ chế duyệt/thu hồi tin (mục 12) trước khi đưa vào báo cáo khoá luận.
@@ -160,6 +172,7 @@ Không xây dựng ngưỡng tự động hoá (auto-threshold — ví dụ tự
 - **`JobPost.jobType`:** enum `JobPostType = INTERNSHIP | PART_TIME | FULL_TIME | CONTRACT`.
 - **`WorkExperience.company`:** giữ `String` tự do (đã ghi trong Assumptions, `PROJECT_OVERVIEW.md` mục 13), không liên kết entity `Company`.
 - **`Conversation.jobPost`:** optional (nullable FK) trong schema.
+- **`Conversation` participants:** FK trực tiếp `studentId`/`employerId` (mỗi conversation cố định đúng 1 candidate + 1 employer), không dùng bảng nối `ConversationParticipant` generic — xem `DATABASE_DESIGN.md` mục "Messaging".
 - **Schema validation library:** **Zod** — dùng cho (1) validate `process.env` lúc boot (`apps/server/src/shared/config/env.ts`, type-safe config thay vì đọc `process.env` thô), (2) middleware `validate(schema)` dùng chung cho request body/query/params, sẵn sàng cho các route nghiệp vụ từ Phase 2 trở đi. Lý do chọn Zod: TypeScript-first (suy ra type tự động từ schema, không cần định nghĩa DTO trùng lặp), không phụ thuộc decorator/reflect-metadata (khớp phong cách function-based hiện tại của repo, không dùng NestJS), phổ biến và đủ nhẹ cho quy mô khoá luận.
 - **Error handling convention:** class `AppError` (statusCode + message) ném từ service/controller, middleware `errorHandler` tập trung ở cuối middleware chain trả về đúng shape `ApiResponse` (`packages/shared-types`). Logging: chưa cần thêm thư viện (Winston/Pino) ở Phase 1 — dùng wrapper `console` mỏng (`shared/logger.ts`), cân nhắc thay thế nếu nhu cầu thực tế phát sinh ở phase sau (tránh thêm dependency chưa cần thiết).
 - **Password hashing library:** **`bcryptjs`** (pure-JS, không cần build native trên Windows) — dùng chung cho script `create-admin.ts` (mục 12b) và auth module thật ở Phase 2 (`/auth/register`, `/auth/login` bằng password).

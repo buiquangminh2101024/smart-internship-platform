@@ -61,6 +61,36 @@ enum NotificationType {
   COMPANY_VERIFIED
 }
 
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum TransactionStatus {
+  INIT
+  SUCCESS
+  FAILED
+}
+
+enum PaymentProvider {
+  VNPAY
+  MOMO
+}
+
 // ─── users ──────────────────────────────────────────────────────────────
 // No refresh-token/OTP tables: JWT blacklist + OTP codes live in Redis (Phase 2),
 // not Postgres — both are ephemeral, TTL-bound data.
@@ -87,7 +117,6 @@ model User {
   student           Student?
   employer          Employer?
   moderationActions JobPostModerationAction[]
-  conversations     ConversationParticipant[]
   messages          Message[]
   notifications     Notification[]
 
@@ -100,17 +129,18 @@ model User {
 // reference and it fits the same small admin-CRUD-list shape.
 
 model Major {
-  id       String    @id @default(cuid())
-  name     String    @unique
-  students Student[]
+  id         String      @id @default(cuid())
+  name       String      @unique
+  educations Education[]
 
   @@map("majors")
 }
 
 model University {
-  id       String    @id @default(cuid())
-  name     String    @unique
-  students Student[]
+  id         String      @id @default(cuid())
+  name       String      @unique
+  code       String?     @unique
+  educations Education[]
 
   @@map("universities")
 }
@@ -127,6 +157,7 @@ model Industry {
 model City {
   id        String    @id @default(cuid())
   name      String    @unique
+  zipcode   String?
   students  Student[]
   companies Company[]
   jobPosts  JobPost[]
@@ -146,6 +177,7 @@ model Skill {
   id            String         @id @default(cuid())
   name          String         @unique
   studentSkills StudentSkill[]
+  jobPostSkills JobPostSkill[]
 
   @@map("skills")
 }
@@ -153,23 +185,19 @@ model Skill {
 // ─── students ───────────────────────────────────────────────────────────
 
 model Student {
-  id             String      @id @default(cuid())
-  userId         String      @unique
-  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  headline       String?
-  bio            String?
-  phone          String?
-  dateOfBirth    DateTime?
-  avatarUrl      String?
-  universityId   String?
-  university     University? @relation(fields: [universityId], references: [id])
-  majorId        String?
-  major          Major?      @relation(fields: [majorId], references: [id])
-  graduationYear Int?
-  cityId         String?
-  city           City?       @relation(fields: [cityId], references: [id])
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  headline    String?
+  bio         String?
+  phone       String?
+  dateOfBirth DateTime?
+  gender      Gender?
+  avatarUrl   String?
+  cityId      String?
+  city        City?     @relation(fields: [cityId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   educations      Education[]
   workExperiences WorkExperience[]
@@ -180,21 +208,28 @@ model Student {
   cvs             Cv[]
   savedJobs       SavedJob[]
   applications    Application[]
+  conversations   Conversation[]
 
   @@map("students")
 }
 
+// Education là nguồn duy nhất cho lịch sử học vấn (không lưu trực tiếp trên
+// Student) vì sinh viên có thể chuyển trường/ngành — mỗi lần chuyển là 1 dòng
+// mới, isCurrent đánh dấu chương trình đang theo học hiện tại.
 model Education {
-  id          String   @id @default(cuid())
-  studentId   String
-  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  school      String
-  degree      String?
-  major       String?
-  startYear   Int?
-  endYear     Int?
-  description String?
-  createdAt   DateTime @default(now())
+  id           String      @id @default(cuid())
+  studentId    String
+  student      Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  universityId String?
+  university   University? @relation(fields: [universityId], references: [id])
+  majorId      String?
+  major        Major?      @relation(fields: [majorId], references: [id])
+  degree       String?
+  startYear    Int?
+  endYear      Int?
+  isCurrent    Boolean     @default(false)
+  description  String?
+  createdAt    DateTime    @default(now())
 
   @@map("educations")
 }
@@ -221,6 +256,7 @@ model Project {
   name        String
   description String?
   url         String?
+  isWorkingOn Boolean   @default(false)
   startDate   DateTime?
   endDate     DateTime?
   createdAt   DateTime  @default(now())
@@ -236,6 +272,7 @@ model Certificate {
   issuer        String?
   issueDate     DateTime?
   credentialUrl String?
+  description   String?
   createdAt     DateTime  @default(now())
 
   @@map("certificates")
@@ -285,14 +322,17 @@ model Company {
   cityId           String?
   city             City?        @relation(fields: [cityId], references: [id])
   address          String?
+  taxCode          String?      @unique
+  foundedYear      Int?
   isVerified       Boolean      @default(false)
   requiresApproval Boolean      @default(true)
   verifiedAt       DateTime?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
-  employers Employer[]
-  jobPosts  JobPost[]
+  employers            Employer[]
+  jobPosts             JobPost[]
+  companySubscriptions CompanySubscription[]
 
   @@map("companies")
 }
@@ -309,37 +349,165 @@ model Employer {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  conversations Conversation[]
+
   @@map("employers")
+}
+
+// ─── subscription & billing ────────────────────────────────────────────────
+// Company phải có CompanySubscription đang ACTIVE còn quota mới được tạo
+// JobPost mới (kể cả DRAFT). Quota còn lại = đếm JobPost tạo trong khoảng
+// [startDate, endDate) của kỳ hiện tại tại query-time (không lưu counter
+// riêng). Nâng cấp gói giữa kỳ = huỷ (CANCELLED) gói cũ + tạo bản ghi mới,
+// không cộng dồn thời hạn/quota còn lại. Chi tiết luồng nghiệp vụ và lý do
+// tách Payment/Transaction/PaymentCallbackLog:
+// docs/designs/SUBSCRIPTION_BILLING_DESIGN.md.
+
+// Catalog do Admin quản lý. Khác các catalog thuần {id, name} (Skill,
+// Industry...), giữ createdAt/updatedAt vì giá/quota/isActive có thể được
+// Admin chỉnh sửa theo thời gian, cần audit.
+model SubscriptionPlan {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  description  String?
+  jobPostQuota Int
+  durationDays Int
+  price        Int
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  companySubscriptions CompanySubscription[]
+
+  @@map("subscription_plans")
+}
+
+model CompanySubscription {
+  id        String             @id @default(cuid())
+  companyId String
+  company   Company            @relation(fields: [companyId], references: [id])
+  planId    String
+  plan      SubscriptionPlan   @relation(fields: [planId], references: [id])
+  startDate DateTime
+  endDate   DateTime
+  status    SubscriptionStatus @default(PENDING)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  payments Payment[]
+
+  @@map("company_subscriptions")
+}
+
+// "Ý định thanh toán" cho 1 CompanySubscription — ổn định, không đổi nhiều
+// lần trong vòng đời, khác với Transaction (mỗi lần gọi cổng).
+model Payment {
+  id                    String              @id @default(cuid())
+  companySubscriptionId String
+  companySubscription   CompanySubscription @relation(fields: [companySubscriptionId], references: [id])
+  amount                Int
+  status                PaymentStatus       @default(PENDING)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  transactions Transaction[]
+
+  @@map("payments")
+}
+
+// Mỗi lần gọi cổng thanh toán (VNPay/Momo) là 1 bản ghi — cho phép retry sau
+// một lần gọi thất bại mà vẫn giữ lịch sử. Append-only (không có updatedAt).
+model Transaction {
+  id                    String            @id @default(cuid())
+  paymentId             String
+  payment               Payment           @relation(fields: [paymentId], references: [id])
+  paymentMethodId       String
+  paymentMethod         PaymentMethod     @relation(fields: [paymentMethodId], references: [id])
+  orderCode             String            @unique
+  providerTransactionId String?           @unique
+  rawResponse           String?
+  status                TransactionStatus @default(INIT)
+  createdAt             DateTime          @default(now())
+
+  @@map("transactions")
+}
+
+// Log thô MỌI callback IPN/webhook nhận được, kể cả khi không khớp được
+// Transaction nào (sai chữ ký, gọi trùng...) — cố tình không có FK để không
+// phụ thuộc việc parse thành công, tách biệt khỏi luồng xử lý nghiệp vụ để
+// tra soát sau này.
+model PaymentCallbackLog {
+  id             String          @id @default(cuid())
+  provider       PaymentProvider
+  rawQueryString String?
+  rawPayload     String?
+  receivedAt     DateTime        @default(now())
+
+  @@map("payment_callback_logs")
+}
+
+// Catalog generic hoá cổng thanh toán — thêm cổng mới (vd. ZaloPay) chỉ cần
+// thêm record, không cần sửa code/enum.
+model PaymentMethod {
+  id            String          @id @default(cuid())
+  displayName   String          @unique
+  logoUrl       String?
+  isAvailable   Boolean         @default(true)
+  processorType PaymentProvider
+  configParams  Json?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  transactions Transaction[]
+
+  @@map("payment_methods")
 }
 
 // ─── job-posts ──────────────────────────────────────────────────────────
 
 model JobPost {
-  id          String        @id @default(cuid())
-  companyId   String
-  company     Company       @relation(fields: [companyId], references: [id])
-  title       String
-  description String
-  jobType     JobPostType
-  status      JobPostStatus @default(DRAFT)
-  salaryMin   Int?
-  salaryMax   Int?
-  cityId      String?
-  city        City?         @relation(fields: [cityId], references: [id])
-  industryId  String?
-  industry    Industry?     @relation(fields: [industryId], references: [id])
-  publishedAt DateTime?
-  expiresAt   DateTime?
-  closedAt    DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id           String        @id @default(cuid())
+  companyId    String
+  company      Company       @relation(fields: [companyId], references: [id])
+  title        String
+  description  String
+  jobType      JobPostType
+  status       JobPostStatus @default(DRAFT)
+  salaryMin    Int?
+  salaryMax    Int?
+  isNegotiable Boolean       @default(false)
+  requirements String?
+  benefits     String?
+  cityId       String?
+  city         City?         @relation(fields: [cityId], references: [id])
+  address      String?
+  industryId   String?
+  industry     Industry?     @relation(fields: [industryId], references: [id])
+  publishedAt  DateTime?
+  expiresAt    DateTime?
+  closedAt     DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 
   moderationActions JobPostModerationAction[]
   applications      Application[]
   savedBy           SavedJob[]
   conversations     Conversation[]
+  skills            JobPostSkill[]
 
   @@map("job_posts")
+}
+
+// Kỹ năng yêu cầu của tin tuyển dụng, dùng chung catalog Skill với
+// StudentSkill để so khớp được khi triển khai AI matching (Phase 10).
+model JobPostSkill {
+  jobPostId String
+  jobPost   JobPost @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  skillId   String
+  skill     Skill   @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@id([jobPostId, skillId])
+  @@map("job_post_skills")
 }
 
 model JobPostModerationAction {
@@ -394,6 +562,7 @@ model Application {
   cvId          String
   cv            Cv                @relation(fields: [cvId], references: [id])
   status        ApplicationStatus @default(PENDING)
+  coverLetter   String?
   employerNotes String?
   rating        Int?
   createdAt     DateTime          @default(now())
@@ -404,29 +573,27 @@ model Application {
 }
 
 // ─── messaging ──────────────────────────────────────────────────────────
+// Mỗi Conversation gắn cố định đúng 1 Student + 1 Employer (đã xác nhận
+// nghiệp vụ: không phải hộp thư chung nhiều nhân viên của công ty), nên dùng
+// FK trực tiếp thay vì bảng nối participant generic.
 
 model Conversation {
-  id        String   @id @default(cuid())
-  jobPostId String?
-  jobPost   JobPost? @relation(fields: [jobPostId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                 String    @id @default(cuid())
+  jobPostId          String?
+  jobPost            JobPost?  @relation(fields: [jobPostId], references: [id])
+  studentId          String
+  student            Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  employerId         String
+  employer           Employer  @relation(fields: [employerId], references: [id], onDelete: Cascade)
+  studentLastReadAt  DateTime?
+  employerLastReadAt DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  participants ConversationParticipant[]
-  messages     Message[]
+  messages Message[]
 
+  @@unique([studentId, employerId, jobPostId])
   @@map("conversations")
-}
-
-model ConversationParticipant {
-  conversationId String
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  userId         String
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  lastReadAt     DateTime?
-
-  @@id([conversationId, userId])
-  @@map("conversation_participants")
 }
 
 model Message {

@@ -196,11 +196,15 @@ Chi tiết đầy đủ và các quyết định (Nginx dev setup, vai trò Redi
 2. `CrawledJob` (crawl tin tuyển dụng từ nguồn ngoài) xuất hiện trong class diagram nhưng không có trong use case/mô tả nghiệp vụ — đã quyết định: **ngoài phạm vi** hiện tại, không đưa vào roadmap.
 3. ~~`JobPost.jobType` hiện là kiểu `String` tự do...~~ **Đã chốt ở Phase 1:** `JobPostType` enum theo hình thức tuyển dụng — `INTERNSHIP | PART_TIME | FULL_TIME | CONTRACT` (không giới hạn nền tảng vào mỗi tin thực tập, khớp với các field lọc sẵn có theo lương/ngành/địa điểm).
 4. `Employer.company` chưa rõ kiểu dữ liệu trong diagram — cần xác nhận là quan hệ bắt buộc tới `Company`.
-5. ~~`Conversation` hiện gắn với bộ ba cố định...~~ **Đã chốt ở Phase 1:** `Conversation.jobPost` là quan hệ optional trong schema (theo đề xuất ban đầu) — cho phép liên hệ chung không gắn tin cụ thể; sẽ xác nhận lại UX thật khi implement Phase 8.
+5. ~~`Conversation` hiện gắn với bộ ba cố định...~~ **Đã chốt ở Phase 1:** `Conversation.jobPost` là quan hệ optional trong schema (theo đề xuất ban đầu) — cho phép liên hệ chung không gắn tin cụ thể; sẽ xác nhận lại UX thật khi implement Phase 9.
 6. Use Case Diagram chỉ vẽ "Đăng tin/Cập nhật tin" cho nhà tuyển dụng, không có "Đóng tin", trong khi Class Diagram có đầy đủ `close()`/`expire()` và trạng thái tương ứng — coi Use Case Diagram là bản minh hoạ rút gọn, vẫn triển khai đầy đủ vòng đời tin tuyển dụng.
 7. Cơ chế duyệt tin/thu hồi tin (`Company.requiresApproval`, `Company.retractionCount`, entity `JobPostModerationAction`, trạng thái `TAKEN_DOWN`) là quyết định nghiệp vụ mới, **chưa có trong Class Diagram gốc** — cần cập nhật chính thức vào diagram trước khi trình bày khoá luận.
 8. Ngưỡng tự động hoá dựa trên `retractionCount` (ví dụ tự động chuyển `requiresApproval = true` khi vượt ngưỡng) chưa được xây dựng ở MVP — Admin quyết định thủ công dựa trên số liệu hiển thị; có thể cân nhắc tự động hoá ở giai đoạn sau.
 9. Root `package.json` có field `description` bị lỗi encoding (dữ liệu UTF-16 sót lại) — lỗi cosmetic, không ảnh hưởng chức năng, có thể sửa khi tiện.
+10. ~~`Student` liên kết trực tiếp `University`/`Major`/`graduationYear` (chỉ lưu được 1 trường/ngành "hiện tại").~~ **Đã chốt:** chuyển hẳn quan hệ `University`/`Major` sang `Education` (kèm `isCurrent`) — sinh viên có thể chuyển trường/ngành, mỗi lần chuyển là 1 dòng lịch sử mới thay vì ghi đè 1 giá trị cố định trên `Student`. Chi tiết: `docs/03-database/DATABASE_DESIGN.md`.
+11. ~~`Conversation` dùng bảng nối `ConversationParticipant` (generic N-N với `User`).~~ **Đã chốt:** đổi sang FK trực tiếp `Conversation.studentId`/`employerId` — đã xác nhận nghiệp vụ mỗi cuộc trò chuyện luôn đúng 1 candidate + 1 employer, không phải hộp thư chung nhiều nhân viên công ty.
+12. ~~`JobPost` thiếu địa chỉ cụ thể và liên kết kỹ năng yêu cầu.~~ **Đã chốt:** thêm `JobPost.address` (địa chỉ cụ thể, độc lập với `cityId` — cần thiết khi 1 công ty có nhiều chi nhánh cùng thành phố) và bảng nối `JobPostSkill` (dùng chung catalog `Skill` với `StudentSkill`, chuẩn bị cho AI matching CV↔JobPost — mục 8).
+13. Đã bổ sung một số field mô tả còn thiếu so với class diagram tham khảo: `Student.gender`, `University.code`, `City.zipcode`, `Company.taxCode`/`foundedYear`, `Application.coverLetter`, `Project.isWorkingOn`, `Certificate.description`, `JobPost.isNegotiable`/`requirements`/`benefits`.
 
 ## 15. High-level development roadmap
 
@@ -211,12 +215,13 @@ Xem chi tiết đầy đủ (Goal/Modules/Deliverables/Dependencies/DoD/Risks t�
 2. Identity & Access
 3. Candidate Profile
 4. Employer & Company
-5. Job Recruitment (bao gồm cơ chế duyệt/thu hồi tin)
-6. CV & Saved Jobs
-7. Application Module
-8. Realtime Messaging
-9. Notifications & Email
-10. AI Features Boundary
-11. Integration & Security Hardening
-12. Testing & Quality
-13. Deployment & Thesis Prep
+5. Subscription & Payment cho đăng tin tuyển dụng
+6. Job Recruitment (bao gồm cơ chế duyệt/thu hồi tin)
+7. CV & Saved Jobs
+8. Application Module
+9. Realtime Messaging
+10. Notifications & Email
+11. AI Features Boundary
+12. Integration & Security Hardening
+13. Testing & Quality
+14. Deployment & Thesis Prep
