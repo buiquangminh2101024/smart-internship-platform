@@ -46,6 +46,4 @@ Agent Skill/
 .claude-workspace/
 
 # folders in docs
-docs/template_ui
-docs/05-frontend
-docs/06-backend
+docs/temp

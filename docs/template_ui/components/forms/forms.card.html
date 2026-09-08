@@ -1,0 +1,35 @@
+<!-- @dsCard group="Components" viewport="700x380" name="Forms — Input, Textarea, Select, Checkbox, Switch" subtitle="Label / hint / error shell, focus and invalid states" -->
+<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>body{background:var(--surface-card);padding:var(--space-5)}.grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-4)}</style>
+</head><body><div id="root"></div>
+<script type="text/babel">
+const { Input, Textarea, Select, Checkbox, Switch } = window.InternHubDesignSystem_f6cc55;
+function Demo(){
+  const [v,setV] = React.useState('Thực tập sinh Frontend tại Đà Nẵng, 3 tháng.');
+  const [c1,setC1] = React.useState(true), [s1,setS1] = React.useState(true);
+  return (<div className="grid">
+    <div style={{display:'grid',gap:'var(--space-4)'}}>
+      <Input label="Email trường" type="email" icon="mail" placeholder="ban@sinhvien.edu.vn" hint="Dùng email trường để được ưu tiên xác thực." required />
+      <Input label="Mức lương mong muốn" icon="wallet" defaultValue="4tr" error="Vui lòng nhập số, ví dụ 4000000." />
+      <Select label="Ngành" options={["Công nghệ thông tin","Marketing","Kế toán – Kiểm toán"]} />
+      <Input label="Đã khóa" icon="lock" defaultValue="Không thể sửa" disabled />
+    </div>
+    <div style={{display:'grid',gap:'var(--space-4)'}}>
+      <Input icon="search" placeholder="Tìm vị trí, công ty, kỹ năng…" />
+      <Textarea label="Mô tả ngắn" rows={3} maxLength={160} value={v} onChange={e=>setV(e.target.value)} />
+      <div style={{display:'grid',gap:'var(--space-2)'}}>
+        <Checkbox label="Remote" checked={c1} onChange={()=>setC1(!c1)} />
+        <Checkbox indeterminate label="Chọn tất cả ứng viên" />
+        <Checkbox label="Đồng ý cho nhà tuyển dụng xem CV" description="Bạn có thể tắt bất cứ lúc nào trong Cài đặt." />
+        <Switch label="Nhận email khi có tin phù hợp" checked={s1} onChange={()=>setS1(!s1)} />
+        <Switch label="Ẩn hồ sơ khỏi tìm kiếm" checked={false} onChange={()=>{}} />
+      </div>
+    </div>
+  </div>);
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo/>);
+</script></body></html>

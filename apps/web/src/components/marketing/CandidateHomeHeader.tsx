@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api-client";
-import { useAuthStore, useCurrentUser } from "@/stores/auth-store";
+import { useCandidateAuthStore, useCurrentUser } from "@/stores/auth-store";
 import { Button } from "@/components/ui/Button";
 
 const NAV_LINKS = [
@@ -17,17 +17,17 @@ const NAV_LINKS = [
 // chính (hero, roles, lifecycle...) giữ nguyên cho cả guest lẫn Candidate.
 export function CandidateHomeHeader() {
   const router = useRouter();
-  const user = useCurrentUser();
-  const hasHydrated = useAuthStore((s) => s.hasHydrated);
+  const user = useCurrentUser("candidate");
+  const hasHydrated = useCandidateAuthStore((s) => s.hasHydrated);
 
   async function handleLogout() {
-    const refreshToken = useAuthStore.getState().refreshToken ?? undefined;
+    const refreshToken = useCandidateAuthStore.getState().refreshToken ?? undefined;
     try {
-      await apiFetch("/auth/logout", { method: "POST", body: JSON.stringify({ refreshToken }) });
+      await apiFetch("candidate", "/auth/logout", { method: "POST", body: JSON.stringify({ refreshToken }) });
     } catch {
       // Ưu tiên clear phía client ngay cả khi API logout thất bại.
     } finally {
-      useAuthStore.getState().clear();
+      useCandidateAuthStore.getState().clear();
       router.refresh();
     }
   }

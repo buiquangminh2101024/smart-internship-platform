@@ -1,0 +1,144 @@
+:root {
+  /* ---------- Base ramps ---------- */
+  /* Neutral: a cool-leaning slate with a trace of green, so it sits calmly under Pine. */
+  --n-0: #ffffff;
+  --n-25: #fafbfb;
+  --n-50: #f4f6f6;
+  --n-100: #e8eceb;
+  --n-200: #d5dbda;
+  --n-300: #b4bebc;
+  --n-400: #8a9694;
+  --n-500: #64716f;
+  --n-600: #4a5654;
+  --n-700: #333e3c;
+  --n-800: #202927;
+  --n-900: #121917;
+
+  /* Pine — the primary. Institutional green-teal: growth + steadiness, and deliberately
+     not the recruiting-industry default blue. */
+  --pine-50: #e8f4f1;
+  --pine-100: #c8e6df;
+  --pine-200: #93ccc0;
+  --pine-300: #5fb0a1;
+  --pine-400: #339483;
+  --pine-500: #0e7a67;
+  --pine-600: #0a6154;
+  --pine-700: #084c42;
+  --pine-800: #063b33;
+  --pine-900: #042a25;
+
+  /* Marigold — the single warm accent. Approachability, highlights, "needs your action". */
+  --marigold-50: #fef6e7;
+  --marigold-100: #fde8c2;
+  --marigold-200: #f9ce7f;
+  --marigold-300: #f4b547;
+  --marigold-400: #ea9e1f;
+  --marigold-500: #c97f0c;
+  --marigold-600: #9e6208;
+
+  /* Role ramps — Indigo = Employer, Plum = Admin. Candidate reuses Pine. */
+  --indigo-50: #ecf0fb;
+  --indigo-100: #d3ddf5;
+  --indigo-300: #7793d8;
+  --indigo-500: #2a4a9b;
+  --indigo-600: #1f3878;
+  --plum-50: #f3edf9;
+  --plum-100: #e2d4ee;
+  --plum-300: #a179c4;
+  --plum-500: #6d3f94;
+  --plum-600: #553075;
+
+  /* Semantic ramps */
+  --green-50: #e7f4ec;
+  --green-500: #157f4c;
+  --green-600: #0f6339;
+  --red-50: #fbeae8;
+  --red-500: #b5342b;
+  --red-600: #932820;
+  --blue-50: #e8f2fa;
+  --blue-500: #1f6fb2;
+  --blue-600: #17568b;
+
+  /* ---------- Semantic aliases ---------- */
+  /* Text */
+  --text-strong: var(--n-900);
+  --text-body: var(--n-700);
+  --text-muted: var(--n-500);
+  --text-subtle: var(--n-400);
+  --text-inverse: var(--n-0);
+  --text-brand: var(--pine-600);
+  --text-link: var(--pine-600);
+  --text-link-hover: var(--pine-700);
+  --text-danger: var(--red-500);
+  --text-success: var(--green-500);
+
+  /* Surfaces */
+  --surface-page: var(--n-50);
+  --surface-card: var(--n-0);
+  --surface-raised: var(--n-0);
+  --surface-sunken: var(--n-100);
+  --surface-brand: var(--pine-500);
+  --surface-brand-soft: var(--pine-50);
+  --surface-brand-deep: var(--pine-800);
+  --surface-accent-soft: var(--marigold-50);
+  --surface-hover: var(--n-50);
+  --surface-active: var(--n-100);
+  --surface-disabled: var(--n-100);
+  --surface-overlay: rgba(18, 25, 23, 0.52);
+
+  /* Borders */
+  --border-subtle: var(--n-100);
+  --border-default: var(--n-200);
+  --border-strong: var(--n-300);
+  --border-brand: var(--pine-500);
+  --border-focus: var(--pine-400);
+  --ring-focus: 0 0 0 3px rgba(51, 148, 131, 0.32);
+  --ring-danger: 0 0 0 3px rgba(181, 52, 43, 0.24);
+
+  /* Actions */
+  --action-primary-bg: var(--pine-500);
+  --action-primary-bg-hover: var(--pine-600);
+  --action-primary-bg-active: var(--pine-700);
+  --action-primary-fg: var(--n-0);
+  --action-secondary-bg: var(--n-0);
+  --action-secondary-fg: var(--pine-700);
+  --action-ghost-fg: var(--n-600);
+  --action-accent-bg: var(--marigold-300);
+  --action-accent-fg: var(--n-900);
+  --action-danger-bg: var(--red-500);
+
+  /* Roles */
+  --role-candidate: var(--pine-500);
+  --role-candidate-soft: var(--pine-50);
+  --role-candidate-ink: var(--pine-700);
+  --role-employer: var(--indigo-500);
+  --role-employer-soft: var(--indigo-50);
+  --role-employer-ink: var(--indigo-600);
+  --role-admin: var(--plum-500);
+  --role-admin-soft: var(--plum-50);
+  --role-admin-ink: var(--plum-600);
+
+  /* Feedback */
+  --feedback-success: var(--green-500);
+  --feedback-success-soft: var(--green-50);
+  --feedback-warning: var(--marigold-500);
+  --feedback-warning-soft: var(--marigold-50);
+  --feedback-danger: var(--red-500);
+  --feedback-danger-soft: var(--red-50);
+  --feedback-info: var(--blue-500);
+  --feedback-info-soft: var(--blue-50);
+
+  /* Job-post lifecycle: draft → review → published → closed / expired / taken down */
+  --status-draft-fg: var(--n-600);
+  --status-draft-bg: var(--n-100);
+  --status-review-fg: var(--marigold-600);
+  --status-review-bg: var(--marigold-50);
+  --status-published-fg: var(--green-600);
+  --status-published-bg: var(--green-50);
+  --status-closed-fg: var(--n-0);
+  --status-closed-bg: var(--n-600);
+  --status-expired-fg: var(--n-500);
+  --status-expired-bg: var(--n-50);
+  --status-takendown-fg: var(--red-600);
+  --status-takendown-bg: var(--red-50);
+}

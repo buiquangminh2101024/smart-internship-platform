@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api-client";
-import { useAuthStore, useCurrentUser } from "@/stores/auth-store";
+import { useEmployerAuthStore, useCurrentUser } from "@/stores/auth-store";
 import { Button } from "@/components/ui/Button";
 
 const NAV_LINKS = [
@@ -17,17 +17,17 @@ const NAV_LINKS = [
 // nhập, cùng nguyên tắc "chỉ đổi navbar" đã áp dụng ở CandidateHomeHeader.
 export function EmployerHomeHeader() {
   const router = useRouter();
-  const user = useCurrentUser();
-  const hasHydrated = useAuthStore((s) => s.hasHydrated);
+  const user = useCurrentUser("employer");
+  const hasHydrated = useEmployerAuthStore((s) => s.hasHydrated);
 
   async function handleLogout() {
-    const refreshToken = useAuthStore.getState().refreshToken ?? undefined;
+    const refreshToken = useEmployerAuthStore.getState().refreshToken ?? undefined;
     try {
-      await apiFetch("/auth/logout", { method: "POST", body: JSON.stringify({ refreshToken }) });
+      await apiFetch("employer", "/auth/logout", { method: "POST", body: JSON.stringify({ refreshToken }) });
     } catch {
       // Ưu tiên clear phía client ngay cả khi API logout thất bại.
     } finally {
-      useAuthStore.getState().clear();
+      useEmployerAuthStore.getState().clear();
       router.refresh();
     }
   }

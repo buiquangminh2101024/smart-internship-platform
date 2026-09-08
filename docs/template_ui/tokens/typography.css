@@ -1,0 +1,47 @@
+:root {
+  /* Size scale — 13px is the UI floor; anything smaller loses Vietnamese tone marks. */
+  --text-2xs: 11px;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-md: 16px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+  --text-4xl: 36px;
+  --text-5xl: 46px;
+  --text-6xl: 58px;
+
+  --weight-light: 300;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --weight-extrabold: 800;
+
+  /* Line heights are generous — stacked diacritics need vertical air. */
+  --leading-tight: 1.18;
+  --leading-snug: 1.32;
+  --leading-normal: 1.55;
+  --leading-relaxed: 1.7;
+
+  --tracking-tight: -0.02em;
+  --tracking-snug: -0.01em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.02em;
+  --tracking-caps: 0.08em;
+
+  /* Roles */
+  --type-display: var(--weight-extrabold) var(--text-5xl) / var(--leading-tight) var(--font-display);
+  --type-h1: var(--weight-bold) var(--text-3xl) / var(--leading-snug) var(--font-display);
+  --type-h2: var(--weight-bold) var(--text-2xl) / var(--leading-snug) var(--font-display);
+  --type-h3: var(--weight-semibold) var(--text-lg) / var(--leading-snug) var(--font-core);
+  --type-body-lg: var(--weight-regular) var(--text-md) / var(--leading-normal) var(--font-core);
+  --type-body: var(--weight-regular) var(--text-base) / var(--leading-normal) var(--font-core);
+  --type-body-sm: var(--weight-regular) var(--text-sm) / var(--leading-normal) var(--font-core);
+  --type-label: var(--weight-semibold) var(--text-sm) / var(--leading-snug) var(--font-core);
+  --type-meta: var(--weight-medium) var(--text-xs) / var(--leading-snug) var(--font-core);
+  --type-eyebrow: var(--weight-bold) var(--text-xs) / var(--leading-snug) var(--font-core);
+  --type-mono: var(--weight-regular) var(--text-sm) / var(--leading-normal) var(--font-mono);
+}

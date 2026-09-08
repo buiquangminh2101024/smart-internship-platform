@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<!-- @template name="App screen (role shell)" description="Authenticated InternHub shell — role-tinted sidebar, top bar and a job list. Start here for candidate, employer or admin screens." -->
+<helmet><script src="./ds-base.js"></script></helmet>
+<div style="display:flex;min-height:100vh;background:#F4F6F6;font-family:'Be Vietnam Pro',system-ui,sans-serif">
+<x-import component-from-global-scope="InternHubDesignSystem_f6cc55.SideNav" role="{{ role }}" items="{{ navItems }}" value="{{ navValue }}" onChange="{{ setNav }}" hint-size="248px,100%">
+</x-import>
+<main style="flex:1;min-width:0;display:flex;flex-direction:column">
+<header style="height:64px;flex:none;display:flex;align-items:center;gap:12px;padding:0 24px;background:#FFFFFF;border-bottom:1px solid #E8ECEB">
+<h2 style="margin:0;font-size:20px;font-weight:700;color:#121917;flex:1;letter-spacing:-0.01em">Tìm việc thực tập</h2>
+<x-import component-from-global-scope="InternHubDesignSystem_f6cc55.RoleBadge" role="{{ role }}" hint-size="140px,24px"></x-import>
+<x-import component-from-global-scope="InternHubDesignSystem_f6cc55.IconButton" icon="bell" label="Thông báo" hint-size="40px,40px"></x-import>
+<x-import component-from-global-scope="InternHubDesignSystem_f6cc55.Avatar" name="Nguyễn Minh Anh" size="sm" hint-size="32px,32px"></x-import>
+</header>
+<div style="flex:1;min-width:0;padding:24px;display:flex;gap:24px;align-items:flex-start;max-width:1240px">
+<div style="flex:1;min-width:0;display:grid;gap:12px">
+<div style="display:flex;align-items:center;justify-content:space-between;gap:16px">
+<span style="font-size:13px;font-weight:400;color:#64716F">3 tin phù hợp · cập nhật hôm nay</span>
+<x-import component-from-global-scope="InternHubDesignSystem_f6cc55.Button" variant="secondary" size="sm" icon="sliders-horizontal" hint-size="120px,32px">Bộ lọc</x-import>
+</div>
+<sc-for list="{{ jobs }}" as="job" hint-placeholder-count="3">
+<x-import component-from-global-scope="InternHubDesignSystem_f6cc55.JobCard" dc-props="{{ job }}" hint-size="100%,150px"></x-import>
+</sc-for>
+</div>
+<aside style="width:300px;flex:none;display:grid;gap:16px">
+<div style="background:#FFFFFF;border:1px solid #E8ECEB;border-radius:10px;box-shadow:0 1px 2px rgba(18,25,23,0.05);padding:16px;display:grid;gap:8px">
+<span style="font-size:13px;font-weight:600;color:#121917">Gợi ý cho bạn</span>
+<p style="margin:0;font-size:13px;line-height:1.55;color:#64716F">Thêm mô tả dự án vào hồ sơ để nhà tuyển dụng dễ tìm thấy bạn hơn.</p>
+<x-import component-from-global-scope="InternHubDesignSystem_f6cc55.Button" variant="secondary" size="sm" hint-size="100%,32px">Hoàn thiện hồ sơ</x-import>
+</div>
+<div style="background:#E8F4F1;border:1px solid #C8E6DF;border-radius:10px;padding:16px;display:grid;gap:6px">
+<span style="font-size:13px;font-weight:600;color:#063B33">Vòng đời tin tuyển dụng</span>
+<p style="margin:0;font-size:13px;line-height:1.55;color:#084C42">Nháp → Chờ duyệt → Đang hiển thị → Đã đóng / Hết hạn / Đã hạ.</p>
+</div>
+</aside>
+</div>
+</main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:900},&quot;role&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;candidate&quot;,&quot;employer&quot;,&quot;admin&quot;],&quot;default&quot;:&quot;candidate&quot;,&quot;tsType&quot;:&quot;\&quot;candidate\&quot; | \&quot;employer\&quot; | \&quot;admin\&quot;&quot;,&quot;section&quot;:&quot;Shell&quot;}}">
+class Component extends DCLogic {
+  state = { nav: "search" };
+  renderVals() {
+    const role = this.props.role ?? "candidate";
+    const navByRole = {
+      candidate: [
+        { value: "search", label: "Tìm việc", icon: "search" },
+        { value: "saved", label: "Tin đã lưu", icon: "bookmark", count: 2 },
+        { value: "apps", label: "Hồ sơ đã gửi", icon: "send", count: 3 },
+        { section: "Của bạn" },
+        { value: "messages", label: "Tin nhắn", icon: "message-square", count: 2 },
+        { value: "profile", label: "Hồ sơ & CV", icon: "file-user" },
+      ],
+      employer: [
+        { value: "search", label: "Tổng quan", icon: "layout-dashboard" },
+        { section: "Tuyển dụng" },
+        { value: "jobs", label: "Tin tuyển dụng", icon: "briefcase", count: 6 },
+        { value: "cands", label: "Ứng viên", icon: "users", count: 5 },
+        { value: "messages", label: "Tin nhắn", icon: "message-square", count: 3 },
+      ],
+      admin: [
+        { value: "search", label: "Tổng quan", icon: "layout-dashboard" },
+        { section: "Kiểm duyệt" },
+        { value: "verify", label: "Xác thực doanh nghiệp", icon: "shield-check", count: 2 },
+        { value: "queue", label: "Duyệt tin tuyển dụng", icon: "file-check-2", count: 3 },
+        { value: "users", label: "Người dùng", icon: "users" },
+      ],
+    };
+    const showStatus = role !== "candidate";
+    const jobs = [
+      { title: "Thực tập sinh Frontend (ReactJS)", company: "FPT Software", verified: true, isNew: true, location: "Hà Nội", salary: "4 – 6 triệu / tháng", deadline: "Còn 12 ngày", tags: ["React", "3 tháng", "Hybrid"] },
+      { title: "Thực tập sinh Digital Marketing", company: "Tiki", verified: true, location: "TP. Hồ Chí Minh", salary: "3 – 5 triệu / tháng", deadline: "Còn 4 ngày", tags: ["Content", "6 tháng"] },
+      { title: "Thực tập sinh Kiểm thử phần mềm", company: "VNG Corporation", verified: true, location: "TP. Hồ Chí Minh", salary: "Thỏa thuận", deadline: "Còn 20 ngày", tags: ["Manual QA"] },
+    ].map((j, i) => ({
+      ...j,
+      status: showStatus ? ["published", "review", "draft"][i] : undefined,
+      onSave: showStatus ? undefined : () => {},
+      onClick: () => {},
+    }));
+    return {
+      role,
+      jobs,
+      navItems: navByRole[role] || navByRole.candidate,
+      navValue: this.state.nav,
+      setNav: (v) => this.setState({ nav: v }),
+    };
+  }
+}
+
+</script>
+</body>
+</html>

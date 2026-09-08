@@ -1,0 +1,28 @@
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  font: var(--type-body);
+  color: var(--text-body);
+  background: var(--surface-page);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+h1, h2, h3, h4, h5, h6 { margin: 0; color: var(--text-strong); text-wrap: pretty; }
+h1 { font: var(--type-h1); letter-spacing: var(--tracking-tight); }
+h2 { font: var(--type-h2); letter-spacing: var(--tracking-snug); }
+h3 { font: var(--type-h3); }
+p { margin: 0; text-wrap: pretty; }
+a { color: var(--text-link); text-decoration: none; text-underline-offset: 3px; transition: color var(--duration-fast) var(--ease-standard); }
+a:hover { color: var(--text-link-hover); text-decoration: underline; }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--pine-500);
+  outline-offset: 2px;
+}
+button { font: inherit; }
+code, kbd, pre { font-family: var(--font-mono); }
+::selection { background: var(--pine-100); color: var(--pine-900); }
+:root { color-scheme: light; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

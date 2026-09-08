@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import type { AuthTokensResponse, UserProfile } from "@sip/shared-types";
-import { apiFetch, ApiError } from "@/lib/api-client";
+import { publicFetch, ApiError } from "@/lib/api-client";
 import { completeAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -38,7 +38,7 @@ export function OtpForm({ email, onVerified }: OtpFormProps) {
 
     setSubmitting(true);
     try {
-      const tokens = await apiFetch<AuthTokensResponse>("/auth/verify-otp", {
+      const tokens = await publicFetch<AuthTokensResponse>("/auth/verify-otp", {
         method: "POST",
         body: JSON.stringify({ email, otp }),
       });
@@ -55,7 +55,7 @@ export function OtpForm({ email, onVerified }: OtpFormProps) {
     setError(null);
     setResending(true);
     try {
-      await apiFetch("/auth/resend-otp", { method: "POST", body: JSON.stringify({ email }) });
+      await publicFetch("/auth/resend-otp", { method: "POST", body: JSON.stringify({ email }) });
       setCooldown(RESEND_COOLDOWN_SECONDS);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Không gửi lại được mã, vui lòng thử lại");

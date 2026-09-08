@@ -1,0 +1,31 @@
+<!-- @dsCard group="Components" viewport="700x360" name="Domain — JobCard, RoleBadge, StatCard" subtitle="The job posting object, actor labels, dashboard metrics" -->
+<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>body{background:var(--surface-page);padding:var(--space-5)}</style>
+</head><body><div id="root"></div>
+<script type="text/babel">
+const { JobCard, RoleBadge, StatCard, Button } = window.InternHubDesignSystem_f6cc55;
+function Demo(){
+  const [saved,setSaved] = React.useState(false);
+  return (<div style={{display:'grid',gap:'var(--space-4)'}}>
+    <div style={{display:'flex',gap:'var(--space-2)',alignItems:'center'}}>
+      <RoleBadge role="candidate" /><RoleBadge role="employer" /><RoleBadge role="admin" />
+      <RoleBadge role="employer" variant="solid" /><RoleBadge role="admin" variant="solid" />
+    </div>
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'var(--space-3)'}}>
+      <JobCard title="Thực tập sinh Frontend" company="FPT Software" verified isNew location="Hà Nội" salary="4 – 6 triệu / tháng" deadline="Còn 12 ngày" tags={["React","3 tháng","Hybrid"]} saved={saved} onSave={()=>setSaved(!saved)} onClick={()=>{}} />
+      <JobCard title="Thực tập sinh Marketing" company="Tiki" location="TP. Hồ Chí Minh" salary="Thỏa thuận" deadline="Còn 4 ngày" status="review" tags={["Content","6 tháng"]} footer={<div style={{display:'flex',gap:'var(--space-2)'}}><Button size="sm" variant="primary">Duyệt tin</Button><Button size="sm" variant="ghost">Yêu cầu sửa</Button></div>} />
+    </div>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'var(--space-3)'}}>
+      <StatCard icon="briefcase" label="Tin đang hiển thị" value={12} />
+      <StatCard icon="users" label="Hồ sơ mới" value={48} delta="+8" deltaTone="up" hint="tuần này" />
+      <StatCard icon="clock" label="Chờ duyệt" value={5} unit="tin" />
+      <StatCard icon="message-square" label="Chưa trả lời" value={3} delta="-2" deltaTone="down" hint="so với tuần trước" />
+    </div>
+  </div>);
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo/>);
+</script></body></html>

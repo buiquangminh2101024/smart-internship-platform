@@ -1,0 +1,11 @@
+<!-- @dsCard group="Effects" viewport="700x170" name="Interaction states" subtitle="Hover, pressed, focus ring, selected, disabled." -->
+<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><title>Interaction states</title><link rel="stylesheet" href="../styles.css">
+<style>body{background:var(--surface-card);margin:0;padding:18px 20px;font:var(--type-body)}.sw{display:flex;gap:0;border-radius:var(--radius-md);overflow:hidden;border:1px solid var(--border-subtle)}.sw>div{flex:1;height:56px;display:flex;align-items:flex-end;padding:6px;font:var(--type-meta);font-size:10px}.lg{display:grid;gap:10px}.rowc{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.tk{font:var(--type-mono);font-size:11px;color:var(--text-subtle)}.cap{font:var(--type-meta);color:var(--text-muted)}</style>
+</head><body><div class="lg"><div class="rowc" style="gap:12px">
+  <div style="height:40px;padding:0 16px;border-radius:var(--radius-md);background:var(--action-primary-bg);color:#fff;font:var(--type-label);display:flex;align-items:center">rest</div>
+  <div style="height:40px;padding:0 16px;border-radius:var(--radius-md);background:var(--action-primary-bg-hover);color:#fff;font:var(--type-label);display:flex;align-items:center">hover 600</div>
+  <div style="height:40px;padding:0 16px;border-radius:var(--radius-md);background:var(--action-primary-bg-active);color:#fff;font:var(--type-label);display:flex;align-items:center;transform:translateY(.5px)">pressed 700</div>
+  <div style="height:40px;padding:0 16px;border-radius:var(--radius-md);background:var(--surface-card);border:1px solid var(--border-focus);box-shadow:var(--ring-focus);font:var(--type-label);display:flex;align-items:center">focus ring</div>
+  <div style="height:40px;padding:0 16px;border-radius:var(--radius-md);background:var(--pine-50);color:var(--pine-700);border:1px solid var(--pine-500);font:var(--type-label);display:flex;align-items:center">selected</div>
+  <div style="height:40px;padding:0 16px;border-radius:var(--radius-md);background:var(--surface-disabled);color:var(--text-subtle);font:var(--type-label);display:flex;align-items:center">disabled</div>
+  </div><div class="cap">Hover darkens one step, press darkens two and nudges 0.5px. No scaling, no lifting, no glow.</div></div></body></html>

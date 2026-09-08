@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { RegistrableRole } from "@sip/shared-types";
 import type { AuthTokensResponse } from "@sip/shared-types";
-import { apiFetch, ApiError } from "@/lib/api-client";
+import { publicFetch, ApiError } from "@/lib/api-client";
 import { completeAuth, redirectPathForRole } from "@/lib/auth";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -32,7 +32,7 @@ export function RegisterForm({ role }: RegisterFormProps) {
     setFormError(null);
     setGoogleSubmitting(true);
     try {
-      const tokens = await apiFetch<AuthTokensResponse>("/auth/google", {
+      const tokens = await publicFetch<AuthTokensResponse>("/auth/google", {
         method: "POST",
         body: JSON.stringify({ idToken, role }),
       });
@@ -58,7 +58,7 @@ export function RegisterForm({ role }: RegisterFormProps) {
 
     setSubmitting(true);
     try {
-      await apiFetch("/auth/register", { method: "POST", body: JSON.stringify({ email, password, role }) });
+      await publicFetch("/auth/register", { method: "POST", body: JSON.stringify({ email, password, role }) });
       setStep("otp");
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : "Không đăng ký được, vui lòng thử lại");

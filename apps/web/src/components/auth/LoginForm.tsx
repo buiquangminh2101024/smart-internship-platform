@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { AuthTokensResponse, RegistrableRole } from "@sip/shared-types";
-import { apiFetch, ApiError } from "@/lib/api-client";
+import { publicFetch, ApiError } from "@/lib/api-client";
 import { completeAuth, redirectPathForRole } from "@/lib/auth";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -27,7 +27,7 @@ export function LoginForm({ role }: LoginFormProps) {
     setFormError(null);
     setGoogleSubmitting(true);
     try {
-      const tokens = await apiFetch<AuthTokensResponse>("/auth/google", {
+      const tokens = await publicFetch<AuthTokensResponse>("/auth/google", {
         method: "POST",
         body: JSON.stringify({ idToken, role }),
       });
@@ -46,7 +46,7 @@ export function LoginForm({ role }: LoginFormProps) {
     setSubmitting(true);
 
     try {
-      const tokens = await apiFetch<AuthTokensResponse>("/auth/login", {
+      const tokens = await publicFetch<AuthTokensResponse>("/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
@@ -56,7 +56,7 @@ export function LoginForm({ role }: LoginFormProps) {
       if (err instanceof ApiError && err.status === 403 && err.message.toLowerCase().includes("not verified")) {
         // Tài khoản chưa xác thực OTP lúc đăng ký — gửi lại mã rồi chuyển sang bước OTP.
         try {
-          await apiFetch("/auth/resend-otp", { method: "POST", body: JSON.stringify({ email }) });
+          await publicFetch("/auth/resend-otp", { method: "POST", body: JSON.stringify({ email }) });
         } catch {
           // Bỏ qua — OtpForm vẫn cho người dùng bấm "Gửi lại mã" thủ công.
         }

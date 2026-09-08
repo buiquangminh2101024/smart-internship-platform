@@ -52,6 +52,25 @@ Log các quyết định kiến trúc phát sinh trong quá trình triển khai 
 
 ---
 
+## AD-4 — Cô lập auth state theo actor area (`apps/web`), thay một phần AD-1/AD-2
+
+**Ngày:** 2026-09-08 · **Phase liên quan:** 05-frontend Phase 2 (Identity & Access)
+
+**Quyết định:** AD-1 dùng 1 cookie `sip_role` (chứa giá trị role) và AD-2 dùng 1 Zustand store/localStorage key `sip-auth` cho cả 3 actor. Trên thực tế điều này khiến state bị dùng chung xuyên khu vực: đăng nhập Candidate xong qua `/employer` (trang public, không bị `proxy.ts` chặn), header Employer vẫn đọc được `user` từ đúng store toàn cục và hiện như đang đăng nhập ở đó.
+
+Quyết định này giữ nguyên mô hình backend "một tài khoản một role" (không thêm `user_roles`/`auth_sessions`, không đổi endpoint `/auth/*`), chỉ tách **state phía client** thành 3 ngữ cảnh độc lập theo `AuthArea = "candidate" | "employer" | "admin"` (`apps/web/src/lib/auth-area.ts`):
+
+- 3 Zustand store/localStorage key riêng thay cho 1 (`sip-auth-candidate`/`sip-auth-employer`/`sip-auth-admin`, factory `createAuthStore(area)` trong `stores/auth-store.ts`).
+- 3 cookie đánh dấu phiên theo area thay cho 1 `sip_role` (`sip_session_candidate`/`sip_session_employer`/`sip_session_admin`, chỉ đánh dấu có phiên — area đã ngụ ý role nên không cần chứa giá trị role trong cookie nữa).
+- `apiFetch` tách thành `publicFetch` (endpoint anonymous: login/register/verify-otp/resend-otp/google) và `apiFetch(area, path, init)` (endpoint cần token, đọc/ghi đúng store theo `area`).
+- `completeAuth` tự suy `area` từ role thật trả về bởi `/users/me` (không phải từ trang đăng nhập đang đứng), nên một tài khoản Candidate lỡ đăng nhập trên `/login?role=EMPLOYER` vẫn được lưu đúng vào store Candidate.
+
+**Lý do:** bug cụ thể nêu trên (session Candidate hiển thị nhầm sang `/employer`) là hệ quả trực tiếp của việc dùng chung 1 store/cookie cho 3 khu vực có UI/quyền truy cập tách biệt theo AD-1. Cân nhắc phương án đầy đủ hơn (bảng `user_roles` + `auth_sessions`, per-role login/logout endpoint ở backend — xem `docs/designs/internhub-role-scoped-authentication.md`) nhưng bị loại vì tiền đề "một identity nhiều role" không khớp schema hiện tại (`User.role` là 1 field enum) và không cần thiết cho vấn đề thực tế đang gặp.
+
+**Ảnh hưởng:** `AD-1`/`AD-2` không bị xoá/sửa (giữ lịch sử theo quy ước đầu file) nhưng chi tiết cookie/localStorage key ở đó coi như lỗi thời — tham chiếu AD-4 này. Danh sách file bị ảnh hưởng: `lib/auth-area.ts` (mới), `lib/auth-storage.ts`, `stores/auth-store.ts`, `lib/api-client.ts`, `lib/auth.ts`, `components/auth/{LoginForm,RegisterForm,OtpForm}.tsx`, `components/marketing/{CandidateHomeHeader,EmployerHomeHeader}.tsx`, `app/admin/page.tsx`, `components/auth/SessionSync.tsx`, `app/provider.tsx`, `proxy.ts`. Backend (`apps/server`) không đổi.
+
+---
+
 ## Phần ghi chú của chủ dự án
 
 *(để trống)*

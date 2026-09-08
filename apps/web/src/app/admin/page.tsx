@@ -3,9 +3,9 @@
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { AuthTokensResponse } from "@sip/shared-types";
-import { apiFetch, ApiError } from "@/lib/api-client";
+import { apiFetch, publicFetch, ApiError } from "@/lib/api-client";
 import { fetchProfileWithToken } from "@/lib/auth";
-import { useAuthStore, useCurrentUser } from "@/stores/auth-store";
+import { useAdminAuthStore, useCurrentUser } from "@/stores/auth-store";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 
@@ -14,20 +14,20 @@ import { Input } from "@/components/ui/Input";
 // không tiết lộ đây là trang dành riêng cho Admin.
 export default function AdminLoginPage() {
   const router = useRouter();
-  const user = useCurrentUser();
+  const user = useCurrentUser("admin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function handleLogout() {
-    const refreshToken = useAuthStore.getState().refreshToken ?? undefined;
+    const refreshToken = useAdminAuthStore.getState().refreshToken ?? undefined;
     try {
-      await apiFetch("/auth/logout", { method: "POST", body: JSON.stringify({ refreshToken }) });
+      await apiFetch("admin", "/auth/logout", { method: "POST", body: JSON.stringify({ refreshToken }) });
     } catch {
       // Ưu tiên clear phía client ngay cả khi API logout thất bại.
     } finally {
-      useAuthStore.getState().clear();
+      useAdminAuthStore.getState().clear();
     }
   }
 
@@ -37,7 +37,7 @@ export default function AdminLoginPage() {
     setSubmitting(true);
 
     try {
-      const tokens = await apiFetch<AuthTokensResponse>("/auth/login", {
+      const tokens = await publicFetch<AuthTokensResponse>("/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
@@ -48,7 +48,7 @@ export default function AdminLoginPage() {
         return;
       }
 
-      useAuthStore.getState().setSession(tokens, loggedInUser);
+      useAdminAuthStore.getState().setSession(tokens, loggedInUser);
       router.push("/admin");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Sai email hoặc mật khẩu");

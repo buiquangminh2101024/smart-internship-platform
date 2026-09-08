@@ -11,7 +11,9 @@ export function Providers ({children}: {children: ReactNode}) {
 
     return (
         <QueryClientProvider client={queryClient}>
-            <SessionSync />
+            <SessionSync area="candidate" />
+            <SessionSync area="employer" />
+            <SessionSync area="admin" />
             {children}
             <ReactQueryDevtools initialIsOpen={false} />
         </QueryClientProvider>

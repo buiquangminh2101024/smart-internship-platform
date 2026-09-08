@@ -1,0 +1,34 @@
+<!-- @dsCard group="Components" viewport="700x340" name="Navigation — Tabs, SideNav, Pagination" subtitle="Role-tinted app rail, in-page tabs, list paging" -->
+<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>body{background:var(--surface-card);padding:0;overflow:hidden}</style>
+</head><body><div id="root"></div>
+<script type="text/babel">
+const { Tabs, SideNav, Pagination } = window.InternHubDesignSystem_f6cc55;
+function Demo(){
+  const [tab,setTab] = React.useState('review');
+  const [nav,setNav] = React.useState('jobs');
+  const [p,setP] = React.useState(3);
+  return (<div style={{display:'flex',height:340}}>
+    <SideNav role="employer" value={nav} onChange={setNav} style={{width:230}}
+      header={<div style={{font:'var(--type-h3)',color:'var(--text-strong)'}}>FPT Software</div>}
+      items={[{value:'dash',label:'Tổng quan',icon:'layout-dashboard'},
+        {section:'Tuyển dụng'},
+        {value:'jobs',label:'Tin tuyển dụng',icon:'briefcase',count:12},
+        {value:'apps',label:'Ứng viên',icon:'users',count:48},
+        {value:'msg',label:'Tin nhắn',icon:'message-square',count:3},
+        {section:'Công ty'},
+        {value:'profile',label:'Hồ sơ công ty',icon:'building-2'},
+        {value:'team',label:'Thành viên',icon:'user-plus'}]} />
+    <div style={{flex:1,padding:'var(--space-5)',display:'flex',flexDirection:'column',gap:'var(--space-5)',background:'var(--surface-page)'}}>
+      <Tabs value={tab} onChange={setTab} items={[{value:'all',label:'Tất cả',count:24},{value:'draft',label:'Nháp',count:2},{value:'review',label:'Chờ duyệt',count:5},{value:'published',label:'Đang hiển thị',count:12},{value:'closed',label:'Đã đóng'}]} />
+      <Tabs size="sm" value="new" onChange={()=>{}} items={[{value:'new',label:'Mới',icon:'sparkles'},{value:'shortlist',label:'Vào vòng trong',icon:'list-check'},{value:'reject',label:'Từ chối',icon:'x'}]} />
+      <Pagination page={p} total={13} onChange={setP} summary="41–60 trong 248 tin" style={{marginTop:'auto'}} />
+    </div>
+  </div>);
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo/>);
+</script></body></html>

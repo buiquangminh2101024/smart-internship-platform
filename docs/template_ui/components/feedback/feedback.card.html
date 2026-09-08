@@ -1,0 +1,28 @@
+<!-- @dsCard group="Components" viewport="700x330" name="Feedback — StatusPill, Toast, EmptyState" subtitle="Lifecycle vocabulary, notices, zero-results" -->
+<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>body{background:var(--surface-card);padding:var(--space-5)}.row{display:flex;gap:var(--space-2);flex-wrap:wrap;align-items:center;margin-bottom:var(--space-4)}</style>
+</head><body><div id="root"></div>
+<script type="text/babel">
+const { StatusPill, Toast, EmptyState, Button } = window.InternHubDesignSystem_f6cc55;
+function Demo(){return(<div>
+<div className="row">
+  <StatusPill status="draft" /><StatusPill status="review" /><StatusPill status="published" />
+  <StatusPill status="closed" /><StatusPill status="expired" /><StatusPill status="takendown" />
+  <span style={{width:'var(--space-4)'}}></span>
+  <StatusPill status="review" size="sm" /><StatusPill status="published" size="sm" showIcon={false} />
+</div>
+<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'var(--space-4)',alignItems:'start'}}>
+  <div style={{display:'grid',gap:'var(--space-3)'}}>
+    <Toast tone="success" title="Đã gửi hồ sơ ứng tuyển" description="Nhà tuyển dụng thường phản hồi trong 5 ngày." onDismiss={()=>{}} style={{width:'100%'}} />
+    <Toast inline tone="warning" title="Công ty chưa được xác thực" description="Tin sẽ hiển thị sau khi Admin xác thực doanh nghiệp." />
+    <Toast inline tone="danger" title="Không thể đăng tin" description="Thiếu mức lương và thời hạn ứng tuyển." />
+  </div>
+  <EmptyState compact icon="search-x" title="Không tìm thấy tin phù hợp" description="Thử bỏ bộ lọc mức lương hoặc mở rộng khu vực." action={<Button variant="secondary" size="sm">Xóa bộ lọc</Button>} />
+</div>
+</div>);}
+ReactDOM.createRoot(document.getElementById('root')).render(<Demo/>);
+</script></body></html>

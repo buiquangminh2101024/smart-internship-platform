@@ -114,7 +114,7 @@ model User {
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
-  student           Student?
+  candidate         Candidate?
   employer          Employer?
   moderationActions JobPostModerationAction[]
   messages          Message[]
@@ -125,7 +125,7 @@ model User {
 
 // ─── catalog ────────────────────────────────────────────────────────────
 // Admin-managed lookup lists. `Skill` is included here alongside the four
-// named in PROJECT_STRUCTURE.md, since StudentSkill needs a catalog to
+// named in PROJECT_STRUCTURE.md, since CandidateSkill needs a catalog to
 // reference and it fits the same small admin-CRUD-list shape.
 
 model Major {
@@ -155,12 +155,12 @@ model Industry {
 }
 
 model City {
-  id        String    @id @default(cuid())
-  name      String    @unique
-  zipcode   String?
-  students  Student[]
-  companies Company[]
-  jobPosts  JobPost[]
+  id         String      @id @default(cuid())
+  name       String      @unique
+  zipcode    String?
+  candidates Candidate[]
+  companies  Company[]
+  jobPosts   JobPost[]
 
   @@map("cities")
 }
@@ -174,17 +174,17 @@ model CompanyType {
 }
 
 model Skill {
-  id            String         @id @default(cuid())
-  name          String         @unique
-  studentSkills StudentSkill[]
-  jobPostSkills JobPostSkill[]
+  id              String           @id @default(cuid())
+  name            String           @unique
+  candidateSkills CandidateSkill[]
+  jobPostSkills   JobPostSkill[]
 
   @@map("skills")
 }
 
-// ─── students ───────────────────────────────────────────────────────────
+// ─── candidates ─────────────────────────────────────────────────────────
 
-model Student {
+model Candidate {
   id          String    @id @default(cuid())
   userId      String    @unique
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -204,22 +204,22 @@ model Student {
   projects        Project[]
   certificates    Certificate[]
   awards          Award[]
-  skills          StudentSkill[]
+  skills          CandidateSkill[]
   cvs             Cv[]
   savedJobs       SavedJob[]
   applications    Application[]
   conversations   Conversation[]
 
-  @@map("students")
+  @@map("candidates")
 }
 
 // Education là nguồn duy nhất cho lịch sử học vấn (không lưu trực tiếp trên
-// Student) vì sinh viên có thể chuyển trường/ngành — mỗi lần chuyển là 1 dòng
+// Candidate) vì ứng viên có thể chuyển trường/ngành — mỗi lần chuyển là 1 dòng
 // mới, isCurrent đánh dấu chương trình đang theo học hiện tại.
 model Education {
   id           String      @id @default(cuid())
-  studentId    String
-  student      Student     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  candidateId  String
+  candidate    Candidate   @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   universityId String?
   university   University? @relation(fields: [universityId], references: [id])
   majorId      String?
@@ -236,8 +236,8 @@ model Education {
 
 model WorkExperience {
   id          String    @id @default(cuid())
-  studentId   String
-  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   company     String
   position    String
   startDate   DateTime?
@@ -251,8 +251,8 @@ model WorkExperience {
 
 model Project {
   id          String    @id @default(cuid())
-  studentId   String
-  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   name        String
   description String?
   url         String?
@@ -266,8 +266,8 @@ model Project {
 
 model Certificate {
   id            String    @id @default(cuid())
-  studentId     String
-  student       Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  candidateId   String
+  candidate     Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   name          String
   issuer        String?
   issueDate     DateTime?
@@ -280,8 +280,8 @@ model Certificate {
 
 model Award {
   id          String    @id @default(cuid())
-  studentId   String
-  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   name        String
   issuer      String?
   date        DateTime?
@@ -291,15 +291,15 @@ model Award {
   @@map("awards")
 }
 
-model StudentSkill {
-  studentId         String
-  student           Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+model CandidateSkill {
+  candidateId       String
+  candidate         Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   skillId           String
-  skill             Skill   @relation(fields: [skillId], references: [id], onDelete: Cascade)
-  yearsOfExperience Float   @default(0)
+  skill             Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  yearsOfExperience Float     @default(0)
 
-  @@id([studentId, skillId])
-  @@map("student_skills")
+  @@id([candidateId, skillId])
+  @@map("candidate_skills")
 }
 
 // ─── companies / employers ──────────────────────────────────────────────
@@ -499,7 +499,7 @@ model JobPost {
 }
 
 // Kỹ năng yêu cầu của tin tuyển dụng, dùng chung catalog Skill với
-// StudentSkill để so khớp được khi triển khai AI matching (Phase 10).
+// CandidateSkill để so khớp được khi triển khai AI matching (Phase 10).
 model JobPostSkill {
   jobPostId String
   jobPost   JobPost @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
@@ -526,13 +526,13 @@ model JobPostModerationAction {
 // ─── cv / saved-jobs ────────────────────────────────────────────────────
 
 model Cv {
-  id         String   @id @default(cuid())
-  studentId  String
-  student    Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  fileUrl    String
-  fileName   String
-  isDefault  Boolean  @default(false)
-  uploadedAt DateTime @default(now())
+  id          String    @id @default(cuid())
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  fileUrl     String
+  fileName    String
+  isDefault   Boolean   @default(false)
+  uploadedAt  DateTime  @default(now())
 
   applications Application[]
 
@@ -540,14 +540,14 @@ model Cv {
 }
 
 model SavedJob {
-  id        String   @id @default(cuid())
-  studentId String
-  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  jobPostId String
-  jobPost   JobPost  @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
+  id          String    @id @default(cuid())
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  jobPostId   String
+  jobPost     JobPost   @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
 
-  @@unique([studentId, jobPostId])
+  @@unique([candidateId, jobPostId])
   @@map("saved_jobs")
 }
 
@@ -557,8 +557,8 @@ model Application {
   id            String            @id @default(cuid())
   jobPostId     String
   jobPost       JobPost           @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
-  studentId     String
-  student       Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  candidateId   String
+  candidate     Candidate         @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   cvId          String
   cv            Cv                @relation(fields: [cvId], references: [id])
   status        ApplicationStatus @default(PENDING)
@@ -568,31 +568,31 @@ model Application {
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 
-  @@unique([jobPostId, studentId])
+  @@unique([jobPostId, candidateId])
   @@map("applications")
 }
 
 // ─── messaging ──────────────────────────────────────────────────────────
-// Mỗi Conversation gắn cố định đúng 1 Student + 1 Employer (đã xác nhận
+// Mỗi Conversation gắn cố định đúng 1 Candidate + 1 Employer (đã xác nhận
 // nghiệp vụ: không phải hộp thư chung nhiều nhân viên của công ty), nên dùng
 // FK trực tiếp thay vì bảng nối participant generic.
 
 model Conversation {
-  id                 String    @id @default(cuid())
-  jobPostId          String?
-  jobPost            JobPost?  @relation(fields: [jobPostId], references: [id])
-  studentId          String
-  student            Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  employerId         String
-  employer           Employer  @relation(fields: [employerId], references: [id], onDelete: Cascade)
-  studentLastReadAt  DateTime?
-  employerLastReadAt DateTime?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  id                  String    @id @default(cuid())
+  jobPostId           String?
+  jobPost             JobPost?  @relation(fields: [jobPostId], references: [id])
+  candidateId         String
+  candidate           Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  employerId          String
+  employer            Employer  @relation(fields: [employerId], references: [id], onDelete: Cascade)
+  candidateLastReadAt DateTime?
+  employerLastReadAt  DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   messages Message[]
 
-  @@unique([studentId, employerId, jobPostId])
+  @@unique([candidateId, employerId, jobPostId])
   @@map("conversations")
 }
 

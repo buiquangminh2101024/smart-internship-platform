@@ -1,0 +1,45 @@
+<!-- @dsCard group="Admin console" viewport="1440x900" name="Admin — moderation queues" subtitle="Company verification, job-post moderation, users, approval config" -->
+<!-- @startingPoint section="Admin console" subtitle="Platform admin shell: verification, moderation, users" viewport="1440x900" -->
+<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"><title>InternHub — Quản trị</title>
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>html,body{height:100%}body{margin:0;background:var(--surface-page)}</style>
+</head><body><div id="root"></div>
+<script type="text/babel" src="AdminShell.jsx"></script>
+<script type="text/babel" src="AdminScreens.jsx"></script>
+<script type="text/babel" data-presets="react">
+var { SideNav, Button, Toast, EmptyState } = window.InternHubDesignSystem_f6cc55;
+var TITLES = { dash: "Tổng quan", verify: "Xác thực doanh nghiệp", queue: "Duyệt tin tuyển dụng", reports: "Báo cáo vi phạm", users: "Người dùng", settings: "Cấu hình duyệt" };
+
+function App() {
+  const [view, setView] = React.useState("dash");
+  const [toast, setToast] = React.useState(null);
+  const act = (title, tone) => { setToast({ tone: tone || "success", title }); setTimeout(() => setToast(null), 3800); };
+  return (
+    <div style={{ display: "flex", minHeight: "100vh" }}>
+      <SideNav role="admin" value={view} onChange={setView} items={A_NAV} header={<ALogo />}
+        footer={<Button variant="ghost" icon="log-out" fullWidth style={{ justifyContent: "flex-start" }}>Đăng xuất</Button>} />
+      <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+        <ATopBar title={TITLES[view]} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {view === "dash" ? <ADashScreen go={setView} /> : null}
+          {view === "verify" ? <VerifyScreen onAction={act} /> : null}
+          {view === "queue" ? <QueueScreen onAction={act} /> : null}
+          {view === "users" ? <UsersScreen onAction={act} /> : null}
+          {view === "settings" ? <SettingsScreen onAction={act} /> : null}
+          {view === "reports" ? (
+            <div style={{ padding: "var(--space-6)", maxWidth: 720 }}>
+              <EmptyState icon="flag" title="1 báo cáo đang chờ xử lý" description="Tin “Thực tập sinh Thiết kế UI” bị 3 sinh viên báo cáo và đã được hạ." action={<Button variant="secondary" onClick={() => setView("queue")}>Mở hàng đợi kiểm duyệt</Button>} />
+            </div>
+          ) : null}
+        </div>
+      </main>
+      {toast ? <div style={{ position: "fixed", right: "var(--space-6)", bottom: "var(--space-6)", zIndex: 60 }}><Toast {...toast} onDismiss={() => setToast(null)} /></div> : null}
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script></body></html>
