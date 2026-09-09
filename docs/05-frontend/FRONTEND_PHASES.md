@@ -36,10 +36,10 @@ Không bắt buộc tuân thủ tuyệt đối thứ tự/số lượng phase n�
 
 ## Phase 4 — Employer & Company Module
 
-- **Goal:** UI hồ sơ doanh nghiệp và trạng thái xác minh.
-- **Main screens/routes:** `(employer)/company` (đăng ký/cập nhật hồ sơ công ty, trạng thái verify), `(admin)/companies` (verify/unverify, bật/tắt `requiresApproval`, xem `retractionCount`).
+- **Goal:** UI hoàn tất thủ tục doanh nghiệp (liên kết công ty mới/đã có) + trạng thái xác minh, cả hai phía Employer và Admin.
+- **Main screens/routes:** `/employer/(portal)/hoan-tat-thu-tuc` (chọn tạo công ty mới — tự động/thủ công xác thực theo mã số thuế — hoặc liên kết công ty đã có qua mã mời), `/employer/(portal)/profile` (thông tin cá nhân, trạng thái công ty, nộp lại nếu bị từ chối, tạo mã mời nếu là company admin), `/admin/(console)/companies` + `/admin/(console)/companies/[id]` (hàng đợi xác thực, verify/reject, bật/tắt `requiresApproval`, xem `retractionCount`). Chi tiết: `docs/05-frontend/phases/phase-04-employer-company/PLAN.md`, quyết định nghiệp vụ: `docs/02-architecture/ARCHITECTURE_DECISIONS.md` AD-5.
 - **Dependencies:** Phase 2 (frontend), Phase 4 (backend).
-- **Definition of Done:** Employer thấy rõ trạng thái verify công ty mình; Admin verify/unverify và cấu hình `requiresApproval` được qua UI.
+- **Definition of Done:** Employer chưa liên kết công ty luôn bị điều hướng vào `hoan-tat-thu-tuc`; hoàn tất xong thấy đúng trạng thái xác minh ở `/employer/profile`; Admin verify/reject/cấu hình `requiresApproval` qua UI.
 
 ## Phase 5 — Job Recruitment Module
 

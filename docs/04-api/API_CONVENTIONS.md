@@ -85,7 +85,7 @@ Quy tắc chọn `401` vs `403`: `401` = "tôi không biết bạn là ai" (toke
 
 ## 7. Request conventions
 
-- `Content-Type: application/json` bắt buộc cho mọi request có body — server chỉ mount `express.json()`, không hỗ trợ `multipart/form-data` ở tầng route thường (upload file qua `MediaStorageService`/Cloudinary ở Phase 6 sẽ có convention riêng khi implement).
+- `Content-Type: application/json` bắt buộc cho mọi request có body **trừ** route nhận file — server chỉ mount `express.json()` global, không parse `multipart/form-data`. Route nhận file (bắt đầu từ Phase 4: `POST /employers/company`, field `businessLicense`) mount `multer` (memory storage, giới hạn 5MB, chỉ nhận `image/jpeg`/`image/png`/`application/pdf`) cục bộ ngay trên route đó — không áp dụng toàn cục. Field khác trong cùng request multipart vẫn theo tên `camelCase` như JSON (đọc qua `req.body`, đã qua `validate(schema)`). Phase 6 (CV upload) tái dùng đúng middleware `shared/middleware/upload.ts` (`singleFileUpload(fieldName)`) này thay vì tạo convention mới.
 - Field naming: `camelCase` xuyên suốt request/response body (khớp Prisma Client field naming, không map lại sang `snake_case` dù cột DB dùng snake_case qua `@@map`).
 - Email luôn được server chuẩn hoá lowercase + trim trước khi so khớp/lưu — frontend không bắt buộc phải tự làm việc này nhưng nên làm để tránh nhầm lẫn UX (validate lỗi trước khi gửi).
 - Enum value trong request/response giữ nguyên `UPPER_SNAKE_CASE` như Prisma enum (`"CANDIDATE"`, `"PENDING_VERIFICATION"`...) — không chuyển sang lowercase/label ở tầng API, việc hiển thị label tiếng Việt là trách nhiệm của frontend.
@@ -106,7 +106,7 @@ Quy tắc chọn `401` vs `403`: `401` = "tôi không biết bạn là ai" (toke
 
 ## 11. Danh mục (catalog) & giá trị cố định
 
-- Các bảng danh mục (`Major`, `University`, `Industry`, `City`, `CompanyType`, `Skill` — Phase 1/5+) trả về nguyên `{ id, name }`, frontend tự build dropdown/filter — không hardcode danh sách phía frontend.
+- Các bảng danh mục (`Major`, `University`, `Industry`, `City`, `CompanyType`, `Skill`) trả về nguyên `{ id, name }`, frontend tự build dropdown/filter — không hardcode danh sách phía frontend. `GET /industries`, `/company-types`, `/cities` (Phase 4, module `catalog`) là route public, không cần `authenticate` — dữ liệu tham chiếu không nhạy cảm.
 
 ## 12. Ghi chú khi thêm module mới
 

@@ -50,7 +50,9 @@ export function EmployerHomeHeader() {
           <div className="h-9 w-[260px]" aria-hidden />
         ) : user ? (
           <div className="flex items-center gap-3">
-            <span className="text-sm text-text-muted">{user.email}</span>
+            <Button as="a" href="/employer/profile" variant="ghost" size="sm">
+              {user.email}
+            </Button>
             <Button variant="ghost" size="sm" onClick={handleLogout}>
               Đăng xuất
             </Button>

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { RegistrableRole } from "@sip/shared-types";
 import type { AuthTokensResponse } from "@sip/shared-types";
 import { publicFetch, ApiError } from "@/lib/api-client";
-import { completeAuth, redirectPathForRole } from "@/lib/auth";
+import { completeAuth, navigateAfterAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { OtpForm } from "./OtpForm";
@@ -37,7 +37,7 @@ export function RegisterForm({ role }: RegisterFormProps) {
         body: JSON.stringify({ idToken, role }),
       });
       const user = await completeAuth(tokens);
-      router.push(redirectPathForRole(user.role));
+      await navigateAfterAuth(router, user);
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : "Không đăng ký được bằng Google, vui lòng thử lại");
     } finally {
@@ -68,7 +68,7 @@ export function RegisterForm({ role }: RegisterFormProps) {
   }
 
   if (step === "otp") {
-    return <OtpForm email={email} onVerified={(user) => router.push(redirectPathForRole(user.role))} />;
+    return <OtpForm email={email} onVerified={(user) => void navigateAfterAuth(router, user)} />;
   }
 
   return (

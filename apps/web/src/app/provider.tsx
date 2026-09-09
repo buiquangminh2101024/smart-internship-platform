@@ -5,6 +5,7 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { SessionSync } from '@/components/auth/SessionSync'
+import { EmployerStageSync } from '@/components/auth/EmployerStageSync'
 
 export function Providers ({children}: {children: ReactNode}) {
     const [queryClient] = useState(() => new QueryClient());
@@ -14,6 +15,7 @@ export function Providers ({children}: {children: ReactNode}) {
             <SessionSync area="candidate" />
             <SessionSync area="employer" />
             <SessionSync area="admin" />
+            <EmployerStageSync />
             {children}
             <ReactQueryDevtools initialIsOpen={false} />
         </QueryClientProvider>

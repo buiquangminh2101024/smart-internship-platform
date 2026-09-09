@@ -13,6 +13,10 @@ import type { NextRequest } from "next/server";
 const CANDIDATE_SESSION_COOKIE = "sip_session_candidate";
 const EMPLOYER_SESSION_COOKIE = "sip_session_employer";
 const ADMIN_SESSION_COOKIE = "sip_session_admin";
+// Xem lib/auth-storage.ts — cờ onboarding riêng cho employer (Phase 4).
+const EMPLOYER_STAGE_COOKIE = "sip_employer_stage";
+const EMPLOYER_ONBOARDING_PATH = "/employer/hoan-tat-thu-tuc";
+const EMPLOYER_PROFILE_PATH = "/employer/profile";
 
 const CANDIDATE_ONLY_PREFIXES = ["/profile", "/cv", "/applications", "/saved-jobs", "/messages"];
 
@@ -29,6 +33,24 @@ export function proxy(request: NextRequest) {
   if (pathname !== "/employer" && pathname.startsWith("/employer/")) {
     if (!request.cookies.get(EMPLOYER_SESSION_COOKIE)) {
       return NextResponse.redirect(new URL("/employer", request.url));
+    }
+
+    // stage thiếu (chưa kịp đồng bộ, xem components/auth/EmployerStageSync.tsx)
+    // -> fail open về trang onboarding, an toàn nhất vì trang đó chỉ hỏi
+    // "tạo công ty mới hay liên kết công ty đã có", không lộ dữ liệu nhạy cảm.
+    const stage = request.cookies.get(EMPLOYER_STAGE_COOKIE)?.value ?? "onboarding";
+
+    if (pathname === EMPLOYER_ONBOARDING_PATH) {
+      if (stage === "pending") return NextResponse.redirect(new URL(EMPLOYER_PROFILE_PATH, request.url));
+      if (stage === "active") return NextResponse.redirect(new URL("/employer", request.url));
+      return NextResponse.next();
+    }
+
+    if (stage === "onboarding") {
+      return NextResponse.redirect(new URL(EMPLOYER_ONBOARDING_PATH, request.url));
+    }
+    if (stage === "pending" && pathname !== EMPLOYER_PROFILE_PATH) {
+      return NextResponse.redirect(new URL(EMPLOYER_PROFILE_PATH, request.url));
     }
     return NextResponse.next();
   }

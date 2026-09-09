@@ -71,6 +71,37 @@ Quyết định này giữ nguyên mô hình backend "một tài khoản một r
 
 ---
 
+## AD-5 — Xác thực doanh nghiệp khi Employer hoàn tất thủ tục (Phase 4)
+
+**Ngày:** 2026-09-08 · **Phase liên quan:** 06-backend/05-frontend Phase 4 (Employer & Company)
+
+**Quyết định:** Sau khi đăng ký/đăng nhập, một tài khoản Employer chưa có `Employer` record (chưa liên kết công ty) bị điều hướng bắt buộc tới `/employer/hoan-tat-thu-tuc` để chọn (a) đăng ký công ty mới hoặc (b) liên kết công ty đã có qua mã mời 6 số (TTL 2 phút, sinh bởi Redis `CompanyInviteCodeStore`, một lần dùng). Không cần migrate `Employer.companyId` sang nullable: một `Employer` record chỉ được tạo tại thời điểm công ty được xác định (tạo mới hoặc join), nên "chưa có Employer" chính là tín hiệu "chưa hoàn tất thủ tục" — khớp với hành vi sẵn có của `AuthService.register` (chỉ tạo `User`, không tạo `Employer`).
+
+**Luồng xác thực khi đăng ký công ty mới** (`EmployersService.createOrResubmitCompany`, `CompanyVerificationService`):
+1. Đuôi email đăng ký thuộc `COMMON_EMAIL_DOMAINS` (env, mặc định gmail/yahoo/outlook/hotmail/icloud/live/aol/protonmail) → bỏ qua tra cứu, luôn cần Admin xác thực thủ công (`NEEDS_MANUAL_REVIEW`, `reason: COMMON_EMAIL_DOMAIN`).
+2. Ngược lại: kiểm tra domain có MX record (`node:dns`) → không có → `BLOCKED` (`NO_MAIL_SERVER`). Có MX → gọi VietQR (`GET {VIETQR_API_URL}/{taxCode}`) → mã `51`/`52`/lỗi mạng → `BLOCKED` (`TAX_CODE_INVALID`/`TAX_CODE_NOT_FOUND`/`TAX_LOOKUP_FAILED`). Thành công (`code: "00"`) → so khớp domain với `data.shortName` (`domainMatchesShortName`, xem thuật toán bên dưới) → khớp thì `AUTO_VERIFIED`, không khớp thì `NEEDS_MANUAL_REVIEW` (`DOMAIN_MISMATCH`).
+3. `BLOCKED` được trả về frontend như lỗi kèm lựa chọn "vẫn gửi yêu cầu xác thực thủ công" (`forceManualReview: true` ở lần submit kế tiếp) — không tự động chuyển sang manual review để tránh nộp nhầm khi email/mã số thuế thực sự sai.
+4. Mọi trường hợp không phải `AUTO_VERIFIED` đều **bắt buộc** upload giấy phép kinh doanh (qua `MediaStorage`/Cloudinary) trước khi ghi `Company(verificationStatus: PENDING, verificationMethod: MANUAL_REVIEW)` — quyết định thống nhất một luồng review duy nhất thay vì tách riêng theo từng lý do.
+5. `runVerificationCheck` luôn chạy lại phía server ở endpoint tạo công ty thật (`POST /employers/company`), không tin outcome do client tự gửi — `POST /employers/company/verification-check` chỉ là preview để frontend quyết định UI (có cần hiện ô upload hay không) trước khi submit multipart cuối cùng.
+
+**Thuật toán so khớp domain ↔ shortName** (`domainMatchesShortName`): bóc các hậu tố tổ chức phổ biến (`edu.vn, com.vn, org.vn, gov.vn, net.vn, ac.vn, vn, com, org, net, edu, gov`) khỏi domain, sau đó thử **từng nhãn còn lại** (không chỉ cấp 1/2 theo vị trí — vd. cả `student` lẫn `iuh` từ `student.iuh.edu.vn`) làm ứng viên, chuẩn hoá (bỏ dấu, chỉ giữ chữ/số) rồi so khớp chuỗi con hai chiều với shortName đã chuẩn hoá. Đây là heuristic best-effort — false negative rơi về xác thực thủ công (an toàn), ưu tiên tránh false positive.
+
+**Model bổ sung** (`Company`): `verificationStatus: PENDING|VERIFIED|REJECTED` (mới), `verificationMethod: AUTO_TAX_MATCH|MANUAL_REVIEW`, `businessLicenseUrl`, `verificationNote`, `rejectedAt` — giữ nguyên `isVerified`/`verifiedAt` cũ (đồng bộ bởi service layer khi `verificationStatus` đổi) để không phá các nơi đã đọc `isVerified` theo tài liệu Phase 4 gốc. `Admin.reject()` cho phép nộp lại (`REJECTED → PENDING` qua chính endpoint tạo công ty, phát hiện qua `Employer.isCompanyAdmin && company.verificationStatus === "REJECTED"`), không phải trạng thái chung cuộc.
+
+**Truy cập bị hạn chế khi chưa `VERIFIED`:** `apps/web/src/proxy.ts` đọc thêm cookie `sip_employer_stage` (`onboarding|pending|active`, ghi bởi `EmployerStageSync`/`lib/auth.ts` sau mỗi lần gọi `GET /employers/me`) để chặn `/employer/(portal)/*`: `onboarding` → luôn về `hoan-tat-thu-tuc`; `pending` → chỉ cho vào `/employer/profile` (+ homepage công khai `/employer`, không bị proxy chặn); `active` → truy cập bình thường. Đây là gate **UX phía frontend**, không phải security boundary — chưa có endpoint nghiệp vụ nào khác (job posts bắt đầu Phase 6) cần gate tương tự ở backend nên chưa thêm middleware `requireVerifiedCompany` (tránh code chưa dùng tới).
+
+**Quy ước upload multipart mới** (chưa từng có trước Phase 4): route `POST /employers/company` dùng `multer` (memory storage, field `businessLicense`, tối đa 5MB, chỉ nhận jpg/png/pdf) — mount cục bộ trên đúng route đó, không đổi convention `express.json()`-only toàn cục. Business license lưu qua `MediaStorage` (`shared/ports/MediaStorage.ts`) → `CloudinaryMediaStorage`, đúng boundary đã định trong `INITIAL_ARCHITECTURE_PLAN.md` §7. Phase 6 (CV upload) sẽ tái dùng nguyên convention này.
+
+**Cờ dev-bypass:** `DEV_SKIP_COMPANY_MANUAL_VERIFICATION` (env, mặc định `false`) — khi `true`, mọi công ty cần manual review được tự động `VERIFIED` ngay (kèm `logger.warn` mỗi lần áp dụng). `env.ts` chặn cứng server khởi động nếu `NODE_ENV=production` và cờ này `true`. **Lưu ý kỹ thuật:** cờ này parse thủ công (`z.preprocess` so khớp đúng chuỗi `"true"`) thay vì `z.coerce.boolean()` — `z.coerce.boolean()` gọi `Boolean(input)` của JS nên chuỗi `"false"` (non-empty) vẫn coerce ra `true`, nguy hiểm cho đúng loại cờ an toàn này (phát hiện khi test thủ công: xem §12c "Bug tìm thấy khi test" bên dưới).
+
+**Module `catalog` mới** (tối thiểu): `GET /industries`, `/company-types`, `/cities` — public, không auth, cần cho dropdown ở form công ty. Chỉ 3 catalog này (không đụng `University`/`Major`, thuộc phạm vi Phase 3 — module khác đảm nhiệm) để tránh đụng độ với công việc song song.
+
+**Dependency mới:** `apps/server`: `cloudinary`, `multer` (+`@types/multer`) — Cloudinary đã có trong tech stack/env từ trước nhưng chưa dùng; `multer` là middleware multipart chuẩn của Express, chưa có middleware nào tương đương. `apps/web`: `react-hook-form`, `zod`, `@hookform/resolvers` — form hoàn tất thủ tục có 10+ field kèm logic hiển thị có điều kiện (upload giấy phép), vượt ngưỡng "form đơn giản" mà Phase 2 frontend cố tình tránh thêm thư viện; các form auth hiện có (`LoginForm`/`RegisterForm`/`OtpForm`) giữ nguyên pattern `useState` cũ, không đổi theo. **Lưu ý version:** `apps/web` pin `zod@^4` (không phải `^3`) dù `@hookform/resolvers@3.x` — vì gói này bị hoist lên root `node_modules` (chỉ `apps/web` khai báo), khiến type resolution phía trong nó phân giải theo `zod` ở root (vốn đã là v4 do `apps/server`) chứ không phải bản nested trong `apps/web`; pin v4 để cả hai đồng bộ một bản duy nhất thay vì cố ép v3 (gây lỗi kiểu `$ZodTypeInternals` không khớp lúc build).
+
+### Bug phát sinh trong lúc implement Phase 4 (đã sửa cùng đợt, không thuộc phạm vi nghiệp vụ Phase 4 nhưng chặn thẳng đường test)
+
+- **`shared/middleware/validate.ts` không hoạt động với `part: "query"` trên Express 5:** `req.query` là getter-only trên prototype của Express 5 (không có setter) — gán trực tiếp (`req.query = result.data`) ném `TypeError: Cannot set property query...`. Chưa từng lộ ra trước Phase 4 vì không route nào validate query cho tới `GET /companies?status=...&cursor=...`. Sửa bằng `Object.defineProperty(req, "query", { value, writable: true, configurable: true, enumerable: true })` thay vì gán trực tiếp, chỉ áp dụng khi `part === "query"`.
+
 ## Phần ghi chú của chủ dự án
 
 *(để trống)*

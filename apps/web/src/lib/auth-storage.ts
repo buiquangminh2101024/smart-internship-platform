@@ -27,3 +27,32 @@ export function clearAreaCookie(area: AuthArea): void {
   if (typeof document === "undefined") return;
   document.cookie = `${sessionCookieName(area)}=; path=/; max-age=0; samesite=lax`;
 }
+
+import type { EmployerStage } from "@sip/shared-types";
+
+// Cờ onboarding riêng cho area "employer" (Phase 4) — proxy.ts đọc cookie này
+// để phân biệt 3 trạng thái /employer/(portal)/* mà cookie phiên (ở trên)
+// không diễn tả được: "onboarding" (chưa có Employer/Company, phải vào
+// hoan-tat-thu-tuc), "pending" (đã nộp, chờ Admin/tự động xác thực — chỉ vào
+// được /employer/profile), "active" (Company đã VERIFIED). Không cần xoá chủ
+// động lúc logout — proxy.ts luôn kiểm tra cookie phiên (sip_session_employer)
+// trước, cookie này chỉ được đọc khi phiên còn hợp lệ nên giá trị cũ (nếu có)
+// vô hại và sẽ bị ghi đè ngay ở lần đăng nhập kế tiếp (xem EmployerStageSync).
+export type EmployerStageCookieValue = "onboarding" | "pending" | "active";
+
+const EMPLOYER_STAGE_COOKIE = "sip_employer_stage";
+
+export function getEmployerStageCookieName(): string {
+  return EMPLOYER_STAGE_COOKIE;
+}
+
+export function setEmployerStageCookie(value: EmployerStageCookieValue): void {
+  if (typeof document === "undefined") return;
+  document.cookie = `${EMPLOYER_STAGE_COOKIE}=${value}; path=/; max-age=${SESSION_COOKIE_MAX_AGE_SECONDS}; samesite=lax`;
+}
+
+export function employerStageToCookieValue(stage: EmployerStage): EmployerStageCookieValue {
+  if (stage === "ACTIVE") return "active";
+  if (stage === "PENDING_VERIFICATION") return "pending";
+  return "onboarding";
+}

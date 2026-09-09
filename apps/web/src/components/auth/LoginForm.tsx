@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { AuthTokensResponse, RegistrableRole } from "@sip/shared-types";
 import { publicFetch, ApiError } from "@/lib/api-client";
-import { completeAuth, redirectPathForRole } from "@/lib/auth";
+import { completeAuth, navigateAfterAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { OtpForm } from "./OtpForm";
@@ -32,7 +32,7 @@ export function LoginForm({ role }: LoginFormProps) {
         body: JSON.stringify({ idToken, role }),
       });
       const user = await completeAuth(tokens);
-      router.push(redirectPathForRole(user.role));
+      await navigateAfterAuth(router, user);
     } catch (err) {
       setFormError(err instanceof ApiError ? err.message : "Không đăng nhập được bằng Google, vui lòng thử lại");
     } finally {
@@ -51,7 +51,7 @@ export function LoginForm({ role }: LoginFormProps) {
         body: JSON.stringify({ email, password }),
       });
       const user = await completeAuth(tokens);
-      router.push(redirectPathForRole(user.role));
+      await navigateAfterAuth(router, user);
     } catch (err) {
       if (err instanceof ApiError && err.status === 403 && err.message.toLowerCase().includes("not verified")) {
         // Tài khoản chưa xác thực OTP lúc đăng ký — gửi lại mã rồi chuyển sang bước OTP.
@@ -70,7 +70,7 @@ export function LoginForm({ role }: LoginFormProps) {
   }
 
   if (step === "otp") {
-    return <OtpForm email={email} onVerified={(user) => router.push(redirectPathForRole(user.role))} />;
+    return <OtpForm email={email} onVerified={(user) => void navigateAfterAuth(router, user)} />;
   }
 
   return (

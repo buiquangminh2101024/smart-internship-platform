@@ -62,9 +62,10 @@ export default function AdminLoginPage() {
       <div className="flex min-h-screen items-center justify-center bg-plum-800 px-6">
         <div className="grid w-full max-w-sm gap-4 rounded-2xl border border-white/10 bg-white p-8 text-center shadow-lg">
           <h1 className="text-xl font-semibold text-text-strong">Đã đăng nhập</h1>
-          <p className="text-sm text-text-muted">
-            Console quản trị sẽ có ở phase sau. Bạn đang đăng nhập với tư cách Admin ({user.email}).
-          </p>
+          <p className="text-sm text-text-muted">Bạn đang đăng nhập với tư cách Admin ({user.email}).</p>
+          <Button as="a" href="/admin/companies">
+            Quản lý công ty
+          </Button>
           <Button variant="secondary" onClick={handleLogout}>
             Đăng xuất
           </Button>
