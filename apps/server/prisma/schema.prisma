@@ -91,6 +91,27 @@ enum PaymentProvider {
   MOMO
 }
 
+// Vòng đời xác thực doanh nghiệp khi Employer hoàn tất thủ tục (Phase 4):
+// PENDING (mới nộp/chờ Admin duyệt) -> VERIFIED (tự động khớp mã số thuế
+// hoặc Admin duyệt tay) hoặc REJECTED (Admin từ chối, employer sửa lại
+// thông tin/giấy phép rồi nộp lại -> PENDING). Độc lập với isVerified/
+// verifiedAt (giữ nguyên để tương thích các phase sau đọc isVerified) —
+// service layer đồng bộ isVerified = (verificationStatus === VERIFIED).
+enum CompanyVerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+// Cách công ty đạt trạng thái VERIFIED (hoặc lý do PENDING cần Admin xem):
+// AUTO_TAX_MATCH — đuôi email khớp shortName tra cứu từ mã số thuế (VietQR),
+// không cần Admin; MANUAL_REVIEW — email đuôi phổ biến, không khớp, hoặc lỗi
+// tra cứu (employer chủ động chọn nộp thủ công) — luôn kèm businessLicenseUrl.
+enum CompanyVerificationMethod {
+  AUTO_TAX_MATCH
+  MANUAL_REVIEW
+}
+
 // ─── users ──────────────────────────────────────────────────────────────
 // No refresh-token/OTP tables: JWT blacklist + OTP codes live in Redis (Phase 2),
 // not Postgres — both are ephemeral, TTL-bound data.
@@ -329,6 +350,15 @@ model Company {
   verifiedAt       DateTime?
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
+
+  // Xác thực doanh nghiệp lúc Employer hoàn tất thủ tục (Phase 4, xem
+  // employers.service.ts) — độc lập với isVerified/verifiedAt ở trên (giữ
+  // nguyên cho các phase đọc thẳng isVerified), service layer đồng bộ 2 phía.
+  verificationStatus CompanyVerificationStatus  @default(PENDING)
+  verificationMethod CompanyVerificationMethod?
+  businessLicenseUrl String?
+  verificationNote   String?
+  rejectedAt         DateTime?
 
   employers            Employer[]
   jobPosts             JobPost[]

@@ -2,7 +2,7 @@
 
 Nguồn sự thật (source of truth) là `apps/server/prisma/schema.prisma` — file này chỉ tóm tắt để đọc nhanh, **không** thay thế schema. Khi có khác biệt, schema thật luôn đúng, tài liệu này cần cập nhật theo.
 
-Database: PostgreSQL (Neon.tech, managed), truy cập qua Prisma Client. Đã áp dụng migration `20260901052345_init` (schema domain đầy đủ, Phase 1) và `20260901124902_admin_auth_oauth_prep` (delta: `User.passwordHash` → optional, thêm `User.googleId`, chuẩn bị cho Google OAuth — xem `INITIAL_ARCHITECTURE_PLAN.md` §8b/§12b).
+Database: PostgreSQL (Neon.tech, managed), truy cập qua Prisma Client. Đã áp dụng migration `20260901052345_init` (schema domain đầy đủ, Phase 1), `20260901124902_admin_auth_oauth_prep` (delta: `User.passwordHash` → optional, thêm `User.googleId`, chuẩn bị cho Google OAuth — xem `INITIAL_ARCHITECTURE_PLAN.md` §8b/§12b), `20260908065623_rename_student_to_candidate` (Phase 3), và `20260908150516_add_company_verification_workflow` (Phase 4: `Company.verificationStatus`/`verificationMethod`/`businessLicenseUrl`/`verificationNote`/`rejectedAt` — xem AD-5).
 
 ## Nhóm entity
 
@@ -25,7 +25,7 @@ Database: PostgreSQL (Neon.tech, managed), truy cập qua Prisma Client. Đã á
 
 ### Employer domain
 
-- **`Company`** — hồ sơ doanh nghiệp: `isVerified`, `requiresApproval` (mặc định `true`, Admin bật/tắt riêng từng công ty), `taxCode` (unique, optional), `foundedYear`, liên kết `Industry`/`CompanyType`/`City`. `retractionCount` **không phải cột** — derive tại query time từ `JobPostModerationAction` (đếm action `RETRACTED`), tránh lệch dữ liệu so với audit log.
+- **`Company`** — hồ sơ doanh nghiệp: `isVerified`, `requiresApproval` (mặc định `true`, Admin bật/tắt riêng từng công ty), `taxCode` (unique, optional), `foundedYear`, liên kết `Industry`/`CompanyType`/`City`. `retractionCount` **không phải cột** — derive tại query time từ `JobPostModerationAction` (đếm action `RETRACTED`), tránh lệch dữ liệu so với audit log. **Phase 4 bổ sung** vòng đời xác thực khi Employer hoàn tất thủ tục (xem `ARCHITECTURE_DECISIONS.md` AD-5): `verificationStatus: CompanyVerificationStatus (PENDING|VERIFIED|REJECTED)` (mặc định `PENDING`), `verificationMethod: CompanyVerificationMethod? (AUTO_TAX_MATCH|MANUAL_REVIEW)`, `businessLicenseUrl` (ảnh/PDF giấy phép kinh doanh khi cần Admin duyệt tay), `verificationNote` (lý do không khớp domain hoặc lý do Admin từ chối), `rejectedAt`. Độc lập với `isVerified`/`verifiedAt` (giữ nguyên, đồng bộ bởi service layer khi `verificationStatus` đổi) để không phá các phần đã đọc thẳng `isVerified`.
 - **`Employer`** (1:1 với `User` qua `userId`, N:1 với `Company`) — `isCompanyAdmin` đánh dấu employer nào là admin của công ty đó.
 
 ### Subscription & Billing
@@ -84,3 +84,5 @@ Chi tiết đầy đủ và rationale nằm ở `INITIAL_ARCHITECTURE_PLAN.md` �
 | Nâng cấp gói giữa kỳ | Huỷ gói cũ (`CANCELLED`) + tạo gói mới, không cộng dồn |
 | Company không có gói active | Chặn hoàn toàn tạo `JobPost` mới (kể cả `DRAFT`) |
 | Cổng thanh toán (VNPay/Momo) | Generic hoá qua catalog `PaymentMethod`, không hardcode enum trên `Transaction` |
+| Xác thực doanh nghiệp (Phase 4) | `Company.verificationStatus`/`verificationMethod`/`businessLicenseUrl`/`verificationNote`/`rejectedAt` mới, độc lập với `isVerified`/`verifiedAt` cũ (đồng bộ ở service layer) — chi tiết `ARCHITECTURE_DECISIONS.md` AD-5 |
+| Liên kết Employer ↔ Company (Phase 4) | Không migrate `Employer.companyId` sang nullable — `Employer` record chỉ tạo khi công ty được xác định (mới hoặc join qua mã mời), "chưa có Employer" = "chưa hoàn tất thủ tục" |

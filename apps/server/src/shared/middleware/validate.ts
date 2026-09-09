@@ -13,7 +13,15 @@ export function validate(schema: ZodType, part: RequestPart = "body"): RequestHa
       return;
     }
 
-    req[part] = result.data;
+    if (part === "query") {
+      // Express 5: req.query là getter-only trên prototype (không có setter) —
+      // gán trực tiếp ném "Cannot set property query of #<IncomingMessage>
+      // which has only a getter". Định nghĩa lại thành own-property ghi đè
+      // được để gắn data đã validate/coerce (vd. cursor/status ở /companies).
+      Object.defineProperty(req, "query", { value: result.data, writable: true, configurable: true, enumerable: true });
+    } else {
+      req[part] = result.data;
+    }
     next();
   };
 }

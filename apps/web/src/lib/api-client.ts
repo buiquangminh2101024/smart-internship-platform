@@ -26,6 +26,12 @@ export const httpClient = axios.create({
   validateStatus: () => true,
 });
 
+// Instance riêng cho upload multipart (không có Content-Type mặc định) —
+// dùng chung httpClient sẽ luôn gửi "application/json" đè lên header
+// multipart mà axios/trình duyệt tự set khi thấy body là FormData, khiến
+// express.json() phía server cố parse JSON và lỗi trước khi tới multer.
+const uploadClient = axios.create({ baseURL: API_BASE_URL, validateStatus: () => true });
+
 interface RawResponse<T> {
   status: number;
   body: ApiResponse<T> | null;
@@ -114,6 +120,54 @@ export async function apiFetch<T = void>(area: AuthArea, path: string, init: Req
 
     if (newToken) {
       res = await doFetch<T>(path, newToken, init);
+    } else {
+      store.getState().clear();
+      if (typeof window !== "undefined") {
+        window.location.href = AREA_HOME[area];
+      }
+    }
+  }
+
+  return parseBody<T>(res);
+}
+
+/**
+ * Biến thể multipart của apiFetch — chỉ dùng cho endpoint nhận file (vd.
+ * POST /employers/company kèm businessLicense). Không tái dùng doFetch() vì
+ * body là FormData, không phải JSON string; và bắt buộc bỏ header
+ * Content-Type mặc định ("application/json" ở httpClient) để axios/trình
+ * duyệt tự set đúng "multipart/form-data; boundary=..." — nếu không,
+ * express.json() phía server sẽ cố parse JSON và lỗi trước khi tới multer.
+ */
+export async function apiUpload<T = void>(area: AuthArea, path: string, formData: FormData): Promise<T> {
+  const store = authStoreForArea(area);
+
+  async function send(bearer: string | null): Promise<RawResponse<T>> {
+    try {
+      const res = await uploadClient.post<ApiResponse<T>>(path, formData, {
+        headers: bearer ? { Authorization: `Bearer ${bearer}` } : {},
+      });
+      return { status: res.status, body: res.data ?? null };
+    } catch {
+      return { status: 0, body: null };
+    }
+  }
+
+  const initialToken = store.getState().accessToken;
+  let res = await send(initialToken);
+
+  if (res.status === 401 && initialToken) {
+    let refreshPromise = refreshPromises.get(area);
+    if (!refreshPromise) {
+      refreshPromise = refreshAccessToken(area).finally(() => {
+        refreshPromises.delete(area);
+      });
+      refreshPromises.set(area, refreshPromise);
+    }
+    const newToken = await refreshPromise;
+
+    if (newToken) {
+      res = await send(newToken);
     } else {
       store.getState().clear();
       if (typeof window !== "undefined") {

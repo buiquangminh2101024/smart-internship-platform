@@ -27,6 +27,7 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^1.4.12",
     "@types/node": "^20.19.43",
     "dotenv-cli": "^11.0.0",
     "prisma": "^6.19.3",
@@ -38,12 +39,14 @@
     "@sip/shared-types": "^1.0.0",
     "awilix": "^13.0.5",
     "bcryptjs": "^2.4.3",
+    "cloudinary": "^2.5.1",
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
     "express": "^5.2.1",
     "google-auth-library": "^11.0.2",
     "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.3",
+    "multer": "^2.0.1",
     "resend": "^6.25.0",
     "zod": "^4.5.4"
   }
