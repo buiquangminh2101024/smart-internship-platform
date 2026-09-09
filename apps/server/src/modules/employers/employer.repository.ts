@@ -4,11 +4,9 @@ type Db = PrismaClient | Prisma.TransactionClient;
 
 export type EmployerWithCompany = Employer & { company: Company };
 
-// Repository riêng của module `employers` (không dùng chung với `companies` —
-// khác PROJECT_STRUCTURE.md §5 lifecycle của UserRepository vốn dùng chung
-// auth/users vì cùng thao tác 1 bảng users cho 2 mục đích khác nhau; ở đây
-// employers/companies là 2 aggregate khác nhau nên mỗi module giữ repository
-// của model mình, chỉ CompanyRepository được dùng chéo — xem employers.service.ts).
+// Sở hữu bởi module `employers`, nhưng đăng ký tập trung ở container.ts (như
+// CompanyRepository từ Phase 4) vì từ Phase 5 module `subscriptions` cũng đọc
+// companyId/isCompanyAdmin qua đây lúc checkout — xem subscriptions.service.ts.
 export class EmployerRepository {
   private readonly prisma: PrismaClient;
 

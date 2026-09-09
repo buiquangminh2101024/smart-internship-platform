@@ -37,6 +37,8 @@ Database: PostgreSQL (Neon.tech, managed), truy cập qua Prisma Client. Đã á
 - **`PaymentCallbackLog`** — log thô **mọi** callback IPN/webhook nhận được (`provider: PaymentProvider` — `VNPAY | MOMO`), kể cả khi không khớp được `Transaction` nào — cố tình không có FK, tách biệt khỏi luồng xử lý nghiệp vụ để tra soát sau này.
 - **`PaymentMethod`** (catalog) — generic hoá cổng thanh toán (`processorType: PaymentProvider`, `configParams` JSON), `Transaction.paymentMethodId` tham chiếu tới đây thay vì hardcode enum trực tiếp trên `Transaction`.
 - Company không có `CompanySubscription` đang `ACTIVE` còn quota bị chặn hoàn toàn tạo `JobPost` mới (kể cả `DRAFT`) — chi tiết: `docs/designs/SUBSCRIPTION_BILLING_DESIGN.md`.
+- **Free trial (chốt AD-6, không thêm cột):** company chưa từng có `CompanySubscription` nào được phép, trong 30 ngày kể từ `Company.verifiedAt`, tạo tối đa 2 `JobPost PUBLISHED` + 10 `JobPost DRAFT` mà không cần mua gói — tính tại query-time từ `verifiedAt` + đếm `JobPost`, không lưu counter riêng. Chi tiết: `docs/designs/SUBSCRIPTION_BILLING_DESIGN.md` mục 5.
+- **Sweep hết hạn:** job `node-cron` (module `subscriptions`) chạy mỗi giờ chuyển `CompanySubscription ACTIVE` hết `endDate` sang `EXPIRED` — chỉ đổi status subscription, việc đóng `JobPost PUBLISHED` tương ứng là deliverable Phase 6 (xem `ARCHITECTURE_DECISIONS.md` AD-6).
 
 ### Job posts & moderation
 
@@ -86,3 +88,6 @@ Chi tiết đầy đủ và rationale nằm ở `INITIAL_ARCHITECTURE_PLAN.md` �
 | Cổng thanh toán (VNPay/Momo) | Generic hoá qua catalog `PaymentMethod`, không hardcode enum trên `Transaction` |
 | Xác thực doanh nghiệp (Phase 4) | `Company.verificationStatus`/`verificationMethod`/`businessLicenseUrl`/`verificationNote`/`rejectedAt` mới, độc lập với `isVerified`/`verifiedAt` cũ (đồng bộ ở service layer) — chi tiết `ARCHITECTURE_DECISIONS.md` AD-5 |
 | Liên kết Employer ↔ Company (Phase 4) | Không migrate `Employer.companyId` sang nullable — `Employer` record chỉ tạo khi công ty được xác định (mới hoặc join qua mã mời), "chưa có Employer" = "chưa hoàn tất thủ tục" |
+| Free trial trước khi mua gói (Phase 5) | Không thêm cột — tính từ `Company.verifiedAt` + đếm `JobPost`; hết trial khi hết 30 ngày, chạm hạn mức (2 publish/10 draft), hoặc mua gói đầu tiên — chi tiết `ARCHITECTURE_DECISIONS.md` AD-6 |
+| Auto-đóng JobPost khi hết gói (Phase 5/6) | Phase 5 chỉ sweep `CompanySubscription → EXPIRED` (`node-cron`); đóng `JobPost PUBLISHED` tương ứng dời sang Phase 6 để giữ đúng ranh giới module — `ARCHITECTURE_DECISIONS.md` AD-6 |
+| Bí mật cổng thanh toán (VNPay/Momo) | Sống trong biến môi trường (`.env`), không lưu trong `PaymentMethod.configParams` — nhất quán với cách các external service khác (Cloudinary, Resend, Google) đã lưu secret trong dự án |

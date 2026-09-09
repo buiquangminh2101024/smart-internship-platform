@@ -108,6 +108,12 @@ Quy tắc chọn `401` vs `403`: `401` = "tôi không biết bạn là ai" (toke
 
 - Các bảng danh mục (`Major`, `University`, `Industry`, `City`, `CompanyType`, `Skill`) trả về nguyên `{ id, name }`, frontend tự build dropdown/filter — không hardcode danh sách phía frontend. `GET /industries`, `/company-types`, `/cities` (Phase 4, module `catalog`) là route public, không cần `authenticate` — dữ liệu tham chiếu không nhạy cảm.
 
-## 12. Ghi chú khi thêm module mới
+## 12. Payment gateway callback (Phase 5)
+
+Ngoại lệ duy nhất của quy tắc "mọi response bọc `ApiResponse<T>`" ở mục 2: endpoint IPN/webhook của VNPay (`GET /payments/vnpay/ipn`) và Momo (`POST /payments/momo/ipn`) trả **đúng format mà cổng thanh toán yêu cầu** (không phải `ApiResponse`), vì đây là response đọc bởi hệ thống VNPay/Momo, không phải frontend — bọc `ApiResponse` sẽ khiến cổng thanh toán không nhận diện được và tiếp tục gọi lại IPN. Cả hai endpoint đều public (không `authenticate`), xác thực bằng chữ ký (HMAC) riêng của từng cổng thay vì JWT — chi tiết luồng/chữ ký: `docs/designs/SUBSCRIPTION_BILLING_DESIGN.md` mục 6. Mọi callback nhận được (kể cả không verify được chữ ký) đều ghi vào `PaymentCallbackLog` trước khi xử lý tiếp, để tra soát sau này.
+
+Trạng thái thanh toán thật sự **chỉ được set trong IPN handler đã verify chữ ký** — không bao giờ tin dữ liệu query param ở return URL (trang frontend nhận redirect từ cổng thanh toán qua trình duyệt người dùng, có thể bị giả mạo). Frontend ở trang return chỉ gọi `GET /subscriptions/payments/by-order-code/:orderCode` (route JSON thường, theo `ApiResponse`) để lấy trạng thái thật.
+
+## 13. Ghi chú khi thêm module mới
 
 Khi implement một module mới (Phase 3 trở đi), nếu phát sinh convention chưa có ở đây (ví dụ format upload file, convention cho Socket.IO event payload ở Phase 8, hay convention riêng cho endpoint Admin), bổ sung trực tiếp vào file này theo đúng mục liên quan — không tạo file convention rời rạc theo từng module.

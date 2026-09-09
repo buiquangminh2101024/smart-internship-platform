@@ -58,11 +58,13 @@ Không bắt buộc phải tuân thủ tuyệt đối thứ tự/số lượng p
 - **Deliverables:**
   - `SubscriptionPlan` (catalog do Admin quản lý: `jobPostQuota`, `durationDays`, `price`, `isActive`).
   - `CompanySubscription`: Company mua/nâng cấp gói (`status: PENDING|ACTIVE|EXPIRED|CANCELLED`); nâng cấp giữa kỳ = huỷ gói cũ + tạo gói mới (không cộng dồn); quota còn lại tính bằng đếm `JobPost` tạo trong kỳ hiện tại (không lưu counter riêng).
-  - Thanh toán qua VNPay/Momo (redirect + IPN callback, không SDK mobile): `Payment` (ý định thanh toán), `Transaction` (mỗi lần gọi cổng, giữ lịch sử thử lại), `PaymentCallbackLog` (log thô mọi callback, kể cả không khớp), `PaymentMethod` (catalog generic hoá cổng thanh toán).
-  - Chặn hoàn toàn việc tạo `JobPost` mới (kể cả `DRAFT`) khi Company không có `CompanySubscription` đang `ACTIVE` còn quota — điểm tích hợp với Phase 6.
-- **Dependencies:** Phase 4 (cần `Company` tồn tại để gắn `CompanySubscription`).
-- **Definition of Done:** Company mua được gói qua VNPay hoặc Momo, IPN callback cập nhật đúng trạng thái `CompanySubscription`/`Payment`/`Transaction`; Company không có gói active bị chặn tạo `JobPost`; nâng cấp gói giữa kỳ hoạt động đúng luật đã chốt.
-- **Risks/Notes:** Không dùng message queue (RabbitMQ/Redpanda) — xử lý IPN trực tiếp trong 1 transaction Prisma vì đây là monolith 1 process/1 DB, không có ranh giới service cần decouple (xem `INITIAL_ARCHITECTURE_PLAN.md` §12c). Chi tiết thiết kế: `docs/designs/SUBSCRIPTION_BILLING_DESIGN.md`.
+  - Thanh toán qua VNPay/Momo (redirect + IPN callback, không SDK mobile) qua `PaymentGatewayAdapter` chung (Strategy/Adapter pattern, xem AD-6): `Payment` (ý định thanh toán), `Transaction` (mỗi lần gọi cổng, giữ lịch sử thử lại), `PaymentCallbackLog` (log thô mọi callback, kể cả không khớp), `PaymentMethod` (catalog generic hoá cổng thanh toán).
+  - **Free trial**: company chưa từng có `CompanySubscription` được publish tối đa 2 tin + draft tối đa 10 tin, miễn phí, trong 30 ngày kể từ `Company.verifiedAt` — không cần mua gói (chi tiết AD-6, `SUBSCRIPTION_BILLING_DESIGN.md` mục 5).
+  - **Sweep hết hạn**: job `node-cron` (mới, dependency) chạy mỗi giờ chuyển `CompanySubscription ACTIVE` hết hạn sang `EXPIRED` (chỉ đổi status subscription — đóng `JobPost PUBLISHED` tương ứng dời sang Phase 6, xem AD-6).
+  - Chặn hoàn toàn việc tạo `JobPost` mới (kể cả `DRAFT`) khi Company không có `CompanySubscription` đang `ACTIVE` còn quota **và** không còn trong free trial — điểm tích hợp với Phase 6 qua `SubscriptionsService.getCompanySubscriptionAccess()`.
+- **Dependencies:** Phase 4 (cần `Company` tồn tại để gắn `CompanySubscription`, trial cần `Company.verifiedAt`).
+- **Definition of Done:** Company mua được gói qua VNPay hoặc Momo, IPN callback cập nhật đúng trạng thái `CompanySubscription`/`Payment`/`Transaction`; company mới verified dùng được free trial theo đúng hạn mức 2 publish/10 draft/30 ngày; company không có gói active và hết trial bị chặn tạo `JobPost`; nâng cấp gói giữa kỳ hoạt động đúng luật đã chốt; sweep `node-cron` tự chuyển gói hết hạn sang `EXPIRED`.
+- **Risks/Notes:** Không dùng message queue (RabbitMQ/Redpanda) — xử lý IPN trực tiếp trong 1 transaction Prisma vì đây là monolith 1 process/1 DB, không có ranh giới service cần decouple (xem `INITIAL_ARCHITECTURE_PLAN.md` §12c). VNPay IPN URL phải điền thủ công trên trang quản trị sandbox (không qua request); test IPN cục bộ dùng VS Code port forwarding (xem AD-6). Chi tiết thiết kế: `docs/designs/SUBSCRIPTION_BILLING_DESIGN.md`, kế hoạch implement: `docs/06-backend/phase-05-subscription-payment/PLAN.md`.
 
 ## Phase 6 — Job Recruitment Module
 
@@ -73,10 +75,11 @@ Không bắt buộc phải tuân thủ tuyệt đối thứ tự/số lượng p
   - Entity `JobPostModerationAction` ghi log đầy đủ mọi hành động duyệt/từ chối/thu hồi.
   - Địa chỉ cụ thể (`address`, độc lập với `cityId` — cần thiết khi công ty có nhiều chi nhánh cùng thành phố), lương thoả thuận (`isNegotiable`), `requirements`/`benefits`; gắn kỹ năng yêu cầu qua `JobPostSkill` (dùng chung catalog `Skill` với `StudentSkill`, chuẩn bị AI matching Phase 11).
   - Tìm kiếm/lọc công khai theo lương, ngành nghề, địa điểm cho Guest.
-  - Tạo mới (`submitForApproval()`/`publish()`) yêu cầu `Company` có `CompanySubscription` đang `ACTIVE` còn quota (Phase 5) — thiếu điều kiện này thì chặn ngay từ bước tạo `JobPost`.
+  - Tạo mới (`submitForApproval()`/`publish()`) yêu cầu `Company` có `CompanySubscription` đang `ACTIVE` còn quota, hoặc còn trong free trial (Phase 5, `SubscriptionsService.getCompanySubscriptionAccess()`) — thiếu cả hai điều kiện thì chặn ngay từ bước tạo `JobPost`.
+  - **Auto-đóng khi hết gói** (dời từ Phase 5, xem `ARCHITECTURE_DECISIONS.md` AD-6): sweep định kỳ (tận dụng `CompanySubscription.status = EXPIRED` đã có sẵn từ job `node-cron` của Phase 5) chuyển mọi `JobPost PUBLISHED` của company vừa hết gói sang `EXPIRED`.
 - **Dependencies:** Phase 4, Phase 5.
-- **Definition of Done:** Một Employer thuộc công ty đã verified publish được tin (tự động hoặc qua duyệt tuỳ cờ `requiresApproval`); Admin thu hồi được một tin đang `PUBLISHED` kèm lý do và thấy `retractionCount` tăng; Guest tìm được tin qua bộ lọc.
-- **Risks/Notes:** `JobPost.jobType` cần enum rõ ràng trước khi hoàn thiện schema phase này (Open Question).
+- **Definition of Done:** Một Employer thuộc công ty đã verified publish được tin (tự động hoặc qua duyệt tuỳ cờ `requiresApproval`, kể cả khi đang dùng free trial); Admin thu hồi được một tin đang `PUBLISHED` kèm lý do và thấy `retractionCount` tăng; Guest tìm được tin qua bộ lọc; company hết `CompanySubscription` (không còn trial) có toàn bộ tin `PUBLISHED` tự chuyển `EXPIRED`.
+- **Risks/Notes:** `JobPost.jobType` cần enum rõ ràng trước khi hoàn thiện schema phase này (Open Question — đã chốt, xem `PROJECT_OVERVIEW.md` §14 mục 3).
 
 ## Phase 7 — CV & Saved Jobs
 

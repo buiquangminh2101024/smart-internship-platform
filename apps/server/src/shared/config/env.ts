@@ -51,6 +51,36 @@ const baseSchema = z.object({
     (value) => (typeof value === "string" ? value === "true" : value),
     z.boolean().default(false),
   ),
+
+  // Phase 5 — Subscription & Payment (VNPay/Momo sandbox, xem
+  // ARCHITECTURE_DECISIONS.md AD-6 và docs/06-backend/phase-05-subscription-payment/PLAN.md).
+  // Credentials sandbox thật copy trực tiếp vào .env cục bộ, KHÔNG commit.
+  VNPAY_TMN_CODE: z.string().optional(),
+  VNPAY_HASH_SECRET: z.string().optional(),
+  VNPAY_PAY_URL: z.string().url().default("https://sandbox.vnpayment.vn/paymentv2/vpcpay.html"),
+  VNPAY_RETURN_URL: z.string().url().default("http://localhost:3000/employer/subscription/return/vnpay"),
+
+  MOMO_PARTNER_CODE: z.string().optional(),
+  MOMO_ACCESS_KEY: z.string().optional(),
+  MOMO_SECRET_KEY: z.string().optional(),
+  MOMO_CREATE_ENDPOINT: z.string().url().default("https://test-payment.momo.vn/v2/gateway/api/create"),
+  MOMO_RETURN_URL: z.string().url().default("http://localhost:3000/employer/subscription/return/momo"),
+  // Bắt buộc là URL public lúc test IPN thật (VS Code port forwarding, xem AD-6) —
+  // Momo gọi lại địa chỉ này để xác nhận thanh toán, localhost sẽ không nhận được callback.
+  MOMO_IPN_URL: z.string().url().default("http://localhost:4000/api/payments/momo/ipn"),
+  MOMO_REQUEST_TYPE: z.string().min(1).default("payWithATM"),
+
+  // DEV ONLY: bỏ qua việc gọi cổng thanh toán thật (VNPay/Momo) khi checkout —
+  // đánh dấu Payment/Transaction COMPLETED và kích hoạt CompanySubscription
+  // ngay lập tức, dùng khi sandbox VNPay/Momo không dùng được (vd. tài khoản
+  // sandbox mượn của dự án khác chưa được VNPay duyệt cho website này) mà vẫn
+  // cần tiếp tục phát triển/test các phần phụ thuộc subscription (Phase 6+).
+  // BẮT BUỘC đặt false khi triển khai thực tế — server sẽ TỪ CHỐI KHỞI ĐỘNG nếu
+  // NODE_ENV=production và giá trị này là true (giống DEV_SKIP_COMPANY_MANUAL_VERIFICATION).
+  DEV_SKIP_PAYMENT_GATEWAY: z.preprocess(
+    (value) => (typeof value === "string" ? value === "true" : value),
+    z.boolean().default(false),
+  ),
 });
 
 // Resend/Google chỉ optional khi OTP_HARDCODE=true (dev bypass gửi email thật).
@@ -84,6 +114,28 @@ const envSchema = baseSchema.superRefine((data, ctx) => {
       code: "custom",
       path: ["DEV_SKIP_COMPANY_MANUAL_VERIFICATION"],
       message: "DEV_SKIP_COMPANY_MANUAL_VERIFICATION must be false in production",
+    });
+  }
+  if (data.NODE_ENV === "production" && !data.VNPAY_TMN_CODE) {
+    ctx.addIssue({ code: "custom", path: ["VNPAY_TMN_CODE"], message: "VNPAY_TMN_CODE is required" });
+  }
+  if (data.NODE_ENV === "production" && !data.VNPAY_HASH_SECRET) {
+    ctx.addIssue({ code: "custom", path: ["VNPAY_HASH_SECRET"], message: "VNPAY_HASH_SECRET is required" });
+  }
+  if (data.NODE_ENV === "production" && !data.MOMO_PARTNER_CODE) {
+    ctx.addIssue({ code: "custom", path: ["MOMO_PARTNER_CODE"], message: "MOMO_PARTNER_CODE is required" });
+  }
+  if (data.NODE_ENV === "production" && !data.MOMO_ACCESS_KEY) {
+    ctx.addIssue({ code: "custom", path: ["MOMO_ACCESS_KEY"], message: "MOMO_ACCESS_KEY is required" });
+  }
+  if (data.NODE_ENV === "production" && !data.MOMO_SECRET_KEY) {
+    ctx.addIssue({ code: "custom", path: ["MOMO_SECRET_KEY"], message: "MOMO_SECRET_KEY is required" });
+  }
+  if (data.NODE_ENV === "production" && data.DEV_SKIP_PAYMENT_GATEWAY) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["DEV_SKIP_PAYMENT_GATEWAY"],
+      message: "DEV_SKIP_PAYMENT_GATEWAY must be false in production",
     });
   }
 });

@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { CreateCompanyForm } from "@/components/employer/CreateCompanyForm";
+import { SubscriptionStatusCard } from "@/components/employer/SubscriptionStatusCard";
 
 const STATUS_LABEL: Record<string, { label: string; tone: "success" | "warning" | "danger" }> = {
   VERIFIED: { label: "Đã xác thực", tone: "success" },
@@ -134,6 +135,15 @@ export default function EmployerProfilePage() {
             </div>
           ) : null}
         </Card>
+      ) : null}
+
+      {company?.verificationStatus === "VERIFIED" ? (
+        <div className="grid gap-3">
+          <SubscriptionStatusCard variant="compact" />
+          <Button as="a" href="/employer/subscription" variant="link" className="w-fit">
+            Xem gói dịch vụ
+          </Button>
+        </div>
       ) : null}
 
       <Card padding="lg" as="form" onSubmit={handleSaveProfile} className="grid gap-4">
