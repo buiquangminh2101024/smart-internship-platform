@@ -41,63 +41,70 @@ Không bắt buộc tuân thủ tuyệt đối thứ tự/số lượng phase n�
 - **Dependencies:** Phase 2 (frontend), Phase 4 (backend).
 - **Definition of Done:** Employer chưa liên kết công ty luôn bị điều hướng vào `hoan-tat-thu-tuc`; hoàn tất xong thấy đúng trạng thái xác minh ở `/employer/profile`; Admin verify/reject/cấu hình `requiresApproval` qua UI.
 
-## Phase 5 — Job Recruitment Module
+## Phase 5 — Subscription & Payment cho đăng tin tuyển dụng
+
+- **Goal:** UI mua/quản lý gói dịch vụ đăng tin (VNPay/Momo) + hiển thị trạng thái free trial cho Employer.
+- **Main screens/routes:** `/employer/(portal)/profile` (thêm khối "Gói dịch vụ" — trial hay đã mua gói, quota còn lại), `/employer/(portal)/subscription` (danh sách `SubscriptionPlan`, mua/nâng cấp, lịch sử), `/employer/(portal)/subscription/return/vnpay` + `/employer/(portal)/subscription/return/momo` (trang chờ xác nhận sau khi cổng thanh toán redirect về, poll API backend lấy trạng thái thật — không tin query param return URL).
+- **Dependencies:** Phase 4 (frontend), Phase 5 (backend).
+- **Definition of Done:** Employer (company admin) xem được gói hiện tại/trial, chọn gói + cổng thanh toán, redirect sang VNPay/Momo, quay lại thấy đúng trạng thái sau khi IPN xử lý xong. Chi tiết: `docs/05-frontend/phases/phase-05-subscription-payment/PLAN.md`.
+
+## Phase 6 — Job Recruitment Module
 
 - **Goal:** UI vòng đời tin tuyển dụng đầy đủ, tìm kiếm công khai.
 - **Main screens/routes:** `(public)/jobs` (tìm kiếm/lọc theo lương/ngành/địa điểm cho Guest), `(employer)/jobs` (tạo/sửa/submit/publish/close tin), `(admin)/jobs` (duyệt/từ chối/thu hồi kèm lý do, xem log moderation).
-- **Dependencies:** Phase 4 (frontend), Phase 5 (backend).
-- **Definition of Done:** Guest tìm được tin qua bộ lọc; Employer publish/đóng tin qua UI; Admin duyệt/thu hồi tin qua UI.
+- **Dependencies:** Phase 4 (frontend), Phase 5, Phase 6 (backend).
+- **Definition of Done:** Guest tìm được tin qua bộ lọc; Employer publish/đóng tin qua UI (kể cả khi đang dùng free trial); Admin duyệt/thu hồi tin qua UI.
 
-## Phase 6 — CV & Saved Jobs
+## Phase 7 — CV & Saved Jobs
 
 - **Goal:** UI hỗ trợ ứng viên gắn với tin tuyển dụng.
 - **Main screens/routes:** `(candidate)/cv` (upload/quản lý CV qua Cloudinary, đặt CV mặc định), nút lưu/bỏ lưu tin trong `(public)/jobs` và `(candidate)/saved-jobs`.
-- **Dependencies:** Phase 3 (frontend), Phase 5 (frontend), Phase 6 (backend).
+- **Dependencies:** Phase 3 (frontend), Phase 6 (frontend), Phase 7 (backend).
 - **Definition of Done:** Candidate upload CV và lưu/bỏ lưu tin qua UI.
 
-## Phase 7 — Application Module
+## Phase 8 — Application Module
 
 - **Goal:** UI luồng ứng tuyển trung tâm.
 - **Main screens/routes:** `(candidate)/applications` (nộp/huỷ ứng tuyển, theo dõi trạng thái), `(employer)/applications` (xét duyệt, ghi chú nội bộ + rating, đổi trạng thái).
-- **Dependencies:** Phase 3, 5, 6 (frontend), Phase 7 (backend).
+- **Dependencies:** Phase 3, 6, 7 (frontend), Phase 8 (backend).
 - **Definition of Done:** Luồng ứng tuyển → xét duyệt → quyết định chạy trọn vẹn qua UI cho một tin tuyển dụng.
 
-## Phase 8 — Realtime Communication
+## Phase 9 — Realtime Communication
 
 - **Goal:** UI nhắn tin realtime giữa Candidate và Employer.
 - **Main screens/routes:** `(candidate)/messages`, `(employer)/messages` — kết nối Socket.IO client, trạng thái đã đọc.
-- **Dependencies:** Phase 7 (frontend), Phase 8 (backend).
+- **Dependencies:** Phase 8 (frontend), Phase 9 (backend).
 - **Definition of Done:** Hai user trao đổi tin nhắn realtime qua UI thành công giữa hai phiên trình duyệt khác nhau.
 
-## Phase 9 — Notification & Email
+## Phase 10 — Notification & Email
 
 - **Goal:** UI thông báo trong ứng dụng.
 - **Main screens/routes:** Notification bell/dropdown dùng chung layout (candidate/employer/admin).
-- **Dependencies:** Phase 4, 5, 7 (frontend), Phase 9 (backend).
+- **Dependencies:** Phase 4, 6, 8 (frontend), Phase 10 (backend).
 - **Definition of Done:** Thay đổi trạng thái ứng tuyển/tin tuyển dụng/verify công ty hiển thị notification trên UI theo thời gian thực hoặc khi reload.
 
-## Phase 10 — AI Features Boundary
+## Phase 11 — AI Features Boundary
 
 - **Goal:** Chỉ chuẩn bị chỗ hiển thị kết quả AI trên UI (nếu backend bật feature flag), không tự xây AI thật.
 - **Main screens/routes:** Placeholder/khu vực hiển thị gợi ý (CV analysis, job matching...) ẩn khi feature flag tắt.
-- **Dependencies:** Phase 3, 5, 6, 7 (frontend), Phase 10 (backend).
+- **Dependencies:** Phase 3, 6, 7, 8 (frontend), Phase 11 (backend).
 - **Definition of Done:** Tắt feature flag AI thì UI không hiển thị gì thêm, không lỗi.
 
-## Phase 11 — Integration & Security Hardening
+## Phase 12 — Integration & Security Hardening
 
 - **Goal:** Rà soát bảo mật phía client (XSS, lưu token an toàn, CORS).
 - **Main screens/routes:** Cross-cutting — không có screen mới.
 - **Dependencies:** Tất cả phase trước.
 - **Definition of Done:** Security checklist frontend đạt (vd. không lưu JWT ở nơi dễ bị XSS đọc, sanitize input hiển thị).
 
-## Phase 12 — Testing & Quality
+## Phase 13 — Testing & Quality
 
 - **Goal:** Test UI (unit component + integration/E2E cơ bản).
 - **Main screens/routes:** Cross-cutting.
 - **Dependencies:** Tất cả phase nghiệp vụ frontend.
 - **Definition of Done:** Có bộ test có ý nghĩa chạy được (framework chốt lúc gần tới phase này — xem `docs/02-architecture/PROJECT_STRUCTURE.md` §9).
 
-## Phase 13 — Deployment & Thesis Preparation
+## Phase 14 — Deployment & Thesis Preparation
 
 - **Goal:** Bản build frontend production-ready cho demo bảo vệ.
 - **Main screens/routes:** Cross-cutting.

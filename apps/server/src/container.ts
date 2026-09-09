@@ -1,4 +1,4 @@
-import { asClass, asValue, createContainer, type AwilixContainer } from "awilix";
+import { asClass, asFunction, asValue, createContainer, type AwilixContainer } from "awilix";
 import type { Redis } from "ioredis";
 import { prisma } from "./infrastructure/prisma";
 import { redis } from "./infrastructure/redis";
@@ -9,8 +9,11 @@ import { ResendEmailSender } from "./infrastructure/resend-email-sender";
 import { GoogleAuthClient } from "./infrastructure/google-auth-client";
 import { RedisCompanyInviteCodeStore } from "./infrastructure/redis-company-invite-code-store";
 import { CloudinaryMediaStorage } from "./infrastructure/cloudinary-media-storage";
+import { VnpayGatewayAdapter } from "./infrastructure/vnpay-gateway-adapter";
+import { MomoGatewayAdapter } from "./infrastructure/momo-gateway-adapter";
 import { UserRepository } from "./modules/users/user.repository";
 import { CompanyRepository } from "./modules/companies/company.repository";
+import { EmployerRepository } from "./modules/employers/employer.repository";
 import { logger, type Logger } from "./shared/logger";
 import { config } from "./shared/config/env";
 import type { RateLimiter } from "./shared/ports/RateLimiter";
@@ -19,7 +22,8 @@ import type { OtpStore } from "./shared/ports/OtpStore";
 import type { EmailSender } from "./shared/ports/EmailSender";
 import type { CompanyInviteCodeStore } from "./shared/ports/CompanyInviteCodeStore";
 import type { MediaStorage } from "./shared/ports/MediaStorage";
-import type { PrismaClient } from "@prisma/client";
+import type { PaymentGatewayAdapter } from "./shared/ports/PaymentGatewayAdapter";
+import type { PaymentProvider, PrismaClient } from "@prisma/client";
 
 // Cradle gốc — mỗi module nghiệp vụ mở rộng type này khi đăng ký thêm
 // controller/service/repository của mình (asClass), theo pattern demo ở
@@ -40,6 +44,13 @@ export interface Cradle {
   mediaStorage: MediaStorage;
   userRepository: UserRepository;
   companyRepository: CompanyRepository;
+  // Dùng chéo bởi employers (chủ sở hữu) và subscriptions (đọc companyId/
+  // isCompanyAdmin lúc checkout, xem employer.repository.ts) — cùng lý do
+  // CompanyRepository đã được đăng ký tập trung ở đây từ Phase 4.
+  employerRepository: EmployerRepository;
+  vnpayGatewayAdapter: PaymentGatewayAdapter;
+  momoGatewayAdapter: PaymentGatewayAdapter;
+  paymentGatewayAdapters: Record<PaymentProvider, PaymentGatewayAdapter>;
 }
 
 export function buildContainer(): AwilixContainer<Cradle> {
@@ -59,6 +70,15 @@ export function buildContainer(): AwilixContainer<Cradle> {
     mediaStorage: asClass(CloudinaryMediaStorage).singleton(),
     userRepository: asClass(UserRepository).singleton(),
     companyRepository: asClass(CompanyRepository).singleton(),
+    employerRepository: asClass(EmployerRepository).singleton(),
+    vnpayGatewayAdapter: asClass(VnpayGatewayAdapter).singleton(),
+    momoGatewayAdapter: asClass(MomoGatewayAdapter).singleton(),
+    paymentGatewayAdapters: asFunction(
+      (cradle: Cradle): Record<PaymentProvider, PaymentGatewayAdapter> => ({
+        VNPAY: cradle.vnpayGatewayAdapter,
+        MOMO: cradle.momoGatewayAdapter,
+      }),
+    ).singleton(),
   });
 
   return container;

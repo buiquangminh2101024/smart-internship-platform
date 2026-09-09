@@ -49,7 +49,20 @@ const skills = [
   "Quản lý thời gian",
 ];
 
-async function seedCatalog(name: string, values: string[], upsert: (name: string) => Promise<unknown>) {
+// Phase 5 — Subscription & Payment. Giá VND cụ thể là số mẫu, chủ dự án tự
+// điều chỉnh lúc seed thật (xem docs/06-backend/phase-05-subscription-payment/PLAN.md).
+const paymentMethods: { displayName: string; processorType: "VNPAY" | "MOMO" }[] = [
+  { displayName: "VNPay", processorType: "VNPAY" },
+  { displayName: "Momo", processorType: "MOMO" },
+];
+
+const subscriptionPlans = [
+  { name: "Cơ bản", description: "Phù hợp doanh nghiệp mới bắt đầu tuyển dụng", jobPostQuota: 5, durationDays: 30, price: 299000 },
+  { name: "Tiêu chuẩn", description: "Tuyển dụng thường xuyên, nhiều vị trí", jobPostQuota: 20, durationDays: 30, price: 799000 },
+  { name: "Doanh nghiệp", description: "Tuyển dụng quy mô lớn, không giới hạn theo tháng", jobPostQuota: 100, durationDays: 90, price: 1999000 },
+];
+
+async function seedCatalog<T>(name: string, values: T[], upsert: (value: T) => Promise<unknown>) {
   for (const value of values) {
     await upsert(value);
   }
@@ -74,6 +87,16 @@ async function main() {
   );
   await seedCatalog("skills", skills, (name) =>
     prisma.skill.upsert({ where: { name }, update: {}, create: { name } }),
+  );
+  await seedCatalog("payment methods", paymentMethods, (item) =>
+    prisma.paymentMethod.upsert({
+      where: { displayName: item.displayName },
+      update: {},
+      create: { displayName: item.displayName, processorType: item.processorType, isAvailable: true },
+    }),
+  );
+  await seedCatalog("subscription plans", subscriptionPlans, (item) =>
+    prisma.subscriptionPlan.upsert({ where: { name: item.name }, update: {}, create: item }),
   );
 }
 

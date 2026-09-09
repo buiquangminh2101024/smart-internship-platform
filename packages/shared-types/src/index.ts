@@ -236,3 +236,86 @@ export interface RejectCompanyRequest {
 export interface SetRequiresApprovalRequest {
   requiresApproval: boolean;
 }
+
+// ─── Subscription & Payment (Phase 5) ────────────────────────────────────
+
+export type SubscriptionStatus = "PENDING" | "ACTIVE" | "EXPIRED" | "CANCELLED";
+
+export type PaymentStatus = "PENDING" | "COMPLETED" | "FAILED";
+
+export type TransactionStatus = "INIT" | "SUCCESS" | "FAILED";
+
+export type PaymentProvider = "VNPAY" | "MOMO";
+
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  description: string | null;
+  jobPostQuota: number;
+  durationDays: number;
+  price: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CompanySubscriptionSummary {
+  id: string;
+  planId: string;
+  plan: SubscriptionPlan;
+  startDate: string;
+  endDate: string;
+  status: SubscriptionStatus;
+  createdAt: string;
+}
+
+export type SubscriptionAccessMode = "TRIAL" | "SUBSCRIBED" | "BLOCKED";
+
+/**
+ * Trạng thái quyền đăng tin của 1 company, trả bởi
+ * GET /employers/company/subscription (xem SUBSCRIPTION_BILLING_DESIGN.md §5).
+ * - TRIAL: publishRemaining/draftRemaining là 2 hạn mức MIỄN PHÍ tách biệt.
+ * - SUBSCRIBED: publishRemaining là tổng quota JobPost còn lại của gói hiện
+ *   tại trong kỳ (1 con số duy nhất, không tách publish/draft) — draftRemaining
+ *   không có ý nghĩa ở mode này.
+ * - BLOCKED: hết trial (hết hạn/chạm hạn mức) và chưa có gói ACTIVE.
+ */
+export interface SubscriptionAccessStatus {
+  mode: SubscriptionAccessMode;
+  publishRemaining?: number;
+  draftRemaining?: number;
+  trialEndsAt?: string;
+  subscription?: CompanySubscriptionSummary;
+}
+
+export interface CheckoutRequest {
+  planId: string;
+  provider: PaymentProvider;
+}
+
+export interface CheckoutResponse {
+  paymentUrl: string;
+  orderCode: string;
+}
+
+export interface PaymentStatusResponse {
+  status: PaymentStatus;
+  companySubscriptionStatus?: SubscriptionStatus;
+}
+
+export interface CreateSubscriptionPlanRequest {
+  name: string;
+  description?: string;
+  jobPostQuota: number;
+  durationDays: number;
+  price: number;
+}
+
+export interface UpdateSubscriptionPlanRequest {
+  name?: string;
+  description?: string;
+  jobPostQuota?: number;
+  durationDays?: number;
+  price?: number;
+  isActive?: boolean;
+}

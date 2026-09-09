@@ -2,7 +2,6 @@ import { Router } from "express";
 import { asClass, type AwilixContainer } from "awilix";
 import { EmployersController } from "./employers.controller";
 import { EmployersService } from "./employers.service";
-import { EmployerRepository } from "./employer.repository";
 import { CompanyVerificationService } from "./company-verification.service";
 import { validate } from "../../shared/middleware/validate";
 import { authenticate } from "../../shared/middleware/authenticate";
@@ -15,9 +14,10 @@ import {
   verificationCheckSchema,
 } from "./employers.dto";
 
+// employerRepository đăng ký tập trung ở container.ts (dùng chéo bởi
+// subscriptions từ Phase 5 — xem employer.repository.ts), không đăng ký lại ở đây.
 export function employersRouter(container: AwilixContainer): Router {
   container.register({
-    employerRepository: asClass(EmployerRepository).singleton(),
     companyVerificationService: asClass(CompanyVerificationService).singleton(),
     employersService: asClass(EmployersService).singleton(),
     employersController: asClass(EmployersController).singleton(),
