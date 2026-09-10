@@ -5,6 +5,8 @@ import { buildContainer } from "./container";
 import { healthRouter } from "./modules/health/health.routes";
 import { authRouter } from "./modules/auth/auth.routes";
 import { usersRouter } from "./modules/users/users.routes";
+import { candidatesRouter } from "./modules/candidates/candidates.routes";
+import { catalogRouter } from "./modules/catalog/catalog.routes";
 import { errorHandler } from "./shared/middleware/errorHandler";
 import { logger } from "./shared/logger";
 
@@ -18,6 +20,8 @@ app.use(express.json());
 app.use("/api", healthRouter(container));
 app.use("/api", authRouter(container));
 app.use("/api", usersRouter(container));
+app.use("/api", candidatesRouter(container));
+app.use("/api", catalogRouter(container));
 
 app.use(errorHandler);
 
