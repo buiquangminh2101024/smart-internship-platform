@@ -70,3 +70,20 @@ export function usePaymentStatus(orderCode: string | undefined) {
     },
   });
 }
+
+/**
+ * POST /subscriptions/payments/by-order-code/:orderCode/cancel — báo cho
+ * backend biết gateway đã redirect về với query param huỷ (Momo
+ * resultCode=1006 / VNPay vnp_ResponseCode=24) trong khi IPN có thể sẽ không
+ * bao giờ gọi tới, để đóng Payment/Transaction đang kẹt PENDING sang FAILED
+ * (xem components/employer/PaymentReturnStatus.tsx). Chỉ có tác dụng nếu
+ * Payment hiện đang PENDING — không bao giờ ghi đè COMPLETED/FAILED thật.
+ */
+export function useReportPaymentCancellation() {
+  return useMutation({
+    mutationFn: (orderCode: string) =>
+      apiFetch<PaymentStatusResponse>("employer", `/subscriptions/payments/by-order-code/${orderCode}/cancel`, {
+        method: "POST",
+      }),
+  });
+}
