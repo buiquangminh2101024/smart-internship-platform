@@ -516,6 +516,9 @@ model JobPost {
   publishedAt  DateTime?
   expiresAt    DateTime?
   closedAt     DateTime?
+  // Tăng 1 mỗi lần Guest xem chi tiết tin PUBLISHED qua API công khai
+  // (quyết định Phase 6, xem docs/06-backend/phase-06-job-recruitment/PLAN.md).
+  viewCount    Int           @default(0)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 

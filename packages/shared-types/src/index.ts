@@ -319,3 +319,122 @@ export interface UpdateSubscriptionPlanRequest {
   price?: number;
   isActive?: boolean;
 }
+
+// ─── Job Posts (Phase 6) ─────────────────────────────────────────────────
+// Vòng đời: DRAFT → PENDING → PUBLISHED → EXPIRED/CLOSED/TAKEN_DOWN
+// (xem INITIAL_ARCHITECTURE_PLAN.md §12 và
+// docs/06-backend/phase-06-job-recruitment/PLAN.md).
+
+// Hạn tối đa của JobPost.expiresAt là 90 ngày kể từ lúc đặt — hằng số đặt
+// riêng ở mỗi app (package này chỉ chứa type, không export giá trị runtime):
+// MAX_EXPIRY_DAYS ở apps/server/src/modules/job-posts/job-posts.service.ts và
+// apps/web/src/lib/job-post-display.ts.
+
+export interface JobPostModerationActionDto {
+  id: string;
+  action: ModerationActionType;
+  /** null khi hệ thống tự hành động (company.requiresApproval=false, cron hết hạn). */
+  actorName: string | null;
+  reason: string | null;
+  createdAt: string;
+}
+
+/** Thông tin công ty kèm theo tin — đủ để render card "Thông tin công ty". */
+export interface JobPostCompanySummary {
+  id: string;
+  name: string;
+  logoUrl: string | null;
+  website: string | null;
+  isVerified: boolean;
+  industryId: string | null;
+  cityId: string | null;
+  address: string | null;
+  taxCode: string | null;
+  description: string | null;
+}
+
+export interface JobPost {
+  id: string;
+  companyId: string;
+  company: JobPostCompanySummary;
+  title: string;
+  description: string;
+  jobType: JobPostType;
+  status: JobPostStatus;
+  salaryMin: number | null;
+  salaryMax: number | null;
+  isNegotiable: boolean;
+  requirements: string | null;
+  benefits: string | null;
+  cityId: string | null;
+  cityName: string | null;
+  address: string | null;
+  industryId: string | null;
+  industryName: string | null;
+  publishedAt: string | null;
+  expiresAt: string | null;
+  closedAt: string | null;
+  viewCount: number;
+  /** Số hồ sơ ứng tuyển — luôn 0 cho tới Phase 8 (module applications). */
+  applicationCount: number;
+  /** Hành động kiểm duyệt mới nhất — nguồn dữ liệu banner từ chối/thu hồi. */
+  latestModerationAction: JobPostModerationActionDto | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateJobPostRequest {
+  title: string;
+  description: string;
+  jobType: JobPostType;
+  industryId?: string;
+  cityId?: string;
+  address?: string;
+  salaryMin?: number;
+  salaryMax?: number;
+  isNegotiable?: boolean;
+  requirements?: string;
+  benefits?: string;
+  /** ISO date — bắt buộc trước khi gửi duyệt, tối đa 90 ngày kể từ lúc đặt. */
+  expiresAt?: string;
+}
+
+export type UpdateJobPostRequest = Partial<CreateJobPostRequest>;
+
+export interface JobPostSearchQuery {
+  q?: string;
+  cityId?: string;
+  industryId?: string;
+  jobType?: JobPostType;
+  salaryMin?: number;
+  cursor?: string;
+}
+
+export interface EmployerJobPostListQuery {
+  status?: JobPostStatus;
+  q?: string;
+  cursor?: string;
+}
+
+export interface RejectJobPostRequest {
+  reason: string;
+}
+
+export interface RetractJobPostRequest {
+  reason: string;
+}
+
+/** Kết quả gửi duyệt — frontend dùng để chọn bước dừng của stepper. */
+export interface SubmitJobPostResponse {
+  jobPost: JobPost;
+  /** true khi company.requiresApproval=false → publish thẳng, không qua hàng đợi Admin. */
+  autoPublished: boolean;
+}
+
+/** Thống kê cho dashboard Employer (/employer/jobs) và Admin (/admin/jobs). */
+export interface JobPostStats {
+  published: number;
+  pending: number;
+  draft: number;
+  closed: number;
+}

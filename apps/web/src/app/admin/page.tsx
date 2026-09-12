@@ -66,6 +66,9 @@ export default function AdminLoginPage() {
           <Button as="a" href="/admin/companies">
             Quản lý công ty
           </Button>
+          <Button as="a" href="/admin/jobs" variant="secondary">
+            Kiểm duyệt tin tuyển dụng
+          </Button>
           <Button variant="secondary" onClick={handleLogout}>
             Đăng xuất
           </Button>

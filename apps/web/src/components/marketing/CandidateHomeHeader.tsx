@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 
 const NAV_LINKS = [
-  { label: "Việc thực tập", href: "/" },
+  { label: "Việc thực tập", href: "/jobs" },
   { label: "Công ty", href: "/" },
   { label: "Cẩm nang", href: "/" },
   { label: "Dành cho doanh nghiệp", href: "/employer" },

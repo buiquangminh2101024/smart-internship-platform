@@ -1,0 +1,61 @@
+import type { JobPost as JobPostDto, JobPostModerationActionDto } from "@sip/shared-types";
+import type { JobPostWithRelations } from "./job-post.repository";
+
+type ModerationActionWithActor = JobPostWithRelations["moderationActions"][number];
+
+function toModerationActionDto(action: ModerationActionWithActor): JobPostModerationActionDto {
+  return {
+    id: action.id,
+    action: action.action,
+    // Chưa có bảng profile chung cho Admin — dùng email làm tên hiển thị,
+    // null khi hệ thống tự hành động (requiresApproval=false, cron hết hạn).
+    actorName: action.actor?.email ?? null,
+    reason: action.reason,
+    createdAt: action.createdAt.toISOString(),
+  };
+}
+
+export function toJobPostDto(jobPost: JobPostWithRelations): JobPostDto {
+  const latest = jobPost.moderationActions[0];
+
+  return {
+    id: jobPost.id,
+    companyId: jobPost.companyId,
+    company: {
+      id: jobPost.company.id,
+      name: jobPost.company.name,
+      logoUrl: jobPost.company.logoUrl,
+      website: jobPost.company.website,
+      isVerified: jobPost.company.isVerified,
+      industryId: jobPost.company.industryId,
+      cityId: jobPost.company.cityId,
+      address: jobPost.company.address,
+      taxCode: jobPost.company.taxCode,
+      description: jobPost.company.description,
+    },
+    title: jobPost.title,
+    description: jobPost.description,
+    jobType: jobPost.jobType,
+    status: jobPost.status,
+    salaryMin: jobPost.salaryMin,
+    salaryMax: jobPost.salaryMax,
+    isNegotiable: jobPost.isNegotiable,
+    requirements: jobPost.requirements,
+    benefits: jobPost.benefits,
+    cityId: jobPost.cityId,
+    cityName: jobPost.city?.name ?? null,
+    address: jobPost.address,
+    industryId: jobPost.industryId,
+    industryName: jobPost.industry?.name ?? null,
+    publishedAt: jobPost.publishedAt?.toISOString() ?? null,
+    expiresAt: jobPost.expiresAt?.toISOString() ?? null,
+    closedAt: jobPost.closedAt?.toISOString() ?? null,
+    viewCount: jobPost.viewCount,
+    // Module applications thuộc Phase 8 — giữ 0 để UI hiển thị placeholder
+    // thay vì phải phân biệt "chưa có tính năng" với "chưa có ứng viên".
+    applicationCount: 0,
+    latestModerationAction: latest ? toModerationActionDto(latest) : null,
+    createdAt: jobPost.createdAt.toISOString(),
+    updatedAt: jobPost.updatedAt.toISOString(),
+  };
+}

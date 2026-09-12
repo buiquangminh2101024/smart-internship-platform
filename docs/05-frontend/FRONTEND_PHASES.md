@@ -51,9 +51,9 @@ Không bắt buộc tuân thủ tuyệt đối thứ tự/số lượng phase n�
 ## Phase 6 — Job Recruitment Module
 
 - **Goal:** UI vòng đời tin tuyển dụng đầy đủ, tìm kiếm công khai.
-- **Main screens/routes:** `(public)/jobs` (tìm kiếm/lọc theo lương/ngành/địa điểm cho Guest), `(employer)/jobs` (tạo/sửa/submit/publish/close tin), `(admin)/jobs` (duyệt/từ chối/thu hồi kèm lý do, xem log moderation).
+- **Main screens/routes:** route thật (không phải route group tạm như ghi trước đây) — `employer/(portal)/jobs` (+ `/new`, `/[id]`), `admin/(console)/jobs` (+ `/[id]`), public `app/jobs` (+ `/[id]`, root-level giống `(candidate)/*`). Chia 4 sub-part tự test được: tạo & gửi duyệt tin, admin duyệt/từ chối, employer quản lý tin + banner từ chối/thu hồi, tìm kiếm công khai cho Guest (làm tối giản, sẽ chi tiết hoá sau khi có mẫu UI đầy đủ).
 - **Dependencies:** Phase 4 (frontend), Phase 5, Phase 6 (backend).
-- **Definition of Done:** Guest tìm được tin qua bộ lọc; Employer publish/đóng tin qua UI (kể cả khi đang dùng free trial); Admin duyệt/thu hồi tin qua UI.
+- **Definition of Done:** Guest tìm được tin qua bộ lọc; Employer publish/đóng tin qua UI (kể cả khi đang dùng free trial); Admin duyệt/thu hồi tin qua UI. Chi tiết: `docs/05-frontend/phases/phase-06-job-recruitment/PLAN.md`.
 
 ## Phase 7 — CV & Saved Jobs
 
