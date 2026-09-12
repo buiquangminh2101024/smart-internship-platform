@@ -15,7 +15,7 @@ const AUTO_DISMISS_MS = 6000;
 
 const toneConfig: Record<ToastTone, { icon: string; iconClass: string }> = {
   danger: { icon: "circle-alert", iconClass: "text-red-600" },
-  success: { icon: "circle-check", iconClass: "text-pine-600" },
+  success: { icon: "circle-check", iconClass: "text-success-600" },
   info: { icon: "info", iconClass: "text-indigo-600" },
 };
 

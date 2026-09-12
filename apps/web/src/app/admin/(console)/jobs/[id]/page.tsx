@@ -27,7 +27,7 @@ function ModerationResult({ outcome }: { outcome: Outcome }) {
   return (
     <Card padding="lg" className="grid justify-items-center gap-6 text-center">
       <span
-        className={`flex h-14 w-14 items-center justify-center rounded-full ${rejected ? "bg-red-100 text-red-600" : "bg-pine-100 text-pine-600"}`}
+        className={`flex h-14 w-14 items-center justify-center rounded-full ${rejected ? "bg-red-100 text-red-600" : "bg-success-100 text-success-600"}`}
       >
         <Icon name={rejected ? "x" : "check"} size={28} />
       </span>

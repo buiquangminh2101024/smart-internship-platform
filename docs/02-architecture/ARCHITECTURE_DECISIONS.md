@@ -137,6 +137,28 @@ Quyết định này giữ nguyên mô hình backend "một tài khoản một r
 
 **Cờ dev-bypass bổ sung (2026-09-09):** `DEV_SKIP_PAYMENT_GATEWAY` (env, mặc định `false`) — cùng khuôn mẫu `DEV_SKIP_COMPANY_MANUAL_VERIFICATION` (AD-5): khi `true`, `PaymentsService.createCheckout` bỏ qua gọi VNPay/Momo thật, đánh dấu `Payment`/`Transaction` `COMPLETED` và kích hoạt `CompanySubscription` ngay lập tức (redirect thẳng về trang return của app kèm `orderCode`, không cần đổi frontend). Lý do: lỗi VNPay sandbox ở trên chưa giải quyết được, cần cờ tạm để tiếp tục phát triển/test các phần phụ thuộc subscription (Phase 6+) trong lúc chờ xử lý dứt điểm lỗi gateway thật. `env.ts` chặn cứng server khởi động nếu `NODE_ENV=production` và cờ này `true`. **Việc thanh toán VNPay/Momo thật sự vẫn cần được sửa và test lại trước khi lên production** (gỡ bỏ phụ thuộc vào cờ này).
 
+---
+
+## AD-7 — Màu thương hiệu theo actor bằng lớp alias token `brand-*` + scope `[data-role]` (`apps/web`)
+
+**Ngày:** 2026-09-12 · **Phase liên quan:** 05-frontend (app shell Employer/Admin, sau Phase 6)
+
+**Quyết định:** AD-3 đưa 4 bảng màu (Pine = Candidate, Indigo = Employer, Plum = Admin, Marigold = accent) vào `apps/web/src/app/globals.css`, nhưng không quy định **component dùng bảng nào**. Trên thực tế cả UI kit (`components/ui/*`) hardcode `pine-*` làm màu mặc định, nên mỗi lần cần một component đúng màu khu vực thì phải ghi đè tại chỗ — ví dụ `!bg-indigo-600 hover:!bg-indigo-700` trên nút "Đăng tin mới" của sidebar Employer, hoặc ternary `role === "employer" ? ... : ...` trong `SideNav`/`PortalTopbar`. Cách này không mở rộng được cho ~15 component × 3 actor.
+
+Quyết định này **không đổi** 4 bảng màu của AD-3, chỉ thêm một lớp **alias semantic** ở giữa component và bảng màu:
+
+- `globals.css` khai báo thêm trong `@theme`: `--color-brand-{50,100,200,500,600,700,800}` mặc định trỏ tới `pine-*` (Candidate là mặc định của app), và `--color-success-{100,600,700}` cũng trỏ tới `pine-*`.
+- Hai khối scope ngoài `@theme`: `[data-role="employer"]` trỏ `--color-brand-*` sang `indigo-*`, `[data-role="admin"]` sang `plum-*`. App shell của mỗi khu vực (`EmployerPortalShell`, `AdminConsoleShell`) đặt `data-role` trên thẻ bọc ngoài cùng; các khu vực khác không đặt gì nên giữ Pine.
+- UI kit chỉ dùng `brand-*`/`success-*`, **không** dùng trực tiếp `pine-*`/`indigo-*`/`plum-*` nữa. Ngoại lệ có chủ đích: `RoleBadge.tsx` (nhiệm vụ của nó là phân biệt 3 actor nên phải thấy đủ 3 bảng màu) và các trang marketing công khai `/`, `/employer` (màu cố định theo thiết kế landing, không phải khu vực đã đăng nhập).
+- Tách `success-*` ra khỏi `brand-*` là phần bắt buộc, không phải tuỳ chọn: Pine vốn gánh cả vai "màu thương hiệu Candidate" lẫn vai "màu trạng thái thành công" (`Badge` tone `success` cho badge "Đã xác minh", icon `circle-check` của `Toast`, icon `badge-check` của `JobCard`). Nếu gộp chung, badge "Đã xác minh" trong portal Employer sẽ thành màu indigo và mất nghĩa semantic.
+- Mục điều hướng đang mở của sidebar dùng **một kiểu duy nhất cho cả 2 actor**: nền `brand-50` + chữ/icon `brand-700`/`brand-600` (nền primary nhạt, chữ primary đậm) — không dùng nền primary đậm + chữ trắng như panel Admin trong ảnh mẫu `Screenshot 2026-09-12 134326.png`. Quyết định của chủ dự án; giữ một kiểu giúp toàn bộ khác biệt giữa 2 khu vực rút về đúng giá trị token, không còn nhánh điều kiện trong component.
+
+**Lý do:** đây là cơ chế đổi màu thuần CSS — không cần prop `role` khoan qua nhiều tầng component, không cần React context, nên component dùng màu **không bị buộc thành client component** và không nhấp nháy màu lúc hydrate. Mọi component lồng bao sâu trong shell đều tự nhận đúng màu.
+
+**Điều kiện kỹ thuật (đã kiểm chứng trên Tailwind 4.3.3 của repo bằng cách compile thử):** khối khai báo phải là `@theme`, **không** được là `@theme inline`. `@theme` sinh ra utility dạng tham chiếu biến (`.bg-brand-500 { background-color: var(--color-brand-500) }`) nên override biến ở tầng dưới mới có tác dụng; `@theme inline` nhúng thẳng giá trị hex vào utility và sẽ vô hiệu hoá toàn bộ cơ chế này. Tailwind cũng giữ lại biến được tham chiếu gián tiếp (`--color-brand-500: var(--color-pine-500)` không làm mất `--color-pine-500` khỏi output dù không utility `pine-*` nào được dùng). Hai dòng `--color-background`/`--color-foreground` hiện nằm trong `@theme inline` không liên quan và giữ nguyên.
+
+**Ảnh hưởng:** `globals.css` (thêm lớp alias, `--color-surface-brand-soft` chuyển thành `var(--color-brand-50)` nên khối thông báo quota trong portal Employer tự đổi sang nền indigo nhạt); `components/ui/{Button,Badge,Input,Select,Textarea,Card,StatCard,JobCard,Toast}.tsx`; `components/layout/{SideNav,PortalTopbar,EmployerPortalShell,AdminConsoleShell}.tsx` (bỏ prop `role` chỉ dùng để chọn màu, bỏ `!important`). Không thêm dependency, không đổi API công khai nào khác của UI kit. Trang marketing `/employer` vẫn còn `!bg-indigo-600` ở một nút CTA — cố ý để lại vì nằm ngoài khu vực có `data-role`, có thể dọn sau nếu muốn đặt `data-role="employer"` cho cả trang landing đó.
+
 ## Phần ghi chú của chủ dự án
 
 *(để trống)*

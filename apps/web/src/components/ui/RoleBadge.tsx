@@ -2,6 +2,9 @@ import { Icon } from "./Icon";
 
 type RoleKey = "candidate" | "employer" | "admin";
 
+// Ngoại lệ có chủ đích của AD-7: component này dùng trực tiếp cả 3 bảng màu
+// thay vì alias `brand-*`, vì nhiệm vụ của nó là phân biệt 3 actor — dùng alias
+// sẽ khiến mọi badge cùng màu với khu vực đang đứng và mất hết ý nghĩa.
 const roleVocabulary: Record<RoleKey, { label: string; icon: string; className: string }> = {
   candidate: { label: "Sinh viên", icon: "user", className: "bg-pine-100 text-pine-800" },
   employer: { label: "Doanh nghiệp", icon: "building-2", className: "bg-indigo-100 text-indigo-800" },

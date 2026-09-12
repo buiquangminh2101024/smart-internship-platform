@@ -33,9 +33,10 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
       ref={ref}
       id={id}
       aria-invalid={!!error}
+      suppressHydrationWarning
       className={[
         "w-full rounded-lg border bg-white px-3 outline-none transition-colors",
-        "focus:border-pine-500 focus:ring-2 focus:ring-pine-100",
+        "focus:border-brand-500 focus:ring-2 focus:ring-brand-100",
         "disabled:bg-surface-page disabled:text-text-subtle",
         error ? "border-red-400" : "border-border-default",
         sizeClasses[size],

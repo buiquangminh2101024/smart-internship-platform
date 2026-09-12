@@ -56,10 +56,35 @@
   --color-marigold-500: #f0a93a;
   --color-marigold-700: #c6821f;
 
+  /*
+   * Lớp alias semantic — xem AD-7. Component trong `components/ui/*` chỉ dùng
+   * `brand-*`/`success-*`, không chạm trực tiếp vào pine/indigo/plum, nhờ vậy
+   * đổi màu theo khu vực chỉ là việc trỏ lại biến ở khối `[data-role]` bên dưới.
+   *
+   * BẮT BUỘC nằm trong `@theme` (không phải `@theme inline`): chỉ `@theme` sinh
+   * utility dạng `var(--color-brand-500)` để override cascade được.
+   */
+  --color-brand-50: var(--color-pine-50);
+  --color-brand-100: var(--color-pine-100);
+  --color-brand-200: var(--color-pine-200);
+  --color-brand-500: var(--color-pine-500);
+  --color-brand-600: var(--color-pine-600);
+  --color-brand-700: var(--color-pine-700);
+  --color-brand-800: var(--color-pine-800);
+
+  /*
+   * Trạng thái "thành công" tách khỏi `brand-*` dù cùng gốc Pine: badge "Đã xác
+   * minh", toast thành công... phải giữ màu xanh ở mọi khu vực, không đổi theo
+   * role (nếu gộp, badge "Đã xác minh" trong portal Employer sẽ thành indigo).
+   */
+  --color-success-100: var(--color-pine-100);
+  --color-success-600: var(--color-pine-600);
+  --color-success-700: var(--color-pine-700);
+
   --color-surface-page: #f4f6f6;
   --color-surface-card: #ffffff;
   --color-surface-brand-deep: #063b33;
-  --color-surface-brand-soft: #eaf5f2;
+  --color-surface-brand-soft: var(--color-brand-50);
   --color-surface-hover: #eef2f1;
 
   --color-border-subtle: #e8ecec;
@@ -69,6 +94,31 @@
   --color-text-body: #33413e;
   --color-text-muted: #64726f;
   --color-text-subtle: #94a19e;
+}
+
+/*
+ * Đổi màu thương hiệu theo khu vực actor (AD-7). App shell đặt `data-role` trên
+ * thẻ bọc ngoài cùng; khu vực Candidate và các trang công khai không đặt gì nên
+ * giữ mặc định Pine ở `@theme` trên.
+ */
+[data-role="employer"] {
+  --color-brand-50: var(--color-indigo-50);
+  --color-brand-100: var(--color-indigo-100);
+  --color-brand-200: var(--color-indigo-200);
+  --color-brand-500: var(--color-indigo-500);
+  --color-brand-600: var(--color-indigo-600);
+  --color-brand-700: var(--color-indigo-700);
+  --color-brand-800: var(--color-indigo-800);
+}
+
+[data-role="admin"] {
+  --color-brand-50: var(--color-plum-50);
+  --color-brand-100: var(--color-plum-100);
+  --color-brand-200: var(--color-plum-200);
+  --color-brand-500: var(--color-plum-500);
+  --color-brand-600: var(--color-plum-600);
+  --color-brand-700: var(--color-plum-700);
+  --color-brand-800: var(--color-plum-800);
 }
 
 @media (prefers-color-scheme: dark) {

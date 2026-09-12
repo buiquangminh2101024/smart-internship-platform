@@ -50,7 +50,7 @@ export function JobCard({
             <span className="truncate font-semibold text-text-strong">{title}</span>
             <span className="inline-flex items-center gap-1 truncate text-sm text-text-muted">
               {company}
-              {verified ? <Icon name="badge-check" size={14} title="Đã xác minh" className="text-pine-600" /> : null}
+              {verified ? <Icon name="badge-check" size={14} title="Đã xác minh" className="text-success-600" /> : null}
             </span>
           </div>
         </div>

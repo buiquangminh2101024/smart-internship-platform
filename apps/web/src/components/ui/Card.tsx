@@ -20,7 +20,7 @@ const paddingClasses: Record<Padding, string> = {
 
 const toneClasses: Record<Tone, string> = {
   default: "bg-surface-card border-border-subtle",
-  brand: "bg-surface-brand-soft border-pine-100",
+  brand: "bg-surface-brand-soft border-brand-100",
   sunken: "bg-surface-page border-border-subtle",
   warning: "bg-marigold-100 border-marigold-300",
 };

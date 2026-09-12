@@ -23,7 +23,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
       aria-invalid={!!error}
       className={[
         "w-full rounded-lg border bg-white px-3 py-2 text-[15px] outline-none transition-colors",
-        "placeholder:text-text-subtle focus:border-pine-500 focus:ring-2 focus:ring-pine-100",
+        "placeholder:text-text-subtle focus:border-brand-500 focus:ring-2 focus:ring-brand-100",
         "disabled:bg-surface-page disabled:text-text-subtle",
         error ? "border-red-400" : "border-border-default",
         className,
