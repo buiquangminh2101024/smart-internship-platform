@@ -1,14 +1,13 @@
 import type { Metadata } from "next";
 import { CandidateHomeHeader } from "@/components/marketing/CandidateHomeHeader";
+import { LatestJobsSection } from "@/components/marketing/LatestJobsSection";
 import { SiteFooter } from "@/components/marketing/SiteFooter";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { Input } from "@/components/ui/Input";
-import { JobCard } from "@/components/ui/JobCard";
 import { RoleBadge } from "@/components/ui/RoleBadge";
 import { Select } from "@/components/ui/Select";
-import { SAMPLE_JOBS } from "@/lib/sample-jobs";
 
 export const metadata: Metadata = {
   title: "InternHub — Kết nối thực tập, mở đầu sự nghiệp",
@@ -67,7 +66,7 @@ export default function CandidateHomePage() {
                 options={["Tất cả khu vực", "Hà Nội", "TP. Hồ Chí Minh", "Đà Nẵng"]}
                 className="flex-1"
               />
-              <Button as="a" href="/register" icon="search">
+              <Button as="a" href="/jobs" icon="search">
                 Tìm việc
               </Button>
             </Card>
@@ -127,19 +126,7 @@ export default function CandidateHomePage() {
         </div>
       </section>
 
-      <section className="mx-auto grid w-full max-w-6xl gap-5 px-6 py-16">
-        <div className="flex items-end gap-4">
-          <h2 className="flex-1 text-2xl font-semibold text-text-strong">Tin mới trong tuần</h2>
-          <Button as="a" href="/register" variant="secondary" iconAfter="arrow-right">
-            Xem tất cả tin
-          </Button>
-        </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          {SAMPLE_JOBS.map((job) => (
-            <JobCard key={job.id} {...job} />
-          ))}
-        </div>
-      </section>
+      <LatestJobsSection />
 
       <section className="mx-auto w-full max-w-6xl px-6 pb-16">
         <Card padding="lg" tone="brand" className="grid items-center gap-8 md:grid-cols-[1.2fr_0.8fr]">

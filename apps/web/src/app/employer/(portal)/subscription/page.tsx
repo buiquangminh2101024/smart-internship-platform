@@ -3,11 +3,14 @@
 import { useState } from "react";
 import type { PaymentProvider, SubscriptionStatus } from "@sip/shared-types";
 import { useSubscriptionHistory, useCheckout } from "@/hooks/useSubscription";
-import { ApiError } from "@/lib/api-client";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { ToastViewport, type ToastData } from "@/components/ui/Toast";
 import { PlanList } from "@/components/employer/PlanList";
 import { SubscriptionStatusCard } from "@/components/employer/SubscriptionStatusCard";
+
+let nextToastId = 0;
 
 const STATUS_LABEL: Record<SubscriptionStatus, { label: string; tone: "success" | "warning" | "danger" | "neutral" }> = {
   ACTIVE: { label: "Đang hoạt động", tone: "success" },
@@ -27,11 +30,14 @@ function formatVnd(amount: number): string {
 export default function EmployerSubscriptionPage() {
   const checkout = useCheckout();
   const { data: history } = useSubscriptionHistory();
-  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [checkingOutPlanId, setCheckingOutPlanId] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<ToastData[]>([]);
+
+  function dismissToast(id: number) {
+    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+  }
 
   async function handleCheckout(planId: string, provider: PaymentProvider) {
-    setCheckoutError(null);
     setCheckingOutPlanId(planId);
     try {
       const result = await checkout.mutateAsync({ planId, provider });
@@ -40,14 +46,26 @@ export default function EmployerSubscriptionPage() {
       window.sessionStorage.setItem("sip_pending_order_code", result.orderCode);
       window.location.href = result.paymentUrl;
     } catch (err) {
-      setCheckoutError(err instanceof ApiError ? err.message : "Không tạo được đơn thanh toán, vui lòng thử lại");
+      // Không hiển thị message chi tiết (lỗi cổng thanh toán, cấu hình, v.v.)
+      // cho khách hàng — chỉ log ra console để dev tự tra, còn UI luôn chung
+      // chung để không lộ nội bộ hệ thống (xem momo-gateway-adapter.ts).
+      console.error("Checkout failed", err);
+      setToasts((prev) => [
+        ...prev,
+        { id: nextToastId++, tone: "danger", message: "Đã có lỗi xảy ra, vui lòng thử lại sau." },
+      ]);
       setCheckingOutPlanId(null);
     }
   }
 
   return (
     <div className="mx-auto grid w-full max-w-4xl gap-8 px-6 py-12">
+      <ToastViewport toasts={toasts} onDismiss={dismissToast} />
+
       <div className="grid gap-1">
+        <Button as="a" href="/employer/profile" variant="link" className="w-fit">
+          ← Quay lại hồ sơ
+        </Button>
         <h1 className="text-2xl font-semibold text-text-strong">Gói dịch vụ</h1>
         <p className="text-sm text-text-muted">Mua hoặc nâng cấp gói đăng tin tuyển dụng.</p>
       </div>
@@ -56,7 +74,6 @@ export default function EmployerSubscriptionPage() {
 
       <div className="grid gap-3">
         <h2 className="text-lg font-semibold text-text-strong">Chọn gói</h2>
-        {checkoutError ? <p className="text-sm text-red-600">{checkoutError}</p> : null}
         <PlanList onCheckout={handleCheckout} checkingOutPlanId={checkingOutPlanId} />
       </div>
 

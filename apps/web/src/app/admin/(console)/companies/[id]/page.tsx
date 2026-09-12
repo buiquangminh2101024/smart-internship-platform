@@ -127,7 +127,7 @@ export default function AdminCompanyDetailPage({ params }: { params: Promise<{ i
             href={company.businessLicenseUrl}
             target="_blank"
             rel="noreferrer"
-            className="font-medium text-pine-700 hover:underline"
+            className="font-medium text-brand-700 hover:underline"
           >
             Xem giấy phép kinh doanh
           </a>

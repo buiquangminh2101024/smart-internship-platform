@@ -195,6 +195,28 @@ export class SubscriptionsService {
     return { status: result.status, companySubscriptionStatus: companySubscription.status };
   }
 
+  /**
+   * Trang return gọi khi query param của cổng thanh toán báo huỷ (Momo
+   * resultCode=1006 / VNPay vnp_ResponseCode=24) nhưng IPN chưa xác nhận gì —
+   * xem PaymentsService.reportClientCancellation. Kiểm tra quyền sở hữu
+   * company giống hệt getPaymentStatusByOrderCode ở trên.
+   */
+  async reportPaymentCancellation(userId: string, orderCode: string): Promise<PaymentStatusResponse> {
+    const employer = await this.requireEmployer(userId);
+    const result = await this.paymentsService.findStatusByOrderCode(orderCode);
+    if (!result) {
+      throw new AppError(404, "Order not found");
+    }
+
+    const companySubscription = await this.companySubscriptionRepository.findById(result.companySubscriptionId);
+    if (!companySubscription || companySubscription.companyId !== employer.companyId) {
+      throw new AppError(404, "Order not found");
+    }
+
+    const status = await this.paymentsService.reportClientCancellation(orderCode);
+    return { status, companySubscriptionStatus: companySubscription.status };
+  }
+
   private async requireEmployer(userId: string) {
     const employer = await this.employerRepository.findByUserId(userId);
     if (!employer) {

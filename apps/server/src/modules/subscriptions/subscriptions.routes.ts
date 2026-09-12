@@ -51,6 +51,9 @@ export function subscriptionsRouter(container: AwilixContainer): Router {
   router.get("/subscriptions/payments/by-order-code/:orderCode", ...employerGuard, (req, res, next) => {
     void resolveController().paymentStatusByOrderCode(req, res, next);
   });
+  router.post("/subscriptions/payments/by-order-code/:orderCode/cancel", ...employerGuard, (req, res, next) => {
+    void resolveController().reportPaymentCancellation(req, res, next);
+  });
 
   return router;
 }

@@ -102,7 +102,11 @@ export class MomoGatewayAdapter implements PaymentGatewayAdapter {
     }
 
     if (result.resultCode !== 0 || !result.payUrl) {
-      throw new AppError(502, `Momo checkout failed: ${result.message ?? "unknown error"}`);
+      // Không forward result.message (nội dung/format do Momo tự quyết định,
+      // có thể mang chi tiết kỹ thuật nội bộ) thẳng ra client — chỉ log lại
+      // để dev tra cứu, còn AppError trả về client luôn là message chung.
+      this.logger.error("Momo createPayment returned failure", { resultCode: result.resultCode, message: result.message });
+      throw new AppError(502, "Payment gateway error, please try again later");
     }
 
     return { paymentUrl: result.payUrl };
@@ -163,7 +167,11 @@ export class MomoGatewayAdapter implements PaymentGatewayAdapter {
   }
 
   private requireSecret(value: string | undefined, name: string): string {
-    if (!value) throw new AppError(500, `${name} is not configured`);
+    if (!value) {
+      // Tên biến env là chi tiết cấu hình nội bộ — không forward ra client.
+      this.logger.error(`${name} is not configured`);
+      throw new AppError(500, "Payment gateway error, please try again later");
+    }
     return value;
   }
 }

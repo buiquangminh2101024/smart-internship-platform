@@ -1,0 +1,117 @@
+import { Router } from "express";
+import { asClass, type AwilixContainer } from "awilix";
+import { CandidateController } from "./candidate.controller";
+import { CandidateService } from "./candidate.service";
+import { CandidateRepository } from "./candidate.repository";
+import { Role } from "@prisma/client";
+import { authenticate } from "../../shared/middleware/authenticate";
+import { authorize } from "../../shared/middleware/authorize";
+import { validate } from "../../shared/middleware/validate";
+import {
+  awardSchema,
+  awardPatchSchema,
+  candidateProfilePatchSchema,
+  certificateSchema,
+  certificatePatchSchema,
+  educationSchema,
+  educationPatchSchema,
+  projectSchema,
+  projectPatchSchema,
+  skillSchema,
+  workExperienceSchema,
+  workExperiencePatchSchema,
+} from "./candidates.dto";
+
+export function candidatesRouter(container: AwilixContainer): Router {
+  container.register({
+    candidateRepository: asClass(CandidateRepository).singleton(),
+    candidateService: asClass(CandidateService).singleton(),
+    candidateController: asClass(CandidateController).singleton(),
+  });
+
+  const router = Router();
+  const controller = () => container.resolve<CandidateController>("candidateController");
+  const candidateOnly = [authenticate(container), authorize(Role.CANDIDATE)];
+
+  router.get("/candidates/me", ...candidateOnly, (req, res, next) => {
+    void controller().me(req, res, next);
+  });
+
+  router.patch("/candidates/me", ...candidateOnly, validate(candidateProfilePatchSchema), (req, res, next) => {
+    void controller().updateMe(req, res, next);
+  });
+
+  router.post("/candidates/me/education", ...candidateOnly, validate(educationSchema), (req, res, next) => {
+    void controller().createEducation(req, res, next);
+  });
+
+  router.patch("/candidates/me/education/:id", ...candidateOnly, validate(educationPatchSchema), (req, res, next) => {
+    void controller().updateEducation(req, res, next);
+  });
+
+  router.delete("/candidates/me/education/:id", ...candidateOnly, (req, res, next) => {
+    void controller().deleteEducation(req, res, next);
+  });
+
+  router.get("/candidates/me/skills", ...candidateOnly, (req, res, next) => {
+    void controller().listSkills(req, res, next);
+  });
+
+  router.post("/candidates/me/skills", ...candidateOnly, validate(skillSchema), (req, res, next) => {
+    void controller().upsertSkill(req, res, next);
+  });
+
+  router.delete("/candidates/me/skills/:skillId", ...candidateOnly, (req, res, next) => {
+    void controller().removeSkill(req, res, next);
+  });
+
+  router.post("/candidates/me/work-experiences", ...candidateOnly, validate(workExperienceSchema), (req, res, next) => {
+    void controller().createWorkExperience(req, res, next);
+  });
+
+  router.patch("/candidates/me/work-experiences/:id", ...candidateOnly, validate(workExperiencePatchSchema), (req, res, next) => {
+    void controller().updateWorkExperience(req, res, next);
+  });
+
+  router.delete("/candidates/me/work-experiences/:id", ...candidateOnly, (req, res, next) => {
+    void controller().deleteWorkExperience(req, res, next);
+  });
+
+  router.post("/candidates/me/projects", ...candidateOnly, validate(projectSchema), (req, res, next) => {
+    void controller().createProject(req, res, next);
+  });
+
+  router.patch("/candidates/me/projects/:id", ...candidateOnly, validate(projectPatchSchema), (req, res, next) => {
+    void controller().updateProject(req, res, next);
+  });
+
+  router.delete("/candidates/me/projects/:id", ...candidateOnly, (req, res, next) => {
+    void controller().deleteProject(req, res, next);
+  });
+
+  router.post("/candidates/me/certificates", ...candidateOnly, validate(certificateSchema), (req, res, next) => {
+    void controller().createCertificate(req, res, next);
+  });
+
+  router.patch("/candidates/me/certificates/:id", ...candidateOnly, validate(certificatePatchSchema), (req, res, next) => {
+    void controller().updateCertificate(req, res, next);
+  });
+
+  router.delete("/candidates/me/certificates/:id", ...candidateOnly, (req, res, next) => {
+    void controller().deleteCertificate(req, res, next);
+  });
+
+  router.post("/candidates/me/awards", ...candidateOnly, validate(awardSchema), (req, res, next) => {
+    void controller().createAward(req, res, next);
+  });
+
+  router.patch("/candidates/me/awards/:id", ...candidateOnly, validate(awardPatchSchema), (req, res, next) => {
+    void controller().updateAward(req, res, next);
+  });
+
+  router.delete("/candidates/me/awards/:id", ...candidateOnly, (req, res, next) => {
+    void controller().deleteAward(req, res, next);
+  });
+
+  return router;
+}

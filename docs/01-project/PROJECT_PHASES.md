@@ -79,7 +79,7 @@ Không bắt buộc phải tuân thủ tuyệt đối thứ tự/số lượng p
   - **Auto-đóng khi hết gói** (dời từ Phase 5, xem `ARCHITECTURE_DECISIONS.md` AD-6): sweep định kỳ (tận dụng `CompanySubscription.status = EXPIRED` đã có sẵn từ job `node-cron` của Phase 5) chuyển mọi `JobPost PUBLISHED` của company vừa hết gói sang `EXPIRED`.
 - **Dependencies:** Phase 4, Phase 5.
 - **Definition of Done:** Một Employer thuộc công ty đã verified publish được tin (tự động hoặc qua duyệt tuỳ cờ `requiresApproval`, kể cả khi đang dùng free trial); Admin thu hồi được một tin đang `PUBLISHED` kèm lý do và thấy `retractionCount` tăng; Guest tìm được tin qua bộ lọc; company hết `CompanySubscription` (không còn trial) có toàn bộ tin `PUBLISHED` tự chuyển `EXPIRED`.
-- **Risks/Notes:** `JobPost.jobType` cần enum rõ ràng trước khi hoàn thiện schema phase này (Open Question — đã chốt, xem `PROJECT_OVERVIEW.md` §14 mục 3).
+- **Risks/Notes:** `JobPost.jobType` cần enum rõ ràng trước khi hoàn thiện schema phase này (Open Question — đã chốt, xem `PROJECT_OVERVIEW.md` §14 mục 3). Quyết định bổ sung khi lên kế hoạch chi tiết: hạn nộp hồ sơ (`expiresAt`) do Employer tự chọn, tối đa 90 ngày kể từ ngày đặt; thêm field `JobPost.viewCount` để đếm lượt xem thật; banner thông báo duyệt/từ chối/thu hồi phía Employer đọc trực tiếp `JobPostModerationAction` mới nhất, không ghi vào bảng `notifications` (để nguyên cho Phase 10). Chi tiết: `docs/06-backend/phase-06-job-recruitment/PLAN.md`.
 
 ## Phase 7 — CV & Saved Jobs
 

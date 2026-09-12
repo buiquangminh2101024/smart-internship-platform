@@ -104,4 +104,14 @@ export class SubscriptionsController {
       next(error);
     }
   };
+
+  reportPaymentCancellation = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await this.subscriptionsService.reportPaymentCancellation(req.user!.id, req.params.orderCode as string);
+      const body: ApiResponse<PaymentStatusResponse> = { success: true, data: result };
+      res.json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
 }

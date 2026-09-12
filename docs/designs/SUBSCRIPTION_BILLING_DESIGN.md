@@ -120,6 +120,8 @@ interface PaymentGatewayAdapter {
 
 **Endpoint tra cứu trạng thái cho FE** (không tin return URL — xem AD-6): `GET /subscriptions/payments/by-order-code/:orderCode` — trả `Payment.status` hiện tại (đã được IPN cập nhật), FE poll endpoint này ở trang return.
 
+**Người dùng chủ động huỷ ở cổng thanh toán** (VNPay `vnp_ResponseCode=24`, Momo `resultCode=1006`): cổng chỉ redirect về `vnp_ReturnUrl`/`MOMO_RETURN_URL` với query param báo huỷ, **không đảm bảo gọi IPN** (IPN chỉ chắc chắn được gọi cho giao dịch đã thực sự đưa tới ngân hàng xử lý) — nên `Payment`/`Transaction` có thể kẹt `PENDING` vĩnh viễn nếu chỉ dựa vào IPN. Để xử lý, FE gọi thêm `POST /subscriptions/payments/by-order-code/:orderCode/cancel` khi phát hiện query param huỷ và trạng thái tra cứu được vẫn là `PENDING`. Endpoint này (`PaymentsService.reportClientCancellation`) **chỉ được phép chuyển `PENDING → FAILED`**, không bao giờ ghi đè `COMPLETED`/`FAILED` đã có — giữ đúng nguyên tắc "không tin return URL" vì nó không có khả năng tự đánh dấu thành công, chỉ dọn các đơn bị huỷ đang treo. Query param này cũng được FE dùng để hiển thị ngay màn "Bạn đã huỷ giao dịch" thay vì chờ hết thời gian poll rồi báo lỗi chung chung.
+
 ### 6.4 Env vars (đặt tên theo convention UPPER_SNAKE_CASE hiện có của dự án)
 
 | Biến | Ghi chú |

@@ -178,6 +178,37 @@ export class PaymentsService {
     return { status: payment.status, companySubscriptionId: payment.companySubscriptionId };
   }
 
+  /**
+   * Được gọi từ trang return khi phát hiện gateway báo huỷ qua query param
+   * (Momo resultCode=1006 / VNPay vnp_ResponseCode=24) nhưng IPN có thể sẽ
+   * không bao giờ gọi tới cho giao dịch bị huỷ trước khi ngân hàng xử lý —
+   * tránh Payment/Transaction kẹt PENDING vĩnh viễn. CHỈ chuyển
+   * PENDING -> FAILED, không bao giờ ghi đè COMPLETED/FAILED đã có (idempotent,
+   * không tin tưởng tuyệt đối query param — xem findStatusByOrderCode ở trên).
+   */
+  async reportClientCancellation(orderCode: string): Promise<PaymentStatus> {
+    const transaction = await this.transactionRepository.findByOrderCode(orderCode);
+    if (!transaction) {
+      throw new AppError(404, "Order not found");
+    }
+
+    const payment = await this.paymentRepository.findById(transaction.paymentId);
+    if (!payment) {
+      throw new AppError(404, "Order not found");
+    }
+
+    if (payment.status !== "PENDING") {
+      return payment.status;
+    }
+
+    await this.transactionRepository.updateStatus(transaction.id, {
+      status: "FAILED",
+      rawResponse: JSON.stringify({ clientReported: "USER_CANCELLED" }),
+    });
+    await this.paymentRepository.updateStatus(payment.id, "FAILED");
+    return "FAILED";
+  }
+
   private async activateSubscriptionForPayment(paymentId: string): Promise<void> {
     const payment = await this.paymentRepository.findById(paymentId);
     if (!payment) return;

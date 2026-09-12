@@ -4,7 +4,10 @@ import { z } from "zod";
 
 // Repo giữ một .env duy nhất ở root (xem .env.example). npm workspaces chạy
 // script này với cwd = apps/server, nên root .env nằm ở "../../.env".
-dotenv.config({ path: path.resolve(process.cwd(), "../../.env") });
+// dotenv.config({ path: path.resolve(process.cwd(), "../../.env") });
+const envPath = path.resolve(process.cwd(), "../../.env");
+console.log("👉 ĐANG ĐỌC FILE ENV TẠI:", envPath);
+dotenv.config({ path: envPath });
 
 const baseSchema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
@@ -19,7 +22,10 @@ const baseSchema = z.object({
   JWT_ACCESS_EXPIRY: z.string().min(1).default("15m"),
   JWT_REFRESH_EXPIRY: z.string().min(1).default("7d"),
 
-  OTP_HARDCODE: z.coerce.boolean().default(false),
+  OTP_HARDCODE: z.preprocess(
+    (value) => (typeof value === "string" ? value === "true" : value),
+    z.boolean().default(false)
+  ),
   OTP_HARDCODE_VALUE: z.string().min(1).default("123456"),
 
   RESEND_API_KEY: z.string().optional(),

@@ -10,11 +10,13 @@ export interface BadgeProps {
   className?: string;
 }
 
+// `brand` đổi màu theo khu vực (AD-7); `success` cố định xanh Pine vì là màu
+// trạng thái, không phải màu thương hiệu — xem chú thích ở `globals.css`.
 const toneClasses: Record<Tone, string> = {
   neutral: "bg-surface-hover text-text-body",
-  brand: "bg-pine-100 text-pine-800",
+  brand: "bg-brand-100 text-brand-800",
   accent: "bg-marigold-100 text-marigold-700",
-  success: "bg-pine-100 text-pine-700",
+  success: "bg-success-100 text-success-700",
   warning: "bg-marigold-100 text-marigold-700",
   danger: "bg-red-100 text-red-700",
   info: "bg-indigo-100 text-indigo-700",

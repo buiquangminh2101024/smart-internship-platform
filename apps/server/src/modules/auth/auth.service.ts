@@ -14,8 +14,8 @@ import type { JwtService } from "./jwt.service";
 
 const SALT_ROUNDS = 12;
 const OTP_RESEND_COOLDOWN_SECONDS = 60;
-const OTP_MAX_PER_EMAIL_PER_HOUR = 5;
-const OTP_MAX_PER_IP_PER_HOUR = 20;
+const OTP_MAX_PER_EMAIL_PER_HOUR = 20;
+const OTP_MAX_PER_IP_PER_HOUR = 1000;
 const ONE_HOUR_SECONDS = 60 * 60;
 
 export type AuthTokens = AuthTokensResponse;

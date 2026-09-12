@@ -19,4 +19,16 @@ export class CatalogService {
   async cities(): Promise<CatalogItem[]> {
     return this.catalogRepository.listCities();
   }
+
+  async majors(): Promise<CatalogItem[]> {
+    return this.catalogRepository.listMajors();
+  }
+
+  async universities(): Promise<CatalogItem[]> {
+    return this.catalogRepository.listUniversities();
+  }
+
+  async skills(): Promise<CatalogItem[]> {
+    return this.catalogRepository.listSkills();
+  }
 }

@@ -13,7 +13,7 @@ export function StatCard({ label, value, unit, icon, className = "" }: StatCardP
   return (
     <div className={["flex items-center gap-4 rounded-xl border border-border-subtle bg-white p-4", className].join(" ")}>
       {icon ? (
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-pine-50 text-pine-600">
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
           <Icon name={icon} size={20} />
         </span>
       ) : null}

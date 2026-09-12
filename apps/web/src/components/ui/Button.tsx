@@ -42,13 +42,17 @@ const sizeClasses: Record<Size, string> = {
   lg: "h-[52px] px-5 text-base",
 };
 
+// `brand-*` là alias đổi theo `data-role` của khu vực (AD-7) — Pine mặc định,
+// Indigo trong portal Employer, Plum trong console Admin. Riêng `text-pine-900`
+// của variant accent giữ nguyên: đó là màu chữ tối tương phản trên nền marigold,
+// không phải màu thương hiệu.
 const variantClasses: Record<Variant, string> = {
-  primary: "bg-pine-500 text-white border-transparent hover:bg-pine-600",
-  secondary: "bg-white text-text-strong border-border-default shadow-sm hover:bg-pine-50 hover:border-pine-200",
+  primary: "bg-brand-500 text-white border-transparent hover:bg-brand-600",
+  secondary: "bg-white text-text-strong border-border-default shadow-sm hover:bg-brand-50 hover:border-brand-200",
   ghost: "bg-transparent text-text-body border-transparent hover:bg-surface-hover hover:text-text-strong",
   accent: "bg-marigold-500 text-pine-900 border-transparent hover:bg-marigold-300",
   danger: "bg-red-600 text-white border-transparent hover:bg-red-700",
-  link: "bg-transparent text-pine-700 border-transparent p-0 h-auto hover:underline",
+  link: "bg-transparent text-brand-700 border-transparent p-0 h-auto hover:underline",
 };
 
 export function Button(props: ButtonProps) {
@@ -104,6 +108,7 @@ export function Button(props: ButtonProps) {
       autoFocus={props.autoFocus}
       disabled={disabled}
       aria-busy={loading || undefined}
+      suppressHydrationWarning
       className={classes}
     >
       {content}

@@ -14,7 +14,8 @@
     "db:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
     "db:seed": "dotenv -e ../../.env -- prisma db seed",
     "db:studio": "dotenv -e ../../.env -- prisma studio",
-    "create-admin": "dotenv -e ../../.env -- tsx scripts/create-admin.ts"
+    "create-admin": "dotenv -e ../../.env -- tsx scripts/create-admin.ts",
+    "db:clear": "dotenv -e ../../.env -- tsx scripts/clear-data.ts"
   },
   "prisma": {
     "seed": "tsx scripts/seed.ts"

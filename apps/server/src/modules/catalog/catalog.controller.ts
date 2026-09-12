@@ -35,4 +35,31 @@ export class CatalogController {
       next(error);
     }
   };
+
+  majors = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const body: ApiResponse<CatalogItem[]> = { success: true, data: await this.catalogService.majors() };
+      res.json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  universities = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const body: ApiResponse<CatalogItem[]> = { success: true, data: await this.catalogService.universities() };
+      res.json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  skills = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const body: ApiResponse<CatalogItem[]> = { success: true, data: await this.catalogService.skills() };
+      res.json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
 }

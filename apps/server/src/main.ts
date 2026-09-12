@@ -12,6 +12,11 @@ import { paymentsRouter } from "./modules/payments/payments.routes";
 import { subscriptionsRouter } from "./modules/subscriptions/subscriptions.routes";
 import { startSubscriptionExpiryJob } from "./modules/subscriptions/subscription-expiry.job";
 import type { CompanySubscriptionRepository } from "./modules/subscriptions/company-subscription.repository";
+import type { SubscriptionsService } from "./modules/subscriptions/subscriptions.service";
+import { jobPostsRouter } from "./modules/job-posts/job-posts.routes";
+import { startJobPostExpiryJob } from "./modules/job-posts/job-post-expiry.job";
+import type { JobPostRepository } from "./modules/job-posts/job-post.repository";
+import { candidatesRouter } from "./modules/candidates/candidates.routes";
 import { errorHandler } from "./shared/middleware/errorHandler";
 import { logger } from "./shared/logger";
 
@@ -30,12 +35,21 @@ app.use("/api", companiesRouter(container));
 app.use("/api", catalogRouter(container));
 app.use("/api", paymentsRouter(container));
 app.use("/api", subscriptionsRouter(container));
+app.use("/api", jobPostsRouter(container));
+app.use("/api", candidatesRouter(container));
 
 app.use(errorHandler);
 
 // Chạy chung process với Express (giống Socket.IO) — đúng nguyên tắc modular
 // monolith, xem ARCHITECTURE_DECISIONS.md AD-6 mục 3.
 startSubscriptionExpiryJob(container.resolve<CompanySubscriptionRepository>("companySubscriptionRepository"), logger);
+// Hạ tin hết hạn + đóng tin của company đã hết quyền đăng (AD-6 mục 3, phần
+// "auto-close khi hết gói" dời từ Phase 5 sang Phase 6).
+startJobPostExpiryJob(
+  container.resolve<JobPostRepository>("jobPostRepository"),
+  container.resolve<SubscriptionsService>("subscriptionsService"),
+  logger,
+);
 
 app.listen(config.PORT, () => {
   logger.info(`Server listening on port ${config.PORT}`);
