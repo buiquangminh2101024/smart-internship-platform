@@ -12,6 +12,7 @@ import { paymentsRouter } from "./modules/payments/payments.routes";
 import { subscriptionsRouter } from "./modules/subscriptions/subscriptions.routes";
 import { startSubscriptionExpiryJob } from "./modules/subscriptions/subscription-expiry.job";
 import type { CompanySubscriptionRepository } from "./modules/subscriptions/company-subscription.repository";
+import { candidatesRouter } from "./modules/candidates/candidates.routes";
 import { errorHandler } from "./shared/middleware/errorHandler";
 import { logger } from "./shared/logger";
 
@@ -30,6 +31,7 @@ app.use("/api", companiesRouter(container));
 app.use("/api", catalogRouter(container));
 app.use("/api", paymentsRouter(container));
 app.use("/api", subscriptionsRouter(container));
+app.use("/api", candidatesRouter(container));
 
 app.use(errorHandler);
 
