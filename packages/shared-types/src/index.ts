@@ -438,3 +438,27 @@ export interface JobPostStats {
   draft: number;
   closed: number;
 }
+
+// ─── CV & Saved Jobs (Phase 7) ───────────────────────────────────────────
+
+export interface CvRecord {
+  id: string;
+  candidateId: string;
+  fileUrl: string;
+  fileName: string;
+  isDefault: boolean;
+  uploadedAt: string;
+}
+
+export interface SavedJobEntry {
+  id: string;
+  candidateId: string;
+  jobPostId: string;
+  createdAt: string;
+  jobPost: JobPost;
+}
+
+export interface SavedJobCheckResponse {
+  jobPostId: string;
+  saved: boolean;
+}

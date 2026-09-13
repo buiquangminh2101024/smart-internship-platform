@@ -4,8 +4,9 @@ export const metadata: Metadata = { title: "Ứng tuyển của tôi — InternH
 
 export default function ApplicationsPage() {
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl items-center justify-center px-6 text-center">
-      <p className="text-text-muted">Trang theo dõi ứng tuyển sẽ có ở Phase 7.</p>
-    </main>
+    <div className="mx-auto flex min-h-[60vh] max-w-3xl items-center justify-center px-6 text-center">
+      <p className="text-text-muted">Trang theo dõi ứng tuyển sẽ có ở Phase 8.</p>
+    </div>
   );
 }
+

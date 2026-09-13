@@ -19,7 +19,10 @@ export class CloudinaryMediaStorage implements MediaStorage {
     this.cloudinaryConfig = appConfig;
   }
 
-  async upload(buffer: Buffer, options: { folder: string; filename?: string }): Promise<UploadedFile> {
+  async upload(
+    buffer: Buffer,
+    options: { folder: string; filename?: string; resourceType?: "auto" | "image" | "video" | "raw" },
+  ): Promise<UploadedFile> {
     const { CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET } = this.cloudinaryConfig;
     if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_API_KEY || !CLOUDINARY_API_SECRET) {
       throw new AppError(500, "Cloudinary is not configured");
@@ -33,7 +36,11 @@ export class CloudinaryMediaStorage implements MediaStorage {
 
     return new Promise<UploadedFile>((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
-        { folder: options.folder, resource_type: "auto", ...(options.filename ? { public_id: options.filename } : {}) },
+        {
+          folder: options.folder,
+          resource_type: options.resourceType ?? "auto",
+          ...(options.filename ? { public_id: options.filename } : {}),
+        },
         (error, result) => {
           if (error || !result) {
             reject(new AppError(502, `Failed to upload file: ${error?.message ?? "unknown error"}`));
