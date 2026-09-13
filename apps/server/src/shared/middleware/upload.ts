@@ -3,7 +3,7 @@ import type { RequestHandler } from "express";
 import { AppError } from "../errors/AppError";
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
-const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "application/pdf"]);
+const DEFAULT_ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "application/pdf"]);
 
 // Multipart chỉ mount trên route cụ thể cần nó (vd. POST /employers/company)
 // — không dùng global, giữ nguyên convention express.json()-only ở mọi route
@@ -13,14 +13,30 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_FILE_SIZE_BYTES },
   fileFilter: (_req, file, cb) => {
-    if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
-      cb(new AppError(400, "File must be a JPEG/PNG image or PDF"));
+    const allowed = DEFAULT_ALLOWED_MIME_TYPES;
+    if (!allowed.has(file.mimetype)) {
+      cb(new AppError(400, "Unsupported file type"));
       return;
     }
     cb(null, true);
   },
 });
 
-export function singleFileUpload(fieldName: string): RequestHandler {
-  return upload.single(fieldName);
+export function singleFileUpload(
+  fieldName: string,
+  allowedMimeTypes: string[] = [...DEFAULT_ALLOWED_MIME_TYPES],
+): RequestHandler {
+  const uploadWithType = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: MAX_FILE_SIZE_BYTES },
+    fileFilter: (_req, file, cb) => {
+      if (!allowedMimeTypes.includes(file.mimetype)) {
+        cb(new AppError(400, "Unsupported file type"));
+        return;
+      }
+      cb(null, true);
+    },
+  });
+
+  return uploadWithType.single(fieldName);
 }

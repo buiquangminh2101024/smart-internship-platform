@@ -17,6 +17,8 @@ import { jobPostsRouter } from "./modules/job-posts/job-posts.routes";
 import { startJobPostExpiryJob } from "./modules/job-posts/job-post-expiry.job";
 import type { JobPostRepository } from "./modules/job-posts/job-post.repository";
 import { candidatesRouter } from "./modules/candidates/candidates.routes";
+import { cvRouter } from "./modules/cv/cv.routes";
+import { savedJobsRouter } from "./modules/saved-jobs/saved-jobs.routes";
 import { errorHandler } from "./shared/middleware/errorHandler";
 import { logger } from "./shared/logger";
 
@@ -37,6 +39,8 @@ app.use("/api", paymentsRouter(container));
 app.use("/api", subscriptionsRouter(container));
 app.use("/api", jobPostsRouter(container));
 app.use("/api", candidatesRouter(container));
+app.use("/api", cvRouter(container));
+app.use("/api", savedJobsRouter(container));
 
 app.use(errorHandler);
 

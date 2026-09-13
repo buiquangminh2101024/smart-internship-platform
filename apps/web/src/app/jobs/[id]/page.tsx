@@ -2,6 +2,7 @@
 
 import { use } from "react";
 import { usePublicJobPost } from "@/hooks/useJobPosts";
+import { useSavedJobCheck, useSaveJob, useUnsaveJob } from "@/hooks/useSavedJobs";
 import { JobPostContent, JobPostCompanyCard, JobPostHeaderCard } from "@/components/jobs/JobPostContent";
 import { CandidateHomeHeader } from "@/components/marketing/CandidateHomeHeader";
 import { SiteFooter } from "@/components/marketing/SiteFooter";
@@ -9,16 +10,39 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { useCandidateAuthStore } from "@/stores/auth-store";
 
-/**
- * Chi tiết tin tuyển dụng công khai (6-FE-4, bản tối giản). Mỗi lần mở trang
- * gọi `GET /job-posts/:id` — chính lời gọi này tăng `viewCount` phía server.
- * Nút "Ứng tuyển ngay"/"Lưu tin" chỉ điều hướng đăng nhập: luồng ứng tuyển và
- * lưu tin thuộc Phase 7/8, KHÔNG implement ở đây.
- */
 export default function PublicJobDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data: job, isLoading, isError } = usePublicJobPost(id);
+
+  // Chỉ CANDIDATE đăng nhập mới có thể lưu tin — kiểm tra cả token lẫn role.
+  const user = useCandidateAuthStore((state) => state.user);
   const isLoggedIn = useCandidateAuthStore((state) => !!state.accessToken);
+  const isCandidate = isLoggedIn && user?.role === "CANDIDATE";
+
+  // Lấy trạng thái lưu từ backend — chỉ gọi khi là CANDIDATE.
+  const { data: checkResult } = useSavedJobCheck(id, isCandidate);
+  const saved = checkResult?.saved ?? false;
+
+  const saveMutation = useSaveJob();
+  const unsaveMutation = useUnsaveJob();
+  const saving = saveMutation.isPending || unsaveMutation.isPending;
+
+  async function toggleSave() {
+    if (!isCandidate) {
+      window.location.href = "/login";
+      return;
+    }
+
+    try {
+      if (saved) {
+        await unsaveMutation.mutateAsync(id);
+      } else {
+        await saveMutation.mutateAsync(id);
+      }
+    } catch {
+      // Lỗi được phản ánh qua mutation state — không cần xử lý thêm ở đây.
+    }
+  }
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -44,11 +68,17 @@ export default function PublicJobDetailPage({ params }: { params: Promise<{ id: 
               job={job}
               action={
                 <div className="flex flex-wrap gap-2">
-                  <Button as="a" href={isLoggedIn ? "/applications" : "/login"} iconAfter="arrow-right">
+                  <Button as="a" href={isCandidate ? "/applications" : "/login"} iconAfter="arrow-right">
                     Ứng tuyển ngay
                   </Button>
-                  <Button as="a" href={isLoggedIn ? "/saved-jobs" : "/login"} variant="secondary" icon="bookmark">
-                    Lưu tin
+                  <Button
+                    type="button"
+                    variant={saved ? "secondary" : "ghost"}
+                    icon="bookmark"
+                    loading={saving}
+                    onClick={() => void toggleSave()}
+                  >
+                    {saved ? "Đã lưu" : "Lưu tin"}
                   </Button>
                 </div>
               }
@@ -74,3 +104,4 @@ export default function PublicJobDetailPage({ params }: { params: Promise<{ id: 
     </div>
   );
 }
+

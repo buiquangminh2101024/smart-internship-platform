@@ -19,6 +19,7 @@ const ACCOUNT_LINKS = [
   { label: "Tổng quan", href: "/", icon: "layout-dashboard" },
   { label: "Quản lý hồ sơ", href: "/profile", icon: "user-round" },
   { label: "Quản lý CV", href: "/cv", icon: "file-text" },
+  { label: "Việc làm đã lưu", href: "/saved-jobs", icon: "bookmark" },
   { label: "Quản lý tìm việc", href: "/applications", icon: "briefcase-business" },
   { label: "Tin nhắn", href: "/messages", icon: "messages-square" },
 ];

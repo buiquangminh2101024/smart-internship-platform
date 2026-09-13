@@ -7,5 +7,8 @@ export interface UploadedFile {
 }
 
 export interface MediaStorage {
-  upload(buffer: Buffer, options: { folder: string; filename?: string }): Promise<UploadedFile>;
+  upload(
+    buffer: Buffer,
+    options: { folder: string; filename?: string; resourceType?: "auto" | "image" | "video" | "raw" },
+  ): Promise<UploadedFile>;
 }
