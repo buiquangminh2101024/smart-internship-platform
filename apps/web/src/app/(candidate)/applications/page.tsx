@@ -18,6 +18,7 @@ export default function ApplicationsPage() {
     }
   };
 
+  return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-10">
       <div className="mb-8">
         <h1 className="text-2xl font-bold">Lịch sử ứng tuyển</h1>
@@ -61,10 +62,10 @@ export default function ApplicationsPage() {
               <div className="flex flex-col items-end gap-3 shrink-0">
                 <Badge tone={
                   app.status === "ACCEPTED" ? "success" :
-                  app.status === "REJECTED" || app.status === "CANCELLED" ? "danger" :
-                  app.status === "PENDING" ? "warning" : "info"
+                    app.status === "REJECTED" || app.status === "CANCELLED" ? "danger" :
+                      app.status === "PENDING" ? "warning" : "info"
                 }>{app.status}</Badge>
-                
+
                 <div className="flex gap-2">
                   {(app.status === "PENDING" || app.status === "REVIEWING") && (
                     <Button variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50" size="sm" onClick={() => void handleCancel(app.id)}>
@@ -81,4 +82,5 @@ export default function ApplicationsPage() {
         </div>
       )}
     </main>
+  )
 }

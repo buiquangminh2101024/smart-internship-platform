@@ -28,7 +28,9 @@ export type NotificationType =
   | "JOB_POST_APPROVED"
   | "JOB_POST_REJECTED"
   | "JOB_POST_TAKEN_DOWN"
-  | "COMPANY_VERIFIED";
+  | "COMPANY_VERIFIED"
+  | "COMPANY_REJECTED"
+  | "MESSAGE_RECEIVED";
 
 // ─── Wrapper response chuẩn cho REST API ─────────────────────────────────
 
@@ -502,4 +504,21 @@ export interface EmployerApplicationDetail extends Application {
   jobPost: JobPost;
   cv: CvRecord;
   candidate: any; 
+}
+
+// ─── Notifications (Phase 10) ────────────────────────────────────────────
+
+export interface Notification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string | null;
+  link: string | null;
+  isRead: boolean;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface UnreadCountResponse {
+  count: number;
 }

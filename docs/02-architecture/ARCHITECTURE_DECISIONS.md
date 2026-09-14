@@ -159,6 +159,34 @@ Quyết định này **không đổi** 4 bảng màu của AD-3, chỉ thêm m�
 
 **Ảnh hưởng:** `globals.css` (thêm lớp alias, `--color-surface-brand-soft` chuyển thành `var(--color-brand-50)` nên khối thông báo quota trong portal Employer tự đổi sang nền indigo nhạt); `components/ui/{Button,Badge,Input,Select,Textarea,Card,StatCard,JobCard,Toast}.tsx`; `components/layout/{SideNav,PortalTopbar,EmployerPortalShell,AdminConsoleShell}.tsx` (bỏ prop `role` chỉ dùng để chọn màu, bỏ `!important`). Không thêm dependency, không đổi API công khai nào khác của UI kit. Trang marketing `/employer` vẫn còn `!bg-indigo-600` ở một nút CTA — cố ý để lại vì nằm ngoài khu vực có `data-role`, có thể dọn sau nếu muốn đặt `data-role="employer"` cho cả trang landing đó.
 
+---
+
+## AD-8 — Transactional Outbox cho email notification (Phase 10)
+
+**Ngày:** 2026-09-14 · **Phase liên quan:** 06-backend/05-frontend Phase 10 (Notification & Email)
+
+**Quyết định:** mọi email sinh ra từ notification **không** được gửi trực tiếp trong luồng xử lý request. Thay vào đó:
+
+1. Thêm model `OutboxEvent` + enum `OutboxStatus` (`PENDING`/`PROCESSING`/`COMPLETED`/`FAILED`) vào `schema.prisma` (chi tiết cột ở `docs/03-database/DATABASE_DESIGN.md`).
+2. `NotificationsService.notify()` ghi `Notification` + `OutboxEvent` **trong cùng `prisma.$transaction` với thay đổi nghiệp vụ** (đổi trạng thái đơn ứng tuyển, duyệt/từ chối tin, xác minh/từ chối công ty). Hoặc cả ba cùng được ghi, hoặc không gì cả.
+3. Một worker `node-cron` chạy **mỗi phút** (`modules/notifications/outbox/outbox.job.ts`) claim lô 20 event `PENDING` đã tới hạn, gọi `EmailSender.send()` (Resend), rồi đánh dấu `COMPLETED`; lỗi thì lùi lịch theo backoff `[1, 5, 15, 30]` phút và `FAILED` sau 5 lần thử.
+4. `Notification.title/body/link` là **snapshot đã render** lúc tạo — bảng không lưu payload thô, notification cũ không đổi nội dung khi dữ liệu nguồn (vd. tiêu đề tin) bị sửa về sau.
+
+**Lý do — và vì sao điều này KHÔNG mâu thuẫn với việc đã từ chối outbox cho payments:** `docs/designs/SUBSCRIPTION_BILLING_DESIGN.md` mục 4 đã loại `PaymentOutboxEvent` với lý do "thuộc pattern outbox/payout cho hệ microservices, không cần cho app monolith Express hiện tại". Lý do đó vẫn đúng và **không bị đảo ngược** ở đây, vì hai trường hợp giải quyết hai bài toán khác nhau:
+
+- **Payments:** outbox ở đó tồn tại để phát sự kiện cho các service khác tiêu thụ (điều phối giữa nhiều service). Monolith này không có service nào để phát tới — cập nhật `Payment`/`Transaction`/`CompanySubscription` đều nằm trong một transaction PostgreSQL duy nhất, nên outbox chỉ thêm tầng trung gian mà không thêm bảo đảm nào.
+- **Notification/email:** bài toán là **độ tin cậy của một lời gọi HTTP đồng bộ ra ngoài** (Resend) — nó tồn tại y hệt dù kiến trúc là monolith hay microservices. Không có outbox thì chỉ có hai lựa chọn, cả hai đều sai: gọi Resend *trong* transaction (một cú HTTP chậm/timeout giữ khoá DB, và Resend lỗi sẽ rollback cả thao tác nghiệp vụ hợp lệ), hoặc gọi *sau* khi commit (process chết giữa chừng là mất email vĩnh viễn, không dấu vết, không cách nào gửi lại).
+
+Ngoài ra, không dùng RabbitMQ/Redpanda/Kafka/BullMQ để giải bài toán này — PostgreSQL + `node-cron` (đã có sẵn từ AD-6 mục 3) là đủ cho quy mô dự án và giữ đúng nguyên tắc modular monolith, không thêm hạ tầng mới.
+
+**Điểm nối realtime tách riêng:** port `shared/ports/RealtimeNotifier.ts` được định nghĩa ở Phase 10 nhưng chỉ có bản `NoopRealtimeNotifier` — **Phase 10 không viết dòng Socket.IO nào** (Socket.IO thuộc Phase 9, đang triển khai song song). Khi Phase 9 xong chỉ cần đổi registration `realtimeNotifier` trong `container.ts`, `NotificationsService` không phải sửa. Frontend Phase 10 tương ứng dùng **polling** `GET /notifications/unread-count` (30s), REST contract không đổi khi chuyển sang socket.
+
+**Known gap (chấp nhận có chủ đích):** nếu process chết đúng lúc một lô đang ở trạng thái `PROCESSING`, các event đó kẹt lại và không được thử lại (chưa có cơ chế reclaim theo timeout). Chấp nhận được ở quy mô đồ án chạy một instance; nếu cần, bổ sung sau bằng cách đưa `PROCESSING` quá hạn về `PENDING` trong chính sweep.
+
+**Ảnh hưởng:** `apps/server/prisma/schema.prisma` (enum `NotificationType` thêm `COMPANY_REJECTED`/`MESSAGE_RECEIVED`, `Notification` thêm `readAt` + index, thêm `OutboxEvent`/`OutboxStatus`); module mới `apps/server/src/modules/notifications/`; `container.ts` (đăng ký `realtimeNotifier`); `main.ts` (mount router + start outbox job); 7 call site ở `applications`/`job-posts`/`companies`/`employers` service; `docs/03-database/DATABASE_DESIGN.md`; `docs/designs/NOTIFICATION_EMAIL_DESIGN.md` (mới).
+
+**Thay đổi kèm theo ngoài phạm vi notification:** `CompaniesService.verify()/reject()` được bổ sung **guard trạng thái** (409 nếu company đã `VERIFIED`/`REJECTED`), theo đúng pattern đã có ở `JobPostsService`. Trước đây gọi lại API duyệt/từ chối nhiều lần vẫn ghi đè hợp lệ; từ khi có notification thì mỗi lần gọi lại sẽ sinh thêm một thông báo và một email trùng, nên guard là bắt buộc chứ không phải dọn dẹp tuỳ chọn.
+
 ## Phần ghi chú của chủ dự án
 
 *(để trống)*
