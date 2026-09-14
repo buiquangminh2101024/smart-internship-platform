@@ -20,7 +20,8 @@ export type ApplicationStatus =
   | "SHORTLISTED"
   | "INTERVIEWING"
   | "ACCEPTED"
-  | "REJECTED";
+  | "REJECTED"
+  | "CANCELLED";
 
 export type NotificationType =
   | "APPLICATION_STATUS_CHANGED"
@@ -461,4 +462,44 @@ export interface SavedJobEntry {
 export interface SavedJobCheckResponse {
   jobPostId: string;
   saved: boolean;
+}
+// ─── Applications (Phase 8) ──────────────────────────────────────────────
+
+export interface Application {
+  id: string;
+  jobPostId: string;
+  candidateId: string;
+  cvId: string;
+  status: ApplicationStatus;
+  coverLetter: string | null;
+  employerNotes?: string | null;
+  rating?: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateApplicationRequest {
+  jobPostId: string;
+  cvId: string;
+  coverLetter?: string;
+}
+
+export interface UpdateApplicationStatusRequest {
+  status: ApplicationStatus;
+}
+
+export interface UpdateApplicationEvaluationRequest {
+  employerNotes?: string | null;
+  rating?: number | null;
+}
+
+export interface CandidateApplicationSummary extends Application {
+  jobPost: JobPost;
+  cv: CvRecord;
+}
+
+export interface EmployerApplicationDetail extends Application {
+  jobPost: JobPost;
+  cv: CvRecord;
+  candidate: any; 
 }

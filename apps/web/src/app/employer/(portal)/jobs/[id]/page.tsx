@@ -228,10 +228,14 @@ function EmployerJobDetail({ params }: { params: Promise<{ id: string }> }) {
             />
 
             <Card padding="md" className="grid gap-3">
-              <h2 className="text-xs font-semibold tracking-wide text-text-subtle uppercase">Tổng quan ứng viên</h2>
-              <p className="text-sm text-text-muted">
-                Danh sách ứng viên sẽ hiển thị tại đây khi tính năng ứng tuyển được bật (Phase 8).
-              </p>
+              <h2 className="text-xs font-semibold tracking-wide text-text-subtle uppercase">Ứng viên</h2>
+              <div className="flex items-center justify-between">
+                <span className="text-2xl font-bold">{job.applicationCount}</span>
+                <span className="text-sm text-text-muted">hồ sơ</span>
+              </div>
+              <Button as="a" href={`/employer/jobs/${job.id}/applications`} variant="secondary" className="w-full">
+                Xem danh sách
+              </Button>
             </Card>
 
             <Card padding="md" className="grid gap-2">

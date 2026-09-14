@@ -87,6 +87,11 @@ export class CvService {
     const existing = await this.prisma.cv.findFirst({ where: { id: cvId, candidateId: candidate.id } });
     if (!existing) throw new AppError(404, "CV not found");
 
+    const applicationCount = await this.prisma.application.count({ where: { cvId } });
+    if (applicationCount > 0) {
+      throw new AppError(400, "Cannot delete CV because it is currently used in one or more applications (CV_IN_USE)");
+    }
+
     await this.prisma.$transaction(async (tx) => {
       const remaining = await tx.cv.findFirst({
         where: { candidateId: candidate.id, id: { not: cvId } },
