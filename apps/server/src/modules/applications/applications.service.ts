@@ -1,21 +1,26 @@
 import type { CreateApplicationRequest, UpdateApplicationEvaluationRequest, UpdateApplicationStatusRequest } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
+import type { NotificationsService } from "../notifications/notifications.service";
 import type { ApplicationsRepository } from "./applications.repository";
 import type { PrismaClient, ApplicationStatus } from "@prisma/client";
 
 export class ApplicationsService {
   private readonly prisma: PrismaClient;
   private readonly applicationsRepository: ApplicationsRepository;
+  private readonly notificationsService: NotificationsService;
 
   constructor({
     prisma,
     applicationsRepository,
+    notificationsService,
   }: {
     prisma: PrismaClient;
     applicationsRepository: ApplicationsRepository;
+    notificationsService: NotificationsService;
   }) {
     this.prisma = prisma;
     this.applicationsRepository = applicationsRepository;
+    this.notificationsService = notificationsService;
   }
 
   async createApplication(userId: string, dto: CreateApplicationRequest) {
@@ -144,7 +149,25 @@ export class ApplicationsService {
       throw new AppError(400, "Cannot transition status to " + dto.status);
     }
 
-    await this.applicationsRepository.update(id, { status: dto.status });
+    // Đổi trạng thái + notification + outbox email ghi chung một transaction:
+    // ứng viên không bao giờ thấy trạng thái mới mà thiếu thông báo, và ngược lại.
+    await this.prisma.$transaction(async (tx) => {
+      await this.applicationsRepository.update(id, { status: dto.status }, tx);
+      await this.notificationsService.notify(
+        "APPLICATION_STATUS_CHANGED",
+        app.candidate.userId,
+        {
+          applicationId: app.id,
+          jobPostId: app.jobPostId,
+          jobPostTitle: app.jobPost.title,
+          companyName: app.jobPost.company.name,
+          oldStatus: app.status,
+          newStatus: dto.status,
+        },
+        tx,
+      );
+    });
+
     return this.applicationsRepository.findEmployerApplicationById(id, employer.companyId);
   }
 

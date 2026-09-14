@@ -20,6 +20,10 @@ import { candidatesRouter } from "./modules/candidates/candidates.routes";
 import { cvRouter } from "./modules/cv/cv.routes";
 import { savedJobsRouter } from "./modules/saved-jobs/saved-jobs.routes";
 import { applicationsRouter } from "./modules/applications/applications.routes";
+import { notificationsRouter } from "./modules/notifications/notifications.routes";
+import { startOutboxJob } from "./modules/notifications/outbox/outbox.job";
+import type { OutboxRepository } from "./modules/notifications/outbox/outbox.repository";
+import type { EmailSender } from "./shared/ports/EmailSender";
 import { errorHandler } from "./shared/middleware/errorHandler";
 import { logger } from "./shared/logger";
 
@@ -43,6 +47,9 @@ app.use("/api", candidatesRouter(container));
 app.use("/api", cvRouter(container));
 app.use("/api", savedJobsRouter(container));
 app.use("/api", applicationsRouter(container));
+// Mount trước khi start outbox job bên dưới: notificationsRouter là nơi đăng ký
+// notificationsService/outboxRepository vào container.
+app.use("/api", notificationsRouter(container));
 
 app.use(errorHandler);
 
@@ -54,6 +61,12 @@ startSubscriptionExpiryJob(container.resolve<CompanySubscriptionRepository>("com
 startJobPostExpiryJob(
   container.resolve<JobPostRepository>("jobPostRepository"),
   container.resolve<SubscriptionsService>("subscriptionsService"),
+  logger,
+);
+// Transactional Outbox cho email notification — quét mỗi phút (AD-8).
+startOutboxJob(
+  container.resolve<OutboxRepository>("outboxRepository"),
+  container.resolve<EmailSender>("emailSender"),
   logger,
 );
 

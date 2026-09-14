@@ -60,6 +60,16 @@ enum NotificationType {
   JOB_POST_REJECTED
   JOB_POST_TAKEN_DOWN
   COMPANY_VERIFIED
+  COMPANY_REJECTED
+  // Chưa có call site: module messaging thuộc Phase 9 (đang làm song song).
+  MESSAGE_RECEIVED
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
 }
 
 enum Gender {
@@ -650,11 +660,38 @@ model Notification {
   userId    String
   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   type      NotificationType
+  // title/body/link là bản snapshot đã render lúc tạo, KHÔNG lưu payload thô:
+  // nội dung thông báo cũ không được đổi theo dữ liệu nguồn (vd. tin tuyển dụng
+  // bị sửa tiêu đề sau đó) — xem docs/designs/NOTIFICATION_EMAIL_DESIGN.md.
   title     String
   body      String?
   link      String?
   isRead    Boolean          @default(false)
+  readAt    DateTime?
   createdAt DateTime         @default(now())
 
+  @@index([userId, isRead])
   @@map("notifications")
+}
+
+/// Transactional Outbox cho email (AD-8). Notification + OutboxEvent được ghi
+/// trong cùng transaction với thay đổi nghiệp vụ; worker node-cron đọc bảng này
+/// rồi mới gọi Resend, nên email không mất khi Resend lỗi / process chết giữa chừng.
+model OutboxEvent {
+  id            String       @id @default(cuid())
+  // String thay vì enum: bảng có thể tái dùng cho loại event khác sau này mà
+  // không cần migration. Hiện chỉ có "NOTIFICATION_EMAIL".
+  eventType     String
+  aggregateType String
+  aggregateId   String
+  payload       Json
+  status        OutboxStatus @default(PENDING)
+  attempts      Int          @default(0)
+  availableAt   DateTime     @default(now())
+  processedAt   DateTime?
+  lastError     String?
+  createdAt     DateTime     @default(now())
+
+  @@index([status, availableAt])
+  @@map("outbox_events")
 }
