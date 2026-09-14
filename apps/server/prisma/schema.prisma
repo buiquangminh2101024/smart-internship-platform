@@ -51,6 +51,7 @@ enum ApplicationStatus {
   INTERVIEWING
   ACCEPTED
   REJECTED
+  CANCELLED
 }
 
 enum NotificationType {
@@ -598,6 +599,7 @@ model Application {
   coverLetter   String?
   employerNotes String?
   rating        Int?
+  reappliedAt   DateTime?         // Set khi ứng viên ứng tuyển lại sau khi hủy
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 

@@ -3,6 +3,7 @@
 import { use } from "react";
 import { usePublicJobPost } from "@/hooks/useJobPosts";
 import { useSavedJobCheck, useSaveJob, useUnsaveJob } from "@/hooks/useSavedJobs";
+import { useJobApplicationStatus } from "@/hooks/useApplications";
 import { JobPostContent, JobPostCompanyCard, JobPostHeaderCard } from "@/components/jobs/JobPostContent";
 import { CandidateHomeHeader } from "@/components/marketing/CandidateHomeHeader";
 import { SiteFooter } from "@/components/marketing/SiteFooter";
@@ -22,6 +23,9 @@ export default function PublicJobDetailPage({ params }: { params: Promise<{ id: 
   // Lấy trạng thái lưu từ backend — chỉ gọi khi là CANDIDATE.
   const { data: checkResult } = useSavedJobCheck(id, isCandidate);
   const saved = checkResult?.saved ?? false;
+
+  // Kiểm tra trạng thái đơn ứng tuyển hiện tại cho job này
+  const { status: appStatus } = useJobApplicationStatus(id, isCandidate);
 
   const saveMutation = useSaveJob();
   const unsaveMutation = useUnsaveJob();
@@ -43,6 +47,23 @@ export default function PublicJobDetailPage({ params }: { params: Promise<{ id: 
       // Lỗi được phản ánh qua mutation state — không cần xử lý thêm ở đây.
     }
   }
+
+  // Xác định trạng thái nút ứng tuyển
+  const applyHref = isCandidate ? `/jobs/${id}/apply` : "/login";
+  const isApplied = appStatus !== undefined && appStatus !== "CANCELLED";
+  const applyLabel = (() => {
+    if (!isCandidate) return "Đăng nhập để ứng tuyển";
+    switch (appStatus) {
+      case "PENDING": return "Đang chờ duyệt";
+      case "REVIEWING": return "Đang xem xét";
+      case "SHORTLISTED": return "Đã vào danh sách";
+      case "INTERVIEWING": return "Đang phỏng vấn";
+      case "ACCEPTED": return "Đã được nhận";
+      case "REJECTED": return "Đã bị từ chối";
+      case "CANCELLED": return "Ứng tuyển lại";
+      default: return "Ứng tuyển ngay";
+    }
+  })();
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -68,9 +89,24 @@ export default function PublicJobDetailPage({ params }: { params: Promise<{ id: 
               job={job}
               action={
                 <div className="flex flex-wrap gap-2">
-                  <Button as="a" href={isCandidate ? "/applications" : "/login"} iconAfter="arrow-right">
-                    Ứng tuyển ngay
-                  </Button>
+                  {isApplied ? (
+                    <Button
+                      type="button"
+                      disabled
+                      variant="secondary"
+                    >
+                      {applyLabel}
+                    </Button>
+                  ) : (
+                    <Button
+                      as="a"
+                      href={applyHref}
+                      iconAfter="arrow-right"
+                      variant="primary"
+                    >
+                      {applyLabel}
+                    </Button>
+                  )}
                   <Button
                     type="button"
                     variant={saved ? "secondary" : "ghost"}
