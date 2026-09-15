@@ -506,6 +506,55 @@ export interface EmployerApplicationDetail extends Application {
   candidate: any; 
 }
 
+// --- Messaging (Phase 9) -------------------------------------------------
+
+export interface Message {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface ConversationParticipant {
+  id: string; // Candidate/Employer ID
+  name: string;
+  avatarUrl: string | null;
+}
+
+export interface ConversationJobPostInfo {
+  id: string;
+  title: string;
+  companyName: string;
+}
+
+export interface Conversation {
+  id: string;
+  jobPostId: string;
+  candidateId: string;
+  employerId: string;
+  candidateLastReadAt: string | null;
+  employerLastReadAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  
+  // Relations loaded for UI
+  jobPost: ConversationJobPostInfo;
+  candidate: ConversationParticipant;
+  employer: ConversationParticipant;
+  
+  // Latest message for list view
+  latestMessage?: Message | null;
+}
+
+export interface CreateConversationRequest {
+  jobPostId: string;
+}
+
+export interface SendMessageSocketPayload {
+  conversationId: string;
+  content: string;
+}
 // ─── Notifications (Phase 10) ────────────────────────────────────────────
 
 export interface Notification {

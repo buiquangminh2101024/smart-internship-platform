@@ -99,6 +99,31 @@ export default function EmployerApplicationDetailPage() {
               <Button disabled={application.status === "ACCEPTED"} variant="primary" onClick={() => handleStatusChange("ACCEPTED")}>Nhận (Accepted)</Button>
               <Button disabled={application.status === "REJECTED"} variant="danger" onClick={() => handleStatusChange("REJECTED")}>Từ chối (Rejected)</Button>
             </div>
+            
+            <hr className="my-4" />
+            <h3 className="font-bold mb-4">Liên hệ</h3>
+            <Button
+              variant="secondary"
+              icon="messages-square"
+              fullWidth
+              onClick={async () => {
+                try {
+                  const { apiFetch } = await import("@/lib/api-client");
+                  const res = await apiFetch<{ id: string }>("employer", "/conversations", {
+                    method: "POST",
+                    body: JSON.stringify({ 
+                      jobPostId: application.jobPostId, 
+                      candidateId: application.candidateId 
+                    })
+                  });
+                  router.push(`/employer/messages?conversationId=${res.id}`);
+                } catch (err: any) {
+                  alert(err.message || "Không thể tạo hội thoại");
+                }
+              }}
+            >
+              Nhắn tin cho ứng viên
+            </Button>
           </Card>
 
           <Card padding="md">

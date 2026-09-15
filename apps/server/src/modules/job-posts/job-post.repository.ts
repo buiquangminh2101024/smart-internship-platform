@@ -21,6 +21,7 @@ const jobPostInclude = {
   city: true,
   industry: true,
   moderationActions: { orderBy: { createdAt: "desc" }, take: 1, include: { actor: true } },
+  _count: { select: { applications: true } },
 } satisfies Prisma.JobPostInclude;
 
 export type JobPostWithRelations = Prisma.JobPostGetPayload<{ include: typeof jobPostInclude }>;
@@ -68,7 +69,7 @@ export class JobPostRepository {
   }
 
   create(
-    data: JobPostWriteData & { companyId: string; title: string; description: string; jobType: JobPostType },
+    data: JobPostWriteData & { companyId: string; employerId: string; title: string; description: string; jobType: JobPostType },
     db: Db = this.prisma,
   ): Promise<JobPostWithRelations> {
     return db.jobPost.create({ data, include: jobPostInclude });
