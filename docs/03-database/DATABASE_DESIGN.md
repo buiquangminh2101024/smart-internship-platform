@@ -57,7 +57,8 @@ Database: PostgreSQL (Neon.tech, managed), truy cập qua Prisma Client. Đã á
 
 ### Notification
 
-- **`Notification`** — thuộc 1 `User`, `type: NotificationType`, có `link`/`isRead`.
+- **`Notification`** — thuộc 1 `User`, `type: NotificationType`, có `link`/`isRead`/`readAt`. `title`/`body`/`link` là **bản snapshot đã render** tại thời điểm tạo (không lưu payload thô) nên nội dung thông báo cũ không đổi khi dữ liệu nguồn thay đổi về sau. Index `(userId, isRead)` phục vụ `GET /notifications` và `/notifications/unread-count`.
+- **`OutboxEvent`** (Phase 10, xem AD-8) — hàng đợi email nằm trong chính DB, ghi cùng transaction với `Notification` và thay đổi nghiệp vụ. Cột: `eventType` (String, hiện chỉ `"NOTIFICATION_EMAIL"` — để String thay vì enum để tái dùng cho loại event khác mà không cần migration), `aggregateType`/`aggregateId` (truy vết ngược về bản ghi gốc), `payload: Json` (`{to, subject, html, notificationType}` đã render sẵn), `status: OutboxStatus` (`PENDING`/`PROCESSING`/`COMPLETED`/`FAILED`), `attempts`, `availableAt` (mốc được phép thử lại — backoff), `processedAt`, `lastError`. Index `(status, availableAt)` cho worker `node-cron` quét mỗi phút.
 
 ## Quy ước chung
 

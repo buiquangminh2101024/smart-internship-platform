@@ -14,6 +14,7 @@ import type { CompanyInviteCodeStore } from "../../shared/ports/CompanyInviteCod
 import type { UserRepository } from "../users/user.repository";
 import type { CompanyRepository, CompanyWriteData } from "../companies/company.repository";
 import { toCompanyDto } from "../companies/company.mapper";
+import type { NotificationsService } from "../notifications/notifications.service";
 import { CompanyVerificationService } from "./company-verification.service";
 import { EmployerRepository, type EmployerWithCompany } from "./employer.repository";
 
@@ -75,6 +76,7 @@ export class EmployersService {
   private readonly mediaStorage: MediaStorage;
   private readonly logger: Logger;
   private readonly employersConfig: EmployersConfig;
+  private readonly notificationsService: NotificationsService;
 
   constructor({
     prisma,
@@ -86,6 +88,7 @@ export class EmployersService {
     mediaStorage,
     logger,
     config,
+    notificationsService,
   }: {
     prisma: PrismaClient;
     employerRepository: EmployerRepository;
@@ -96,6 +99,7 @@ export class EmployersService {
     mediaStorage: MediaStorage;
     logger: Logger;
     config: EmployersConfig;
+    notificationsService: NotificationsService;
   }) {
     this.prisma = prisma;
     this.employerRepository = employerRepository;
@@ -106,6 +110,7 @@ export class EmployersService {
     this.mediaStorage = mediaStorage;
     this.logger = logger;
     this.employersConfig = config;
+    this.notificationsService = notificationsService;
   }
 
   async getMe(userId: string): Promise<EmployerMeResponse> {
@@ -208,17 +213,32 @@ export class EmployersService {
     const profileFields = definedOnly({ title: dto.title, phone: dto.phone });
 
     await this.prisma.$transaction(async (tx) => {
+      let companyId: string;
       if (mode === "create") {
         const company = await this.companyRepository.create({ ...companyData, name: dto.name, taxCode: dto.taxCode }, tx);
         await this.employerRepository.create(
           { userId, companyId: company.id, isCompanyAdmin: true, ...profileFields },
           tx,
         );
+        companyId = company.id;
       } else {
         await this.companyRepository.update(existingEmployer!.companyId, companyData, tx);
         if (Object.keys(profileFields).length > 0) {
           await this.employerRepository.updateProfile(userId, profileFields, tx);
         }
+        companyId = existingEmployer!.companyId;
+      }
+
+      // Nhánh auto-verify là đường phổ biến nhất khiến company trở thành
+      // VERIFIED (Admin duyệt tay đi qua companies.service.ts) — trước Phase 10
+      // luồng này im lặng, employer không nhận được xác nhận nào.
+      if (autoVerified) {
+        await this.notificationsService.notify(
+          "COMPANY_VERIFIED",
+          userId,
+          { companyId, companyName: dto.name },
+          tx,
+        );
       }
     });
 

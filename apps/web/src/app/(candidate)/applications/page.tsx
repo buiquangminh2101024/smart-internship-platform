@@ -78,10 +78,10 @@ export default function ApplicationsPage() {
               <div className="flex flex-col items-end gap-3 shrink-0">
                 <Badge tone={
                   app.status === "ACCEPTED" ? "success" :
-                  app.status === "REJECTED" || app.status === "CANCELLED" ? "danger" :
-                  app.status === "PENDING" ? "warning" : "info"
+                    app.status === "REJECTED" || app.status === "CANCELLED" ? "danger" :
+                      app.status === "PENDING" ? "warning" : "info"
                 }>{app.status}</Badge>
-                
+
                 <div className="flex gap-2">
                   <Button variant="secondary" icon="messages-square" size="sm" onClick={() => void handleMessage(app.jobPostId)}>
                     Nhắn tin
@@ -102,4 +102,5 @@ export default function ApplicationsPage() {
       )}
     </main>
   );
+
 }

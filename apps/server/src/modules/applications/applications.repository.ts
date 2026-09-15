@@ -1,6 +1,8 @@
 import type { Prisma, ApplicationStatus } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
 
+type Db = PrismaClient | Prisma.TransactionClient;
+
 export type ApplicationWithCandidateRelations = Prisma.ApplicationGetPayload<{
   include: {
     jobPost: {
@@ -132,8 +134,12 @@ export class ApplicationsRepository {
     });
   }
 
-  async update(id: string, data: Partial<{ status: ApplicationStatus; employerNotes: string | null; rating: number | null; cvId: string; coverLetter: string | null; reappliedAt: Date }>) {
-    return this.prisma.application.update({
+  async update(
+    id: string,
+    data: Partial<{ status: ApplicationStatus; employerNotes: string | null; rating: number | null; cvId: string; coverLetter: string | null; reappliedAt: Date }>,
+    db: Db = this.prisma,
+  ) {
+    return db.application.update({
       where: { id },
       data,
     });

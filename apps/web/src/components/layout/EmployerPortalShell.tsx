@@ -29,6 +29,7 @@ const CRUMB_LABELS: Record<string, string> = {
   messages: "Tin nhắn",
   profile: "Hồ sơ công ty",
   subscription: "Gói dịch vụ",
+  notifications: "Thông báo",
 };
 
 /**
@@ -58,6 +59,7 @@ export function EmployerPortalShell({ children }: { children: ReactNode }) {
   return (
     <div data-role="employer" className="flex min-h-screen flex-col bg-surface-page">
       <PortalTopbar
+        area="employer"
         roleLabel="Doanh nghiệp"
         homeHref="/employer/jobs"
         crumbs={buildCrumbs(pathname, { label: "Employer Portal", href: "/employer" }, CRUMB_LABELS)}

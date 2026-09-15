@@ -1,4 +1,12 @@
-import type { Company, Employer, JobPostStatus, JobPostType, PrismaClient } from "@prisma/client";
+
+import type {
+  Company,
+  Employer,
+  JobPostStatus,
+  JobPostType,
+  Prisma,
+  PrismaClient,
+} from "@prisma/client";
 import type {
   CreateJobPostRequest,
   EmployerJobPostListQuery,
@@ -12,6 +20,8 @@ import type {
 import { AppError } from "../../shared/errors/AppError";
 import type { CompanyRepository } from "../companies/company.repository";
 import type { EmployerRepository } from "../employers/employer.repository";
+import type { NotificationPayloadMap } from "../notifications/notification.types";
+import type { NotificationsService } from "../notifications/notifications.service";
 import type { SubscriptionsService } from "../subscriptions/subscriptions.service";
 import { toJobPostDto } from "./job-post.mapper";
 import type { JobPostRepository, JobPostWithRelations, JobPostWriteData } from "./job-post.repository";
@@ -30,6 +40,7 @@ export class JobPostsService {
   private readonly employerRepository: EmployerRepository;
   private readonly companyRepository: CompanyRepository;
   private readonly subscriptionsService: SubscriptionsService;
+  private readonly notificationsService: NotificationsService;
 
   constructor({
     prisma,
@@ -37,18 +48,21 @@ export class JobPostsService {
     employerRepository,
     companyRepository,
     subscriptionsService,
+    notificationsService,
   }: {
     prisma: PrismaClient;
     jobPostRepository: JobPostRepository;
     employerRepository: EmployerRepository;
     companyRepository: CompanyRepository;
     subscriptionsService: SubscriptionsService;
+    notificationsService: NotificationsService;
   }) {
     this.prisma = prisma;
     this.jobPostRepository = jobPostRepository;
     this.employerRepository = employerRepository;
     this.companyRepository = companyRepository;
     this.subscriptionsService = subscriptionsService;
+    this.notificationsService = notificationsService;
   }
 
   // ─── Public (Guest) ──────────────────────────────────────────────────────
@@ -185,7 +199,9 @@ export class JobPostsService {
 
     const updated = await this.prisma.$transaction(async (tx) => {
       await this.jobPostRepository.createModerationAction({ jobPostId: id, action: "APPROVED", actorId }, tx);
-      return this.jobPostRepository.update(id, { status: "PUBLISHED", publishedAt: new Date() }, tx);
+      const result = await this.jobPostRepository.update(id, { status: "PUBLISHED", publishedAt: new Date() }, tx);
+      await this.notifyCompanyEmployers(jobPost.companyId, "JOB_POST_APPROVED", { jobPostId: id, jobPostTitle: jobPost.title }, tx);
+      return result;
     });
     return toJobPostDto(updated);
   }
@@ -199,7 +215,14 @@ export class JobPostsService {
 
     const updated = await this.prisma.$transaction(async (tx) => {
       await this.jobPostRepository.createModerationAction({ jobPostId: id, action: "REJECTED", actorId, reason }, tx);
-      return this.jobPostRepository.update(id, { status: "DRAFT" }, tx);
+      const result = await this.jobPostRepository.update(id, { status: "DRAFT" }, tx);
+      await this.notifyCompanyEmployers(
+        jobPost.companyId,
+        "JOB_POST_REJECTED",
+        { jobPostId: id, jobPostTitle: jobPost.title, reason },
+        tx,
+      );
+      return result;
     });
     return toJobPostDto(updated);
   }
@@ -217,12 +240,30 @@ export class JobPostsService {
 
     const updated = await this.prisma.$transaction(async (tx) => {
       await this.jobPostRepository.createModerationAction({ jobPostId: id, action: "RETRACTED", actorId, reason }, tx);
-      return this.jobPostRepository.update(id, { status: "TAKEN_DOWN" }, tx);
+      const result = await this.jobPostRepository.update(id, { status: "TAKEN_DOWN" }, tx);
+      await this.notifyCompanyEmployers(
+        jobPost.companyId,
+        "JOB_POST_TAKEN_DOWN",
+        { jobPostId: id, jobPostTitle: jobPost.title, reason },
+        tx,
+      );
+      return result;
     });
     return toJobPostDto(updated);
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
+
+  private async notifyCompanyEmployers<T extends "JOB_POST_APPROVED" | "JOB_POST_REJECTED" | "JOB_POST_TAKEN_DOWN">(
+    companyId: string,
+    type: T,
+    data: NotificationPayloadMap[T],
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    const employers = await this.employerRepository.findManyByCompanyId(companyId, tx);
+    await this.notificationsService.notifyMany(type, employers.map((employer) => employer.userId), data, tx);
+  }
+
 
   private toPage(page: { items: JobPostWithRelations[]; hasMore: boolean; nextCursor?: string }) {
     return {

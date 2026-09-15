@@ -23,6 +23,7 @@ const NAV_ITEMS: SideNavItem[] = [
 const CRUMB_LABELS: Record<string, string> = {
   jobs: "Kiểm duyệt tin",
   companies: "Nhà tuyển dụng",
+  notifications: "Thông báo",
 };
 
 /**
@@ -50,6 +51,7 @@ export function AdminConsoleShell({ children }: { children: ReactNode }) {
   return (
     <div data-role="admin" className="flex min-h-screen flex-col bg-surface-page">
       <PortalTopbar
+        area="admin"
         roleLabel="Quản trị"
         homeHref="/admin/jobs"
         crumbs={buildCrumbs(pathname, { label: "Admin Panel", href: "/admin" }, CRUMB_LABELS)}

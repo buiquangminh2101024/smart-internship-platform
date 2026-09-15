@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
+import type { AuthArea } from "@/lib/auth-area";
+import { NotificationBell } from "./NotificationBell";
 
 export interface Crumb {
   label: string;
@@ -35,6 +37,8 @@ export function buildCrumbs(pathname: string, root: Crumb, labels: Record<string
 export interface PortalTopbarProps {
   /** Nhãn phụ cạnh logo: "Doanh nghiệp" / "Quản trị". */
   roleLabel: string;
+  /** Quyết định store token + trang danh sách thông báo dùng cho chuông. */
+  area: AuthArea;
   homeHref: string;
   crumbs: Crumb[];
   userEmail?: string | undefined;
@@ -45,14 +49,15 @@ export interface PortalTopbarProps {
 
 /**
  * Thanh trên của app shell. Bản tối giản so với ảnh mẫu: **không** có ô tìm
- * kiếm toàn cục (chưa có API) và **không** có chuông thông báo (Phase 10), chỉ
- * giữ logo, breadcrumb, email và đăng xuất.
+ * kiếm toàn cục (chưa có API); gồm logo, breadcrumb, chuông thông báo (Phase 10),
+ * email và đăng xuất.
  *
  * Màu thương hiệu (logo, chip role) dùng alias `brand-*`, đổi theo `data-role`
  * của app shell bọc ngoài — xem AD-7.
  */
 export function PortalTopbar({
   roleLabel,
+  area,
   homeHref,
   crumbs,
   userEmail,
@@ -85,6 +90,7 @@ export function PortalTopbar({
         </nav>
 
         <div className="ml-auto flex items-center gap-2">
+          <NotificationBell area={area} />
           {userEmail ? (
             accountHref ? (
               <Button as="a" href={accountHref} variant="ghost" size="sm" icon="circle-user">

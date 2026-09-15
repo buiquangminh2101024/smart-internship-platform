@@ -28,4 +28,11 @@ export class EmployerRepository {
   updateProfile(userId: string, data: { title?: string; phone?: string }, db: Db = this.prisma): Promise<Employer> {
     return db.employer.update({ where: { userId }, data });
   }
+
+  // Phase 10: gửi notification cho MỌI employer của company (không chỉ
+  // isCompanyAdmin) — bất kỳ ai trong số họ cũng có thể thao tác trên tin tuyển
+  // dụng nên đều cần biết kết quả kiểm duyệt.
+  findManyByCompanyId(companyId: string, db: Db = this.prisma): Promise<Pick<Employer, "id" | "userId">[]> {
+    return db.employer.findMany({ where: { companyId }, select: { id: true, userId: true } });
+  }
 }
