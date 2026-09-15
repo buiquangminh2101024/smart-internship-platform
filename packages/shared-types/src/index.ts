@@ -554,6 +554,7 @@ export interface CreateConversationRequest {
 export interface SendMessageSocketPayload {
   conversationId: string;
   content: string;
+}
 // ─── Notifications (Phase 10) ────────────────────────────────────────────
 
 export interface Notification {
