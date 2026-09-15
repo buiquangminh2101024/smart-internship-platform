@@ -17,7 +17,7 @@ import { PortalTopbar, buildCrumbs } from "./PortalTopbar";
 // để disable thay vì link chết.
 const NAV_ITEMS: SideNavItem[] = [
   { label: "Tin tuyển dụng", icon: "briefcase", href: "/employer/jobs", matchNested: true },
-  { label: "Ứng viên", icon: "users", soon: true },
+  { label: "Tin nhắn", icon: "messages-square", href: "/employer/messages", matchNested: true },
   { label: "Hồ sơ công ty", icon: "building-2", href: "/employer/profile" },
   { label: "Gói dịch vụ", icon: "credit-card", href: "/employer/subscription", matchNested: true },
 ];
@@ -25,6 +25,8 @@ const NAV_ITEMS: SideNavItem[] = [
 const CRUMB_LABELS: Record<string, string> = {
   jobs: "Tin tuyển dụng",
   new: "Đăng tin mới",
+  applications: "Ứng viên",
+  messages: "Tin nhắn",
   profile: "Hồ sơ công ty",
   subscription: "Gói dịch vụ",
 };

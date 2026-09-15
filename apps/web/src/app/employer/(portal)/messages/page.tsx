@@ -2,15 +2,15 @@ import { Suspense } from "react";
 import { ChatLayout } from "@/components/messaging/ChatLayout";
 
 export const metadata = {
-  title: "Tin nhắn | Smart Internship Platform",
+  title: "Tin nhắn | Employer Portal",
 };
 
-export default function CandidateMessagesPage() {
+export default function EmployerMessagesPage() {
   return (
-    <div className="flex h-[calc(100vh-64px)] flex-col">
+    <div className="flex h-full flex-col">
       <div className="flex-1 overflow-hidden">
         <Suspense fallback={<div className="p-8 text-center text-text-muted">Đang tải...</div>}>
-          <ChatLayout area="candidate" />
+          <ChatLayout area="employer" />
         </Suspense>
       </div>
     </div>

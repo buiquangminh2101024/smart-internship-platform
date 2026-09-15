@@ -51,9 +51,7 @@ export function toJobPostDto(jobPost: JobPostWithRelations): JobPostDto {
     expiresAt: jobPost.expiresAt?.toISOString() ?? null,
     closedAt: jobPost.closedAt?.toISOString() ?? null,
     viewCount: jobPost.viewCount,
-    // Module applications thuộc Phase 8 — giữ 0 để UI hiển thị placeholder
-    // thay vì phải phân biệt "chưa có tính năng" với "chưa có ứng viên".
-    applicationCount: 0,
+    applicationCount: jobPost._count?.applications ?? 0,
     latestModerationAction: latest ? toModerationActionDto(latest) : null,
     createdAt: jobPost.createdAt.toISOString(),
     updatedAt: jobPost.updatedAt.toISOString(),

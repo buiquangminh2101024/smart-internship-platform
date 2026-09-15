@@ -1,4 +1,4 @@
-import type { Company, JobPostStatus, PrismaClient } from "@prisma/client";
+import type { Company, Employer, JobPostStatus, JobPostType, PrismaClient } from "@prisma/client";
 import type {
   CreateJobPostRequest,
   EmployerJobPostListQuery,
@@ -90,11 +90,12 @@ export class JobPostsService {
   }
 
   async createDraft(userId: string, dto: CreateJobPostRequest): Promise<JobPostDto> {
-    const company = await this.requireVerifiedCompany(userId);
+    const { company, employer } = await this.requireVerifiedCompany(userId);
     await this.requireCreateQuota(company);
 
     const created = await this.jobPostRepository.create({
       companyId: company.id,
+      employerId: employer.id,
       status: "DRAFT",
       ...this.toWriteData(dto),
       title: dto.title,
@@ -122,7 +123,7 @@ export class JobPostsService {
    * INITIAL_ARCHITECTURE_PLAN.md §12.
    */
   async submitForApproval(userId: string, id: string): Promise<SubmitJobPostResponse> {
-    const company = await this.requireVerifiedCompany(userId);
+    const { company } = await this.requireVerifiedCompany(userId);
     const jobPost = await this.requireOwnedJobPost(company.id, id);
     if (jobPost.status !== "DRAFT") {
       throw new AppError(409, "Only a draft job post can be submitted for approval");
@@ -333,7 +334,7 @@ export class JobPostsService {
   }
 
   /** Company phải được Admin xác minh trước khi tạo/đăng tin (AD-5, AD-6). */
-  private async requireVerifiedCompany(userId: string): Promise<Company> {
+  private async requireVerifiedCompany(userId: string): Promise<{ company: Company; employer: Employer }> {
     const employer = await this.requireEmployer(userId);
     const company = await this.companyRepository.findById(employer.companyId);
     if (!company) {
@@ -342,7 +343,7 @@ export class JobPostsService {
     if (!company.isVerified) {
       throw new AppError(403, "Your company must be verified before posting jobs");
     }
-    return company;
+    return { company, employer };
   }
 
   private async requireJobPost(id: string): Promise<JobPostWithRelations> {

@@ -20,6 +20,7 @@ import { candidatesRouter } from "./modules/candidates/candidates.routes";
 import { cvRouter } from "./modules/cv/cv.routes";
 import { savedJobsRouter } from "./modules/saved-jobs/saved-jobs.routes";
 import { applicationsRouter } from "./modules/applications/applications.routes";
+import { messagingRoutes } from "./modules/messaging/messaging.routes";
 import { errorHandler } from "./shared/middleware/errorHandler";
 import { logger } from "./shared/logger";
 
@@ -43,6 +44,7 @@ app.use("/api", candidatesRouter(container));
 app.use("/api", cvRouter(container));
 app.use("/api", savedJobsRouter(container));
 app.use("/api", applicationsRouter(container));
+app.use("/api/conversations", messagingRoutes(container));
 
 app.use(errorHandler);
 
@@ -57,6 +59,14 @@ startJobPostExpiryJob(
   logger,
 );
 
-app.listen(config.PORT, () => {
+import { createServer } from "http";
+import { setupSocketIo } from "./infrastructure/socket";
+
+// ... existing code ...
+
+const server = createServer(app);
+setupSocketIo(server, container);
+
+server.listen(config.PORT, () => {
   logger.info(`Server listening on port ${config.PORT}`);
 });

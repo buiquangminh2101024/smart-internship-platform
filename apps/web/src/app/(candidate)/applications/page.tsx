@@ -8,9 +8,12 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/Icon";
 
+import { useRouter } from "next/navigation";
+
 export default function ApplicationsPage() {
   const { data: applications, isLoading, isError } = useCandidateApplications();
   const cancelMutation = useCancelApplication();
+  const router = useRouter();
 
   const handleCancel = async (id: string) => {
     if (confirm("Bạn có chắc chắn muốn hủy đơn ứng tuyển này?")) {
@@ -18,6 +21,20 @@ export default function ApplicationsPage() {
     }
   };
 
+  const handleMessage = async (jobPostId: string) => {
+    try {
+      const { apiFetch } = await import("@/lib/api-client");
+      const res = await apiFetch<{ id: string }>("candidate", "/conversations", {
+        method: "POST",
+        body: JSON.stringify({ jobPostId }),
+      });
+      router.push(`/messages?conversationId=${res.id}`);
+    } catch (err: any) {
+      alert(err.message || "Không thể tạo hội thoại");
+    }
+  };
+
+  return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-10">
       <div className="mb-8">
         <h1 className="text-2xl font-bold">Lịch sử ứng tuyển</h1>
@@ -66,6 +83,9 @@ export default function ApplicationsPage() {
                 }>{app.status}</Badge>
                 
                 <div className="flex gap-2">
+                  <Button variant="secondary" icon="messages-square" size="sm" onClick={() => void handleMessage(app.jobPostId)}>
+                    Nhắn tin
+                  </Button>
                   {(app.status === "PENDING" || app.status === "REVIEWING") && (
                     <Button variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50" size="sm" onClick={() => void handleCancel(app.id)}>
                       Hủy đơn
@@ -81,4 +101,5 @@ export default function ApplicationsPage() {
         </div>
       )}
     </main>
+  );
 }
