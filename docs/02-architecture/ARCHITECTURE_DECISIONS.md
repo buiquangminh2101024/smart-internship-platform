@@ -187,6 +187,45 @@ Ngoài ra, không dùng RabbitMQ/Redpanda/Kafka/BullMQ để giải bài toán n
 
 **Thay đổi kèm theo ngoài phạm vi notification:** `CompaniesService.verify()/reject()` được bổ sung **guard trạng thái** (409 nếu company đã `VERIFIED`/`REJECTED`), theo đúng pattern đã có ở `JobPostsService`. Trước đây gọi lại API duyệt/từ chối nhiều lần vẫn ghi đè hợp lệ; từ khi có notification thì mỗi lần gọi lại sẽ sinh thêm một thông báo và một email trùng, nên guard là bắt buộc chứ không phải dọn dẹp tuỳ chọn.
 
+## AD-9 — Skill do người dùng tự nhập: pgvector + embedding local + ranh giới AI cho LLM (JobPost Skill, Hướng B)
+
+**Ngày:** 2026-09-15 · **Phase liên quan:** không thuộc phase đánh số — retrofit cho `job-posts` (Phase 6) và `candidates` (Phase 3), chuẩn bị cho Phase 11. Kế hoạch chi tiết: `docs/06-backend/jobpost-skill-huong-b/PLAN.md` và `docs/05-frontend/phases/jobpost-skill-huong-b/PLAN.md`; thiết kế gốc: `docs/designs/JOBPOST_SKILL_DESIGN.md`.
+
+**Quyết định:** Candidate và Employer được **tự gõ tên kỹ năng chưa có** thay vì chỉ chọn từ danh mục Admin. Để catalog không biến thành bãi rác trùng lặp, mỗi tên gõ vào đi qua một pipeline khử trùng lặp **phân bậc từ rẻ tới đắt**, và chỉ bậc đắt nhất mới dùng tới LLM:
+
+| Bậc | Kỹ thuật | Chi phí | Kết quả |
+|---|---|---|---|
+| 0 | Tra bảng `SkillAlias` (tên đã chuẩn hoá) | 1 truy vấn | `ALIAS` |
+| 1 | Jaccard trên tập từ + Dice trên bigram ký tự | trong RAM | `AUTO` nếu ≥ 0.85 |
+| 2 | Embedding local 384 chiều, cosine qua pgvector | CPU, không gọi API ngoài | `AUTO` nếu ≥ 0.85 |
+| 3 | Gemini xác nhận cặp tên (chạy trong cron, **không** trong request) | tốn token | cron tự gộp nếu `MATCH` |
+| 4 | Admin duyệt/từ chối/gộp tay | người | quyết định cuối |
+
+Điểm dưới 0.6 coi như chắc chắn là kỹ năng khác — tạo `PENDING` thẳng, **không** đi qua bậc 3.
+
+**Lý do đặt LLM ở bậc 3 và cho chạy trong cron, không phải trong request:**
+
+- Gọi Gemini đồng bộ bắt người dùng chờ vài giây chỉ để thêm một cái tag. Bậc 2 vùng xám tạo bản ghi `PENDING` tạm rồi trả về ngay; cron mỗi giờ mới hỏi LLM và gộp lại nếu trùng.
+- **Feedback loop:** mỗi lần gộp (cron hoặc Admin) ghi thêm một dòng `SkillAlias`, nên lần sau chính biến thể đó rơi xuống bậc 0 — càng dùng càng ít phải gọi LLM. Đã kiểm chứng: "Reactjs" lần đầu mất ~3s + 1 lượt gọi Gemini, lần sau khớp alias trong <1s, không gọi gì.
+- **Không có LLM thì hệ thống vẫn đúng**, chỉ kém tự động: `SkillMatchVerifier.verify()` không bao giờ ném lỗi, mọi sự cố (thiếu key, model bị gỡ, JSON hỏng) đều quy về `UNSURE` và skill nằm lại chờ Admin. Human-in-the-loop là đường lui mặc định, không phải phương án dự phòng phải viết thêm.
+
+**pgvector thay vì vector database riêng:** cột `Skill.embedding` kiểu `vector(384)` (~1.5KB/dòng) nằm ngay trong Postgres/Neon hiện có. Catalog kỹ năng cỡ hàng trăm dòng nên tổng dung lượng không đáng kể và không cần thêm hạ tầng — đúng nguyên tắc modular monolith như AD-6/AD-8. Prisma Client chưa có kiểu vector native nên cột khai `Unsupported("vector(384)")` và mọi thao tác đọc/ghi đi qua `$queryRaw`/`$executeRaw`.
+
+**Ranh giới AI (chuẩn bị Phase 11):** port `shared/ports/SkillMatchVerifier.ts` + adapter `infrastructure/gemini-skill-match-verifier.ts`, đúng pattern `EmailSender`/`PaymentGatewayAdapter` đã có. Pipeline không biết gì về Gemini; đổi model hoặc tắt hẳn AI chỉ cần đổi registration trong `skills.routes.ts`. Đây là port AI đầu tiên của dự án và là bản thử pattern cho `CvAnalyzer`/`JobMatcher`/`CandidateRanker` ở Phase 11.
+
+**Chống lạm dụng — rate-limit đặt ở đâu và vì sao:** 10 kỹ năng mới/tuần và 40/tháng cho mỗi người, 150/tuần toàn hệ thống (Redis `INCR`+`EXPIRE`, khoá theo mốc lịch). **Chỉ tăng bộ đếm khi thực sự tạo ra một `Skill` PENDING mới** — gõ trúng kỹ năng đã có không tạo dữ liệu gì nên không bị trừ. Không tái dùng port `RateLimiter` sẵn có vì port đó gộp "kiểm tra + tăng" trong một lệnh `consume()`, còn ở đây hai thời điểm phải tách rời.
+
+**Validate khác chuẩn hoá:** `skill-normalize.util.ts` chỉ *biến đổi* chuỗi để so khớp. Việc *từ chối* input rác (≤50 ký tự, không có từ 1 ký tự, phải có ít nhất một chữ/số) nằm ở zod trong `skills.dto.ts`, chạy trước cả rate-limit. Rule "không có từ 1 ký tự" **chỉ áp dụng cho input tự gõ** qua `POST /skills/suggest` — skill seed sẵn tên một ký tự (`"C"`, `"R"`) ghi thẳng vào DB qua `scripts/seed.ts` nên không bị ảnh hưởng.
+
+**Ảnh hưởng:** `schema.prisma` (bật `previewFeatures = ["postgresqlExtensions"]` + `extensions = [vector]`; enum `SkillStatus`/`SkillAliasSource`; `Skill` thêm `status`/`createdByUserId`/`embedding`/`pendingMatchSkillId`/`createdAt`; model `SkillAlias` mới); module mới `apps/server/src/modules/skills/`; port + adapter mới; `catalog.repository.ts` (lọc `APPROVED` + `select` tường minh để không lộ cột nội bộ ra endpoint công khai); `job-posts` (DTO/service/repository/mapper nhận `skillIds`, lọc tìm kiếm theo kỹ năng); `applications`/`saved-jobs` (dùng chung `jobPostInclude` export từ `job-post.repository.ts` thay vì chép tay); `main.ts` (mount router + cron); `packages/shared-types`; frontend: `components/shared/SkillMultiSelect.tsx` mới, `CandidateProfileClient`, `JobPostForm`, `JobPostContent`, `app/jobs/page.tsx`, `app/admin/(console)/skills/page.tsx` mới.
+
+**Hai điểm đã kiểm chứng khi triển khai, khác dự đoán lúc lên kế hoạch:**
+
+1. **`env.cacheDir` phải đặt trên đúng instance module vừa `import()`.** `@huggingface/transformers` có hai bản build (CJS/ESM); import tĩnh và `import()` động cho ra **hai object `env` khác nhau**, nên cấu hình đặt ở bản này không ảnh hưởng bản kia — model vẫn tải về `node_modules` (465MB) dù log báo đã trỏ sang ổ D:. `applyEmbeddingEnv()` vì vậy nhận `env` làm tham số thay vì tự import.
+2. **Model Gemini bị gỡ theo thời gian.** `gemini-2.0-flash` trả 404 kèm tên bản thay thế; ID model để trong `GEMINI_MODEL` (env, mặc định `gemini-3.6-flash`) để đổi được mà không phải sửa code.
+
+**Known gap (chấp nhận có chủ đích):** người đã chạm hạn mức tuần bị chặn ở bước rate-limit **trước** khi pipeline chạy, nên lúc đó gõ trúng một kỹ năng đã có cũng bị 429 dù không tạo gì mới. Chấp nhận được vì luồng chính (chọn từ dropdown) không đi qua endpoint này; nếu thấy vướng thì dời `assertWithinQuota()` xuống ngay trước bước tạo `Skill` trong `skill-dedupe.service.ts`.
+
 ## Phần ghi chú của chủ dự án
 
 *(để trống)*

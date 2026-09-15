@@ -62,7 +62,7 @@ export class JobPostsService {
   async search(query: JobPostSearchQuery): Promise<PaginatedResponse<JobPostDto>> {
     const { cursor, ...filter } = query;
     const page = await this.jobPostRepository.findPublishedForSearch(filter, cursor);
-    return this.toPage(page);
+    return this.toPage(page, { publicOnly: true });
   }
 
   /** Chi tiết công khai — chỉ tin PUBLISHED, mỗi lượt xem tăng viewCount. */
@@ -72,7 +72,7 @@ export class JobPostsService {
       throw new AppError(404, "Job post not found");
     }
     await this.jobPostRepository.incrementViewCount(id);
-    return toJobPostDto({ ...jobPost, viewCount: jobPost.viewCount + 1 });
+    return toJobPostDto({ ...jobPost, viewCount: jobPost.viewCount + 1 }, { publicOnly: true });
   }
 
   // ─── Employer ────────────────────────────────────────────────────────────
@@ -107,6 +107,11 @@ export class JobPostsService {
       description: dto.description,
       jobType: dto.jobType,
     });
+
+    if (dto.skillIds) {
+      await this.jobPostRepository.setSkills(created.id, dto.skillIds);
+      return toJobPostDto(await this.requireJobPost(created.id));
+    }
     return toJobPostDto(created);
   }
 
@@ -119,6 +124,12 @@ export class JobPostsService {
     }
 
     const updated = await this.jobPostRepository.update(id, this.toWriteData(dto));
+    // skillIds nằm ở bảng nối nên phải ghi riêng, không đi qua JobPostWriteData.
+    // undefined = form không đụng tới kỹ năng; mảng rỗng = cố ý xoá hết.
+    if (dto.skillIds) {
+      await this.jobPostRepository.setSkills(id, dto.skillIds);
+      return toJobPostDto(await this.requireJobPost(id));
+    }
     return toJobPostDto(updated);
   }
 
@@ -256,9 +267,12 @@ export class JobPostsService {
   }
 
 
-  private toPage(page: { items: JobPostWithRelations[]; hasMore: boolean; nextCursor?: string }) {
+  private toPage(
+    page: { items: JobPostWithRelations[]; hasMore: boolean; nextCursor?: string },
+    options?: { publicOnly?: boolean },
+  ) {
     return {
-      items: page.items.map(toJobPostDto),
+      items: page.items.map((item) => toJobPostDto(item, options)),
       hasMore: page.hasMore,
       ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
     };

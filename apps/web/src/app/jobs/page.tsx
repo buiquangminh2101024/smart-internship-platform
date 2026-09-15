@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { JobPostSearchQuery, JobPostType } from "@sip/shared-types";
 import { usePublicJobPosts, type OptionalQuery } from "@/hooks/useJobPosts";
-import { useCities, useIndustries } from "@/hooks/useCatalog";
+import { useCities, useIndustries, useSkills } from "@/hooks/useCatalog";
+import { Badge } from "@/components/ui/Badge";
 import { JOB_TYPE_LABEL, JOB_TYPE_OPTIONS, formatDeadline, formatSalary } from "@/lib/job-post-display";
 import { CandidateHomeHeader } from "@/components/marketing/CandidateHomeHeader";
 import { SiteFooter } from "@/components/marketing/SiteFooter";
@@ -33,7 +34,18 @@ export default function PublicJobsPage() {
   const [filters, setFilters] = useState<OptionalQuery<JobPostSearchQuery>>({});
   const { data: cities } = useCities();
   const { data: industries } = useIndustries();
+  const { data: skills } = useSkills();
   const { data, isLoading } = usePublicJobPosts(filters);
+
+  const selectedSkillIds = filters.skillIds ?? [];
+
+  /** Bấm một chip kỹ năng = bật/tắt nó trong bộ lọc (tin phải có ĐỦ các kỹ năng đã chọn). */
+  function toggleSkill(skillId: string) {
+    const next = selectedSkillIds.includes(skillId)
+      ? selectedSkillIds.filter((id) => id !== skillId)
+      : [...selectedSkillIds, skillId];
+    patch({ skillIds: next.length > 0 ? next : undefined });
+  }
 
   // OptionalQuery cho phép truyền `undefined` khi người dùng bỏ chọn bộ lọc
   // (tsconfig bật exactOptionalPropertyTypes).
@@ -101,6 +113,22 @@ export default function PublicJobsPage() {
             Tìm việc
           </Button>
         </Card>
+
+        {/* Lọc theo kỹ năng: danh sách chip thay vì multi-select — số kỹ năng
+            trong danh mục còn nhỏ và chip bấm được ngay trên điện thoại. */}
+        {skills && skills.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-text-muted">Kỹ năng:</span>
+            {skills.map((skill) => {
+              const active = selectedSkillIds.includes(skill.id);
+              return (
+                <button key={skill.id} type="button" onClick={() => toggleSkill(skill.id)} aria-pressed={active}>
+                  <Badge tone={active ? "brand" : "neutral"}>{skill.name}</Badge>
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
 
         {isLoading ? (
           <p className="text-sm text-text-muted">Đang tải...</p>

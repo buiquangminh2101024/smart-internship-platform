@@ -37,6 +37,8 @@
     "typescript": "^5.7.3"
   },
   "dependencies": {
+    "@google/genai": "^2.22.0",
+    "@huggingface/transformers": "^4.2.0",
     "@prisma/client": "^6.19.3",
     "@sip/shared-types": "^1.0.0",
     "awilix": "^13.0.5",

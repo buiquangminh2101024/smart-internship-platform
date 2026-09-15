@@ -1,22 +1,19 @@
 import type { Prisma, ApplicationStatus } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
+import { jobPostInclude } from "../job-posts/job-post.repository";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
 export type ApplicationWithCandidateRelations = Prisma.ApplicationGetPayload<{
   include: {
-    jobPost: {
-      include: { company: true; city: true; industry: true; moderationActions: { orderBy: { createdAt: "desc" }; take: 1 } };
-    };
+    jobPost: { include: typeof jobPostInclude };
     cv: true;
   };
 }>;
 
 export type ApplicationWithEmployerRelations = Prisma.ApplicationGetPayload<{
   include: {
-    jobPost: {
-      include: { company: true; city: true; industry: true; moderationActions: { orderBy: { createdAt: "desc" }; take: 1 } };
-    };
+    jobPost: { include: typeof jobPostInclude };
     cv: true;
     candidate: {
       include: {
@@ -57,9 +54,7 @@ export class ApplicationsRepository {
     return this.prisma.application.findMany({
       where: { candidateId },
       include: {
-        jobPost: {
-          include: { company: true, city: true, industry: true, moderationActions: { orderBy: { createdAt: "desc" }, take: 1 } },
-        },
+        jobPost: { include: jobPostInclude },
         cv: true,
       },
       orderBy: { createdAt: "desc" },
@@ -70,9 +65,7 @@ export class ApplicationsRepository {
     return this.prisma.application.findFirst({
       where: { id, candidateId },
       include: {
-        jobPost: {
-          include: { company: true, city: true, industry: true, moderationActions: { orderBy: { createdAt: "desc" }, take: 1 } },
-        },
+        jobPost: { include: jobPostInclude },
         cv: true,
       },
     });
@@ -86,9 +79,7 @@ export class ApplicationsRepository {
         ...(status ? { status } : {}),
       },
       include: {
-        jobPost: {
-          include: { company: true, city: true, industry: true, moderationActions: { orderBy: { createdAt: "desc" }, take: 1 } },
-        },
+        jobPost: { include: jobPostInclude },
         cv: true,
         candidate: {
           include: {
@@ -114,9 +105,7 @@ export class ApplicationsRepository {
         jobPost: { companyId },
       },
       include: {
-        jobPost: {
-          include: { company: true, city: true, industry: true, moderationActions: { orderBy: { createdAt: "desc" }, take: 1 } },
-        },
+        jobPost: { include: jobPostInclude },
         cv: true,
         candidate: {
           include: {

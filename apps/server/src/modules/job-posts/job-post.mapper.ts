@@ -15,8 +15,18 @@ function toModerationActionDto(action: ModerationActionWithActor): JobPostModera
   };
 }
 
-export function toJobPostDto(jobPost: JobPostWithRelations): JobPostDto {
+/**
+ * `publicOnly` lọc bỏ skill còn PENDING: trang công khai chỉ được thấy skill đã
+ * duyệt, trong khi form sửa tin của chính Employer phải thấy đủ cả skill họ vừa
+ * tự đề xuất (nếu không, lần lưu sau sẽ vô tình xoá mất).
+ */
+export function toJobPostDto(jobPost: JobPostWithRelations, options?: { publicOnly?: boolean }): JobPostDto {
   const latest = jobPost.moderationActions[0];
+  const skills = jobPost.skills
+    .map((link) => link.skill)
+    .filter((skill) => !options?.publicOnly || skill.status === "APPROVED")
+    .map((skill) => ({ id: skill.id, name: skill.name, status: skill.status }))
+    .sort((left, right) => left.name.localeCompare(right.name));
 
   return {
     id: jobPost.id,
@@ -51,6 +61,7 @@ export function toJobPostDto(jobPost: JobPostWithRelations): JobPostDto {
     expiresAt: jobPost.expiresAt?.toISOString() ?? null,
     closedAt: jobPost.closedAt?.toISOString() ?? null,
     viewCount: jobPost.viewCount,
+    skills,
     // Module applications thuộc Phase 8 — giữ 0 để UI hiển thị placeholder
     // thay vì phải phân biệt "chưa có tính năng" với "chưa có ứng viên".
     applicationCount: 0,

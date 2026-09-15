@@ -1,12 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { SkillStatus } from "@sip/shared-types";
 import { apiFetch } from "@/lib/api-client";
+import { suggestSkill } from "@/lib/skills";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { SkillMultiSelect, type SelectedSkill } from "@/components/shared/SkillMultiSelect";
 
 type CatalogItem = { id: string; name: string };
 type Values = Record<string, string | boolean>;
@@ -14,7 +17,10 @@ type Profile = {
   headline?: string | null; bio?: string | null; phone?: string | null; dateOfBirth?: string | null;
   gender?: "MALE" | "FEMALE" | "OTHER" | null; avatarUrl?: string | null; cityId?: string | null;
   city?: CatalogItem | null; educations: Resource[]; workExperiences: Resource[]; projects: Resource[];
-  certificates: Resource[]; awards: Resource[]; skills: Array<Resource & { skill: CatalogItem; yearsOfExperience: number }>;
+  certificates: Resource[]; awards: Resource[];
+  // `status` có từ khi ứng viên được tự gõ kỹ năng mới (Hướng B) — PENDING nghĩa
+  // là kỹ năng đã gắn vào hồ sơ nhưng chưa được Admin duyệt vào danh mục chung.
+  skills: Array<Resource & { skill: CatalogItem & { status?: SkillStatus }; yearsOfExperience: number }>;
 };
 type Resource = Record<string, unknown> & { id: string };
 
@@ -199,9 +205,46 @@ export function CandidateProfileClient() {
   );
 }
 
+/**
+ * Kỹ năng của ứng viên — dùng component chung với form tin tuyển dụng của
+ * Nhà tuyển dụng. Khác trước: ngoài chọn từ danh mục, ứng viên gõ được tên chưa
+ * có; backend khử trùng lặp rồi tạo kỹ năng chờ duyệt (xem
+ * docs/05-frontend/phases/jobpost-skill-huong-b/PLAN.md).
+ *
+ * Vẫn lưu ngay từng kỹ năng lên server (không gom rồi lưu một lượt) — giữ đúng
+ * hành vi cũ của trang hồ sơ, nơi mỗi mục được lưu độc lập.
+ */
 function SkillSection({ items, skills, refresh }: { items: Profile["skills"]; skills: CatalogItem[]; refresh: () => Promise<void> }) {
-  const [skillId, setSkillId] = useState(""); const [years, setYears] = useState("0"); const [error, setError] = useState(""); const [saving, setSaving] = useState(false);
-  async function submit(event: React.FormEvent) { event.preventDefault(); setSaving(true); setError(""); try { await apiFetch("candidate", "/candidates/me/skills", { method: "POST", body: JSON.stringify({ skillId, yearsOfExperience: Number(years) }) }); await refresh(); setSkillId(""); setYears("0"); } catch (cause) { setError(cause instanceof Error ? cause.message : "Không thể lưu kỹ năng."); } finally { setSaving(false); } }
-  async function remove(id: string) { try { await apiFetch("candidate", `/candidates/me/skills/${id}`, { method: "DELETE" }); await refresh(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Không thể xóa kỹ năng."); } }
-  return <><div className="flex flex-wrap gap-2">{items.length ? items.map((item) => <span key={item.skill.id} className="inline-flex items-center gap-2 rounded-full bg-pine-50 px-3 py-1.5 text-sm text-pine-800">{item.skill.name} <span className="text-pine-600">{item.yearsOfExperience} năm</span><button type="button" aria-label={`Xóa ${item.skill.name}`} className="text-pine-700 hover:text-red-600" onClick={() => void remove(item.skill.id)}>×</button></span>) : <p className="text-sm text-text-muted">Chưa có kỹ năng.</p>}</div><form onSubmit={submit} className="flex flex-col gap-3 rounded-lg bg-surface-page p-4 sm:flex-row"><Select className="flex-1" value={skillId} onChange={(e) => setSkillId(e.target.value)} options={[{ value: "", label: "Chọn kỹ năng" }, ...skills.map((skill) => ({ value: skill.id, label: skill.name }))]} required /><Input className="sm:w-36" type="number" min="0" max="60" step="0.5" value={years} onChange={(e) => setYears(e.target.value)} aria-label="Số năm kinh nghiệm" /><Button type="submit" loading={saving} disabled={!skillId} icon="plus">Thêm kỹ năng</Button></form>{error ? <p className="text-sm text-red-600">{error}</p> : null}</>;
+  const selected: SelectedSkill[] = items.map((item) => ({
+    id: item.skill.id,
+    name: item.skill.name,
+    status: item.skill.status ?? "APPROVED",
+    yearsOfExperience: item.yearsOfExperience,
+  }));
+
+  async function add(skill: SelectedSkill) {
+    await apiFetch("candidate", "/candidates/me/skills", {
+      method: "POST",
+      body: JSON.stringify({ skillId: skill.id, yearsOfExperience: skill.yearsOfExperience ?? 0 }),
+    });
+    await refresh();
+  }
+
+  async function remove(skillId: string) {
+    await apiFetch("candidate", `/candidates/me/skills/${skillId}`, { method: "DELETE" });
+    await refresh();
+  }
+
+  return (
+    <SkillMultiSelect
+      label=""
+      hint="Không tìm thấy kỹ năng của bạn? Gõ tên rồi bấm Thêm — kỹ năng mới sẽ được quản trị viên duyệt trước khi vào danh mục chung."
+      selected={selected}
+      catalog={skills}
+      allowYearsOfExperience
+      onAdd={add}
+      onRemove={remove}
+      onSuggestNew={(name) => suggestSkill("candidate", name)}
+    />
+  );
 }

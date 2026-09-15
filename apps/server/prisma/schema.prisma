@@ -1,10 +1,15 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  // postgresqlExtensions: cần để khai báo extension `vector` (pgvector) ngay
+  // trong schema — Prisma tự sinh `CREATE EXTENSION` trong migration thay vì
+  // phải chạy tay trên Neon.
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
 }
 
 // ─── Enums ────────────────────────────────────────────────────────────────
@@ -123,6 +128,24 @@ enum CompanyVerificationMethod {
   MANUAL_REVIEW
 }
 
+// Vòng đời một Skill trong catalog (xem docs/06-backend/jobpost-skill-huong-b/PLAN.md).
+// Skill seed sẵn/Admin duyệt = APPROVED (hiện trong GET /catalog/skills công
+// khai); skill do Candidate/Employer tự gõ = PENDING (gắn được vào hồ sơ/tin
+// của chính người tạo nhưng chưa vào danh mục công khai) tới khi cron LLM merge
+// hoặc Admin duyệt/từ chối/gộp.
+enum SkillStatus {
+  APPROVED
+  PENDING
+}
+
+// Nguồn gốc một dòng SkillAlias — phân biệt alias seed sẵn, alias sinh ra khi
+// Admin gộp tay, và alias sinh ra khi cron để Gemini kết luận MATCH.
+enum SkillAliasSource {
+  SEED
+  ADMIN_MERGE
+  LLM_MERGE
+}
+
 // ─── users ──────────────────────────────────────────────────────────────
 // No refresh-token/OTP tables: JWT blacklist + OTP codes live in Redis (Phase 2),
 // not Postgres — both are ephemeral, TTL-bound data.
@@ -151,6 +174,7 @@ model User {
   moderationActions JobPostModerationAction[]
   messages          Message[]
   notifications     Notification[]
+  createdSkills     Skill[]
 
   @@map("users")
 }
@@ -206,12 +230,44 @@ model CompanyType {
 }
 
 model Skill {
-  id              String           @id @default(cuid())
-  name            String           @unique
+  id                  String                      @id @default(cuid())
+  name                String                      @unique
+  status              SkillStatus                 @default(APPROVED)
+  createdByUserId     String?
+  createdBy           User?                       @relation(fields: [createdByUserId], references: [id])
+  // Vector 384 chiều sinh bởi Xenova/paraphrase-multilingual-MiniLM-L12-v2.
+  // Prisma Client chưa có kiểu vector native — mọi thao tác đọc/ghi cột này đi
+  // qua $queryRaw/$executeRaw trong skill-embedding.service.ts.
+  embedding           Unsupported("vector(384)")?
+  // Skill gần nhất tìm được lúc tạo (vùng xám 0.6-0.85) — cron dùng để biết cần
+  // hỏi Gemini so với skill nào, không phải tính lại fuzzy/embedding lần hai.
+  // Được xoá (null) sau khi đã qua LLM để không xử lý lại vòng sau.
+  pendingMatchSkillId String?
+  pendingMatchSkill   Skill?                      @relation("SkillPendingMatch", fields: [pendingMatchSkillId], references: [id])
+  pendingMatchOf      Skill[]                     @relation("SkillPendingMatch")
+  createdAt           DateTime                    @default(now())
+
   candidateSkills CandidateSkill[]
   jobPostSkills   JobPostSkill[]
+  aliases         SkillAlias[]
 
+  @@index([status])
   @@map("skills")
+}
+
+// Tên gọi khác của một Skill (đã chuẩn hoá qua skill-normalize.util.ts) — tra
+// exact match ở bậc 1 của pipeline dedupe, nên không cần fuzzy/LLM cho các biến
+// thể đã từng gặp. Feedback loop: mỗi lần merge (Admin hoặc cron LLM) ghi thêm
+// một dòng, catalog càng dùng càng ít phải gọi LLM.
+model SkillAlias {
+  id        String           @id @default(cuid())
+  alias     String           @unique
+  skillId   String
+  skill     Skill            @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  source    SkillAliasSource @default(ADMIN_MERGE)
+  createdAt DateTime         @default(now())
+
+  @@map("skill_aliases")
 }
 
 // ─── candidates ─────────────────────────────────────────────────────────
@@ -609,7 +665,7 @@ model Application {
   coverLetter   String?
   employerNotes String?
   rating        Int?
-  reappliedAt   DateTime?         // Set khi ứng viên ứng tuyển lại sau khi hủy
+  reappliedAt   DateTime? // Set khi ứng viên ứng tuyển lại sau khi hủy
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 

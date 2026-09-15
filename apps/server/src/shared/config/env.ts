@@ -87,6 +87,19 @@ const baseSchema = z.object({
     (value) => (typeof value === "string" ? value === "true" : value),
     z.boolean().default(false),
   ),
+
+  // JobPost Skill — Hướng B (xem docs/06-backend/jobpost-skill-huong-b/PLAN.md).
+  // Cả hai đều optional: thiếu GEMINI_API_KEY thì cron bỏ qua bước xác nhận LLM,
+  // skill vùng xám nằm lại PENDING chờ Admin duyệt tay (human-in-the-loop vẫn
+  // chạy được, chỉ tốn công hơn). Thiếu EMBEDDING_MODEL_CACHE_DIR thì
+  // @huggingface/transformers dùng cache mặc định trong node_modules — vẫn chạy,
+  // chỉ làm phình thư mục dự án (đó là lý do nên trỏ sang ổ đĩa khác).
+  GEMINI_API_KEY: z.string().optional(),
+  // Đổi được qua .env khi Google gỡ model cũ (gemini-2.0-flash đã bị gỡ, API
+  // trả 404 kèm tên bản thay thế) — không phải sửa code.
+  GEMINI_MODEL: z.string().min(1).default("gemini-3.6-flash"),
+  EMBEDDING_MODEL_CACHE_DIR: z.string().optional(),
+  EMBEDDING_MODEL_ID: z.string().min(1).default("Xenova/paraphrase-multilingual-MiniLM-L12-v2"),
 });
 
 // Resend/Google chỉ optional khi OTP_HARDCODE=true (dev bypass gửi email thật).

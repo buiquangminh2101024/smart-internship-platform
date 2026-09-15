@@ -19,10 +19,16 @@ import { apiFetch, publicFetch } from "@/lib/api-client";
  */
 export type OptionalQuery<T> = { [K in keyof T]?: T[K] | undefined };
 
-function toQueryString(params: Record<string, string | number | undefined>): string {
+function toQueryString(params: Record<string, string | number | string[] | undefined>): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== "") search.set(key, String(value));
+    // Mảng (vd. skillIds) gửi dạng "a,b,c" — backend nhận cả dạng này lẫn lặp
+    // key nhiều lần, chọn dạng gọn để query string dễ đọc.
+    if (Array.isArray(value)) {
+      if (value.length > 0) search.set(key, value.join(","));
+    } else if (value !== undefined && value !== "") {
+      search.set(key, String(value));
+    }
   }
   const qs = search.toString();
   return qs ? `?${qs}` : "";

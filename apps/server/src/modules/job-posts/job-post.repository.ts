@@ -16,11 +16,17 @@ const PAGE_SIZE = 20;
 // render card "Thông tin công ty" + nhãn địa điểm/ngành mà frontend không phải
 // gọi thêm catalog API, moderationActions (1 dòng mới nhất) cho banner từ
 // chối/thu hồi (xem job-post.mapper.ts).
-const jobPostInclude = {
+// Export để saved-jobs/applications dùng lại thay vì chép tay: các module đó
+// cũng render JobPostDto qua toJobPostDto(), nên thiếu một quan hệ ở đây là
+// mapper hỏng lúc chạy (đã xảy ra khi thêm `skills`).
+export const jobPostInclude = {
   company: true,
   city: true,
   industry: true,
   moderationActions: { orderBy: { createdAt: "desc" }, take: 1, include: { actor: true } },
+  // Kèm cả skill PENDING (do chính employer vừa đề xuất) — form sửa tin cần
+  // thấy chúng; mapper mới là chỗ lọc bớt khi trả ra API công khai.
+  skills: { include: { skill: { select: { id: true, name: true, status: true } } } },
 } satisfies Prisma.JobPostInclude;
 
 export type JobPostWithRelations = Prisma.JobPostGetPayload<{ include: typeof jobPostInclude }>;
@@ -113,9 +119,27 @@ export class JobPostRepository {
     return paginate(rows);
   }
 
+  /** Ghi đè danh sách kỹ năng của tin (diff-write: xoá cái bỏ, thêm cái mới). */
+  async setSkills(jobPostId: string, skillIds: string[], db: Db = this.prisma): Promise<void> {
+    await db.jobPostSkill.deleteMany({ where: { jobPostId, skillId: { notIn: skillIds } } });
+    if (skillIds.length === 0) return;
+
+    await db.jobPostSkill.createMany({
+      data: skillIds.map((skillId) => ({ jobPostId, skillId })),
+      skipDuplicates: true,
+    });
+  }
+
   /** Tìm kiếm công khai — chỉ tin PUBLISHED và chưa quá hạn. */
   async findPublishedForSearch(
-    filter: { q?: string; cityId?: string; industryId?: string; jobType?: JobPostType; salaryMin?: number },
+    filter: {
+      q?: string;
+      cityId?: string;
+      industryId?: string;
+      jobType?: JobPostType;
+      salaryMin?: number;
+      skillIds?: string[];
+    },
     cursor: string | undefined,
   ): Promise<Page<JobPostWithRelations>> {
     // Mỗi điều kiện "hoặc" là 1 phần tử của AND — không gộp chung key `OR` ở
@@ -136,6 +160,13 @@ export class JobPostRepository {
           { company: { name: { contains: filter.q, mode: "insensitive" } } },
         ],
       });
+    }
+    if (filter.skillIds?.length) {
+      // Mỗi skill là một điều kiện `some` riêng — gộp chung một `some` với
+      // `skillId: { in: [...] }` sẽ thành "có BẤT KỲ skill nào", tức là OR.
+      for (const skillId of filter.skillIds) {
+        and.push({ skills: { some: { skillId } } });
+      }
     }
 
     const rows = await this.prisma.jobPost.findMany({

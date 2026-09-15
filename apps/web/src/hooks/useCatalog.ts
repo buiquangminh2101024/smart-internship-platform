@@ -25,3 +25,8 @@ export function useCompanyTypes() {
 export function useCities() {
   return useCatalogList("/cities", "cities");
 }
+
+/** Chỉ kỹ năng đã duyệt — skill người dùng tự đề xuất không nằm trong danh sách này. */
+export function useSkills() {
+  return useCatalogList("/catalog/skills", "skills");
+}
