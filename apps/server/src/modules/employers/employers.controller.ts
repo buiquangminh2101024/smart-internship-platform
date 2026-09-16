@@ -9,7 +9,24 @@ import type {
   VerificationCheckRequest,
   VerificationCheckResponse,
 } from "@sip/shared-types";
-import type { EmployersService } from "./employers.service";
+import type { CompanyUploadFiles, EmployersService, UploadedFileInput } from "./employers.service";
+
+function collectCompanyFiles(req: Request): CompanyUploadFiles {
+  const files = (req.files ?? {}) as Record<string, Express.Multer.File[] | undefined>;
+  const pick = (field: string): UploadedFileInput | undefined => {
+    const file = files[field]?.[0];
+    return file ? { buffer: file.buffer, originalName: file.originalname } : undefined;
+  };
+
+  const result: CompanyUploadFiles = {};
+  const businessLicense = pick("businessLicense");
+  const logo = pick("logo");
+  const banner = pick("banner");
+  if (businessLicense) result.businessLicense = businessLicense;
+  if (logo) result.logo = logo;
+  if (banner) result.banner = banner;
+  return result;
+}
 
 export class EmployersController {
   private readonly employersService: EmployersService;
@@ -56,10 +73,19 @@ export class EmployersController {
   createCompany = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const dto = req.body as CreateCompanyRequest;
-      const file = req.file ? { buffer: req.file.buffer, originalName: req.file.originalname } : undefined;
-      const result = await this.employersService.createOrResubmitCompany(req.user!.id, dto, file);
+      const result = await this.employersService.createOrResubmitCompany(req.user!.id, dto, collectCompanyFiles(req));
       const body: ApiResponse<EmployerMeResponse> = { success: true, data: result };
       res.status(201).json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  updateBranding = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await this.employersService.updateCompanyBranding(req.user!.id, collectCompanyFiles(req));
+      const body: ApiResponse<EmployerMeResponse> = { success: true, data: result };
+      res.json(body);
     } catch (error) {
       next(error);
     }

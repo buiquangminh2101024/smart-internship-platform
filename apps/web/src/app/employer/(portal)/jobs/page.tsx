@@ -73,6 +73,21 @@ function JobStatusNote({ job }: { job: JobPost }) {
   return null;
 }
 
+type ConfirmAction = "close" | "delete";
+
+const CONFIRM_COPY: Record<ConfirmAction, { message: string; confirmLabel: string; fallbackError: string }> = {
+  close: {
+    message: "Đóng tin sẽ gỡ tin khỏi trang tìm kiếm công khai và không thể mở lại. Tiếp tục?",
+    confirmLabel: "Xác nhận đóng tin",
+    fallbackError: "Không đóng được tin, vui lòng thử lại",
+  },
+  delete: {
+    message: "Xóa nháp sẽ mất toàn bộ nội dung đã soạn và không thể khôi phục. Tiếp tục?",
+    confirmLabel: "Xác nhận xóa nháp",
+    fallbackError: "Không xóa được tin nháp, vui lòng thử lại",
+  },
+};
+
 /**
  * Danh sách quản lý tin tuyển dụng của Employer — khớp ảnh mẫu
  * `Screenshot 2026-09-12 135023.png`: ô tìm kiếm + lọc trạng thái, danh sách
@@ -81,10 +96,10 @@ function JobStatusNote({ job }: { job: JobPost }) {
 export default function EmployerJobsPage() {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<JobPostStatus | "ALL">("ALL");
-  /** Id tin đang chờ xác nhận đóng — hiện inline thay vì dùng window.confirm. */
-  const [closingId, setClosingId] = useState<string | null>(null);
-  const [closeError, setCloseError] = useState<string | null>(null);
-  const [closing, setClosing] = useState(false);
+  /** Tin đang chờ xác nhận đóng/xóa — hiện inline thay vì dùng window.confirm. */
+  const [confirming, setConfirming] = useState<{ id: string; action: ConfirmAction } | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [acting, setActing] = useState(false);
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   // API phân trang theo cursor — giữ ngăn xếp cursor của các trang đã qua để
@@ -103,18 +118,27 @@ export default function EmployerJobsPage() {
     setCursorStack([]);
   }
 
-  async function closeJob(id: string) {
-    setCloseError(null);
-    setClosing(true);
+  function askConfirm(id: string, action: ConfirmAction) {
+    setActionError(null);
+    setConfirming({ id, action });
+  }
+
+  async function runConfirmed(id: string, action: ConfirmAction) {
+    setActionError(null);
+    setActing(true);
     try {
-      await apiFetch<JobPost>("employer", `/employer/job-posts/${id}/close`, { method: "POST" });
-      setClosingId(null);
+      if (action === "close") {
+        await apiFetch<JobPost>("employer", `/employer/job-posts/${id}/close`, { method: "POST" });
+      } else {
+        await apiFetch("employer", `/employer/job-posts/${id}`, { method: "DELETE" });
+      }
+      setConfirming(null);
       await queryClient.invalidateQueries({ queryKey: ["employerJobPosts"] });
       await queryClient.invalidateQueries({ queryKey: ["employerJobPostStats"] });
     } catch (err) {
-      setCloseError(err instanceof ApiError ? err.message : "Không đóng được tin, vui lòng thử lại");
+      setActionError(err instanceof ApiError ? err.message : CONFIRM_COPY[action].fallbackError);
     } finally {
-      setClosing(false);
+      setActing(false);
     }
   }
 
@@ -191,17 +215,21 @@ export default function EmployerJobsPage() {
                   </div>
                   <JobMeta job={job} />
                   <JobStatusNote job={job} />
-                  {closingId === job.id ? (
+                  {confirming?.id === job.id ? (
                     <div className="grid gap-2 rounded-lg border border-red-200 bg-red-50 p-3">
-                      <p className="text-sm text-red-700">
-                        Đóng tin sẽ gỡ tin khỏi trang tìm kiếm công khai và không thể mở lại. Tiếp tục?
-                      </p>
-                      {closeError ? <p className="text-sm text-red-600">{closeError}</p> : null}
+                      <p className="text-sm text-red-700">{CONFIRM_COPY[confirming.action].message}</p>
+                      {actionError ? <p className="text-sm text-red-600">{actionError}</p> : null}
                       <div className="flex gap-2">
-                        <Button type="button" variant="danger" size="sm" loading={closing} onClick={() => void closeJob(job.id)}>
-                          Xác nhận đóng tin
+                        <Button
+                          type="button"
+                          variant="danger"
+                          size="sm"
+                          loading={acting}
+                          onClick={() => void runConfirmed(job.id, confirming.action)}
+                        >
+                          {CONFIRM_COPY[confirming.action].confirmLabel}
                         </Button>
-                        <Button type="button" variant="ghost" size="sm" disabled={closing} onClick={() => setClosingId(null)}>
+                        <Button type="button" variant="ghost" size="sm" disabled={acting} onClick={() => setConfirming(null)}>
                           Hủy
                         </Button>
                       </div>
@@ -218,20 +246,17 @@ export default function EmployerJobsPage() {
                     </Button>
                   ) : null}
                   {job.status === "DRAFT" ? (
-                    <Button as="a" href={`/employer/jobs/${job.id}?edit=1`} variant="link">
-                      Chỉnh sửa
-                    </Button>
+                    <>
+                      <Button as="a" href={`/employer/jobs/${job.id}?edit=1`} variant="link">
+                        Chỉnh sửa
+                      </Button>
+                      <Button type="button" variant="link" className="text-red-600" onClick={() => askConfirm(job.id, "delete")}>
+                        Xóa nháp
+                      </Button>
+                    </>
                   ) : null}
                   {job.status === "PUBLISHED" ? (
-                    <Button
-                      type="button"
-                      variant="link"
-                      className="text-red-600"
-                      onClick={() => {
-                        setCloseError(null);
-                        setClosingId(job.id);
-                      }}
-                    >
+                    <Button type="button" variant="link" className="text-red-600" onClick={() => askConfirm(job.id, "close")}>
                       Đóng tin
                     </Button>
                   ) : null}

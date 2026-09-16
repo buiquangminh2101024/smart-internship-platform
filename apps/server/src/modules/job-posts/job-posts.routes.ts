@@ -54,6 +54,9 @@ export function jobPostsRouter(container: AwilixContainer): Router {
   router.patch("/employer/job-posts/:id", ...employerGuard, validate(updateJobPostSchema), (req, res, next) => {
     void resolveController().update(req, res, next);
   });
+  router.delete("/employer/job-posts/:id", ...employerGuard, (req, res, next) => {
+    void resolveController().remove(req, res, next);
+  });
   router.post("/employer/job-posts/:id/submit", ...employerGuard, (req, res, next) => {
     void resolveController().submit(req, res, next);
   });

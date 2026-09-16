@@ -100,6 +100,15 @@ export class JobPostsController {
     }
   };
 
+  remove = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      await this.jobPostsService.deleteDraft(req.user!.id, req.params.id as string);
+      res.json({ success: true, data: { deleted: true } } satisfies ApiResponse);
+    } catch (error) {
+      next(error);
+    }
+  };
+
   submit = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const result = await this.jobPostsService.submitForApproval(req.user!.id, req.params.id as string);

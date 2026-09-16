@@ -59,7 +59,10 @@ async function doFetch<T>(path: string, token: string | null, init: RequestInit)
 
 function parseBody<T>(res: RawResponse<T>): T {
   if (res.status < 200 || res.status >= 300 || !res.body || !res.body.success) {
-    throw new ApiError(res.status, res.body?.error ?? res.body?.message ?? "Đã có lỗi xảy ra, vui lòng thử lại");
+    // 413 thường do gateway (nginx) trả về trang HTML, không có body JSON để đọc message.
+    const fallback =
+      res.status === 413 ? "Tệp tải lên quá lớn, vui lòng chọn tệp nhỏ hơn" : "Đã có lỗi xảy ra, vui lòng thử lại";
+    throw new ApiError(res.status, res.body?.error ?? res.body?.message ?? fallback);
   }
 
   return res.body.data as T;
@@ -148,12 +151,20 @@ export async function apiFetch<T = void>(area: AuthArea, path: string, init: Req
  * duyệt tự set đúng "multipart/form-data; boundary=..." — nếu không,
  * express.json() phía server sẽ cố parse JSON và lỗi trước khi tới multer.
  */
-export async function apiUpload<T = void>(area: AuthArea, path: string, formData: FormData): Promise<T> {
+export async function apiUpload<T = void>(
+  area: AuthArea,
+  path: string,
+  formData: FormData,
+  method: "POST" | "PATCH" = "POST",
+): Promise<T> {
   const store = authStoreForArea(area);
 
   async function send(bearer: string | null): Promise<RawResponse<T>> {
     try {
-      const res = await uploadClient.post<ApiResponse<T>>(path, formData, {
+      const res = await uploadClient.request<ApiResponse<T>>({
+        url: path,
+        method,
+        data: formData,
         headers: bearer ? { Authorization: `Bearer ${bearer}` } : {},
       });
       return { status: res.status, body: res.data ?? null };

@@ -142,6 +142,17 @@ export class JobPostsService {
     return toJobPostDto(updated);
   }
 
+  /** Hard delete, chỉ cho DRAFT — tin nháp chưa từng công khai nên không có hồ sơ ứng tuyển/hội thoại. */
+  async deleteDraft(userId: string, id: string): Promise<void> {
+    const { companyId } = await this.requireEmployer(userId);
+    const jobPost = await this.requireOwnedJobPost(companyId, id);
+    if (jobPost.status !== "DRAFT") {
+      throw new AppError(409, "Only a draft job post can be deleted");
+    }
+
+    await this.jobPostRepository.delete(id);
+  }
+
   /**
    * DRAFT → PENDING, hoặc publish thẳng khi company.requiresApproval=false
    * (ghi log APPROVED với actor=null để phân biệt với Admin duyệt tay) — xem

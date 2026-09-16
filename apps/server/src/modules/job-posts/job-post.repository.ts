@@ -85,6 +85,10 @@ export class JobPostRepository {
     return db.jobPost.update({ where: { id }, data, include: jobPostInclude });
   }
 
+  async delete(id: string, db: Db = this.prisma): Promise<void> {
+    await db.jobPost.delete({ where: { id } });
+  }
+
   /** Danh sách tin của chính company (mọi trạng thái) — trang quản lý của Employer. */
   async findOwnedByCompany(
     companyId: string,

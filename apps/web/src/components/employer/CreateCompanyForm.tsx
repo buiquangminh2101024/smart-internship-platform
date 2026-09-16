@@ -14,6 +14,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { useIndustries, useCompanyTypes, useCities } from "@/hooks/useCatalog";
 import { BusinessLicenseUpload } from "./BusinessLicenseUpload";
+import { CompanyImageUpload } from "./CompanyImageUpload";
 
 const formSchema = z.object({
   name: z.string().trim().min(1, "Vui lòng nhập tên công ty"),
@@ -62,6 +63,10 @@ export function CreateCompanyForm({ mode, company, employer, onDone }: CreateCom
   const [forceManualReview, setForceManualReview] = useState(false);
   const [licenseFile, setLicenseFile] = useState<File | null>(null);
   const [licenseError, setLicenseError] = useState<string | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const [bannerError, setBannerError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -115,13 +120,16 @@ export function CreateCompanyForm({ mode, company, employer, onDone }: CreateCom
 
   async function handleFinalSubmit() {
     if (!checkResult) return;
-    if (needsLicense && !licenseFile) {
-      setLicenseError("Vui lòng tải lên giấy phép kinh doanh");
-      return;
-    }
+    // Nộp lại hồ sơ được giữ ảnh cũ — chỉ bắt buộc chọn ảnh khi công ty chưa có.
+    const missingLogo = !logoFile && !company?.logoUrl;
+    const missingBanner = !bannerFile && !company?.bannerUrl;
+    const missingLicense = needsLicense && !licenseFile;
+    setLogoError(missingLogo ? "Vui lòng tải lên logo công ty" : null);
+    setBannerError(missingBanner ? "Vui lòng tải lên ảnh bìa công ty" : null);
+    setLicenseError(missingLicense ? "Vui lòng tải lên giấy phép kinh doanh" : null);
+    if (missingLogo || missingBanner || missingLicense) return;
 
     setFormError(null);
-    setLicenseError(null);
     setSubmitting(true);
     try {
       const values = getValues();
@@ -139,6 +147,8 @@ export function CreateCompanyForm({ mode, company, employer, onDone }: CreateCom
       if (values.phone) formData.append("phone", values.phone);
       if (checkResult.outcome === "BLOCKED" && forceManualReview) formData.append("forceManualReview", "true");
       if (licenseFile) formData.append("businessLicense", licenseFile);
+      if (logoFile) formData.append("logo", logoFile);
+      if (bannerFile) formData.append("banner", bannerFile);
 
       await apiUpload("employer", "/employers/company", formData);
       onDone();
@@ -178,6 +188,36 @@ export function CreateCompanyForm({ mode, company, employer, onDone }: CreateCom
         </div>
         <div className="mt-4">
           <Textarea label="Giới thiệu công ty" {...register("description")} />
+        </div>
+      </Card>
+
+      <Card padding="sm" tone="sunken">
+        <h3 className="mb-3 text-sm font-semibold text-text-strong">Hình ảnh công ty</h3>
+        <div className="grid gap-4 sm:grid-cols-[auto_1fr]">
+          <CompanyImageUpload
+            label="Logo"
+            variant="logo"
+            required
+            file={logoFile}
+            currentUrl={company?.logoUrl}
+            error={logoError}
+            onChange={(f) => {
+              setLogoFile(f);
+              setLogoError(null);
+            }}
+          />
+          <CompanyImageUpload
+            label="Ảnh bìa (banner)"
+            variant="banner"
+            required
+            file={bannerFile}
+            currentUrl={company?.bannerUrl}
+            error={bannerError}
+            onChange={(f) => {
+              setBannerFile(f);
+              setBannerError(null);
+            }}
+          />
         </div>
       </Card>
 
