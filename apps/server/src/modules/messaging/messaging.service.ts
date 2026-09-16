@@ -1,33 +1,46 @@
 import type { Role } from "@prisma/client";
+import type { Message, UnreadCountResponse } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
+import type { Logger } from "../../shared/logger";
+import type { RealtimeNotifier } from "../../shared/ports/RealtimeNotifier";
 import type { CandidateRepository } from "../candidates/candidate.repository";
 import type { EmployerRepository } from "../employers/employer.repository";
 import type { JobPostRepository } from "../job-posts/job-post.repository";
-import type { MessagingRepository } from "./messaging.repository";
+import type { ConversationWithRelations, MessagingRepository } from "./messaging.repository";
 
 import { toConversationDto, toMessageDto } from "./messaging.mapper";
+
+const MESSAGE_PREVIEW_LENGTH = 100;
 
 export class MessagingService {
   private readonly messagingRepository: MessagingRepository;
   private readonly candidateRepository: CandidateRepository;
   private readonly employerRepository: EmployerRepository;
   private readonly jobPostRepository: JobPostRepository;
+  private readonly realtimeNotifier: RealtimeNotifier;
+  private readonly logger: Logger;
 
   constructor({
     messagingRepository,
     candidateRepository,
     employerRepository,
     jobPostRepository,
+    realtimeNotifier,
+    logger,
   }: {
     messagingRepository: MessagingRepository;
     candidateRepository: CandidateRepository;
     employerRepository: EmployerRepository;
     jobPostRepository: JobPostRepository;
+    realtimeNotifier: RealtimeNotifier;
+    logger: Logger;
   }) {
     this.messagingRepository = messagingRepository;
     this.candidateRepository = candidateRepository;
     this.employerRepository = employerRepository;
     this.jobPostRepository = jobPostRepository;
+    this.realtimeNotifier = realtimeNotifier;
+    this.logger = logger;
   }
 
   async getConversations(userId: string, role: Role) {
@@ -38,7 +51,28 @@ export class MessagingService {
     } else if (role === "EMPLOYER") {
       const employer = await this.requireEmployer(userId);
       const convs = await this.messagingRepository.findConversationsByEmployerId(employer.id);
-      return this.enrichWithLatestMessages(convs);
+      const enriched = await this.enrichWithLatestMessages(convs);
+      // Link "CV ứng viên" chỉ có khi ứng viên đã nộp đơn vào đúng tin này —
+      // hội thoại do employer chủ động mở trước thì applicationId = null.
+      const applications = await this.messagingRepository.findApplicationIdsForConversations(
+        convs.map((c) => ({ candidateId: c.candidateId, jobPostId: c.jobPostId })),
+      );
+      return enriched.map((conv) => ({
+        ...conv,
+        applicationId:
+          applications.find((a) => a.candidateId === conv.candidateId && a.jobPostId === conv.jobPostId)?.id ?? null,
+      }));
+    }
+    throw new AppError(403, "Invalid role for messaging");
+  }
+
+  async getUnreadSummary(userId: string, role: Role): Promise<UnreadCountResponse> {
+    if (role === "CANDIDATE") {
+      const candidate = await this.requireCandidate(userId);
+      return { count: await this.messagingRepository.countUnreadConversations(role, candidate.id, userId) };
+    } else if (role === "EMPLOYER") {
+      const employer = await this.requireEmployer(userId);
+      return { count: await this.messagingRepository.countUnreadConversations(role, employer.id, userId) };
     }
     throw new AppError(403, "Invalid role for messaging");
   }
@@ -103,6 +137,32 @@ export class MessagingService {
     }
     const message = await this.messagingRepository.saveMessage(conversationId, userId, content);
     return { message: toMessageDto(message), conversation: conv };
+  }
+
+  /**
+   * Báo "có tin nhắn mới" cho phía còn lại của hội thoại — cùng một nhánh cho
+   * cả candidate lẫn employer (thông báo đối xứng). Best-effort: lỗi push chỉ
+   * log, tin nhắn đã lưu xong.
+   */
+  async notifyRecipient(conversation: ConversationWithRelations, senderUserId: string, message: Message) {
+    const senderIsCandidate = conversation.candidate.userId === senderUserId;
+    const recipientUserId = senderIsCandidate ? conversation.employer.userId : conversation.candidate.userId;
+    const dto = toConversationDto(conversation);
+    const senderName = senderIsCandidate ? dto.candidate.name : dto.employer.name;
+    const preview = message.content.length > MESSAGE_PREVIEW_LENGTH
+      ? `${message.content.slice(0, MESSAGE_PREVIEW_LENGTH)}…`
+      : message.content;
+
+    try {
+      await this.realtimeNotifier.pushMessageToUser(recipientUserId, {
+        conversationId: conversation.id,
+        senderName,
+        preview,
+        createdAt: new Date(message.createdAt),
+      });
+    } catch (error) {
+      this.logger.error("Push thông báo tin nhắn thất bại", { conversationId: conversation.id, error });
+    }
   }
 
   private async enrichWithLatestMessages(conversations: any[]) {

@@ -27,6 +27,31 @@ function TextBlock({ icon, title, value }: { icon: string; title: string; value:
   );
 }
 
+/**
+ * Kỹ năng yêu cầu của tin. Trang công khai chỉ nhận về skill đã duyệt (backend
+ * lọc), còn ở xem trước/chi tiết của Employer có thể kèm skill PENDING — đánh
+ * dấu rõ để họ biết kỹ năng đó chưa hiển thị với ứng viên.
+ */
+function SkillBlock({ job }: { job: JobPost }) {
+  if (job.skills.length === 0) return null;
+  return (
+    <Card padding="lg" className="grid gap-3">
+      <h2 className="inline-flex items-center gap-2 text-base font-semibold text-text-strong">
+        <Icon name="sparkles" size={17} className="text-pine-600" />
+        Kỹ năng yêu cầu
+      </h2>
+      <div className="flex flex-wrap gap-2">
+        {job.skills.map((skill) => (
+          <Badge key={skill.id} tone={skill.status === "PENDING" ? "warning" : "brand"}>
+            {skill.name}
+            {skill.status === "PENDING" ? " · chờ duyệt" : ""}
+          </Badge>
+        ))}
+      </div>
+    </Card>
+  );
+}
+
 /** Card "Thông tin công ty" ở cột phải — dùng chung ở xem trước/review/công khai. */
 export function JobPostCompanyCard({ job, footer }: { job: JobPost; footer?: ReactNode }) {
   const rows = [
@@ -123,6 +148,7 @@ export function JobPostContent({ job, aside }: { job: JobPost; aside?: ReactNode
       <div className="grid gap-4">
         <TextBlock icon="file-text" title="Mô tả công việc" value={job.description} />
         <TextBlock icon="circle-check" title="Yêu cầu ứng viên" value={job.requirements} />
+        <SkillBlock job={job} />
         <TextBlock icon="gift" title="Quyền lợi" value={job.benefits} />
       </div>
       <div className="grid gap-4 lg:sticky lg:top-6">{aside ?? <JobPostCompanyCard job={job} />}</div>

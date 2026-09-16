@@ -22,6 +22,8 @@ export function messagingRoutes(container: AwilixContainer) {
   router.use(authorize("CANDIDATE", "EMPLOYER"));
 
   router.get("/", (req, res, next) => resolveController().listConversations(req, res).catch(next));
+  // Khai báo trước "/:id/..." cho rõ ràng — dòng ghim "N tin nhắn mới" ở NotificationBell.
+  router.get("/unread-summary", (req, res, next) => resolveController().unreadSummary(req, res).catch(next));
   router.post("/", (req, res, next) => resolveController().createConversation(req, res).catch(next));
   router.get("/:id/messages", (req, res, next) => resolveController().listMessages(req, res).catch(next));
   router.put("/:id/read", (req, res, next) => resolveController().markAsRead(req, res).catch(next));

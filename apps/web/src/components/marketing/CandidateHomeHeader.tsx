@@ -115,11 +115,15 @@ export function CandidateHomeHeader() {
                       <Icon name="bell" size={17} />
                       <span className="flex-1">Thông báo</span>
                     </Link>
-                    <div className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-text-subtle" aria-disabled="true">
+                    <Link
+                      href="/settings"
+                      role="menuitem"
+                      onClick={() => setIsAccountMenuOpen(false)}
+                      className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-text-body transition-colors hover:bg-pine-50 hover:text-pine-800"
+                    >
                       <Icon name="settings" size={17} />
                       <span className="flex-1">Cài đặt</span>
-                      <span className="text-xs">Sắp có</span>
-                    </div>
+                    </Link>
                     <button
                       type="button"
                       role="menuitem"

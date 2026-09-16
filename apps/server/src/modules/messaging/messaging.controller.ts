@@ -15,6 +15,12 @@ export class MessagingController {
     res.json({ success: true, data: conversations });
   };
 
+  unreadSummary = async (req: Request, res: Response) => {
+    const { id: userId, role } = req.user!;
+    const summary = await this.messagingService.getUnreadSummary(userId, role);
+    res.json({ success: true, data: summary });
+  };
+
   createConversation = async (req: Request, res: Response) => {
     const { id: userId, role } = req.user!;
     const { jobPostId, candidateId } = req.body as CreateConversationRequest & { candidateId?: string };

@@ -20,6 +20,9 @@ const jobPostFields = {
   requirements: optionalText,
   benefits: optionalText,
   expiresAt: z.string().trim().optional(),
+  // Ghi đè toàn bộ danh sách kỹ năng của tin khi có mặt. Trần 30 để một tin
+  // không gắn cả trăm tag làm nhiễu phần matching sau này (Phase 11).
+  skillIds: z.array(z.string().trim().min(1)).max(30).optional(),
 };
 
 export const createJobPostSchema = z.object(jobPostFields);
@@ -44,6 +47,15 @@ export const jobPostSearchQuerySchema = z.object({
   jobType: z.enum(JOB_POST_TYPES).optional(),
   // Query string luôn là chuỗi — coerce sang number để service so sánh được.
   salaryMin: z.coerce.number().int().min(0).optional(),
+  // Express cho ra string khi có 1 giá trị và string[] khi lặp `?skillIds=`
+  // nhiều lần — quy cả hai (và dạng "a,b,c") về mảng để service chỉ xử lý 1 kiểu.
+  skillIds: z
+    .preprocess((value) => {
+      if (value === undefined || value === "") return undefined;
+      const list = Array.isArray(value) ? value : String(value).split(",");
+      return list.map((item) => String(item).trim()).filter(Boolean);
+    }, z.array(z.string().min(1)).max(10))
+    .optional(),
   cursor: z.string().optional(),
 });
 

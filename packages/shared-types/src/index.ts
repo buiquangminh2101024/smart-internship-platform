@@ -29,8 +29,7 @@ export type NotificationType =
   | "JOB_POST_REJECTED"
   | "JOB_POST_TAKEN_DOWN"
   | "COMPANY_VERIFIED"
-  | "COMPANY_REJECTED"
-  | "MESSAGE_RECEIVED";
+  | "COMPANY_REJECTED";
 
 // ─── Wrapper response chuẩn cho REST API ─────────────────────────────────
 
@@ -126,6 +125,56 @@ export interface UserProfile {
 export interface CatalogItem {
   id: string;
   name: string;
+}
+
+// ─── Skills (JobPost Skill — Hướng B) ────────────────────────────────────
+// Xem docs/06-backend/jobpost-skill-huong-b/PLAN.md. Catalog kỹ năng cho phép
+// Candidate/Employer tự gõ tên chưa có; hệ thống khử trùng lặp rồi Admin duyệt.
+
+export type SkillStatus = "APPROVED" | "PENDING";
+
+/**
+ * Cách một tên gõ vào được giải quyết:
+ * - ALIAS: trùng một tên gọi khác đã biết của skill có sẵn;
+ * - AUTO: khớp đủ gần với skill có sẵn (so khớp chuỗi hoặc embedding);
+ * - PENDING_REVIEW: đã tạo skill mới, đang chờ duyệt — UI phải báo rõ cho người
+ *   dùng biết kỹ năng này chưa công khai.
+ */
+export type SkillMatchType = "ALIAS" | "AUTO" | "PENDING_REVIEW";
+
+export interface SuggestSkillRequest {
+  name: string;
+}
+
+export interface SuggestSkillResponse {
+  skillId: string;
+  name: string;
+  status: SkillStatus;
+  matchType: SkillMatchType;
+}
+
+export interface AdminSkillDto {
+  id: string;
+  name: string;
+  status: SkillStatus;
+  createdByEmail: string | null;
+  /** Skill gần nhất hệ thống tìm được — gợi ý sẵn cho Admin khi gộp. */
+  pendingMatchSkill: { id: string; name: string } | null;
+  /** Số hồ sơ + tin tuyển dụng đang gắn skill này (mất hết nếu từ chối). */
+  usageCount: number;
+  createdAt: string;
+}
+
+export interface MergeSkillRequest {
+  targetSkillId: string;
+}
+
+/**
+ * Kỹ năng gắn trên tin tuyển dụng. API công khai chỉ trả skill APPROVED; API của
+ * chính Employer trả cả PENDING để form sửa tin không làm mất kỹ năng họ vừa đề xuất.
+ */
+export interface JobPostSkillDto extends CatalogItem {
+  status: SkillStatus;
 }
 
 // ─── Companies & Employers (Phase 4) ─────────────────────────────────────
@@ -378,6 +427,8 @@ export interface JobPost {
   expiresAt: string | null;
   closedAt: string | null;
   viewCount: number;
+  /** Kỹ năng yêu cầu — chỉ skill đã duyệt mới lộ ra API công khai. */
+  skills: JobPostSkillDto[];
   /** Số hồ sơ ứng tuyển — luôn 0 cho tới Phase 8 (module applications). */
   applicationCount: number;
   /** Hành động kiểm duyệt mới nhất — nguồn dữ liệu banner từ chối/thu hồi. */
@@ -400,6 +451,11 @@ export interface CreateJobPostRequest {
   benefits?: string;
   /** ISO date — bắt buộc trước khi gửi duyệt, tối đa 90 ngày kể từ lúc đặt. */
   expiresAt?: string;
+  /**
+   * Danh sách kỹ năng yêu cầu — ghi đè toàn bộ (diff-write) khi có mặt, bỏ qua
+   * khi undefined. Chấp nhận cả skill PENDING mà chính employer vừa đề xuất.
+   */
+  skillIds?: string[];
 }
 
 export type UpdateJobPostRequest = Partial<CreateJobPostRequest>;
@@ -410,6 +466,8 @@ export interface JobPostSearchQuery {
   industryId?: string;
   jobType?: JobPostType;
   salaryMin?: number;
+  /** Lọc theo kỹ năng — tin phải có ĐỦ tất cả skill được chọn. */
+  skillIds?: string[];
   cursor?: string;
 }
 
@@ -545,6 +603,30 @@ export interface Conversation {
   
   // Latest message for list view
   latestMessage?: Message | null;
+
+  /**
+   * Chỉ có ở phía employer: Application khớp (candidateId, jobPostId) để link
+   * tới CV ứng viên — null khi ứng viên chưa nộp đơn vào tin này.
+   */
+  applicationId?: string | null;
+}
+
+/** Payload event socket `notification:new_message` (không gắn bản ghi Notification). */
+export interface MessageNotificationEvent {
+  conversationId: string;
+  senderName: string;
+  preview: string;
+  createdAt: string;
+}
+
+/** Payload event socket `notification:new` — thông báo nghiệp vụ (Phase 10). */
+export interface NotificationEvent {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string | null;
+  link: string | null;
+  createdAt: string;
 }
 
 export interface CreateConversationRequest {

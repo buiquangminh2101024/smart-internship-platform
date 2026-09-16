@@ -1,21 +1,33 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import { useMessagingStore } from "@/stores/messaging-store";
-import { useSocket } from "@/hooks/useSocket";
+import { useSocket } from "@/components/realtime/SocketProvider";
 import { useCurrentUser } from "@/stores/auth-store";
 import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
-
-import { useSearchParams } from "next/navigation";
+import {
+  conversationExternalLink,
+  isConversationUnread,
+  unreadSummaryQueryKey,
+  type MessagingArea,
+} from "@/lib/messaging";
 
 interface ChatLayoutProps {
-  area: "candidate" | "employer";
+  area: MessagingArea;
 }
 
 export function ChatLayout({ area }: ChatLayoutProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const initialConversationId = searchParams.get("conversationId");
+  // `?filter=unread` — đích của dòng ghim "N tin nhắn mới" ở NotificationBell.
+  const unreadOnly = searchParams.get("filter") === "unread";
 
   const {
     conversations,
@@ -30,7 +42,11 @@ export function ChatLayout({ area }: ChatLayoutProps) {
   } = useMessagingStore();
 
   const user = useCurrentUser(area);
-  const { sendMessage } = useSocket(area);
+  const socket = useSocket();
+  // Trạng thái kết nối giữ ở SocketProvider suốt lúc chuyển trang, nên vào
+  // trang chat là thấy ngay nếu socket đã lỗi từ trước.
+  const isConnected = socket?.status === "connected";
+  const isDisconnected = !socket || socket.status === "disconnected";
   const [inputText, setInputText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -47,9 +63,11 @@ export function ChatLayout({ area }: ChatLayoutProps) {
       fetchMessages(area, activeConversationId);
     }
     if (activeConversationId) {
-      markAsRead(area, activeConversationId);
+      markAsRead(area, activeConversationId).then(() =>
+        queryClient.invalidateQueries({ queryKey: unreadSummaryQueryKey(area) }),
+      );
     }
-  }, [activeConversationId, area, fetchMessages, markAsRead, messages]);
+  }, [activeConversationId, area, fetchMessages, markAsRead, messages, queryClient]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -62,9 +80,23 @@ export function ChatLayout({ area }: ChatLayoutProps) {
     e.preventDefault();
     if (!inputText.trim() || !activeConversationId) return;
 
-    sendMessage(activeConversationId, inputText);
-    setInputText("");
+    // Gửi không được (mất kết nối) thì giữ nguyên nội dung để người dùng gửi lại.
+    if (socket?.sendMessage(activeConversationId, inputText)) setInputText("");
   };
+
+  function setUnreadOnly(next: boolean) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next) params.set("filter", "unread");
+    else params.delete("filter");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname);
+  }
+
+  // Hội thoại đang mở vẫn hiển thị ở khung chat dù đã rời khỏi danh sách lọc
+  // (mở ra là đã đọc) — activeConversation lấy từ danh sách đầy đủ.
+  const visibleConversations = unreadOnly
+    ? conversations.filter((c) => isConversationUnread(c, area, user?.id))
+    : conversations;
 
   if (isLoadingConversations) {
     return <div className="flex h-full items-center justify-center p-8 text-text-muted">Đang tải...</div>;
@@ -83,46 +115,77 @@ export function ChatLayout({ area }: ChatLayoutProps) {
     <div className="flex h-full overflow-hidden bg-white">
       {/* Sidebar (List) */}
       <div className="w-80 flex-shrink-0 border-r border-border-subtle bg-surface-page flex flex-col">
+        <div className="flex gap-1 border-b border-border-subtle p-2">
+          {[
+            { label: "Tất cả", value: false },
+            { label: "Chưa đọc", value: true },
+          ].map((tab) => (
+            <button
+              key={tab.label}
+              type="button"
+              onClick={() => setUnreadOnly(tab.value)}
+              aria-pressed={unreadOnly === tab.value}
+              className={`flex-1 rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                unreadOnly === tab.value
+                  ? "bg-brand-50 font-medium text-brand-700"
+                  : "text-text-muted hover:bg-surface-hover"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
         <div className="flex-1 overflow-y-auto">
-          {conversations.map((conv) => {
+          {visibleConversations.length === 0 ? (
+            <p className="p-4 text-center text-sm text-text-muted">Không có hội thoại nào có tin nhắn chưa đọc.</p>
+          ) : null}
+          {visibleConversations.map((conv) => {
             const partner = area === "candidate" ? conv.employer : conv.candidate;
-            const lastRead = area === "candidate" ? conv.candidateLastReadAt : conv.employerLastReadAt;
-            const hasUnread = conv.latestMessage && 
-              conv.latestMessage.senderId !== user?.id && 
-              (!lastRead || new Date(conv.latestMessage.createdAt) > new Date(lastRead));
+            const hasUnread = isConversationUnread(conv, area, user?.id);
+            const externalLink = unreadOnly ? conversationExternalLink(conv, area) : null;
 
             return (
-              <button
-                key={conv.id}
-                onClick={() => setActiveConversationId(conv.id)}
-                className={`w-full flex items-start gap-3 p-4 text-left hover:bg-surface-hover transition-colors border-b border-border-subtle ${
-                  activeConversationId === conv.id ? "bg-surface-active" : ""
-                }`}
-              >
-                <div className="w-10 h-10 rounded-full bg-border-subtle flex-shrink-0 flex items-center justify-center overflow-hidden">
-                  {partner.avatarUrl ? (
-                    <img src={partner.avatarUrl} alt={partner.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <Icon name="user" className="text-text-muted" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-baseline mb-1">
-                    <div className={`text-sm truncate ${hasUnread ? "font-bold text-text-strong" : "font-medium text-text-strong"}`}>
-                      {partner.name || partner.id}
-                    </div>
+              <div key={conv.id} className="border-b border-border-subtle">
+                <button
+                  onClick={() => setActiveConversationId(conv.id)}
+                  className={`w-full flex items-start gap-3 p-4 text-left hover:bg-surface-hover transition-colors ${
+                    activeConversationId === conv.id ? "bg-surface-active" : ""
+                  }`}
+                >
+                  <div className="w-10 h-10 rounded-full bg-border-subtle flex-shrink-0 flex items-center justify-center overflow-hidden">
+                    {partner.avatarUrl ? (
+                      <img src={partner.avatarUrl} alt={partner.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <Icon name="user" className="text-text-muted" />
+                    )}
                   </div>
-                  <div className="text-xs text-text-muted truncate">
-                    {conv.jobPost.title}
-                  </div>
-                  {conv.latestMessage && (
-                    <div className={`text-sm truncate mt-1 ${hasUnread ? "font-bold text-text-strong" : "text-text-muted"}`}>
-                      {conv.latestMessage.senderId === user?.id ? "Bạn: " : ""}
-                      {conv.latestMessage.content}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-baseline mb-1">
+                      <div className={`text-sm truncate ${hasUnread ? "font-bold text-text-strong" : "font-medium text-text-strong"}`}>
+                        {partner.name || partner.id}
+                      </div>
                     </div>
-                  )}
-                </div>
-              </button>
+                    <div className="text-xs text-text-muted truncate">
+                      {conv.jobPost.title}
+                    </div>
+                    {conv.latestMessage && (
+                      <div className={`text-sm truncate mt-1 ${hasUnread ? "font-bold text-text-strong" : "text-text-muted"}`}>
+                        {conv.latestMessage.senderId === user?.id ? "Bạn: " : ""}
+                        {conv.latestMessage.content}
+                      </div>
+                    )}
+                  </div>
+                </button>
+                {externalLink ? (
+                  <Link
+                    href={externalLink.href}
+                    className="-mt-2 flex items-center gap-1 px-4 pb-3 pl-[68px] text-xs text-brand-700 hover:underline"
+                  >
+                    <Icon name="external-link" size={12} />
+                    {externalLink.label}
+                  </Link>
+                ) : null}
+              </div>
             );
           })}
         </div>
@@ -174,6 +237,12 @@ export function ChatLayout({ area }: ChatLayoutProps) {
 
             {/* Input area */}
             <form onSubmit={handleSend} className="p-4 bg-white border-t border-border-subtle">
+              {isDisconnected ? (
+                <p role="status" className="mb-2 flex items-center gap-2 rounded-lg bg-marigold-100 px-3 py-2 text-xs text-text-strong">
+                  <Icon name="wifi-off" size={14} className="shrink-0" />
+                  Mất kết nối, tin nhắn chưa gửi được. Đang thử kết nối lại…
+                </p>
+              ) : null}
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -182,7 +251,7 @@ export function ChatLayout({ area }: ChatLayoutProps) {
                   placeholder="Nhập tin nhắn..."
                   className="flex-1 rounded-lg border border-border-strong px-4 py-2 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                 />
-                <Button type="submit" disabled={!inputText.trim()} icon="send">
+                <Button type="submit" disabled={!inputText.trim() || !isConnected} icon="send">
                   Gửi
                 </Button>
               </div>

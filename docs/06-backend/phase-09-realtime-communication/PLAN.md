@@ -1,0 +1,56 @@
+# Phase 9 (Backend) — Bổ sung: Tích hợp Notification realtime cho Messaging
+
+Xem implementation nền tảng (chat, Socket.IO gateway) đã hoàn thành ở `IMPLEMENTATION.md` cùng thư mục. Tài liệu này là **kế hoạch bổ sung, chưa triển khai** — chốt cùng chủ dự án ngày 2026-09-16, nối module `messaging` với module `notifications` (Phase 10) qua seam `RealtimeNotifier` đã chuẩn bị sẵn.
+
+> **Trạng thái: đã triển khai (2026-09-16).** Migration `20260916000000_remove_message_received_notification_type` cần được áp dụng (`npm run db:migrate -w server`). Ghi chú triển khai ở `IMPLEMENTATION.md` mục 6.
+
+## 1. Bối cảnh
+
+- Phase 10 đã định nghĩa `NotificationType.MESSAGE_RECEIVED` + payload (`NotificationPayloadMap`) + template registry, nhưng **cố ý chưa wire call site nào** (xem `docs/06-backend/phase-10-notification-email/PLAN.md` mục "Quyết định mới chốt" #2 và bảng call site #7, dòng cuối: *"MESSAGE_RECEIVED: chỉ thêm enum + entry template registry... không wire call site"*).
+- `RealtimeNotifier` hiện chỉ có 1 implementation: `NoopRealtimeNotifier` (`apps/server/src/infrastructure/noop-realtime-notifier.ts`) — mọi `pushToUser()` bị bỏ qua, chỉ log warning. Comment trong file này đã ghi rõ: *"TODO(Phase 9): thay bằng SocketIoRealtimeNotifier... Không sửa NotificationsService"*.
+- Frontend `NotificationBell.tsx` (dòng 19-22) cũng có sẵn TODO tương ứng: bỏ polling 30s, chuyển sang lắng nghe socket event.
+- Quyết định nghiệp vụ đã chốt với chủ dự án (trò chuyện 2026-09-16):
+  1. Thông báo tin nhắn **đối xứng 2 chiều** — candidate và employer đều nhận thông báo khi phía kia nhắn tin, không lệch nhau.
+  2. **Không** tạo 1 dòng `Notification` DB cho mỗi tin nhắn (sẽ spam, che các thông báo nghiệp vụ khác trong notification center). Thay vào đó: 1 entry **cố định/tổng hợp** ("bạn có N tin nhắn mới") nằm ở đầu hoặc cuối notification center; bấm vào dẫn sang trang danh sách hội thoại có tin chưa đọc, kèm link ra ngoài tới CV ứng viên (nếu người xem là employer) hoặc trang công ty (nếu người xem là candidate).
+  3. Có thể bật/tắt trình duyệt thông báo (Web Notification API) ngay trong web app (không phải setting trình duyệt); chỉ bắn khi tab đang mở nhưng không active (không dùng Service Worker/Push API).
+  4. Khi kết nối Socket.IO phía client bị lỗi/mất kết nối, hiển thị thêm 1 banner nhỏ trong app (không chỉ `console.error` như `useSocket.ts` hiện tại) — chi tiết UI ở `docs/05-frontend/phases/phase-09-realtime-communication/PLAN.md`.
+  5. Lỗi Socket.IO phía backend (khởi tạo thất bại hoặc lỗi runtime lúc push) **không được làm crash server** — REST API phải tiếp tục hoạt động bình thường, chỉ mất phần realtime, có log để biết.
+
+## 2. Quyết định kỹ thuật đề xuất
+
+1. **Không dùng `NotificationsService.notify()` cho `MESSAGE_RECEIVED`.** Bỏ qua hoàn toàn bảng `notifications`/`outbox_events` cho loại này — khác mọi loại khác đã wire ở Phase 10. Lý do: nguồn sự thật của "tin nhắn chưa đọc" đã là domain `messaging` (so sánh `candidateLastReadAt`/`employerLastReadAt` với tin nhắn mới nhất trong `Conversation`); lưu thêm một bản ghi `Notification` độc lập sẽ tạo ra 2 nguồn sự thật có thể lệch nhau theo thời gian (đọc tin nhắn trong chat không tự đánh dấu `Notification.isRead`).
+   - `MessagingService`/socket handler `send_message` gọi `RealtimeNotifier.pushMessageToUser()` (method mới, xem mục 2) sau khi lưu tin nhắn thành công — không đi qua `notify()`.
+   - **Xóa hoàn toàn `MESSAGE_RECEIVED` khỏi Phase 10** (đã chốt 2026-09-16, khác đề xuất ban đầu là "giữ nguyên, chỉ đánh dấu chưa dùng"): xóa entry template trong `templates/notification-templates.ts`, xóa key `MESSAGE_RECEIVED` khỏi `NotificationPayloadMap` (`notification.types.ts`), **và** xóa giá trị `MESSAGE_RECEIVED` khỏi enum `NotificationType` trong `schema.prisma` — bắt buộc xóa cả 3 cùng lúc vì assertion `AssertSameKeys` trong `notification.types.ts` chặn compile nếu key payload map và enum Prisma lệch nhau. Cần **1 migration Prisma mới** để bỏ giá trị enum này (Postgres không hỗ trợ `DROP VALUE` trực tiếp trên enum, Prisma sẽ tạo lại type — kiểm tra kỹ SQL migration sinh ra trước khi chạy; an toàn vì chưa có `Notification` row nào từng dùng type này, do call site chưa bao giờ được wire).
+
+2. **`SocketIoRealtimeNotifier implements RealtimeNotifier`** (`apps/server/src/infrastructure/socket-realtime-notifier.ts`, mới):
+   - `RealtimeNotifier` (port, `apps/server/src/shared/ports/RealtimeNotifier.ts`) có thêm **method mới** `pushMessageToUser(userId: string, payload: RealtimeMessagePayload): Promise<void> | void` (đã chốt — đi qua interface, không để `messaging` module bắn thẳng qua `io`, giữ đúng nguyên tắc "mọi thứ realtime đi qua 1 port" đã có từ Phase 10). `NoopRealtimeNotifier` cũng phải cài đặt method này (no-op + log, giống `pushToUser()` hiện có) để interface không vỡ khi dùng làm fallback (xem mục 3).
+   - `RealtimeMessagePayload` (type mới, cạnh `RealtimeNotificationPayload` trong cùng file port): `{ conversationId: string, senderName: string, preview: string, createdAt: Date }` — không tái dùng `RealtimeNotificationPayload` vì không có `Notification.id`/`type` thật (mục 1 đã quyết định không ghi `Notification` DB cho tin nhắn).
+   - `SocketIoRealtimeNotifier.pushMessageToUser()` emit event **riêng** `notification:new_message` tới room `user:${userId}` — cố ý khác `new_message` (nội dung tin nhắn thật, đã dùng trong chat) để frontend phân biệt rạch ròi giữa "cập nhật UI chat đang mở" và "bắn thông báo/toast/browser notification".
+   - `SocketIoRealtimeNotifier.pushToUser()` (method gốc của interface, dùng cho các `NotificationType` khác từ Phase 10 — `APPLICATION_STATUS_CHANGED`, `JOB_POST_*`, `COMPANY_*`) emit qua event **`notification:new`** (mới, đặt tên song song `notification:new_message`) tới cùng room `user:${userId}` — đây chính là event mà TODO trong `NotificationBell.tsx` (dòng 19-22) cần lắng nghe để bỏ polling, tách biệt với `notification:new_message` (chỉ dùng cho dòng ghim tin nhắn).
+
+3. **Thứ tự khởi tạo (đã chốt — dời `setupSocketIo()` lên sớm hơn trong `main.ts`, không cần EventEmitter trung gian):**
+   - Hiện `main.ts` gọi `createServer(app)` + `setupSocketIo(server, container)` ở **cuối file**, sau khi toàn bộ router đã mount — trong khi `container.ts:73` đăng ký `realtimeNotifier` **tĩnh, ngay lúc `buildContainer()`** (đầu file). Đổi lại: chuyển `const server = createServer(app)` và `setupSocketIo(server, container)` lên **ngay sau `const app = express()`**, trước mọi `app.use(...)` mount router. Express cho phép thêm route vào `app` sau khi `httpServer`/`io` đã tạo — route chỉ cần sẵn sàng lúc `server.listen()`, không phải lúc tạo `httpServer` — nên việc dời lên an toàn.
+   - `setupSocketIo()` trả về `io`; ngay sau đó `main.ts` gọi `container.register({ socketIoServer: asValue(io), realtimeNotifier: asClass(SocketIoRealtimeNotifier).singleton() })` — thay cho registration tĩnh cũ (xóa dòng `realtimeNotifier: asClass(NoopRealtimeNotifier).singleton()` khỏi `container.ts`, chuyển hẳn qua `main.ts` vì giờ phụ thuộc `io` runtime). Vì awilix chỉ thực sự resolve dependency lúc có request đầu tiên gọi `container.resolve(...)` (đã áp dụng ở `resend-email-sender.ts`), đăng ký ở đây vẫn sớm hơn nhiều so với `server.listen()`/request đầu tiên — không cần thêm cơ chế lazy-proxy đặc biệt nào khác.
+   - **Graceful degradation (đã chốt — lỗi Socket.IO không được làm sập cả server):** bọc đoạn `setupSocketIo()` trong `try/catch`. Nếu lỗi: `logger.error("Socket.IO khởi tạo thất bại, notification/chat realtime sẽ không hoạt động", { error })`, đăng ký fallback `realtimeNotifier: asClass(NoopRealtimeNotifier).singleton()` thay vì `SocketIoRealtimeNotifier`, rồi **tiếp tục chạy phần còn lại của `main.ts` bình thường** (mount router, cron job, `server.listen()`) — REST API (kể cả `notifications`/`messaging` REST endpoints) vẫn hoạt động đầy đủ, chỉ mất phần realtime/socket. Không throw ra ngoài khiến process crash.
+
+4. **Symmetric call site:** trong `messaging.service.ts#saveMessage()` (đã trả sẵn cả `message` và `conversation` với `candidate.userId`/`employer.userId`) hoặc ngay tại socket handler `send_message` (`infrastructure/socket/index.ts`) — xác định người nhận là phía còn lại của `conversation`, gọi `realtimeNotifier.pushMessageToUser(recipientUserId, { conversationId, senderName, preview, createdAt })`. Không có nhánh lệch giữa 2 role — cùng 1 đoạn code cho cả candidate và employer.
+
+5. **API tổng hợp cho dòng ghim ở notification center:** thêm endpoint mới `GET /api/conversations/unread-summary` trong `messaging` module → `{ count: number }`. Đếm bằng 1 query Prisma (số `Conversation` có tin nhắn mới hơn mốc đọc tương ứng theo role của user hiện tại), tương tự cách `notifications.repository.ts#countUnread` đang làm cho bảng `notifications` — cần thêm method mới trong `messaging.repository.ts`, không tái dùng `getConversations()` (tránh load toàn bộ list chỉ để đếm).
+
+6. **Trang đích khi bấm vào dòng ghim:** mở rộng trang `/messages` (candidate) / `/employer/messages` (employer) đã có, thêm bộ lọc "chỉ hội thoại chưa đọc" — không cần trang mới, tái dùng `ChatLayout`/`messaging-store` hiện có (chi tiết ở PLAN.md phía frontend cùng phase).
+
+## 3. Route đích cho dòng ghim (đã chốt 2026-09-16)
+
+Hai đường dẫn user yêu cầu trong dòng ghim **chưa có trang tương ứng** trong codebase hiện tại. Đã chốt cùng chủ dự án:
+
+- **"Link tới CV của ứng viên" (khi employer là người nhận thông báo):** không có trang public candidate profile hay trang theo `candidateId`. Trang gần nhất là `/employer/(portal)/applications/[id]/page.tsx` nhưng khoá theo **`applicationId`**, trong khi `Conversation` chỉ có `candidateId`/`jobPostId` (`@@unique([jobPostId, candidateId])`), **không có** `applicationId`. Một `Conversation` có thể tồn tại mà không có `Application` khớp (employer chủ động nhắn trước khi ứng viên nộp đơn).
+  - **Quyết định:** tra `Application` theo `(candidateId, jobPostId)` của conversation — có thì link `/employer/applications/[id]` đó; **không có thì ẩn link** (không xây trang candidate profile mới — hướng (b) bị loại vì phạm vi lớn hơn Phase 9, chưa cần thiết).
+- **"Link tới trang giới thiệu công ty công khai" (khi candidate là người nhận thông báo):** hiện **không tồn tại** trang public company profile nào trong `apps/web/src/app` (chỉ có `/jobs/[id]` — trang chi tiết tin tuyển dụng, có tên công ty nhưng không phải trang riêng của công ty).
+  - **Quyết định:** dùng tạm `/jobs/[jobPostId]` của conversation làm điểm đến (luôn có `jobPostId` vì `Conversation` bắt buộc gắn 1 `JobPost`) — không xây trang `/companies/[id]` mới ở bổ sung này (hướng (b) bị loại, để dành cho phase sau nếu cần).
+
+## 4. Phạm vi KHÔNG làm trong bổ sung này
+
+- Không đổi cấu trúc bảng `notifications`/`outbox_events` (chỉ 1 migration nhỏ xóa giá trị enum `MESSAGE_RECEIVED`, xem mục 2.1 — không thêm cột/bảng mới).
+- Không xây Service Worker/Push API — chỉ Web Notification API khi tab đang mở nhưng không active (đã chốt).
+- Không đổi các call site khác đã wire ở Phase 10 (`APPLICATION_STATUS_CHANGED`, `JOB_POST_*`, `COMPANY_*`) — chỉ xóa riêng `MESSAGE_RECEIVED` (chưa từng có call site thật nên xóa an toàn).
+- Không xây trang candidate profile mới hay `/companies/[id]` mới (đã chốt ở mục 3).

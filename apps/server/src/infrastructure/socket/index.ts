@@ -13,6 +13,11 @@ export function setupSocketIo(httpServer: HttpServer, container: AwilixContainer
     cors: { origin: config.CORS_ORIGIN },
   });
 
+  // Lỗi tầng engine (handshake/transport) chỉ log, không để lan ra process.
+  io.engine.on("connection_error", (err: { code: number; message: string }) => {
+    logger.warn("Socket.IO connection_error", { code: err.code, message: err.message });
+  });
+
   io.use(async (socket, next) => {
     try {
       const token = socket.handshake.auth.token;
@@ -61,6 +66,7 @@ export function setupSocketIo(httpServer: HttpServer, container: AwilixContainer
         const employerUserId = conversation.employer.userId;
 
         io.to(`user:${candidateUserId}`).to(`user:${employerUserId}`).emit("new_message", message);
+        await messagingService.notifyRecipient(conversation, userId, message);
       } catch (error: any) {
         logger.error(`Socket message error: ${error.message}`);
         socket.emit("error", { message: error.message });

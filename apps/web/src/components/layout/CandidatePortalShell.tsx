@@ -18,6 +18,7 @@ const NAV_ITEMS: SideNavItem[] = [
   { label: "Việc làm đã lưu", icon: "bookmark", href: "/saved-jobs" },
   { label: "Ứng tuyển của tôi", href: "/applications", icon: "briefcase-business" },
   { label: "Tin nhắn", icon: "messages-square", href: "/messages" },
+  { label: "Cài đặt", icon: "settings", href: "/settings" },
 ];
 
 /**

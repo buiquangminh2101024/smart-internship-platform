@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { AppError } from "../../shared/errors/AppError";
 import { toJobPostDto } from "../job-posts/job-post.mapper";
+import { jobPostInclude } from "../job-posts/job-post.repository";
 
 export class SavedJobsService {
   private readonly prisma: PrismaClient;
@@ -15,15 +16,7 @@ export class SavedJobsService {
       where: { candidateId: candidate.id },
       orderBy: { createdAt: "desc" },
       include: {
-        jobPost: {
-          include: {
-            company: true,
-            city: true,
-            industry: true,
-            moderationActions: { orderBy: { createdAt: "desc" }, take: 1, include: { actor: true } },
-            _count: { select: { applications: true } },
-          },
-        },
+        jobPost: { include: jobPostInclude },
       },
     });
 
@@ -51,15 +44,7 @@ export class SavedJobsService {
       update: {},
       create: { candidateId: candidate.id, jobPostId },
       include: {
-        jobPost: {
-          include: {
-            company: true,
-            city: true,
-            industry: true,
-            moderationActions: { orderBy: { createdAt: "desc" }, take: 1, include: { actor: true } },
-            _count: { select: { applications: true } },
-          },
-        },
+        jobPost: { include: jobPostInclude },
       },
     });
 

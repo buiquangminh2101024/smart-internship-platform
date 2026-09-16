@@ -87,6 +87,43 @@ export class MessagingRepository {
     });
   }
 
+  /**
+   * Đếm hội thoại có tin nhắn của phía kia mới hơn mốc đọc của user. So sánh
+   * cột với cột qua quan hệ nên phải dùng raw SQL (Prisma filter không hỗ trợ).
+   */
+  async countUnreadConversations(role: Role, participantId: string, userId: string): Promise<number> {
+    const rows =
+      role === "CANDIDATE"
+        ? await this.prisma.$queryRaw<{ count: bigint }[]>`
+            SELECT COUNT(*) AS count FROM "conversations" c
+            WHERE c."candidateId" = ${participantId}
+              AND EXISTS (
+                SELECT 1 FROM "messages" m
+                WHERE m."conversationId" = c."id"
+                  AND m."senderId" <> ${userId}
+                  AND (c."candidateLastReadAt" IS NULL OR m."createdAt" > c."candidateLastReadAt")
+              )`
+        : await this.prisma.$queryRaw<{ count: bigint }[]>`
+            SELECT COUNT(*) AS count FROM "conversations" c
+            WHERE c."employerId" = ${participantId}
+              AND EXISTS (
+                SELECT 1 FROM "messages" m
+                WHERE m."conversationId" = c."id"
+                  AND m."senderId" <> ${userId}
+                  AND (c."employerLastReadAt" IS NULL OR m."createdAt" > c."employerLastReadAt")
+              )`;
+    return Number(rows[0]?.count ?? 0);
+  }
+
+  /** Application khớp (candidateId, jobPostId) của từng hội thoại — dùng cho link "CV ứng viên". */
+  async findApplicationIdsForConversations(pairs: { candidateId: string; jobPostId: string }[]) {
+    if (pairs.length === 0) return [];
+    return this.prisma.application.findMany({
+      where: { OR: pairs.map(({ candidateId, jobPostId }) => ({ candidateId, jobPostId })) },
+      select: { id: true, candidateId: true, jobPostId: true },
+    });
+  }
+
   async getLatestMessage(conversationId: string) {
     return this.prisma.message.findFirst({
       where: { conversationId },

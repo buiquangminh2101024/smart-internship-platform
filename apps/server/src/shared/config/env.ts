@@ -30,6 +30,14 @@ const baseSchema = z.object({
 
   RESEND_API_KEY: z.string().optional(),
   RESEND_FROM_EMAIL: z.string().optional(),
+  // DEV ONLY: thay ResendEmailSender bằng ConsoleEmailSender (in email ra
+  // console, không gửi thật) — áp dụng cho MỌI email (OTP + notification).
+  // Cùng pattern parse tường minh như DEV_SKIP_COMPANY_MANUAL_VERIFICATION;
+  // superRefine bên dưới chặn cứng khi NODE_ENV=production.
+  DEV_SKIP_EMAIL_SENDING: z.preprocess(
+    (value) => (typeof value === "string" ? value === "true" : value),
+    z.boolean().default(false),
+  ),
 
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
@@ -87,12 +95,26 @@ const baseSchema = z.object({
     (value) => (typeof value === "string" ? value === "true" : value),
     z.boolean().default(false),
   ),
+
+  // JobPost Skill — Hướng B (xem docs/06-backend/jobpost-skill-huong-b/PLAN.md).
+  // Cả hai đều optional: thiếu GEMINI_API_KEY thì cron bỏ qua bước xác nhận LLM,
+  // skill vùng xám nằm lại PENDING chờ Admin duyệt tay (human-in-the-loop vẫn
+  // chạy được, chỉ tốn công hơn). Thiếu EMBEDDING_MODEL_CACHE_DIR thì
+  // @huggingface/transformers dùng cache mặc định trong node_modules — vẫn chạy,
+  // chỉ làm phình thư mục dự án (đó là lý do nên trỏ sang ổ đĩa khác).
+  GEMINI_API_KEY: z.string().optional(),
+  // Đổi được qua .env khi Google gỡ model cũ (gemini-2.0-flash đã bị gỡ, API
+  // trả 404 kèm tên bản thay thế) — không phải sửa code.
+  GEMINI_MODEL: z.string().min(1).default("gemini-3.6-flash"),
+  EMBEDDING_MODEL_CACHE_DIR: z.string().optional(),
+  EMBEDDING_MODEL_ID: z.string().min(1).default("Xenova/paraphrase-multilingual-MiniLM-L12-v2"),
 });
 
-// Resend/Google chỉ optional khi OTP_HARDCODE=true (dev bypass gửi email thật).
-// Ở production luôn bắt buộc phải có đủ để OTP thật + Google OAuth hoạt động.
+// Resend/Google chỉ optional khi OTP_HARDCODE=true hoặc DEV_SKIP_EMAIL_SENDING=true
+// (dev bypass gửi email thật). Ở production luôn bắt buộc phải có đủ để OTP
+// thật + Google OAuth hoạt động.
 const envSchema = baseSchema.superRefine((data, ctx) => {
-  const requireInProd = data.NODE_ENV === "production" || !data.OTP_HARDCODE;
+  const requireInProd = data.NODE_ENV === "production" || (!data.OTP_HARDCODE && !data.DEV_SKIP_EMAIL_SENDING);
 
   if (requireInProd && !data.RESEND_API_KEY) {
     ctx.addIssue({ code: "custom", path: ["RESEND_API_KEY"], message: "RESEND_API_KEY is required" });
@@ -142,6 +164,13 @@ const envSchema = baseSchema.superRefine((data, ctx) => {
       code: "custom",
       path: ["DEV_SKIP_PAYMENT_GATEWAY"],
       message: "DEV_SKIP_PAYMENT_GATEWAY must be false in production",
+    });
+  }
+  if (data.NODE_ENV === "production" && data.DEV_SKIP_EMAIL_SENDING) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["DEV_SKIP_EMAIL_SENDING"],
+      message: "DEV_SKIP_EMAIL_SENDING must be false in production",
     });
   }
 });

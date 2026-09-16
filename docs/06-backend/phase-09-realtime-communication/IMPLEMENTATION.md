@@ -50,3 +50,17 @@ Các model được cập nhật/thêm mới để hỗ trợ Chat:
 
 - **Sự cố Awilix Proxy Injection**: Gây ra lỗi `Could not resolve 'getConversations'`. Khắc phục bằng cách điều chỉnh cấu trúc hàm tạo của Controller/Service từ Positional Argument sang Destructured Object (đúng chuẩn của thư viện).
 - **Hardcode Placeholder Values**: Giải quyết sự cố 0 ứng viên (0 applications) hiển thị ở phần UI của nhà tuyển dụng do truy vấn Prisma không kèm thuộc tính `_count.applications` (đã bị hardcode thành 0 từ Phase 6). Bổ sung đếm tự động vào Mapper và cấu hình truy vấn của repository JobPosts/SavedJobs.
+
+## 6. Bổ sung — Notification realtime cho Messaging (2026-09-16)
+
+Triển khai theo `PLAN.md` cùng thư mục.
+
+- **Port `RealtimeNotifier`** thêm `pushMessageToUser()` + type `RealtimeMessagePayload`. Hai bản cài đặt:
+  - `infrastructure/socket-realtime-notifier.ts` (mới): `pushToUser()` → event `notification:new`, `pushMessageToUser()` → event `notification:new_message`, cùng room `user:${userId}`. Lỗi emit chỉ log.
+  - `infrastructure/noop-realtime-notifier.ts`: fallback, cài đặt cả 2 method (chỉ log).
+- **Khởi tạo (`main.ts` + `container.ts`)**: `createServer(app)` + `setupSocketIo()` chạy ngay sau `express()`, bọc `try/catch`; kết quả truyền vào `registerRealtime(container, io)` (mới, trong `container.ts`) — có `io` thì đăng ký `socketIoServer` + `SocketIoRealtimeNotifier`, lỗi thì `logger.error` và đăng ký `NoopRealtimeNotifier`, server vẫn `listen` bình thường. Đăng ký tĩnh `realtimeNotifier` trong `buildContainer()` đã bỏ. Socket gateway log thêm `io.engine` `connection_error`.
+- **Call site đối xứng**: `MessagingService.notifyRecipient()` (mới) — gọi từ handler `send_message` sau khi lưu tin + emit `new_message`; người nhận là phía còn lại của hội thoại, preview cắt 100 ký tự. Lỗi push chỉ log.
+- **`GET /api/conversations/unread-summary`** → `{ count }`: `MessagingRepository.countUnreadConversations()` dùng raw SQL (so sánh `messages.createdAt` với `candidateLastReadAt`/`employerLastReadAt`, bỏ qua tin do chính user gửi).
+- **`GET /api/conversations` (employer)** trả thêm `applicationId` (Application khớp `(candidateId, jobPostId)`, `null` nếu chưa nộp đơn) — nguồn cho link "Xem CV ứng viên".
+- **Xoá `MESSAGE_RECEIVED`**: template, `NotificationPayloadMap`, enum Prisma, union `NotificationType` ở `shared-types`; migration `20260916000000_remove_message_received_notification_type` (tạo lại enum theo cách Prisma sinh).
+- `shared-types` thêm `Conversation.applicationId?`, `MessageNotificationEvent`, `NotificationEvent`.

@@ -2,7 +2,9 @@
 
 import { useState, type ReactNode } from "react";
 import type { CreateJobPostRequest, JobPost, JobPostType } from "@sip/shared-types";
-import { useCities, useIndustries } from "@/hooks/useCatalog";
+import { useCities, useIndustries, useSkills } from "@/hooks/useCatalog";
+import { suggestSkill } from "@/lib/skills";
+import { SkillMultiSelect, type SelectedSkill } from "@/components/shared/SkillMultiSelect";
 import {
   JOB_TYPE_OPTIONS,
   MAX_EXPIRY_DAYS,
@@ -71,9 +73,16 @@ function toFormState(job: JobPost | undefined): FormState {
  */
 export function JobPostForm({ initial, saving = false, error, notice, onAction, onCancel }: JobPostFormProps) {
   const [form, setForm] = useState<FormState>(() => toFormState(initial));
+  // Kỹ năng nằm ở bảng nối nên không đi cùng FormState (toàn string) — giữ state
+  // riêng, gom vào `skillIds` lúc submit. Skill PENDING employer vừa đề xuất
+  // cũng nằm trong danh sách này và được gửi lên như skill thường.
+  const [skills, setSkills] = useState<SelectedSkill[]>(
+    () => (initial?.skills ?? []).map((skill) => ({ id: skill.id, name: skill.name, status: skill.status })),
+  );
   const [validationError, setValidationError] = useState<string | null>(null);
   const { data: industries } = useIndustries();
   const { data: cities } = useCities();
+  const { data: skillCatalog } = useSkills();
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -108,6 +117,7 @@ export function JobPostForm({ initial, saving = false, error, notice, onAction, 
       requirements: form.requirements.trim(),
       benefits: form.benefits.trim(),
       isNegotiable: form.isNegotiable,
+      skillIds: skills.map((skill) => skill.id),
       ...(form.isNegotiable ? {} : { ...(salaryMin !== undefined ? { salaryMin } : {}), ...(salaryMax !== undefined ? { salaryMax } : {}) }),
       ...(form.expiresAt ? { expiresAt: expiryInputToIso(form.expiresAt) } : {}),
     };
@@ -246,6 +256,16 @@ export function JobPostForm({ initial, saving = false, error, notice, onAction, 
           placeholder="Môi trường làm việc trẻ trung, năng động."
           value={form.benefits}
           onChange={(e) => set("benefits", e.target.value)}
+        />
+        <SkillMultiSelect
+          label="Kỹ năng yêu cầu"
+          hint="Không tìm thấy kỹ năng cần tuyển? Gõ tên rồi bấm Thêm — kỹ năng mới sẽ được quản trị viên duyệt trước khi vào danh mục chung."
+          selected={skills}
+          catalog={skillCatalog ?? []}
+          disabled={saving}
+          onAdd={(skill) => setSkills((prev) => [...prev, skill])}
+          onRemove={(skillId) => setSkills((prev) => prev.filter((skill) => skill.id !== skillId))}
+          onSuggestNew={(name) => suggestSkill("employer", name)}
         />
       </Card>
 
