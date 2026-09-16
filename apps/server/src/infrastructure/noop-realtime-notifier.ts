@@ -1,13 +1,13 @@
 import type { Logger } from "../shared/logger";
-import type { RealtimeNotificationPayload, RealtimeNotifier } from "../shared/ports/RealtimeNotifier";
+import type {
+  RealtimeMessagePayload,
+  RealtimeNotificationPayload,
+  RealtimeNotifier,
+} from "../shared/ports/RealtimeNotifier";
 
 /**
- * Bản cài đặt tạm của RealtimeNotifier cho Phase 10: không đẩy gì cả, frontend
- * lấy notification bằng polling (GET /notifications/unread-count).
- *
- * TODO(Phase 9): thay bằng SocketIoRealtimeNotifier (emit tới room theo userId)
- * và đổi registration `realtimeNotifier` trong container.ts. Không sửa
- * NotificationsService — nó chỉ phụ thuộc interface này.
+ * Fallback của RealtimeNotifier khi Socket.IO khởi tạo thất bại (xem main.ts):
+ * không đẩy gì cả, frontend vẫn lấy notification bằng REST (polling dự phòng).
  */
 export class NoopRealtimeNotifier implements RealtimeNotifier {
   private readonly logger: Logger;
@@ -17,10 +17,17 @@ export class NoopRealtimeNotifier implements RealtimeNotifier {
   }
 
   pushToUser(userId: string, payload: RealtimeNotificationPayload): void {
-    this.logger.info("Realtime push skipped (Socket.IO chưa sẵn sàng — Phase 9)", {
+    this.logger.info("Realtime push skipped (Socket.IO không khả dụng)", {
       userId,
       notificationId: payload.id,
       type: payload.type,
+    });
+  }
+
+  pushMessageToUser(userId: string, payload: RealtimeMessagePayload): void {
+    this.logger.info("Realtime message push skipped (Socket.IO không khả dụng)", {
+      userId,
+      conversationId: payload.conversationId,
     });
   }
 }

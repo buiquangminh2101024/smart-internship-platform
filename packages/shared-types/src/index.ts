@@ -29,8 +29,7 @@ export type NotificationType =
   | "JOB_POST_REJECTED"
   | "JOB_POST_TAKEN_DOWN"
   | "COMPANY_VERIFIED"
-  | "COMPANY_REJECTED"
-  | "MESSAGE_RECEIVED";
+  | "COMPANY_REJECTED";
 
 // ─── Wrapper response chuẩn cho REST API ─────────────────────────────────
 
@@ -565,6 +564,79 @@ export interface EmployerApplicationDetail extends Application {
   candidate: any; 
 }
 
+// --- Messaging (Phase 9) -------------------------------------------------
+
+export interface Message {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface ConversationParticipant {
+  id: string; // Candidate/Employer ID
+  name: string;
+  avatarUrl: string | null;
+}
+
+export interface ConversationJobPostInfo {
+  id: string;
+  title: string;
+  companyName: string;
+}
+
+export interface Conversation {
+  id: string;
+  jobPostId: string;
+  candidateId: string;
+  employerId: string;
+  candidateLastReadAt: string | null;
+  employerLastReadAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  
+  // Relations loaded for UI
+  jobPost: ConversationJobPostInfo;
+  candidate: ConversationParticipant;
+  employer: ConversationParticipant;
+  
+  // Latest message for list view
+  latestMessage?: Message | null;
+
+  /**
+   * Chỉ có ở phía employer: Application khớp (candidateId, jobPostId) để link
+   * tới CV ứng viên — null khi ứng viên chưa nộp đơn vào tin này.
+   */
+  applicationId?: string | null;
+}
+
+/** Payload event socket `notification:new_message` (không gắn bản ghi Notification). */
+export interface MessageNotificationEvent {
+  conversationId: string;
+  senderName: string;
+  preview: string;
+  createdAt: string;
+}
+
+/** Payload event socket `notification:new` — thông báo nghiệp vụ (Phase 10). */
+export interface NotificationEvent {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string | null;
+  link: string | null;
+  createdAt: string;
+}
+
+export interface CreateConversationRequest {
+  jobPostId: string;
+}
+
+export interface SendMessageSocketPayload {
+  conversationId: string;
+  content: string;
+}
 // ─── Notifications (Phase 10) ────────────────────────────────────────────
 
 export interface Notification {

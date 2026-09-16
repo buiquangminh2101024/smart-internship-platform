@@ -1,7 +1,10 @@
 import { config } from "./shared/config/env";
 import express from "express";
 import cors from "cors";
-import { buildContainer } from "./container";
+import { createServer } from "http";
+import type { Server as SocketIOServer } from "socket.io";
+import { setupSocketIo } from "./infrastructure/socket";
+import { buildContainer, registerRealtime } from "./container";
 import { healthRouter } from "./modules/health/health.routes";
 import { authRouter } from "./modules/auth/auth.routes";
 import { usersRouter } from "./modules/users/users.routes";
@@ -25,16 +28,32 @@ import type { SkillMatchVerifier } from "./shared/ports/SkillMatchVerifier";
 import { cvRouter } from "./modules/cv/cv.routes";
 import { savedJobsRouter } from "./modules/saved-jobs/saved-jobs.routes";
 import { applicationsRouter } from "./modules/applications/applications.routes";
+
+import { messagingRoutes } from "./modules/messaging/messaging.routes";
+
 import { notificationsRouter } from "./modules/notifications/notifications.routes";
 import { startOutboxJob } from "./modules/notifications/outbox/outbox.job";
 import type { OutboxRepository } from "./modules/notifications/outbox/outbox.repository";
 import type { EmailSender } from "./shared/ports/EmailSender";
+
 import { errorHandler } from "./shared/middleware/errorHandler";
 import { logger } from "./shared/logger";
 
 const container = buildContainer();
 
 const app = express();
+
+// Tạo httpServer + Socket.IO trước khi mount router để realtimeNotifier có mặt
+// trong container ngay từ đầu (route vẫn thêm được vào `app` sau đó). Socket.IO
+// lỗi thì chỉ mất realtime, không được kéo sập REST API.
+const server = createServer(app);
+let io: SocketIOServer | null = null;
+try {
+  io = setupSocketIo(server, container);
+} catch (error) {
+  logger.error("Socket.IO khởi tạo thất bại, notification/chat realtime sẽ không hoạt động", { error });
+}
+registerRealtime(container, io);
 
 app.use(cors({ origin: config.CORS_ORIGIN }));
 app.use(express.json());
@@ -55,6 +74,9 @@ app.use("/api", skillsRouter(container));
 app.use("/api", cvRouter(container));
 app.use("/api", savedJobsRouter(container));
 app.use("/api", applicationsRouter(container));
+
+app.use("/api/conversations", messagingRoutes(container));
+
 // Mount trước khi start outbox job bên dưới: notificationsRouter là nơi đăng ký
 // notificationsService/outboxRepository vào container.
 app.use("/api", notificationsRouter(container));
@@ -87,6 +109,6 @@ startSkillSuggestionQueueJob({
   logger,
 });
 
-app.listen(config.PORT, () => {
+server.listen(config.PORT, () => {
   logger.info(`Server listening on port ${config.PORT}`);
 });

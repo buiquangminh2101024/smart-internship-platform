@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { SideNav, type SideNavItem } from "./SideNav";
 import { PortalTopbar, buildCrumbs } from "./PortalTopbar";
+import { SocketProvider } from "@/components/realtime/SocketProvider";
 
 // Bố cục theo ảnh mẫu `Screenshot 2026-09-12 134041.png` (panel 1 & 2): 4 mục
 // điều hướng + nút "Đăng tin mới" ghim đáy sidebar. "Dashboard" tạm trỏ về
@@ -17,17 +18,21 @@ import { PortalTopbar, buildCrumbs } from "./PortalTopbar";
 // để disable thay vì link chết.
 const NAV_ITEMS: SideNavItem[] = [
   { label: "Tin tuyển dụng", icon: "briefcase", href: "/employer/jobs", matchNested: true },
-  { label: "Ứng viên", icon: "users", soon: true },
+  { label: "Tin nhắn", icon: "messages-square", href: "/employer/messages", matchNested: true },
   { label: "Hồ sơ công ty", icon: "building-2", href: "/employer/profile" },
   { label: "Gói dịch vụ", icon: "credit-card", href: "/employer/subscription", matchNested: true },
+  { label: "Cài đặt", icon: "settings", href: "/employer/settings" },
 ];
 
 const CRUMB_LABELS: Record<string, string> = {
   jobs: "Tin tuyển dụng",
   new: "Đăng tin mới",
+  applications: "Ứng viên",
+  messages: "Tin nhắn",
   profile: "Hồ sơ công ty",
   subscription: "Gói dịch vụ",
   notifications: "Thông báo",
+  settings: "Cài đặt",
 };
 
 /**
@@ -55,42 +60,44 @@ export function EmployerPortalShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div data-role="employer" className="flex min-h-screen flex-col bg-surface-page">
-      <PortalTopbar
-        area="employer"
-        roleLabel="Doanh nghiệp"
-        homeHref="/employer/jobs"
-        crumbs={buildCrumbs(pathname, { label: "Employer Portal", href: "/employer" }, CRUMB_LABELS)}
-        userEmail={user?.email}
-        accountHref="/employer/profile"
-        onLogout={handleLogout}
-      />
-
-      <div className="flex flex-1 items-stretch">
-        <SideNav
-          items={NAV_ITEMS}
-          header={
-            <div className="grid gap-1">
-              <span className="flex items-center gap-2 text-sm font-semibold text-text-strong">
-                <Icon name="building-2" size={16} className="text-brand-600" />
-                <span className="truncate">{company?.name ?? "Employer Portal"}</span>
-              </span>
-              {company ? (
-                <Badge tone={company.isVerified ? "success" : "warning"}>
-                  {company.isVerified ? "Đã xác minh" : "Chờ xác minh"}
-                </Badge>
-              ) : null}
-            </div>
-          }
-          footer={
-            <Button as="a" href="/employer/jobs/new" icon="plus" fullWidth>
-              Đăng tin mới
-            </Button>
-          }
+    <SocketProvider area="employer">
+      <div data-role="employer" className="flex min-h-screen flex-col bg-surface-page">
+        <PortalTopbar
+          area="employer"
+          roleLabel="Doanh nghiệp"
+          homeHref="/employer/jobs"
+          crumbs={buildCrumbs(pathname, { label: "Employer Portal", href: "/employer" }, CRUMB_LABELS)}
+          userEmail={user?.email}
+          accountHref="/employer/profile"
+          onLogout={handleLogout}
         />
 
-        <main className="min-w-0 flex-1">{children}</main>
+        <div className="flex flex-1 items-stretch">
+          <SideNav
+            items={NAV_ITEMS}
+            header={
+              <div className="grid gap-1">
+                <span className="flex items-center gap-2 text-sm font-semibold text-text-strong">
+                  <Icon name="building-2" size={16} className="text-brand-600" />
+                  <span className="truncate">{company?.name ?? "Employer Portal"}</span>
+                </span>
+                {company ? (
+                  <Badge tone={company.isVerified ? "success" : "warning"}>
+                    {company.isVerified ? "Đã xác minh" : "Chờ xác minh"}
+                  </Badge>
+                ) : null}
+              </div>
+            }
+            footer={
+              <Button as="a" href="/employer/jobs/new" icon="plus" fullWidth>
+                Đăng tin mới
+              </Button>
+            }
+          />
+
+          <main className="min-w-0 flex-1">{children}</main>
+        </div>
       </div>
-    </div>
+    </SocketProvider>
   );
 }

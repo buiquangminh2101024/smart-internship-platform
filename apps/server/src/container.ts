@@ -1,12 +1,15 @@
 import { asClass, asFunction, asValue, createContainer, type AwilixContainer } from "awilix";
 import type { Redis } from "ioredis";
+import type { Server as SocketIOServer } from "socket.io";
 import { prisma } from "./infrastructure/prisma";
 import { redis } from "./infrastructure/redis";
 import { RedisRateLimiter } from "./infrastructure/redis-rate-limiter";
 import { RedisTokenBlacklist } from "./infrastructure/redis-token-blacklist";
 import { RedisOtpStore } from "./infrastructure/redis-otp-store";
 import { ResendEmailSender } from "./infrastructure/resend-email-sender";
+import { ConsoleEmailSender } from "./infrastructure/console-email-sender";
 import { NoopRealtimeNotifier } from "./infrastructure/noop-realtime-notifier";
+import { SocketIoRealtimeNotifier } from "./infrastructure/socket-realtime-notifier";
 import { GoogleAuthClient } from "./infrastructure/google-auth-client";
 import { RedisCompanyInviteCodeStore } from "./infrastructure/redis-company-invite-code-store";
 import { CloudinaryMediaStorage } from "./infrastructure/cloudinary-media-storage";
@@ -41,8 +44,9 @@ export interface Cradle {
   tokenBlacklist: TokenBlacklist;
   otpStore: OtpStore;
   emailSender: EmailSender;
-  // Phase 10: bản no-op. Khi Phase 9 xong, đổi registration sang implementation
-  // dùng Socket.IO — NotificationsService không phải sửa gì.
+  // Bản Socket.IO khi gateway khởi tạo được, fallback no-op nếu lỗi —
+  // NotificationsService/messaging chỉ phụ thuộc interface.
+  socketIoServer?: SocketIOServer;
   realtimeNotifier: RealtimeNotifier;
   googleAuthClient: GoogleAuthClient;
   companyInviteCodeStore: CompanyInviteCodeStore;
@@ -69,8 +73,11 @@ export function buildContainer(): AwilixContainer<Cradle> {
     rateLimiter: asClass(RedisRateLimiter).singleton(),
     tokenBlacklist: asClass(RedisTokenBlacklist).singleton(),
     otpStore: asClass(RedisOtpStore).singleton(),
-    emailSender: asClass(ResendEmailSender).singleton(),
-    realtimeNotifier: asClass(NoopRealtimeNotifier).singleton(),
+    emailSender: config.DEV_SKIP_EMAIL_SENDING
+      ? asClass(ConsoleEmailSender).singleton()
+      : asClass(ResendEmailSender).singleton(),
+    // realtimeNotifier KHÔNG đăng ký ở đây: phụ thuộc instance Socket.IO tạo
+    // lúc runtime — xem registerRealtime() bên dưới, gọi từ main.ts.
     googleAuthClient: asClass(GoogleAuthClient).singleton(),
     companyInviteCodeStore: asClass(RedisCompanyInviteCodeStore).singleton(),
     mediaStorage: asClass(CloudinaryMediaStorage).singleton(),
@@ -88,4 +95,19 @@ export function buildContainer(): AwilixContainer<Cradle> {
   });
 
   return container;
+}
+
+/**
+ * Đăng ký realtimeNotifier theo kết quả khởi tạo Socket.IO. `io` = null nghĩa
+ * là gateway lỗi → dùng bản no-op để REST API vẫn chạy (chỉ mất realtime).
+ */
+export function registerRealtime(container: AwilixContainer<Cradle>, io: SocketIOServer | null): void {
+  if (io) {
+    container.register({
+      socketIoServer: asValue(io),
+      realtimeNotifier: asClass(SocketIoRealtimeNotifier).singleton(),
+    });
+  } else {
+    container.register({ realtimeNotifier: asClass(NoopRealtimeNotifier).singleton() });
+  }
 }

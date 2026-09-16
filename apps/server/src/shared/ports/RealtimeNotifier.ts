@@ -10,10 +10,25 @@ export interface RealtimeNotificationPayload {
 }
 
 /**
- * Điểm nối realtime cho notification. Phase 10 chỉ định nghĩa port + bản no-op;
- * bản dùng Socket.IO thuộc Phase 9 (đang làm song song) — khi Phase 9 xong chỉ
- * cần đổi registration trong container.ts, NotificationsService không đổi.
+ * Báo "có tin nhắn mới" — không gắn với bản ghi Notification nào (tin nhắn
+ * không ghi vào bảng notifications, nguồn sự thật chưa-đọc là mốc đọc của
+ * Conversation — xem docs/06-backend/phase-09-realtime-communication/PLAN.md).
+ */
+export interface RealtimeMessagePayload {
+  conversationId: string;
+  senderName: string;
+  preview: string;
+  createdAt: Date;
+}
+
+/**
+ * Điểm nối realtime cho notification. Mọi thứ realtime ngoài nội dung chat đi
+ * qua port này — bản Socket.IO đăng ký trong main.ts, fallback no-op khi
+ * Socket.IO khởi tạo lỗi.
  */
 export interface RealtimeNotifier {
+  /** Event `notification:new` — các NotificationType nghiệp vụ (Phase 10). */
   pushToUser(userId: string, payload: RealtimeNotificationPayload): Promise<void> | void;
+  /** Event `notification:new_message` — chỉ dành cho tin nhắn. */
+  pushMessageToUser(userId: string, payload: RealtimeMessagePayload): Promise<void> | void;
 }

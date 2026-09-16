@@ -111,6 +111,27 @@ Xem tổng quan roadmap ở `docs/01-project/PROJECT_PHASES.md` §Phase 10, ki�
 - `NotificationsService` có thêm **`notifyMany()`** (lặp `notify()` cho danh sách user) vì 5/7 call site đều gửi cho toàn bộ employer của một company.
 - `ApplicationsRepository.update()` được thêm tham số `db: Db = this.prisma` đúng như kế hoạch; ngoài ra `applications.service.ts#updateApplicationStatus` nay bọc `prisma.$transaction`.
 
+## Bổ sung (2026-09-16) — Dev email bypass cho notification email
+
+> **Trạng thái: đã triển khai (2026-09-16).** Khác mô tả ban đầu ở mục 5: vì `emailSender` là 1 registration dùng chung, cờ này áp dụng cho **mọi** email (cả OTP ở `auth.service.ts` lẫn outbox notification) — xem ghi chú dưới mục 5. `RESEND_*` cũng không còn bắt buộc ở dev khi bật cờ.
+
+Vấn đề: khi test bằng email giả (đăng ký thử candidate/employer), `outbox.job.ts` vẫn cố gửi qua Resend thật cho địa chỉ không tồn tại — cần cách tắt gửi email thật ở dev mà **không thể vô tình để sót khi lên production**.
+
+Đề xuất, theo đúng pattern `DEV_SKIP_COMPANY_MANUAL_VERIFICATION`/`DEV_SKIP_PAYMENT_GATEWAY` đã có sẵn trong `apps/server/src/shared/config/env.ts` (dùng `z.preprocess` parse tường minh chuỗi `"true"`, không dùng `z.coerce.boolean()`, cộng ràng buộc chặn cứng production trong `superRefine`):
+
+1. Thêm biến `DEV_SKIP_EMAIL_SENDING` (boolean, cùng pattern `z.preprocess`, default `false`) vào `env.ts` — đặt cạnh nhóm `RESEND_*`.
+2. Thêm nhánh trong `superRefine` hiện có (cạnh nhánh `DEV_SKIP_PAYMENT_GATEWAY`, dòng ~153): nếu `NODE_ENV === "production"` và `DEV_SKIP_EMAIL_SENDING === true` → `ctx.addIssue(...)`, server **từ chối khởi động** thay vì chỉ dựa vào việc nhớ xoá biến khỏi `.env` production.
+3. Thêm `ConsoleEmailSender implements EmailSender` (`apps/server/src/infrastructure/console-email-sender.ts`, mới) — log `to`/`subject`/`html` qua `logger.info`, không gọi Resend, không throw.
+4. `container.ts:72`: đăng ký `emailSender` có điều kiện theo `config.DEV_SKIP_EMAIL_SENDING` — `asClass(ConsoleEmailSender)` hoặc `asClass(ResendEmailSender)`, giữ `.singleton()`.
+5. **Không đổi** `OTP_HARDCODE` hiện có — đây là flag riêng cho luồng OTP (`auth.service.ts`), đã hoạt động đúng và độc lập. `DEV_SKIP_EMAIL_SENDING` chỉ ảnh hưởng `outbox.job.ts`/email notification (Phase 10), hai flag không chồng lấn nhau: bật `OTP_HARDCODE` mà tắt `DEV_SKIP_EMAIL_SENDING` vẫn gửi email notification thật (chỉ OTP được bypass), và ngược lại.
+   - *Ghi chú khi triển khai:* tắt `OTP_HARDCODE` + bật `DEV_SKIP_EMAIL_SENDING` → OTP sinh ngẫu nhiên như thật nhưng email OTP chỉ được in ra console server (đọc mã OTP ở đó) — hai cờ vẫn độc lập về cách sinh OTP.
+
+### Phạm vi KHÔNG làm
+
+- Không đổi interface `EmailSender`.
+- Không thêm UI/admin toggle — chỉ qua `.env`, giống các cờ `DEV_SKIP_*` khác.
+- Không ảnh hưởng `ResendEmailSender` hiện có — chỉ thêm 1 implementation mới song song.
+
 ## Phần 4 — Ghi chú của chủ dự án
 
 *(để trống)*

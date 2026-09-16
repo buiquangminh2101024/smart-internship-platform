@@ -167,14 +167,8 @@ const templates: { [T in NotificationType]: Renderer<T> } = {
     };
   },
 
-  // Chưa có call site — module messaging thuộc Phase 9. Cố ý KHÔNG gửi email:
-  // mỗi tin nhắn một email sẽ thành spam; tin nhắn đã có realtime + in-app.
-  MESSAGE_RECEIVED: (data) => ({
-    title: `Tin nhắn mới từ ${data.senderName}`,
-    body: data.preview,
-    link: `/messages?conversationId=${encodeURIComponent(data.conversationId)}`,
-    email: null,
-  }),
+  // Tin nhắn cố ý không có loại notification: không ghi DB mỗi tin, chỉ push
+  // realtime qua RealtimeNotifier.pushMessageToUser (Phase 9 bổ sung).
 };
 
 export function renderNotification<T extends NotificationType>(

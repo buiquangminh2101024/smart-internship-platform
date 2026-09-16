@@ -1,11 +1,18 @@
-import type { Metadata } from "next";
+import { Suspense } from "react";
+import { ChatLayout } from "@/components/messaging/ChatLayout";
 
-export const metadata: Metadata = { title: "Tin nhắn — InternHub" };
+export const metadata = {
+  title: "Tin nhắn | Smart Internship Platform",
+};
 
-export default function MessagesPage() {
+export default function CandidateMessagesPage() {
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl items-center justify-center px-6 text-center">
-      <p className="text-text-muted">Trang nhắn tin sẽ có ở Phase 8.</p>
-    </main>
+    <div className="flex h-[calc(100vh-64px)] flex-col">
+      <div className="flex-1 overflow-hidden">
+        <Suspense fallback={<div className="p-8 text-center text-text-muted">Đang tải...</div>}>
+          <ChatLayout area="candidate" />
+        </Suspense>
+      </div>
+    </div>
   );
 }

@@ -27,6 +27,7 @@ export const jobPostInclude = {
   // Kèm cả skill PENDING (do chính employer vừa đề xuất) — form sửa tin cần
   // thấy chúng; mapper mới là chỗ lọc bớt khi trả ra API công khai.
   skills: { include: { skill: { select: { id: true, name: true, status: true } } } },
+  _count: { select: { applications: true } },
 } satisfies Prisma.JobPostInclude;
 
 export type JobPostWithRelations = Prisma.JobPostGetPayload<{ include: typeof jobPostInclude }>;
@@ -74,7 +75,7 @@ export class JobPostRepository {
   }
 
   create(
-    data: JobPostWriteData & { companyId: string; title: string; description: string; jobType: JobPostType },
+    data: JobPostWriteData & { companyId: string; employerId: string; title: string; description: string; jobType: JobPostType },
     db: Db = this.prisma,
   ): Promise<JobPostWithRelations> {
     return db.jobPost.create({ data, include: jobPostInclude });

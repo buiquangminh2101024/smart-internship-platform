@@ -98,6 +98,22 @@ async function refreshAccessToken(area: AuthArea): Promise<string | null> {
 }
 
 /**
+ * Refresh access token của `area`, gộp các lệnh gọi đồng thời (REST 401 và
+ * socket bị từ chối token cùng lúc chỉ gọi /auth/refresh một lần).
+ * Trả null nếu không refresh được.
+ */
+export function refreshAccessTokenShared(area: AuthArea): Promise<string | null> {
+  let refreshPromise = refreshPromises.get(area);
+  if (!refreshPromise) {
+    refreshPromise = refreshAccessToken(area).finally(() => {
+      refreshPromises.delete(area);
+    });
+    refreshPromises.set(area, refreshPromise);
+  }
+  return refreshPromise;
+}
+
+/**
  * Fetch wrapper cho endpoint cần access token, đọc/ghi đúng store của
  * `area` được truyền vào — tự đính access token nếu có, refresh một lần khi
  * gặp 401 rồi thử lại; nếu vẫn thất bại thì clear đúng session của area đó
@@ -109,14 +125,7 @@ export async function apiFetch<T = void>(area: AuthArea, path: string, init: Req
   let res = await doFetch<T>(path, initialToken, init);
 
   if (res.status === 401 && initialToken) {
-    let refreshPromise = refreshPromises.get(area);
-    if (!refreshPromise) {
-      refreshPromise = refreshAccessToken(area).finally(() => {
-        refreshPromises.delete(area);
-      });
-      refreshPromises.set(area, refreshPromise);
-    }
-    const newToken = await refreshPromise;
+    const newToken = await refreshAccessTokenShared(area);
 
     if (newToken) {
       res = await doFetch<T>(path, newToken, init);
@@ -157,14 +166,7 @@ export async function apiUpload<T = void>(area: AuthArea, path: string, formData
   let res = await send(initialToken);
 
   if (res.status === 401 && initialToken) {
-    let refreshPromise = refreshPromises.get(area);
-    if (!refreshPromise) {
-      refreshPromise = refreshAccessToken(area).finally(() => {
-        refreshPromises.delete(area);
-      });
-      refreshPromises.set(area, refreshPromise);
-    }
-    const newToken = await refreshPromise;
+    const newToken = await refreshAccessTokenShared(area);
 
     if (newToken) {
       res = await send(newToken);

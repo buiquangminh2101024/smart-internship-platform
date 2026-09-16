@@ -66,8 +66,6 @@ enum NotificationType {
   JOB_POST_TAKEN_DOWN
   COMPANY_VERIFIED
   COMPANY_REJECTED
-  // Chưa có call site: module messaging thuộc Phase 9 (đang làm song song).
-  MESSAGE_RECEIVED
 }
 
 enum OutboxStatus {
@@ -447,6 +445,7 @@ model Employer {
   updatedAt      DateTime @updatedAt
 
   conversations Conversation[]
+  jobPosts      JobPost[]
 
   @@map("employers")
 }
@@ -566,6 +565,8 @@ model JobPost {
   id           String        @id @default(cuid())
   companyId    String
   company      Company       @relation(fields: [companyId], references: [id])
+  employerId   String
+  employer     Employer      @relation(fields: [employerId], references: [id])
   title        String
   description  String
   jobType      JobPostType
@@ -680,8 +681,8 @@ model Application {
 
 model Conversation {
   id                  String    @id @default(cuid())
-  jobPostId           String?
-  jobPost             JobPost?  @relation(fields: [jobPostId], references: [id])
+  jobPostId           String
+  jobPost             JobPost   @relation(fields: [jobPostId], references: [id])
   candidateId         String
   candidate           Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   employerId          String
