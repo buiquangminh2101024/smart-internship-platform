@@ -164,10 +164,7 @@ export class JobPostsService {
     if (jobPost.status !== "DRAFT") {
       throw new AppError(409, "Only a draft job post can be submitted for approval");
     }
-    if (!jobPost.expiresAt) {
-      throw new AppError(400, "An application deadline is required before submitting a job post");
-    }
-    this.assertExpiryWithinLimit(jobPost.expiresAt);
+    this.assertReadyForSubmission(jobPost);
     await this.requirePublishQuota(company);
 
     const autoPublished = !company.requiresApproval;
@@ -345,6 +342,33 @@ export class JobPostsService {
     }
 
     return data;
+  }
+
+  /**
+   * Bộ ràng buộc "đủ thông tin để công khai" — chỉ áp dụng khi gửi duyệt,
+   * không áp dụng lúc lưu nháp (createDraft/updateDraft vẫn chỉ cần
+   * title+description). Đồng bộ với validate phía frontend ở JobPostForm.
+   */
+  private assertReadyForSubmission(jobPost: JobPostWithRelations): void {
+    if (!jobPost.expiresAt) {
+      throw new AppError(400, "An application deadline is required before submitting a job post");
+    }
+    this.assertExpiryWithinLimit(jobPost.expiresAt);
+    if (!jobPost.industryId) {
+      throw new AppError(400, "An industry is required before submitting a job post");
+    }
+    if (!jobPost.cityId) {
+      throw new AppError(400, "A city is required before submitting a job post");
+    }
+    if (!jobPost.address) {
+      throw new AppError(400, "A work address is required before submitting a job post");
+    }
+    if (!jobPost.isNegotiable && jobPost.salaryMin == null && jobPost.salaryMax == null) {
+      throw new AppError(400, "A salary range or the negotiable option is required before submitting a job post");
+    }
+    if (jobPost.skills.length === 0) {
+      throw new AppError(400, "At least one skill is required before submitting a job post");
+    }
   }
 
   private assertExpiryWithinLimit(expiresAt: Date): void {
