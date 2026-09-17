@@ -8,10 +8,18 @@ import type {
 } from "@sip/shared-types";
 import { useMessagingStore } from "../stores/messaging-store";
 import { authStoreForArea } from "../stores/auth-store";
+import type { AuthArea } from "../lib/auth-area";
 import type { MessagingArea } from "../lib/messaging";
 import { refreshAccessTokenShared } from "../lib/api-client";
 
 export type SocketStatus = "idle" | "connecting" | "connected" | "disconnected";
+
+// Admin không có hội thoại/tin nhắn (AD-12) — mọi thao tác riêng cho tin nhắn
+// (markConversationUnavailable, MESSAGES_HREF...) phải guard qua đây thay vì
+// dựa vào "server sẽ không emit event đó cho admin" để bỏ qua kiểm tra kiểu.
+export function isMessagingArea(area: AuthArea): area is MessagingArea {
+  return area !== "admin";
+}
 
 export interface SocketHandlers {
   /** `notification:new` — thông báo nghiệp vụ Phase 10 (NotificationBell). */
@@ -24,7 +32,7 @@ export interface SocketHandlers {
  * Mở đúng 1 kết nối Socket.IO cho một area. Chỉ SocketProvider gọi hook này —
  * nơi khác lấy kết nối qua `useSocket()` (components/realtime/SocketProvider).
  */
-export function useSocketConnection(area: MessagingArea, handlers: SocketHandlers, enabled = true) {
+export function useSocketConnection(area: AuthArea, handlers: SocketHandlers, enabled = true) {
   const socketRef = useRef<Socket | null>(null);
   const handlersRef = useRef(handlers);
   // Chỉ set trong callback của socket; null = đang kết nối lần đầu.
@@ -69,13 +77,13 @@ export function useSocketConnection(area: MessagingArea, handlers: SocketHandler
 
     // Phía kia vừa xoá hội thoại → khoá ô nhập ngay cả khi đang mở/đang gõ.
     socket.on("conversation:unavailable", (event: ConversationUnavailableEvent) => {
-      markConversationUnavailable(area, event.conversationId);
+      if (isMessagingArea(area)) markConversationUnavailable(area, event.conversationId);
     });
 
     // Lỗi từ handler `send_message`. Bị chặn vì hội thoại đã bị xoá (lỡ mất
     // event ở trên do rớt mạng) thì đồng bộ lại để khoá UI.
     socket.on("error", (payload: { message?: string; code?: string; conversationId?: string }) => {
-      if (payload?.code === "CONVERSATION_UNAVAILABLE" && payload.conversationId) {
+      if (payload?.code === "CONVERSATION_UNAVAILABLE" && payload.conversationId && isMessagingArea(area)) {
         markConversationUnavailable(area, payload.conversationId);
         return;
       }

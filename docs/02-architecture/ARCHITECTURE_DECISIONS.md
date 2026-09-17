@@ -261,6 +261,25 @@ Bắt buộc thêm khi gửi duyệt (áp dụng cho cả nhánh publish thẳng
 
 **Ảnh hưởng:** `schema.prisma` (`Conversation` thêm `candidateDeletedAt`/`employerDeletedAt`, cần migration); `messaging.repository.ts` (2 query list + 2 câu raw SQL đếm chưa đọc phải lọc thêm theo cờ xoá của người gọi); `messaging.service.ts` (thêm `deleteConversation()`, guard trong `saveMessage()`); `messaging.controller.ts`/`.routes.ts` (`DELETE /conversations/:id`); `RealtimeNotifier` port + 2 impl (method mới); `AppError` (thêm field `code?: string` tuỳ chọn để phân biệt lỗi "không còn khả dụng" ở tầng socket); `packages/shared-types` (`Conversation` thêm 2 field, `ConversationJobPostInfo` thêm `status`); frontend `messaging-store.ts`, `useSocket.ts`, `lib/messaging.ts`, `ChatLayout.tsx`. Chi tiết đầy đủ ở 2 file PLAN nêu trên.
 
+## AD-12 — Thông báo cho Admin khi có việc cần duyệt, tái dùng hạ tầng `notify()` chung theo `userId` (Phase 10, bổ sung)
+
+**Ngày:** 2026-09-17 · **Phase liên quan:** 06-backend/05-frontend Phase 10 (Notification & Email), bổ sung. Kế hoạch chi tiết: `docs/06-backend/phase-10-notification-email/ADMIN_MODERATION_NOTIFICATIONS_PLAN.md` và `docs/05-frontend/phases/phase-10-notification-email/ADMIN_MODERATION_NOTIFICATIONS_PLAN.md`.
+
+> **Trạng thái: ĐÃ TRIỂN KHAI (2026-09-17).**
+
+**Quyết định:**
+
+1. **Không cần event socket mới, không sửa `RealtimeNotifier`**: `NotificationsService.notify()`/`notifyMany()` đã tổng quát theo `userId`, không phân biệt role — chỉ cần thêm 2 giá trị `NotificationType` (`COMPANY_LINK_REQUESTED`, `JOB_POST_SUBMITTED`) và gọi `notifyMany(type, adminIds, ...)` tại đúng 2 điểm nghiệp vụ (`employers.service.ts#createOrResubmitCompany` nhánh `MANUAL_REVIEW`, `job-posts.service.ts#submitForApproval` nhánh `PENDING`).
+2. **Không gửi email cho 2 loại thông báo này** (`email: null` trong renderer) — Admin làm việc trực tiếp trên dashboard trong giờ hành chính (hàng đợi công việc), khác candidate/employer chờ kết quả nhiều ngày; gửi email mỗi lần sẽ spam mà không thêm giá trị.
+3. **Mỗi sự kiện là 1 dòng riêng trong NotificationBell, không gộp theo kiểu hội thoại**: khác tin nhắn (gộp theo `Conversation` vì là luồng trao đổi liên tục), mỗi yêu cầu liên kết công ty / mỗi tin chờ duyệt là 1 action item Admin cần xử lý (duyệt/từ chối) độc lập — gộp lại sẽ khó biết còn bao nhiêu việc tồn đọng và khó đánh dấu đã xử lý riêng từng cái.
+4. **Mở rộng tầng socket/browser-notification frontend từ `MessagingArea` sang `AuthArea`, có type guard tường minh chặn phần tin nhắn cho admin**: `useSocketConnection`/`SocketProvider`/`useBrowserNotification`/`SettingsPage` trước đây cố ý loại `"admin"` (đúng vì admin không có hội thoại). Thêm `isMessagingArea()` type guard tại các điểm gọi API riêng cho tin nhắn (`markConversationUnavailable`, `MESSAGES_HREF[area]`) thay vì dựa vào "server sẽ không emit event tin nhắn cho admin" để bỏ qua kiểm tra kiểu.
+5. **Admin có socket connection lần đầu** (`AdminConsoleShell` mount `SocketProvider area="admin"`) — trước đây khu admin chạy hoàn toàn bằng polling 30s cho `NotificationBell`; polling vẫn giữ làm dự phòng (không đổi `UNREAD_POLL_MS`), giống nguyên tắc "socket chỉ là kênh đẩy nhanh, REST vẫn là nguồn sự thật" đã dùng từ AD-8/AD-11.
+6. **Trang Cài đặt (`/admin/settings`) dùng lại `SettingsPage` component chung**, ẩn toggle "Tin nhắn mới" khi `area === "admin"` thay vì tách component riêng — tránh trùng lặp UI, đúng tinh thần tái dùng đã áp dụng cho `NotificationBell`.
+
+**Lý do:** tận dụng tối đa hạ tầng generic đã có (notification theo `userId`, không theo role) thay vì dựng cơ chế riêng cho Admin — chi phí biên chỉ là 2 giá trị enum + 2 điểm gọi `notifyMany` ở backend, và nới kiểu `AuthArea` có kiểm soát ở frontend.
+
+**Ảnh hưởng:** `schema.prisma` (`NotificationType` thêm 2 giá trị, cần migration); `notification.types.ts`/`notification-templates.ts` (payload + renderer mới, `email: null`); `user.repository.ts` (method `findAdminIds()` mới); `employers.service.ts`, `job-posts.service.ts` (điểm gọi `notifyMany` mới); frontend `useSocket.ts`, `SocketProvider.tsx`, `AdminConsoleShell.tsx` (mount `SocketProvider` + mục nav "Cài đặt"), `lib/browser-notification.ts`, `useBrowserNotification.ts`, `SettingsPage.tsx`, route mới `app/admin/(console)/settings/page.tsx`. Chi tiết đầy đủ ở 2 file PLAN nêu trên.
+
 ## Phần ghi chú của chủ dự án
 
 *(để trống)*

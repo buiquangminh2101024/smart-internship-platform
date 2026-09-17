@@ -7,14 +7,14 @@ import {
   writeBrowserNotificationSetting,
   type BrowserNotificationKind,
 } from "@/lib/browser-notification";
-import type { MessagingArea } from "@/lib/messaging";
+import type { AuthArea } from "@/lib/auth-area";
 
 // Quyền/setting không phát sự kiện thay đổi; snapshot được đọc lại mỗi lần
 // render, nên sau khi ghi chỉ cần ép render lại (forceRender).
 const subscribeNoop = () => () => {};
 
 /** State cho 1 toggle ở trang Cài đặt. Việc bắn thông báo nằm ở SocketProvider. */
-export function useBrowserNotification(area: MessagingArea, kind: BrowserNotificationKind) {
+export function useBrowserNotification(area: AuthArea, kind: BrowserNotificationKind) {
   const [, forceRender] = useReducer((n: number) => n + 1, 0);
 
   // Server snapshot = "chưa hỗ trợ" — window/localStorage không có lúc SSR.

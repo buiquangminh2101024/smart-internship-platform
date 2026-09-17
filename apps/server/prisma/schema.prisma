@@ -66,6 +66,8 @@ enum NotificationType {
   JOB_POST_TAKEN_DOWN
   COMPANY_VERIFIED
   COMPANY_REJECTED
+  COMPANY_LINK_REQUESTED // AD-12 — employer nộp/nộp lại hồ sơ công ty cần Admin xác minh thủ công
+  JOB_POST_SUBMITTED // AD-12 — employer gửi tin tuyển dụng chờ duyệt
 }
 
 enum OutboxStatus {

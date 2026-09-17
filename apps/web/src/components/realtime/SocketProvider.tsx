@@ -3,13 +3,14 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { useSocketConnection, type SocketStatus } from "@/hooks/useSocket";
+import { useSocketConnection, isMessagingArea, type SocketStatus } from "@/hooks/useSocket";
 import { showBrowserNotification } from "@/lib/browser-notification";
 import { markNotificationRead } from "@/lib/notifications";
-import { MESSAGES_HREF, unreadSummaryQueryKey, type MessagingArea } from "@/lib/messaging";
+import { MESSAGES_HREF, unreadSummaryQueryKey } from "@/lib/messaging";
+import type { AuthArea } from "@/lib/auth-area";
 
 interface SocketContextValue {
-  area: MessagingArea;
+  area: AuthArea;
   status: SocketStatus;
   /** false = chưa gửi được vì mất kết nối. */
   sendMessage: (conversationId: string, content: string) => boolean;
@@ -31,7 +32,7 @@ export function SocketProvider({
   enabled = true,
   children,
 }: {
-  area: MessagingArea;
+  area: AuthArea;
   enabled?: boolean;
   children: ReactNode;
 }) {
@@ -56,6 +57,7 @@ export function SocketProvider({
         });
       },
       onMessageNotification: (event) => {
+        if (!isMessagingArea(area)) return; // admin không có tin nhắn — phòng hờ, server không emit event này cho admin
         void queryClient.invalidateQueries({ queryKey: unreadSummaryQueryKey(area) });
         showBrowserNotification(area, "message", {
           title: `Tin nhắn mới từ ${event.senderName}`,

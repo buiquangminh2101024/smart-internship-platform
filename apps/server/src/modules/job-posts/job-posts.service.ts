@@ -23,6 +23,7 @@ import type { EmployerRepository } from "../employers/employer.repository";
 import type { NotificationPayloadMap } from "../notifications/notification.types";
 import type { NotificationsService } from "../notifications/notifications.service";
 import type { SubscriptionsService } from "../subscriptions/subscriptions.service";
+import type { UserRepository } from "../users/user.repository";
 import { toJobPostDto } from "./job-post.mapper";
 import type { JobPostRepository, JobPostWithRelations, JobPostWriteData } from "./job-post.repository";
 
@@ -41,6 +42,7 @@ export class JobPostsService {
   private readonly companyRepository: CompanyRepository;
   private readonly subscriptionsService: SubscriptionsService;
   private readonly notificationsService: NotificationsService;
+  private readonly userRepository: UserRepository;
 
   constructor({
     prisma,
@@ -49,6 +51,7 @@ export class JobPostsService {
     companyRepository,
     subscriptionsService,
     notificationsService,
+    userRepository,
   }: {
     prisma: PrismaClient;
     jobPostRepository: JobPostRepository;
@@ -56,6 +59,7 @@ export class JobPostsService {
     companyRepository: CompanyRepository;
     subscriptionsService: SubscriptionsService;
     notificationsService: NotificationsService;
+    userRepository: UserRepository;
   }) {
     this.prisma = prisma;
     this.jobPostRepository = jobPostRepository;
@@ -63,6 +67,7 @@ export class JobPostsService {
     this.companyRepository = companyRepository;
     this.subscriptionsService = subscriptionsService;
     this.notificationsService = notificationsService;
+    this.userRepository = userRepository;
   }
 
   // ─── Public (Guest) ──────────────────────────────────────────────────────
@@ -171,7 +176,16 @@ export class JobPostsService {
     const updated = await this.prisma.$transaction(async (tx) => {
       await this.jobPostRepository.createModerationAction({ jobPostId: id, action: "SUBMITTED", actorId: userId }, tx);
       if (!autoPublished) {
-        return this.jobPostRepository.update(id, { status: "PENDING" }, tx);
+        const pending = await this.jobPostRepository.update(id, { status: "PENDING" }, tx);
+        // AD-12 — company.requiresApproval=true: Admin cần biết có tin chờ duyệt.
+        const adminIds = await this.userRepository.findAdminIds(tx);
+        await this.notificationsService.notifyMany(
+          "JOB_POST_SUBMITTED",
+          adminIds,
+          { jobPostId: id, jobPostTitle: jobPost.title, companyName: company.name },
+          tx,
+        );
+        return pending;
       }
       await this.jobPostRepository.createModerationAction({ jobPostId: id, action: "APPROVED", actorId: null }, tx);
       return this.jobPostRepository.update(id, { status: "PUBLISHED", publishedAt: new Date() }, tx);

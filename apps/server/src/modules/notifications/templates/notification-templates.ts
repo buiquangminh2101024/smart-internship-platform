@@ -167,6 +167,23 @@ const templates: { [T in NotificationType]: Renderer<T> } = {
     };
   },
 
+  // AD-12 — thông báo cho Admin, cố ý không gửi email (email: null): Admin xử
+  // lý trực tiếp trên dashboard trong giờ làm, gửi email mỗi lần sẽ spam mà
+  // không thêm giá trị (khác candidate/employer chờ kết quả nhiều ngày).
+  COMPANY_LINK_REQUESTED: (data) => ({
+    title: "Yêu cầu liên kết công ty mới",
+    body: `Công ty "${data.companyName}" (${data.employerEmail}) vừa gửi hồ sơ liên kết, cần xác minh thủ công.`,
+    link: `/admin/companies/${data.companyId}`,
+    email: null,
+  }),
+
+  JOB_POST_SUBMITTED: (data) => ({
+    title: "Tin tuyển dụng chờ duyệt",
+    body: `${data.companyName} vừa gửi tin "${data.jobPostTitle}" chờ duyệt.`,
+    link: `/admin/jobs/${data.jobPostId}`,
+    email: null,
+  }),
+
   // Tin nhắn cố ý không có loại notification: không ghi DB mỗi tin, chỉ push
   // realtime qua RealtimeNotifier.pushMessageToUser (Phase 9 bổ sung).
 };

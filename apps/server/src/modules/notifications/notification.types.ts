@@ -19,6 +19,8 @@ export interface NotificationPayloadMap {
   JOB_POST_TAKEN_DOWN: { jobPostId: string; jobPostTitle: string; reason?: string };
   COMPANY_VERIFIED: { companyId: string; companyName: string };
   COMPANY_REJECTED: { companyId: string; companyName: string; reason?: string };
+  COMPANY_LINK_REQUESTED: { companyId: string; companyName: string; employerEmail: string };
+  JOB_POST_SUBMITTED: { jobPostId: string; jobPostTitle: string; companyName: string };
 }
 
 // Khoá của map phải trùng khít enum Prisma: thêm giá trị vào enum mà quên khai

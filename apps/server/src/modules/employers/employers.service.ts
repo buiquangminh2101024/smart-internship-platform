@@ -257,6 +257,16 @@ export class EmployersService {
           { companyId, companyName: dto.name },
           tx,
         );
+      } else {
+        // AD-12 — company vào MANUAL_REVIEW (create lẫn resubmit): Admin cần
+        // biết để xử lý, không tự lộ ra qua polling danh sách company.
+        const adminIds = await this.userRepository.findAdminIds(tx);
+        await this.notificationsService.notifyMany(
+          "COMPANY_LINK_REQUESTED",
+          adminIds,
+          { companyId, companyName: dto.name, employerEmail: user.email },
+          tx,
+        );
       }
     });
 

@@ -29,7 +29,9 @@ export type NotificationType =
   | "JOB_POST_REJECTED"
   | "JOB_POST_TAKEN_DOWN"
   | "COMPANY_VERIFIED"
-  | "COMPANY_REJECTED";
+  | "COMPANY_REJECTED"
+  | "COMPANY_LINK_REQUESTED"
+  | "JOB_POST_SUBMITTED";
 
 // ─── Wrapper response chuẩn cho REST API ─────────────────────────────────
 

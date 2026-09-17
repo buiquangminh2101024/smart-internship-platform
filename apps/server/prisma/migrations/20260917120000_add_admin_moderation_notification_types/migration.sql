@@ -1,0 +1,3 @@
+-- AlterEnum
+ALTER TYPE "NotificationType" ADD VALUE 'COMPANY_LINK_REQUESTED';
+ALTER TYPE "NotificationType" ADD VALUE 'JOB_POST_SUBMITTED';

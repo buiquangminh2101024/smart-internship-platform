@@ -1,4 +1,4 @@
-import type { MessagingArea } from "./messaging";
+import type { AuthArea } from "./auth-area";
 
 /** message = tin nhắn; system = thông báo nghiệp vụ (duyệt tin, ứng tuyển...). */
 export type BrowserNotificationKind = "message" | "system";
@@ -6,14 +6,16 @@ export type BrowserNotificationKind = "message" | "system";
 // Setting bật/tắt thông báo trình duyệt lưu theo từng trình duyệt (localStorage),
 // không đồng bộ đa thiết bị — đã chấp nhận trong PLAN.md phase 9 (frontend).
 // Key của "message" giữ nguyên tên cũ để không mất setting đã bật trước đó.
-const storageKey = (area: MessagingArea, kind: BrowserNotificationKind) =>
+// Admin không có kind "message" (không có hội thoại) nhưng dùng chung type với
+// candidate/employer — xem AD-12.
+const storageKey = (area: AuthArea, kind: BrowserNotificationKind) =>
   kind === "message" ? `sip-browser-notify-${area}` : `sip-browser-notify-system-${area}`;
 
 export function isBrowserNotificationSupported(): boolean {
   return typeof window !== "undefined" && "Notification" in window;
 }
 
-export function readBrowserNotificationSetting(area: MessagingArea, kind: BrowserNotificationKind): boolean {
+export function readBrowserNotificationSetting(area: AuthArea, kind: BrowserNotificationKind): boolean {
   try {
     return window.localStorage.getItem(storageKey(area, kind)) === "on";
   } catch {
@@ -22,7 +24,7 @@ export function readBrowserNotificationSetting(area: MessagingArea, kind: Browse
 }
 
 export function writeBrowserNotificationSetting(
-  area: MessagingArea,
+  area: AuthArea,
   kind: BrowserNotificationKind,
   enabled: boolean,
 ): void {
@@ -38,7 +40,7 @@ export function writeBrowserNotificationSetting(
  * (visibilityState, không phải hasFocus), đã cấp quyền và loại này đang bật.
  */
 export function showBrowserNotification(
-  area: MessagingArea,
+  area: AuthArea,
   kind: BrowserNotificationKind,
   { title, body, tag, onClick }: { title: string; body: string; tag: string; onClick: () => void },
 ): void {
