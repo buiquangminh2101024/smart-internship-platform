@@ -1,4 +1,4 @@
-import type { Conversation, UnreadCountResponse } from "@sip/shared-types";
+import type { Conversation, JobPostStatus, UnreadCountResponse } from "@sip/shared-types";
 import { apiFetch } from "./api-client";
 
 export type MessagingArea = "candidate" | "employer";
@@ -27,6 +27,25 @@ export function isConversationUnread(conv: Conversation, area: MessagingArea, cu
   const lastRead = area === "candidate" ? conv.candidateLastReadAt : conv.employerLastReadAt;
   return !lastRead || new Date(latest.createdAt) > new Date(lastRead);
 }
+
+const DELETABLE_JOB_POST_STATUSES: readonly JobPostStatus[] = ["CLOSED", "EXPIRED", "TAKEN_DOWN"];
+
+/** Tin tuyển dụng đã đóng/hết hạn/bị gỡ — được phép xoá hội thoại (cùng quy tắc với backend, AD-11). */
+export function isConversationDeletable(conv: Conversation): boolean {
+  return DELETABLE_JOB_POST_STATUSES.includes(conv.jobPost.status);
+}
+
+/** false khi đã có phía xoá hội thoại — chỉ còn xem lịch sử, không gửi tin được. */
+export function isConversationAvailable(conv: Conversation): boolean {
+  return !conv.candidateDeletedAt && !conv.employerDeletedAt;
+}
+
+/** Nhãn badge theo trạng thái tin tuyển dụng của hội thoại đủ điều kiện xoá. */
+export const CLOSED_JOB_POST_LABEL: Partial<Record<JobPostStatus, string>> = {
+  CLOSED: "Tin đã đóng",
+  EXPIRED: "Tin hết hạn",
+  TAKEN_DOWN: "Tin bị gỡ",
+};
 
 /** Link ra ngoài cho dòng hội thoại: CV ứng viên (employer) hoặc tin tuyển dụng của công ty (candidate). */
 export function conversationExternalLink(

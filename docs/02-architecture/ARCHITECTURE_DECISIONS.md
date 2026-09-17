@@ -240,6 +240,27 @@ Bắt buộc thêm khi gửi duyệt (áp dụng cho cả nhánh publish thẳng
 
 **Bug phát sinh trong lúc implement (đã sửa cùng đợt):** khi validate thất bại với nhiều lỗi cùng lúc, `zodResolver` ném thẳng `ZodError` ra ngoài thay vì gán vào `formState.errors` — form không hiện lỗi theo field mà Next.js hiện màn hình lỗi runtime. Nguyên nhân: `zod` đã ở v4 (`^4.5.4`) nhưng `@hookform/resolvers` vẫn ở v3 (`^3.9.1`, cài `3.10.0`) — bản v3 kiểm tra lỗi validate qua `error.errors` (tên thuộc tính của `ZodError` ở **Zod v3**), trong khi **Zod v4** đã bỏ hẳn `.errors`, chỉ còn `.issues`; điều kiện kiểm tra sai khiến thư viện coi đây không phải lỗi validate và `throw` nguyên văn. Bug này không riêng `JobPostForm` — mọi form dùng `zodResolver` (kể cả `CreateCompanyForm.tsx`) đều dính, chỉ là chưa ai rơi đúng nhánh nhiều lỗi cùng lúc để lộ ra. **Đã sửa** bằng cách nâng `@hookform/resolvers` lên `^5.9.1` (đã build sẵn nhánh nhận diện schema Zod v4 và đọc đúng `.issues`) — không phải thêm dependency mới, mà nâng cấp bản của dependency đã có sẵn để tương thích đúng với `zod` đang cài. `react-hook-form` giữ nguyên (`7.87.0` đã cao hơn peer dependency `^7.55.0` của bản `@hookform/resolvers` mới).
 
+## AD-11 — Soft-delete hội thoại theo trạng thái JobPost, khoá gửi tin một chiều qua socket (Phase 9, bổ sung)
+
+**Ngày:** 2026-09-17 · **Phase liên quan:** 06-backend/05-frontend Phase 9 (Realtime Communication), bổ sung sau `IMPLEMENTATION.md`. Kế hoạch chi tiết: `docs/06-backend/phase-09-realtime-communication/CONVERSATION_SOFT_DELETE_PLAN.md` và `docs/05-frontend/phases/phase-09-realtime-communication/CONVERSATION_SOFT_DELETE_PLAN.md`.
+
+> **Trạng thái: ĐÃ TRIỂN KHAI (2026-09-17)** — chi tiết và các điểm lệch nhỏ so với plan ghi ở 2 file `CONVERSATION_SOFT_DELETE_PLAN.md`.
+
+**Quyết định:**
+
+1. **Điều kiện xoá gắn với `JobPost.status`, không thêm cờ mới trên `JobPost`/`Conversation` cho việc "đánh dấu"**: một `Conversation` chỉ xoá được khi `jobPost.status` ∈ `{CLOSED, EXPIRED, TAKEN_DOWN}` (3 trạng thái chung cuộc — đã xác nhận trong `job-posts.service.ts` không có transition nào quay ngược từ 3 trạng thái này về `PUBLISHED`). Badge "tin đã đóng/hết hạn/bị gỡ — có thể xoá hội thoại" hiển thị cho **cả 2 phía** tính trực tiếp từ `jobPost.status` đã có sẵn qua JOIN, không cần cột/bảng đánh dấu riêng.
+2. **Soft-delete 2 cờ độc lập theo từng phía** (`Conversation.candidateDeletedAt`/`employerDeletedAt`, đều `DateTime?`): mỗi bên chỉ set cờ của chính mình. Một bên xoá thì hội thoại biến mất khỏi danh sách của **chính họ** (filter ở query list), phía còn lại vẫn thấy hội thoại nhưng bị khoá — chỉ xem được lịch sử, không gửi được tin mới.
+3. **Xoá cứng khi cả 2 cờ cùng có giá trị** — kiểm tra ngay trong transaction của lần xoá thứ 2, gọi `prisma.conversation.delete()` (cascade xoá `Message` đã có sẵn qua `onDelete: Cascade`, không cần dọn thủ công).
+4. **Thông báo "không còn khả dụng" qua Socket.IO (không dùng polling)** — quyết định sau khi so sánh 2 phương án:
+   - **Polling bị loại**: trang `/messages` hiện chỉ gọi `fetchConversations()` một lần lúc mount (`ChatLayout.tsx`), không có `refetchInterval` nào cho danh sách hội thoại. Nếu chỉ dựa vào polling, một người đang gõ dở tin trong đúng hội thoại bị phía kia xoá sẽ không biết cho tới khi rời trang và quay lại — không đáp ứng được yêu cầu "đang nhắn hoặc đang mở cuộc hội thoại đó phải được thông báo ngay".
+   - **Socket được chọn**: hạ tầng `RealtimeNotifier` (port + `SocketIoRealtimeNotifier`/`NoopRealtimeNotifier`, room `user:${userId}`) đã có sẵn từ Phase 9/10, thêm 1 method mới (`notifyConversationUnavailable`) là chi phí biên rất nhỏ, tái dùng đúng pattern đã có thay vì dựng cơ chế polling mới.
+   - **REST vẫn là nguồn sự thật dự phòng** (không chỉ dựa vào socket): `saveMessage()` (được gọi từ handler `send_message`) kiểm tra lại cờ xoá của phía kia mỗi lần gửi — bị chặn ngay cả khi phía nhận lỡ mất sự kiện socket (mất kết nối đúng lúc, tab chưa mount lại listener...). `GET /conversations` cũng luôn trả đúng 2 cờ `*DeletedAt` hiện tại, nên client mở lại trang (bỏ qua socket) vẫn thấy đúng trạng thái khoá ngay từ lần fetch đầu.
+5. **Không cho phép reopen job post quay lại trạng thái cho phép xoá** — không có cơ chế "un-eligible" cần xử lý (đã xác nhận qua code hiện tại, xem điểm 1).
+
+**Lý do:** giữ đúng nguyên tắc "1 nguồn sự thật, socket chỉ là kênh đẩy nhanh" đã áp dụng nhất quán từ AD-8 (outbox email) tới bổ sung Phase 9 (notification tin nhắn) — không có nhánh nào chỉ đúng khi socket không rớt.
+
+**Ảnh hưởng:** `schema.prisma` (`Conversation` thêm `candidateDeletedAt`/`employerDeletedAt`, cần migration); `messaging.repository.ts` (2 query list + 2 câu raw SQL đếm chưa đọc phải lọc thêm theo cờ xoá của người gọi); `messaging.service.ts` (thêm `deleteConversation()`, guard trong `saveMessage()`); `messaging.controller.ts`/`.routes.ts` (`DELETE /conversations/:id`); `RealtimeNotifier` port + 2 impl (method mới); `AppError` (thêm field `code?: string` tuỳ chọn để phân biệt lỗi "không còn khả dụng" ở tầng socket); `packages/shared-types` (`Conversation` thêm 2 field, `ConversationJobPostInfo` thêm `status`); frontend `messaging-store.ts`, `useSocket.ts`, `lib/messaging.ts`, `ChatLayout.tsx`. Chi tiết đầy đủ ở 2 file PLAN nêu trên.
+
 ## Phần ghi chú của chủ dự án
 
 *(để trống)*

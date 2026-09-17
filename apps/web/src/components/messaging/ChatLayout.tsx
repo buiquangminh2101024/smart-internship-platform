@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
@@ -9,8 +9,13 @@ import { useSocket } from "@/components/realtime/SocketProvider";
 import { useCurrentUser } from "@/stores/auth-store";
 import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { ToastViewport, type ToastData } from "@/components/ui/Toast";
 import {
+  CLOSED_JOB_POST_LABEL,
   conversationExternalLink,
+  isConversationAvailable,
+  isConversationDeletable,
   isConversationUnread,
   unreadSummaryQueryKey,
   type MessagingArea,
@@ -35,10 +40,12 @@ export function ChatLayout({ area }: ChatLayoutProps) {
     messages,
     isLoadingConversations,
     isLoadingMessages,
+    hasFetchedMessages,
     fetchConversations,
     fetchMessages,
     setActiveConversationId,
     markAsRead,
+    deleteConversation,
   } = useMessagingStore();
 
   const user = useCurrentUser(area);
@@ -49,6 +56,32 @@ export function ChatLayout({ area }: ChatLayoutProps) {
   const isDisconnected = !socket || socket.status === "disconnected";
   const [inputText, setInputText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [toasts, setToasts] = useState<ToastData[]>([]);
+
+  const pushToast = useCallback((tone: ToastData["tone"], message: string) => {
+    setToasts((prev) => [...prev, { id: Date.now(), tone, message }]);
+  }, []);
+  const dismissToast = useCallback((id: number) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+  const cancelDelete = useCallback(() => setPendingDeleteId(null), []);
+
+  async function confirmDelete() {
+    if (!pendingDeleteId) return;
+    setIsDeleting(true);
+    try {
+      const { hardDeleted } = await deleteConversation(area, pendingDeleteId);
+      pushToast("success", hardDeleted ? "Đã xoá vĩnh viễn hội thoại." : "Đã xoá hội thoại khỏi danh sách của bạn.");
+      queryClient.invalidateQueries({ queryKey: unreadSummaryQueryKey(area) });
+    } catch (err) {
+      pushToast("danger", err instanceof Error ? err.message : "Xoá hội thoại thất bại.");
+    } finally {
+      setIsDeleting(false);
+      setPendingDeleteId(null);
+    }
+  }
 
   useEffect(() => {
     fetchConversations(area).then(() => {
@@ -59,15 +92,21 @@ export function ChatLayout({ area }: ChatLayoutProps) {
   }, [area, fetchConversations, initialConversationId, setActiveConversationId]);
 
   useEffect(() => {
-    if (activeConversationId && !messages[activeConversationId]) {
+    if (activeConversationId && !hasFetchedMessages[activeConversationId]) {
       fetchMessages(area, activeConversationId);
     }
-    if (activeConversationId) {
-      markAsRead(area, activeConversationId).then(() =>
-        queryClient.invalidateQueries({ queryKey: unreadSummaryQueryKey(area) }),
-      );
-    }
-  }, [activeConversationId, area, fetchMessages, markAsRead, messages, queryClient]);
+  }, [activeConversationId, area, fetchMessages, hasFetchedMessages]);
+
+  // Tách riêng khỏi effect fetch ở trên: phụ thuộc đúng mảng tin nhắn của
+  // conversation đang mở (không phải cả `messages`) để tự markAsRead lại khi
+  // có tin nhắn mới tới lúc đang xem, mà không đụng tới các conversation khác.
+  const activeMessages = activeConversationId ? messages[activeConversationId] : undefined;
+  useEffect(() => {
+    if (!activeConversationId) return;
+    markAsRead(area, activeConversationId).then(() =>
+      queryClient.invalidateQueries({ queryKey: unreadSummaryQueryKey(area) }),
+    );
+  }, [activeConversationId, activeMessages, area, markAsRead, queryClient]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -75,10 +114,11 @@ export function ChatLayout({ area }: ChatLayoutProps) {
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId);
   const currentMessages = activeConversationId ? messages[activeConversationId] || [] : [];
+  const isActiveConversationAvailable = activeConversation ? isConversationAvailable(activeConversation) : true;
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim() || !activeConversationId) return;
+    if (!inputText.trim() || !activeConversationId || !isActiveConversationAvailable) return;
 
     // Gửi không được (mất kết nối) thì giữ nguyên nội dung để người dùng gửi lại.
     if (socket?.sendMessage(activeConversationId, inputText)) setInputText("");
@@ -102,17 +142,35 @@ export function ChatLayout({ area }: ChatLayoutProps) {
     return <div className="flex h-full items-center justify-center p-8 text-text-muted">Đang tải...</div>;
   }
 
+  const overlays = (
+    <>
+      <ConfirmDialog
+        isOpen={pendingDeleteId !== null}
+        title="Xoá hội thoại?"
+        message="Hội thoại sẽ biến mất khỏi danh sách của bạn và người kia không thể nhắn tiếp. Nếu người kia cũng đã xoá, toàn bộ tin nhắn sẽ bị xoá vĩnh viễn."
+        confirmLabel="Xoá"
+        isDestructive
+        isConfirming={isDeleting}
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
+      />
+      <ToastViewport toasts={toasts} onDismiss={dismissToast} />
+    </>
+  );
+
   if (conversations.length === 0) {
     return (
       <div className="flex h-full flex-col items-center justify-center p-8 text-center">
         <Icon name="messages-square" size={48} className="mb-4 text-border-strong" />
         <p className="text-text-muted">Bạn chưa có hội thoại nào.</p>
+        {overlays}
       </div>
     );
   }
 
   return (
     <div className="flex h-full overflow-hidden bg-white">
+      {overlays}
       {/* Sidebar (List) */}
       <div className="w-80 flex-shrink-0 border-r border-border-subtle bg-surface-page flex flex-col">
         <div className="flex gap-1 border-b border-border-subtle p-2">
@@ -143,9 +201,21 @@ export function ChatLayout({ area }: ChatLayoutProps) {
             const partner = area === "candidate" ? conv.employer : conv.candidate;
             const hasUnread = isConversationUnread(conv, area, user?.id);
             const externalLink = unreadOnly ? conversationExternalLink(conv, area) : null;
+            const deletable = isConversationDeletable(conv);
 
             return (
-              <div key={conv.id} className="border-b border-border-subtle">
+              <div key={conv.id} className="group relative border-b border-border-subtle">
+                {deletable ? (
+                  <button
+                    type="button"
+                    onClick={() => setPendingDeleteId(conv.id)}
+                    aria-label="Xoá hội thoại"
+                    title="Xoá hội thoại"
+                    className="absolute right-2 top-2 z-10 rounded-md p-1.5 text-text-muted hover:bg-red-50 hover:text-red-600"
+                  >
+                    <Icon name="trash-2" size={16} />
+                  </button>
+                ) : null}
                 <button
                   onClick={() => setActiveConversationId(conv.id)}
                   className={`w-full flex items-start gap-3 p-4 text-left hover:bg-surface-hover transition-colors ${
@@ -160,7 +230,7 @@ export function ChatLayout({ area }: ChatLayoutProps) {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex justify-between items-baseline mb-1">
+                    <div className={`flex justify-between items-baseline mb-1 ${deletable ? "pr-6" : ""}`}>
                       <div className={`text-sm truncate ${hasUnread ? "font-bold text-text-strong" : "font-medium text-text-strong"}`}>
                         {partner.name || partner.id}
                       </div>
@@ -168,6 +238,22 @@ export function ChatLayout({ area }: ChatLayoutProps) {
                     <div className="text-xs text-text-muted truncate">
                       {conv.jobPost.title}
                     </div>
+                    {deletable || !isConversationAvailable(conv) ? (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {deletable ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-surface-hover px-2 py-0.5 text-[11px] text-text-muted">
+                            <Icon name="archive" size={11} />
+                            {CLOSED_JOB_POST_LABEL[conv.jobPost.status]} · có thể xoá
+                          </span>
+                        ) : null}
+                        {!isConversationAvailable(conv) ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-marigold-100 px-2 py-0.5 text-[11px] text-text-strong">
+                            <Icon name="lock" size={11} />
+                            Không còn khả dụng
+                          </span>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {conv.latestMessage && (
                       <div className={`text-sm truncate mt-1 ${hasUnread ? "font-bold text-text-strong" : "text-text-muted"}`}>
                         {conv.latestMessage.senderId === user?.id ? "Bạn: " : ""}
@@ -236,6 +322,14 @@ export function ChatLayout({ area }: ChatLayoutProps) {
             </div>
 
             {/* Input area */}
+            {!isActiveConversationAvailable ? (
+              <div className="p-4 bg-white border-t border-border-subtle">
+                <p role="status" className="flex items-center gap-2 rounded-lg bg-marigold-100 px-3 py-2 text-sm text-text-strong">
+                  <Icon name="lock" size={16} className="shrink-0" />
+                  Cuộc hội thoại không còn khả dụng để nhắn tin. Bạn chỉ có thể xem lại lịch sử.
+                </p>
+              </div>
+            ) : (
             <form onSubmit={handleSend} className="p-4 bg-white border-t border-border-subtle">
               {isDisconnected ? (
                 <p role="status" className="mb-2 flex items-center gap-2 rounded-lg bg-marigold-100 px-3 py-2 text-xs text-text-strong">
@@ -256,6 +350,7 @@ export function ChatLayout({ area }: ChatLayoutProps) {
                 </Button>
               </div>
             </form>
+            )}
           </>
         ) : (
           <div className="flex-1 flex items-center justify-center text-text-muted">

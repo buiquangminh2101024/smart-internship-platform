@@ -1,7 +1,7 @@
 import type { Prisma, PrismaClient, Role } from "@prisma/client";
 
 const conversationInclude = {
-  jobPost: { select: { id: true, title: true, company: { select: { name: true } } } },
+  jobPost: { select: { id: true, title: true, status: true, company: { select: { name: true } } } },
   candidate: { select: { id: true, userId: true, user: { select: { email: true } }, avatarUrl: true } },
   employer: { select: { id: true, userId: true, user: { select: { email: true } }, title: true } },
 } satisfies Prisma.ConversationInclude;
@@ -17,7 +17,8 @@ export class MessagingRepository {
 
   async findConversationsByCandidateId(candidateId: string): Promise<ConversationWithRelations[]> {
     return this.prisma.conversation.findMany({
-      where: { candidateId },
+      // Hội thoại chính candidate đã xoá thì ẩn khỏi danh sách của họ.
+      where: { candidateId, candidateDeletedAt: null },
       include: conversationInclude,
       orderBy: { updatedAt: "desc" },
     });
@@ -25,7 +26,7 @@ export class MessagingRepository {
 
   async findConversationsByEmployerId(employerId: string): Promise<ConversationWithRelations[]> {
     return this.prisma.conversation.findMany({
-      where: { employerId },
+      where: { employerId, employerDeletedAt: null },
       include: conversationInclude,
       orderBy: { updatedAt: "desc" },
     });
@@ -88,6 +89,24 @@ export class MessagingRepository {
   }
 
   /**
+   * Đánh dấu xoá phía `role`; nếu phía kia cũng đã xoá thì xoá cứng hội thoại
+   * (Message cascade theo). Chạy trong 1 transaction — race 2 phía xoá cùng
+   * mili-giây được chấp nhận, xem CONVERSATION_SOFT_DELETE_PLAN.md mục 3.
+   */
+  async softDeleteConversationSide(conversationId: string, role: Role, date: Date): Promise<{ hardDeleted: boolean }> {
+    return this.prisma.$transaction(async (tx) => {
+      const data: Prisma.ConversationUpdateInput =
+        role === "CANDIDATE" ? { candidateDeletedAt: date } : { employerDeletedAt: date };
+      const updated = await tx.conversation.update({ where: { id: conversationId }, data });
+      if (updated.candidateDeletedAt && updated.employerDeletedAt) {
+        await tx.conversation.delete({ where: { id: conversationId } });
+        return { hardDeleted: true };
+      }
+      return { hardDeleted: false };
+    });
+  }
+
+  /**
    * Đếm hội thoại có tin nhắn của phía kia mới hơn mốc đọc của user. So sánh
    * cột với cột qua quan hệ nên phải dùng raw SQL (Prisma filter không hỗ trợ).
    */
@@ -97,6 +116,7 @@ export class MessagingRepository {
         ? await this.prisma.$queryRaw<{ count: bigint }[]>`
             SELECT COUNT(*) AS count FROM "conversations" c
             WHERE c."candidateId" = ${participantId}
+              AND c."candidateDeletedAt" IS NULL
               AND EXISTS (
                 SELECT 1 FROM "messages" m
                 WHERE m."conversationId" = c."id"
@@ -106,6 +126,7 @@ export class MessagingRepository {
         : await this.prisma.$queryRaw<{ count: bigint }[]>`
             SELECT COUNT(*) AS count FROM "conversations" c
             WHERE c."employerId" = ${participantId}
+              AND c."employerDeletedAt" IS NULL
               AND EXISTS (
                 SELECT 1 FROM "messages" m
                 WHERE m."conversationId" = c."id"

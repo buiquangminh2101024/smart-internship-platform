@@ -21,6 +21,11 @@ export interface RealtimeMessagePayload {
   createdAt: Date;
 }
 
+/** Phía kia vừa xoá hội thoại — người nhận chỉ còn xem lịch sử (AD-11). */
+export interface ConversationUnavailablePayload {
+  conversationId: string;
+}
+
 /**
  * Điểm nối realtime cho notification. Mọi thứ realtime ngoài nội dung chat đi
  * qua port này — bản Socket.IO đăng ký trong main.ts, fallback no-op khi
@@ -31,4 +36,6 @@ export interface RealtimeNotifier {
   pushToUser(userId: string, payload: RealtimeNotificationPayload): Promise<void> | void;
   /** Event `notification:new_message` — chỉ dành cho tin nhắn. */
   pushMessageToUser(userId: string, payload: RealtimeMessagePayload): Promise<void> | void;
+  /** Event `conversation:unavailable` — khoá gửi tin ở phía chưa xoá. */
+  notifyConversationUnavailable(userId: string, payload: ConversationUnavailablePayload): Promise<void> | void;
 }

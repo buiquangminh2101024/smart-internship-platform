@@ -1,5 +1,5 @@
-import type { Role } from "@prisma/client";
-import type { Message, UnreadCountResponse } from "@sip/shared-types";
+import type { JobPostStatus, Role } from "@prisma/client";
+import type { DeleteConversationResponse, Message, UnreadCountResponse } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
 import type { Logger } from "../../shared/logger";
 import type { RealtimeNotifier } from "../../shared/ports/RealtimeNotifier";
@@ -11,6 +11,8 @@ import type { ConversationWithRelations, MessagingRepository } from "./messaging
 import { toConversationDto, toMessageDto } from "./messaging.mapper";
 
 const MESSAGE_PREVIEW_LENGTH = 100;
+// Chỉ tin đã đóng/hết hạn/bị gỡ mới cho xoá hội thoại (AD-11).
+const DELETABLE_JOB_POST_STATUSES: readonly JobPostStatus[] = ["CLOSED", "EXPIRED", "TAKEN_DOWN"];
 
 export class MessagingService {
   private readonly messagingRepository: MessagingRepository;
@@ -132,11 +134,42 @@ export class MessagingService {
 
   async saveMessage(userId: string, role: Role, conversationId: string, content: string) {
     const conv = await this.requireConversationAccess(userId, role, conversationId);
+    if (conv.candidateDeletedAt || conv.employerDeletedAt) {
+      throw new AppError(409, "Cuộc hội thoại không còn khả dụng để nhắn tin", "CONVERSATION_UNAVAILABLE");
+    }
     if (!content || content.trim() === "") {
       throw new AppError(400, "Message content cannot be empty");
     }
     const message = await this.messagingRepository.saveMessage(conversationId, userId, content);
     return { message: toMessageDto(message), conversation: conv };
+  }
+
+  /**
+   * Xoá mềm phía người gọi; phía kia cũng đã xoá thì xoá cứng. Chỉ phía chưa
+   * xoá mới được báo realtime để khoá ô nhập (phía đã xoá không còn thấy hội
+   * thoại trong danh sách).
+   */
+  async deleteConversation(userId: string, role: Role, conversationId: string): Promise<DeleteConversationResponse> {
+    const conv = await this.requireConversationAccess(userId, role, conversationId);
+    if (!DELETABLE_JOB_POST_STATUSES.includes(conv.jobPost.status)) {
+      throw new AppError(400, "Chỉ có thể xoá hội thoại khi tin tuyển dụng đã đóng, hết hạn hoặc bị gỡ");
+    }
+
+    // Bấm xoá 2 lần (double-click/2 tab) coi như thành công, không làm gì thêm.
+    const ownDeletedAt = role === "CANDIDATE" ? conv.candidateDeletedAt : conv.employerDeletedAt;
+    if (ownDeletedAt) return { hardDeleted: false };
+
+    const result = await this.messagingRepository.softDeleteConversationSide(conversationId, role, new Date());
+
+    if (!result.hardDeleted) {
+      const otherUserId = role === "CANDIDATE" ? conv.employer.userId : conv.candidate.userId;
+      try {
+        await this.realtimeNotifier.notifyConversationUnavailable(otherUserId, { conversationId });
+      } catch (error) {
+        this.logger.error("Push conversation:unavailable thất bại", { conversationId, error });
+      }
+    }
+    return result;
   }
 
   /**
