@@ -1,4 +1,4 @@
-import type { PrismaClient, User } from "@prisma/client";
+import type { Prisma, PrismaClient, User } from "@prisma/client";
 
 // Dùng chung giữa module `auth` (xác thực/token) và `users` (hồ sơ/quản trị
 // tài khoản) — xem PROJECT_STRUCTURE.md §5 lý do 2 module tách tầng service
@@ -20,6 +20,13 @@ export class UserRepository {
 
   findById(id: string): Promise<User | null> {
     return this.prisma.user.findUnique({ where: { id } });
+  }
+
+  /** AD-12 — danh sách userId của mọi tài khoản Admin, để fan-out notification. */
+  async findAdminIds(tx?: Prisma.TransactionClient): Promise<string[]> {
+    const db = tx ?? this.prisma;
+    const rows = await db.user.findMany({ where: { role: "ADMIN" }, select: { id: true } });
+    return rows.map((row) => row.id);
   }
 
   createWithPassword(params: {

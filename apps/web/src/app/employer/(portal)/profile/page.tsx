@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { CreateCompanyForm } from "@/components/employer/CreateCompanyForm";
 import { SubscriptionStatusCard } from "@/components/employer/SubscriptionStatusCard";
+import { CompanyBrandingCard } from "@/components/employer/CompanyBrandingCard";
 
 const STATUS_LABEL: Record<string, { label: string; tone: "success" | "warning" | "danger" }> = {
   VERIFIED: { label: "Đã xác thực", tone: "success" },
@@ -135,6 +136,10 @@ export default function EmployerProfilePage() {
             </div>
           ) : null}
         </Card>
+      ) : null}
+
+      {company?.verificationStatus === "VERIFIED" ? (
+        <CompanyBrandingCard company={company} canEdit={employer?.isCompanyAdmin ?? false} />
       ) : null}
 
       {company?.verificationStatus === "VERIFIED" ? (

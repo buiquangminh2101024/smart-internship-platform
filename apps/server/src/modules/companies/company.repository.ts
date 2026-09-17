@@ -20,6 +20,8 @@ export interface CompanyWriteData {
   verificationStatus?: CompanyVerificationStatus;
   verificationMethod?: CompanyVerificationMethod | null;
   businessLicenseUrl?: string | null;
+  logoUrl?: string | null;
+  bannerUrl?: string | null;
   verificationNote?: string | null;
   rejectedAt?: Date | null;
   isVerified?: boolean;

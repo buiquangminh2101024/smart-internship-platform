@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { useBrowserNotification } from "@/hooks/useBrowserNotification";
 import type { BrowserNotificationKind } from "@/lib/browser-notification";
-import type { MessagingArea } from "@/lib/messaging";
+import type { AuthArea } from "@/lib/auth-area";
 
 const TOGGLES: { kind: BrowserNotificationKind; icon: string; label: string; description: string }[] = [
   {
@@ -22,10 +22,13 @@ const TOGGLES: { kind: BrowserNotificationKind; icon: string; label: string; des
 ];
 
 /**
- * Trang "Cài đặt" dùng chung candidate/employer: bật/tắt riêng từng loại
- * thông báo qua trình duyệt (lưu theo trình duyệt, localStorage).
+ * Trang "Cài đặt" dùng chung candidate/employer/admin: bật/tắt riêng từng loại
+ * thông báo qua trình duyệt (lưu theo trình duyệt, localStorage). Admin không
+ * có hội thoại nên không hiện toggle "Tin nhắn mới" (AD-12).
  */
-export function SettingsPage({ area }: { area: MessagingArea }) {
+export function SettingsPage({ area }: { area: AuthArea }) {
+  const toggles = area === "admin" ? TOGGLES.filter((toggle) => toggle.kind !== "message") : TOGGLES;
+
   return (
     <div className="mx-auto grid w-full max-w-3xl gap-6 px-6 py-12">
       <h1 className="text-2xl font-semibold text-text-strong">Cài đặt</h1>
@@ -37,7 +40,7 @@ export function SettingsPage({ area }: { area: MessagingArea }) {
             Hiện thông báo của trình duyệt khi bạn đang ở tab khác. Chỉ áp dụng trên trình duyệt này.
           </p>
         </div>
-        {TOGGLES.map((toggle) => (
+        {toggles.map((toggle) => (
           <BrowserNotificationToggle key={toggle.kind} area={area} {...toggle} />
         ))}
       </Card>
@@ -52,7 +55,7 @@ function BrowserNotificationToggle({
   label,
   description,
 }: {
-  area: MessagingArea;
+  area: AuthArea;
   kind: BrowserNotificationKind;
   icon: string;
   label: string;

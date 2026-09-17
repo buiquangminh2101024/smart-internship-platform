@@ -29,7 +29,9 @@ export type NotificationType =
   | "JOB_POST_REJECTED"
   | "JOB_POST_TAKEN_DOWN"
   | "COMPANY_VERIFIED"
-  | "COMPANY_REJECTED";
+  | "COMPANY_REJECTED"
+  | "COMPANY_LINK_REQUESTED"
+  | "JOB_POST_SUBMITTED";
 
 // ─── Wrapper response chuẩn cho REST API ─────────────────────────────────
 
@@ -584,6 +586,8 @@ export interface ConversationJobPostInfo {
   id: string;
   title: string;
   companyName: string;
+  /** CLOSED/EXPIRED/TAKEN_DOWN → hội thoại được phép xoá (AD-11). */
+  status: JobPostStatus;
 }
 
 export interface Conversation {
@@ -593,9 +597,12 @@ export interface Conversation {
   employerId: string;
   candidateLastReadAt: string | null;
   employerLastReadAt: string | null;
+  /** Soft-delete từng phía — phía kia đã xoá thì hội thoại chỉ còn xem lịch sử. */
+  candidateDeletedAt: string | null;
+  employerDeletedAt: string | null;
   createdAt: string;
   updatedAt: string;
-  
+
   // Relations loaded for UI
   jobPost: ConversationJobPostInfo;
   candidate: ConversationParticipant;
@@ -617,6 +624,17 @@ export interface MessageNotificationEvent {
   senderName: string;
   preview: string;
   createdAt: string;
+}
+
+/** Payload event socket `conversation:unavailable` — phía kia vừa xoá hội thoại. */
+export interface ConversationUnavailableEvent {
+  conversationId: string;
+}
+
+/** Response `DELETE /conversations/:id`. */
+export interface DeleteConversationResponse {
+  /** true khi cả 2 phía đã xoá → hội thoại bị xoá thật khỏi DB. */
+  hardDeleted: boolean;
 }
 
 /** Payload event socket `notification:new` — thông báo nghiệp vụ (Phase 10). */

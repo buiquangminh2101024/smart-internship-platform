@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, use, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import type { CreateJobPostRequest, JobPost, SubmitJobPostResponse } from "@sip/shared-types";
 import { apiFetch, ApiError } from "@/lib/api-client";
@@ -25,13 +25,17 @@ function QuickActions({
   onEdit,
   onSubmit,
   onClose,
+  onDelete,
 }: {
   job: JobPost;
   busy: boolean;
   onEdit: () => void;
   onSubmit: () => void;
   onClose: () => void;
+  onDelete: () => void;
 }) {
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
   return (
     <Card padding="md" className="grid gap-2">
       <h2 className="text-xs font-semibold tracking-wide text-text-subtle uppercase">Thao tác nhanh</h2>
@@ -43,6 +47,32 @@ function QuickActions({
           <Button type="button" icon="send" fullWidth loading={busy} onClick={onSubmit}>
             Gửi duyệt
           </Button>
+          {confirmingDelete ? (
+            <div className="grid gap-2 rounded-lg border border-red-200 bg-red-50 p-3">
+              <p className="text-sm text-red-700">
+                Xóa nháp sẽ mất toàn bộ nội dung đã soạn và không thể khôi phục. Tiếp tục?
+              </p>
+              <div className="flex gap-2">
+                <Button type="button" variant="danger" size="sm" loading={busy} onClick={onDelete}>
+                  Xác nhận xóa
+                </Button>
+                <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => setConfirmingDelete(false)}>
+                  Hủy
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button
+              type="button"
+              variant="danger"
+              icon="trash-2"
+              fullWidth
+              disabled={busy}
+              onClick={() => setConfirmingDelete(true)}
+            >
+              Xóa nháp
+            </Button>
+          )}
         </>
       ) : null}
       {job.status === "PUBLISHED" ? (
@@ -88,6 +118,7 @@ export default function EmployerJobDetailPage({ params }: { params: Promise<{ id
 function EmployerJobDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const searchParams = useSearchParams();
+  const router = useRouter();
   const queryClient = useQueryClient();
 
   const { data: job, isLoading } = useEmployerJobPost(id);
@@ -224,6 +255,15 @@ function EmployerJobDetail({ params }: { params: Promise<{ id: string }> }) {
                   await apiFetch<JobPost>("employer", `/employer/job-posts/${id}/close`, { method: "POST" });
                   await refresh();
                 }, "Không đóng được tin, vui lòng thử lại")
+              }
+              onDelete={() =>
+                void run(async () => {
+                  await apiFetch("employer", `/employer/job-posts/${id}`, { method: "DELETE" });
+                  queryClient.removeQueries({ queryKey: ["employerJobPost", id] });
+                  await queryClient.invalidateQueries({ queryKey: ["employerJobPosts"] });
+                  await queryClient.invalidateQueries({ queryKey: ["employerJobPostStats"] });
+                  router.replace("/employer/jobs");
+                }, "Không xóa được tin nháp, vui lòng thử lại")
               }
             />
 

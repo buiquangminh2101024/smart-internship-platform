@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Conversation, Message } from "@sip/shared-types";
+import type { Conversation, DeleteConversationResponse, Message } from "@sip/shared-types";
 import { apiFetch } from "../lib/api-client";
 
 interface MessagingState {
@@ -8,12 +8,19 @@ interface MessagingState {
   messages: Record<string, Message[]>; // conversationId -> messages
   isLoadingConversations: boolean;
   isLoadingMessages: Record<string, boolean>;
+  // Lịch sử đã fetch cho conversation này chưa — tách riêng khỏi `messages` vì
+  // socket "new_message" có thể tạo `messages[id]` (chỉ 1 tin) trước khi lịch
+  // sử từng được tải, khiến UI tưởng nhầm là đã có đủ dữ liệu.
+  hasFetchedMessages: Record<string, boolean>;
 
   fetchConversations: (area: "candidate" | "employer") => Promise<void>;
   fetchMessages: (area: "candidate" | "employer", conversationId: string) => Promise<void>;
   setActiveConversationId: (id: string | null) => void;
   appendMessage: (conversationId: string, message: Message) => void;
   markAsRead: (area: "candidate" | "employer", conversationId: string) => Promise<void>;
+  deleteConversation: (area: "candidate" | "employer", conversationId: string) => Promise<DeleteConversationResponse>;
+  /** Phía kia đã xoá hội thoại (socket `conversation:unavailable` / lỗi gửi tin) — khoá gửi tin. */
+  markConversationUnavailable: (area: "candidate" | "employer", conversationId: string) => void;
 }
 
 export const useMessagingStore = create<MessagingState>((set, get) => ({
@@ -22,6 +29,7 @@ export const useMessagingStore = create<MessagingState>((set, get) => ({
   messages: {},
   isLoadingConversations: false,
   isLoadingMessages: {},
+  hasFetchedMessages: {},
 
   fetchConversations: async (area) => {
     set({ isLoadingConversations: true });
@@ -46,10 +54,21 @@ export const useMessagingStore = create<MessagingState>((set, get) => ({
         `/conversations/${conversationId}/messages`
       );
       // Items are returned desc, we want to display them chronologically
-      const reversed = res.items.slice().reverse();
-      set((state) => ({
-        messages: { ...state.messages, [conversationId]: reversed },
-      }));
+      const fetched = res.items.slice().reverse();
+      set((state) => {
+        // Gộp với message đã có (từ socket) thay vì ghi đè — tránh mất tin nhắn
+        // đến đúng lúc request lịch sử đang bay.
+        const existing = state.messages[conversationId] || [];
+        const byId = new Map(fetched.map((m) => [m.id, m]));
+        for (const m of existing) byId.set(m.id, m);
+        const merged = Array.from(byId.values()).sort(
+          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+        );
+        return {
+          messages: { ...state.messages, [conversationId]: merged },
+          hasFetchedMessages: { ...state.hasFetchedMessages, [conversationId]: true },
+        };
+      });
     } finally {
       set((state) => ({
         isLoadingMessages: { ...state.isLoadingMessages, [conversationId]: false },
@@ -100,5 +119,28 @@ export const useMessagingStore = create<MessagingState>((set, get) => ({
       });
       return { conversations };
     });
+  },
+
+  deleteConversation: async (area, conversationId) => {
+    const result = await apiFetch<DeleteConversationResponse>(area, `/conversations/${conversationId}`, {
+      method: "DELETE",
+    });
+    // Phía mình đã xoá → hội thoại biến mất khỏi danh sách của mình (dù có xoá cứng hay không).
+    set((state) => ({
+      conversations: state.conversations.filter((c) => c.id !== conversationId),
+      activeConversationId: state.activeConversationId === conversationId ? null : state.activeConversationId,
+    }));
+    return result;
+  },
+
+  markConversationUnavailable: (area, conversationId) => {
+    const now = new Date().toISOString();
+    set((state) => ({
+      conversations: state.conversations.map((c) => {
+        if (c.id !== conversationId || c.candidateDeletedAt || c.employerDeletedAt) return c;
+        // Người nhận sự kiện là phía chưa xoá → cờ xoá thuộc về phía đối diện.
+        return area === "candidate" ? { ...c, employerDeletedAt: now } : { ...c, candidateDeletedAt: now };
+      }),
+    }));
   },
 }));

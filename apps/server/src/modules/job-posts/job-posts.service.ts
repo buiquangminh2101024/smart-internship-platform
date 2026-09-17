@@ -23,6 +23,7 @@ import type { EmployerRepository } from "../employers/employer.repository";
 import type { NotificationPayloadMap } from "../notifications/notification.types";
 import type { NotificationsService } from "../notifications/notifications.service";
 import type { SubscriptionsService } from "../subscriptions/subscriptions.service";
+import type { UserRepository } from "../users/user.repository";
 import { toJobPostDto } from "./job-post.mapper";
 import type { JobPostRepository, JobPostWithRelations, JobPostWriteData } from "./job-post.repository";
 
@@ -41,6 +42,7 @@ export class JobPostsService {
   private readonly companyRepository: CompanyRepository;
   private readonly subscriptionsService: SubscriptionsService;
   private readonly notificationsService: NotificationsService;
+  private readonly userRepository: UserRepository;
 
   constructor({
     prisma,
@@ -49,6 +51,7 @@ export class JobPostsService {
     companyRepository,
     subscriptionsService,
     notificationsService,
+    userRepository,
   }: {
     prisma: PrismaClient;
     jobPostRepository: JobPostRepository;
@@ -56,6 +59,7 @@ export class JobPostsService {
     companyRepository: CompanyRepository;
     subscriptionsService: SubscriptionsService;
     notificationsService: NotificationsService;
+    userRepository: UserRepository;
   }) {
     this.prisma = prisma;
     this.jobPostRepository = jobPostRepository;
@@ -63,6 +67,7 @@ export class JobPostsService {
     this.companyRepository = companyRepository;
     this.subscriptionsService = subscriptionsService;
     this.notificationsService = notificationsService;
+    this.userRepository = userRepository;
   }
 
   // ─── Public (Guest) ──────────────────────────────────────────────────────
@@ -142,6 +147,17 @@ export class JobPostsService {
     return toJobPostDto(updated);
   }
 
+  /** Hard delete, chỉ cho DRAFT — tin nháp chưa từng công khai nên không có hồ sơ ứng tuyển/hội thoại. */
+  async deleteDraft(userId: string, id: string): Promise<void> {
+    const { companyId } = await this.requireEmployer(userId);
+    const jobPost = await this.requireOwnedJobPost(companyId, id);
+    if (jobPost.status !== "DRAFT") {
+      throw new AppError(409, "Only a draft job post can be deleted");
+    }
+
+    await this.jobPostRepository.delete(id);
+  }
+
   /**
    * DRAFT → PENDING, hoặc publish thẳng khi company.requiresApproval=false
    * (ghi log APPROVED với actor=null để phân biệt với Admin duyệt tay) — xem
@@ -153,17 +169,23 @@ export class JobPostsService {
     if (jobPost.status !== "DRAFT") {
       throw new AppError(409, "Only a draft job post can be submitted for approval");
     }
-    if (!jobPost.expiresAt) {
-      throw new AppError(400, "An application deadline is required before submitting a job post");
-    }
-    this.assertExpiryWithinLimit(jobPost.expiresAt);
+    this.assertReadyForSubmission(jobPost);
     await this.requirePublishQuota(company);
 
     const autoPublished = !company.requiresApproval;
     const updated = await this.prisma.$transaction(async (tx) => {
       await this.jobPostRepository.createModerationAction({ jobPostId: id, action: "SUBMITTED", actorId: userId }, tx);
       if (!autoPublished) {
-        return this.jobPostRepository.update(id, { status: "PENDING" }, tx);
+        const pending = await this.jobPostRepository.update(id, { status: "PENDING" }, tx);
+        // AD-12 — company.requiresApproval=true: Admin cần biết có tin chờ duyệt.
+        const adminIds = await this.userRepository.findAdminIds(tx);
+        await this.notificationsService.notifyMany(
+          "JOB_POST_SUBMITTED",
+          adminIds,
+          { jobPostId: id, jobPostTitle: jobPost.title, companyName: company.name },
+          tx,
+        );
+        return pending;
       }
       await this.jobPostRepository.createModerationAction({ jobPostId: id, action: "APPROVED", actorId: null }, tx);
       return this.jobPostRepository.update(id, { status: "PUBLISHED", publishedAt: new Date() }, tx);
@@ -334,6 +356,33 @@ export class JobPostsService {
     }
 
     return data;
+  }
+
+  /**
+   * Bộ ràng buộc "đủ thông tin để công khai" — chỉ áp dụng khi gửi duyệt,
+   * không áp dụng lúc lưu nháp (createDraft/updateDraft vẫn chỉ cần
+   * title+description). Đồng bộ với validate phía frontend ở JobPostForm.
+   */
+  private assertReadyForSubmission(jobPost: JobPostWithRelations): void {
+    if (!jobPost.expiresAt) {
+      throw new AppError(400, "An application deadline is required before submitting a job post");
+    }
+    this.assertExpiryWithinLimit(jobPost.expiresAt);
+    if (!jobPost.industryId) {
+      throw new AppError(400, "An industry is required before submitting a job post");
+    }
+    if (!jobPost.cityId) {
+      throw new AppError(400, "A city is required before submitting a job post");
+    }
+    if (!jobPost.address) {
+      throw new AppError(400, "A work address is required before submitting a job post");
+    }
+    if (!jobPost.isNegotiable && jobPost.salaryMin == null && jobPost.salaryMax == null) {
+      throw new AppError(400, "A salary range or the negotiable option is required before submitting a job post");
+    }
+    if (jobPost.skills.length === 0) {
+      throw new AppError(400, "At least one skill is required before submitting a job post");
+    }
   }
 
   private assertExpiryWithinLimit(expiresAt: Date): void {

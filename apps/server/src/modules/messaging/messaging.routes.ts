@@ -27,6 +27,7 @@ export function messagingRoutes(container: AwilixContainer) {
   router.post("/", (req, res, next) => resolveController().createConversation(req, res).catch(next));
   router.get("/:id/messages", (req, res, next) => resolveController().listMessages(req, res).catch(next));
   router.put("/:id/read", (req, res, next) => resolveController().markAsRead(req, res).catch(next));
+  router.delete("/:id", (req, res, next) => resolveController().deleteConversation(req, res).catch(next));
 
   return router;
 }

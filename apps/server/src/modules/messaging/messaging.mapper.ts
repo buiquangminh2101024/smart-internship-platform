@@ -9,12 +9,15 @@ export function toConversationDto(entity: ConversationWithRelations): Conversati
     employerId: entity.employerId,
     candidateLastReadAt: entity.candidateLastReadAt?.toISOString() || null,
     employerLastReadAt: entity.employerLastReadAt?.toISOString() || null,
+    candidateDeletedAt: entity.candidateDeletedAt?.toISOString() || null,
+    employerDeletedAt: entity.employerDeletedAt?.toISOString() || null,
     createdAt: entity.createdAt.toISOString(),
     updatedAt: entity.updatedAt.toISOString(),
     jobPost: {
       id: entity.jobPost.id,
       title: entity.jobPost.title,
       companyName: entity.jobPost.company.name,
+      status: entity.jobPost.status,
     },
     candidate: {
       id: entity.candidate.id,

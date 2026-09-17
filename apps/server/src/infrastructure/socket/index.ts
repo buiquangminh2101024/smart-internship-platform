@@ -69,7 +69,8 @@ export function setupSocketIo(httpServer: HttpServer, container: AwilixContainer
         await messagingService.notifyRecipient(conversation, userId, message);
       } catch (error: any) {
         logger.error(`Socket message error: ${error.message}`);
-        socket.emit("error", { message: error.message });
+        // `conversationId` + `code` để frontend khoá đúng hội thoại khi bị chặn gửi.
+        socket.emit("error", { message: error.message, code: error.code, conversationId: payload?.conversationId });
       }
     });
 

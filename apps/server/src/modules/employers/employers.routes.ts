@@ -6,13 +6,15 @@ import { CompanyVerificationService } from "./company-verification.service";
 import { validate } from "../../shared/middleware/validate";
 import { authenticate } from "../../shared/middleware/authenticate";
 import { authorize } from "../../shared/middleware/authorize";
-import { singleFileUpload } from "../../shared/middleware/upload";
+import { multiFileUpload } from "../../shared/middleware/upload";
 import {
   createCompanySchema,
   joinCompanySchema,
   updateEmployerProfileSchema,
   verificationCheckSchema,
 } from "./employers.dto";
+
+const COMPANY_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 // employerRepository đăng ký tập trung ở container.ts (dùng chéo bởi
 // subscriptions từ Phase 5 — xem employer.repository.ts), không đăng ký lại ở đây.
@@ -41,15 +43,28 @@ export function employersRouter(container: AwilixContainer): Router {
       void resolveController().checkVerification(req, res, next);
     },
   );
-  // Multipart — businessLicense là optional (chỉ bắt buộc khi cần manual
-  // review, kiểm tra trong EmployersService, không phải ở tầng route).
+  // Multipart — tính bắt buộc của từng file (license chỉ khi cần manual
+  // review, logo/banner khi công ty chưa có ảnh) kiểm tra trong EmployersService.
   router.post(
     "/employers/company",
     ...guard,
-    singleFileUpload("businessLicense"),
+    multiFileUpload({
+      businessLicense: ["image/jpeg", "image/png", "application/pdf"],
+      logo: COMPANY_IMAGE_MIME_TYPES,
+      banner: COMPANY_IMAGE_MIME_TYPES,
+    }),
     validate(createCompanySchema),
     (req, res, next) => {
       void resolveController().createCompany(req, res, next);
+    },
+  );
+  // Chỉ isCompanyAdmin được đổi ảnh — kiểm tra trong EmployersService.
+  router.patch(
+    "/employers/company/branding",
+    ...guard,
+    multiFileUpload({ logo: COMPANY_IMAGE_MIME_TYPES, banner: COMPANY_IMAGE_MIME_TYPES }),
+    (req, res, next) => {
+      void resolveController().updateBranding(req, res, next);
     },
   );
   router.post("/employers/company/join", ...guard, validate(joinCompanySchema), (req, res, next) => {

@@ -1,5 +1,6 @@
 import type { Logger } from "../shared/logger";
 import type {
+  ConversationUnavailablePayload,
   RealtimeMessagePayload,
   RealtimeNotificationPayload,
   RealtimeNotifier,
@@ -26,6 +27,13 @@ export class NoopRealtimeNotifier implements RealtimeNotifier {
 
   pushMessageToUser(userId: string, payload: RealtimeMessagePayload): void {
     this.logger.info("Realtime message push skipped (Socket.IO không khả dụng)", {
+      userId,
+      conversationId: payload.conversationId,
+    });
+  }
+
+  notifyConversationUnavailable(userId: string, payload: ConversationUnavailablePayload): void {
+    this.logger.info("Realtime conversation:unavailable skipped (Socket.IO không khả dụng)", {
       userId,
       conversationId: payload.conversationId,
     });

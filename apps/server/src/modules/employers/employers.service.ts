@@ -22,9 +22,15 @@ interface EmployersConfig {
   DEV_SKIP_COMPANY_MANUAL_VERIFICATION: boolean;
 }
 
-export interface UploadedLicenseFile {
+export interface UploadedFileInput {
   buffer: Buffer;
   originalName: string;
+}
+
+export interface CompanyUploadFiles {
+  businessLicense?: UploadedFileInput;
+  logo?: UploadedFileInput;
+  banner?: UploadedFileInput;
 }
 
 // `exactOptionalPropertyTypes` cấm gán {key: undefined} cho field khai báo
@@ -135,10 +141,11 @@ export class EmployersService {
   async createOrResubmitCompany(
     userId: string,
     dto: CreateCompanyRequest,
-    licenseFile: UploadedLicenseFile | undefined,
+    files: CompanyUploadFiles,
   ): Promise<EmployerMeResponse> {
     const user = await this.requireUser(userId);
     const existingEmployer = await this.employerRepository.findByUserId(userId);
+    const licenseFile = files.businessLicense;
 
     let mode: "create" | "resubmit";
     if (!existingEmployer) {
@@ -147,6 +154,14 @@ export class EmployersService {
       mode = "resubmit";
     } else {
       throw new AppError(409, "This account is already linked to a company");
+    }
+
+    // Nộp lại hồ sơ được giữ ảnh cũ — chỉ bắt buộc khi công ty chưa từng có ảnh.
+    if (!files.logo && !existingEmployer?.company.logoUrl) {
+      throw new AppError(400, "A company logo is required");
+    }
+    if (!files.banner && !existingEmployer?.company.bannerUrl) {
+      throw new AppError(400, "A company banner is required");
     }
 
     const outcome = await this.companyVerificationService.runVerificationCheck({ email: user.email, taxCode: dto.taxCode });
@@ -182,6 +197,8 @@ export class EmployersService {
       businessLicenseUrl = uploaded.url;
     }
 
+    const brandingUrls = await this.uploadBranding(userId, files);
+
     let verificationNote: string | null = null;
     if (!autoVerified) {
       if (outcome.outcome === "BLOCKED") {
@@ -208,6 +225,7 @@ export class EmployersService {
       rejectedAt: null,
       isVerified: autoVerified,
       verifiedAt: autoVerified ? new Date() : null,
+      ...brandingUrls,
     };
 
     const profileFields = definedOnly({ title: dto.title, phone: dto.phone });
@@ -237,6 +255,16 @@ export class EmployersService {
           "COMPANY_VERIFIED",
           userId,
           { companyId, companyName: dto.name },
+          tx,
+        );
+      } else {
+        // AD-12 — company vào MANUAL_REVIEW (create lẫn resubmit): Admin cần
+        // biết để xử lý, không tự lộ ra qua polling danh sách company.
+        const adminIds = await this.userRepository.findAdminIds(tx);
+        await this.notificationsService.notifyMany(
+          "COMPANY_LINK_REQUESTED",
+          adminIds,
+          { companyId, companyName: dto.name, employerEmail: user.email },
           tx,
         );
       }
@@ -281,6 +309,48 @@ export class EmployersService {
 
     await this.employerRepository.updateProfile(userId, data);
     return this.getMe(userId);
+  }
+
+  async updateCompanyBranding(userId: string, files: CompanyUploadFiles): Promise<EmployerMeResponse> {
+    const employer = await this.employerRepository.findByUserId(userId);
+    if (!employer) {
+      throw new AppError(404, "Employer profile not found");
+    }
+    if (!employer.isCompanyAdmin) {
+      throw new AppError(403, "Only a company admin can update the company logo and banner");
+    }
+    if (!files.logo && !files.banner) {
+      throw new AppError(400, "Provide a logo or a banner to update");
+    }
+
+    const brandingUrls = await this.uploadBranding(userId, files);
+    await this.companyRepository.update(employer.companyId, brandingUrls);
+    return this.getMe(userId);
+  }
+
+  /** Chỉ trả về key của ảnh thật sự được upload, để ảnh không gửi lên giữ nguyên giá trị cũ. */
+  private async uploadBranding(
+    userId: string,
+    files: CompanyUploadFiles,
+  ): Promise<{ logoUrl?: string; bannerUrl?: string }> {
+    const result: { logoUrl?: string; bannerUrl?: string } = {};
+    if (files.logo) {
+      const uploaded = await this.mediaStorage.upload(files.logo.buffer, {
+        folder: "company-logos",
+        filename: `${userId}-${Date.now()}`,
+        resourceType: "image",
+      });
+      result.logoUrl = uploaded.url;
+    }
+    if (files.banner) {
+      const uploaded = await this.mediaStorage.upload(files.banner.buffer, {
+        folder: "company-banners",
+        filename: `${userId}-${Date.now()}`,
+        resourceType: "image",
+      });
+      result.bannerUrl = uploaded.url;
+    }
+    return result;
   }
 
   private async requireUser(userId: string) {

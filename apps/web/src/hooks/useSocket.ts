@@ -1,12 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
-import type { Message, MessageNotificationEvent, NotificationEvent } from "@sip/shared-types";
+import type {
+  ConversationUnavailableEvent,
+  Message,
+  MessageNotificationEvent,
+  NotificationEvent,
+} from "@sip/shared-types";
 import { useMessagingStore } from "../stores/messaging-store";
 import { authStoreForArea } from "../stores/auth-store";
+import type { AuthArea } from "../lib/auth-area";
 import type { MessagingArea } from "../lib/messaging";
 import { refreshAccessTokenShared } from "../lib/api-client";
 
 export type SocketStatus = "idle" | "connecting" | "connected" | "disconnected";
+
+// Admin không có hội thoại/tin nhắn (AD-12) — mọi thao tác riêng cho tin nhắn
+// (markConversationUnavailable, MESSAGES_HREF...) phải guard qua đây thay vì
+// dựa vào "server sẽ không emit event đó cho admin" để bỏ qua kiểm tra kiểu.
+export function isMessagingArea(area: AuthArea): area is MessagingArea {
+  return area !== "admin";
+}
 
 export interface SocketHandlers {
   /** `notification:new` — thông báo nghiệp vụ Phase 10 (NotificationBell). */
@@ -19,12 +32,13 @@ export interface SocketHandlers {
  * Mở đúng 1 kết nối Socket.IO cho một area. Chỉ SocketProvider gọi hook này —
  * nơi khác lấy kết nối qua `useSocket()` (components/realtime/SocketProvider).
  */
-export function useSocketConnection(area: MessagingArea, handlers: SocketHandlers, enabled = true) {
+export function useSocketConnection(area: AuthArea, handlers: SocketHandlers, enabled = true) {
   const socketRef = useRef<Socket | null>(null);
   const handlersRef = useRef(handlers);
   // Chỉ set trong callback của socket; null = đang kết nối lần đầu.
   const [connState, setConnState] = useState<"connected" | "disconnected" | null>(null);
   const appendMessage = useMessagingStore((s) => s.appendMessage);
+  const markConversationUnavailable = useMessagingStore((s) => s.markConversationUnavailable);
   const hasToken = authStoreForArea(area)((s) => Boolean(s.accessToken));
   const shouldConnect = enabled && hasToken;
   const status: SocketStatus = !shouldConnect ? "idle" : (connState ?? "connecting");
@@ -59,6 +73,21 @@ export function useSocketConnection(area: MessagingArea, handlers: SocketHandler
 
     socket.on("new_message", (message: Message) => {
       appendMessage(message.conversationId, message);
+    });
+
+    // Phía kia vừa xoá hội thoại → khoá ô nhập ngay cả khi đang mở/đang gõ.
+    socket.on("conversation:unavailable", (event: ConversationUnavailableEvent) => {
+      if (isMessagingArea(area)) markConversationUnavailable(area, event.conversationId);
+    });
+
+    // Lỗi từ handler `send_message`. Bị chặn vì hội thoại đã bị xoá (lỡ mất
+    // event ở trên do rớt mạng) thì đồng bộ lại để khoá UI.
+    socket.on("error", (payload: { message?: string; code?: string; conversationId?: string }) => {
+      if (payload?.code === "CONVERSATION_UNAVAILABLE" && payload.conversationId && isMessagingArea(area)) {
+        markConversationUnavailable(area, payload.conversationId);
+        return;
+      }
+      console.warn("Socket error", payload?.message);
     });
 
     socket.on("notification:new", (event: NotificationEvent) => {
@@ -100,7 +129,7 @@ export function useSocketConnection(area: MessagingArea, handlers: SocketHandler
       socket.disconnect();
       setConnState(null);
     };
-  }, [shouldConnect, appendMessage, area]);
+  }, [shouldConnect, appendMessage, markConversationUnavailable, area]);
 
   /** false = chưa gửi được (mất kết nối) — nơi gọi giữ lại nội dung để gửi lại. */
   const sendMessage = useCallback((conversationId: string, content: string): boolean => {

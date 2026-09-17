@@ -66,6 +66,8 @@ enum NotificationType {
   JOB_POST_TAKEN_DOWN
   COMPANY_VERIFIED
   COMPANY_REJECTED
+  COMPANY_LINK_REQUESTED // AD-12 — employer nộp/nộp lại hồ sơ công ty cần Admin xác minh thủ công
+  JOB_POST_SUBMITTED // AD-12 — employer gửi tin tuyển dụng chờ duyệt
 }
 
 enum OutboxStatus {
@@ -689,6 +691,9 @@ model Conversation {
   employer            Employer  @relation(fields: [employerId], references: [id], onDelete: Cascade)
   candidateLastReadAt DateTime?
   employerLastReadAt  DateTime?
+  // Soft-delete riêng từng phía; cả 2 cùng có giá trị thì xoá cứng (AD-11).
+  candidateDeletedAt  DateTime?
+  employerDeletedAt   DateTime?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 

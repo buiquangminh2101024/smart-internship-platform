@@ -40,3 +40,25 @@ export function singleFileUpload(
 
   return uploadWithType.single(fieldName);
 }
+
+/** Nhiều field file trong cùng một request, mỗi field có danh sách MIME riêng, tối đa 1 file/field. */
+export function multiFileUpload(allowedMimeTypesByField: Record<string, string[]>): RequestHandler {
+  const uploadWithTypes = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: MAX_FILE_SIZE_BYTES },
+    fileFilter: (_req, file, cb) => {
+      const allowed = allowedMimeTypesByField[file.fieldname];
+      if (!allowed) {
+        cb(new AppError(400, `Unexpected file field: ${file.fieldname}`));
+        return;
+      }
+      if (!allowed.includes(file.mimetype)) {
+        cb(new AppError(400, "Unsupported file type"));
+        return;
+      }
+      cb(null, true);
+    },
+  });
+
+  return uploadWithTypes.fields(Object.keys(allowedMimeTypesByField).map((name) => ({ name, maxCount: 1 })));
+}

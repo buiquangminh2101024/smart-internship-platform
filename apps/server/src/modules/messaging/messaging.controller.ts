@@ -42,4 +42,11 @@ export class MessagingController {
     await this.messagingService.markAsRead(userId, role, id);
     res.json({ success: true, data: { success: true } });
   };
+
+  deleteConversation = async (req: Request, res: Response) => {
+    const { id: userId, role } = req.user!;
+    const id = req.params.id as string;
+    const result = await this.messagingService.deleteConversation(userId, role, id);
+    res.json({ success: true, data: result });
+  };
 }
