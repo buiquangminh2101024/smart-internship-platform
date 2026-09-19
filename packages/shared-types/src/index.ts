@@ -513,6 +513,82 @@ export interface CvRecord {
   uploadedAt: string;
 }
 
+/**
+ * CV nhìn từ phía chính chủ (GET/POST /candidates/me/cvs...) — thêm kết quả
+ * phân tích AI. Tách khỏi CvRecord vì CvRecord còn đi kèm Application sang
+ * phía Employer, không có lý do để lộ dữ liệu trích xuất ra đó.
+ */
+export interface CandidateCvRecord extends CvRecord {
+  extractionStatus: CvExtractionStatus;
+  extractedData: CvExtractionResult | null;
+  extractedAt: string | null;
+}
+
+// ─── CV AI Extraction (docs/06-backend/cv-ai-extraction-phase1/PLAN.md) ───
+
+export type CvExtractionStatus = "NOT_STARTED" | "PROCESSING" | "DONE" | "FAILED";
+
+/**
+ * Kết quả LLM đọc CV, lưu nguyên vào Cv.extractedData. Ngày tháng giữ dạng
+ * chuỗi như model trả về ("YYYY-MM" hoặc "YYYY-MM-DD") — Phase 2 mới chuẩn hoá
+ * khi ghi vào hồ sơ.
+ */
+export interface CvExtractionResult {
+  isValidCv: boolean;
+  invalidReason: string | null;
+  extractionConfidence: "high" | "low";
+  // Chỉ có giá trị khi cả 2 LLM đều lỗi và phải rơi về OCR offline (Tesseract).
+  rawOcrText: string | null;
+  candidate: {
+    // Không có field tương ứng trong hồ sơ — giữ lại để dùng sau.
+    fullName: string | null;
+    headline: string | null;
+    bio: string | null;
+    phone: string | null;
+    dateOfBirth: string | null;
+    gender: "MALE" | "FEMALE" | "OTHER" | null;
+  };
+  educations: Array<{
+    universityName: string | null;
+    majorName: string | null;
+    degree: string | null;
+    startYear: number | null;
+    endYear: number | null;
+    isCurrent: boolean;
+    description: string | null;
+  }>;
+  workExperiences: Array<{
+    company: string;
+    position: string;
+    startDate: string | null;
+    endDate: string | null;
+    isCurrent: boolean;
+    description: string | null;
+  }>;
+  projects: Array<{
+    name: string;
+    description: string | null;
+    url: string | null;
+    isWorkingOn: boolean;
+    startDate: string | null;
+    endDate: string | null;
+  }>;
+  certificates: Array<{
+    name: string;
+    issuer: string | null;
+    issueDate: string | null;
+    credentialUrl: string | null;
+    description: string | null;
+  }>;
+  awards: Array<{
+    name: string;
+    issuer: string | null;
+    date: string | null;
+    description: string | null;
+  }>;
+  skills: string[];
+}
+
 export interface SavedJobEntry {
   id: string;
   candidateId: string;

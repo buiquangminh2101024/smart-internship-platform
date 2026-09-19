@@ -37,6 +37,15 @@ export class CvController {
     }
   };
 
+  extract = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const item = await this.cvService.extractForCandidate(req.user!.id, String(req.params.id));
+      res.json({ success: true, data: item } satisfies ApiResponse);
+    } catch (error) {
+      next(error);
+    }
+  };
+
   setDefault = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const item = await this.cvService.setDefaultForCandidate(req.user!.id, String(req.params.id));

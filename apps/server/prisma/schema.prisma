@@ -628,6 +628,14 @@ model JobPostModerationAction {
 
 // ─── cv / saved-jobs ────────────────────────────────────────────────────
 
+// Trích xuất CV bằng AI — xem docs/06-backend/cv-ai-extraction-phase1/PLAN.md.
+enum CvExtractionStatus {
+  NOT_STARTED
+  PROCESSING
+  DONE
+  FAILED
+}
+
 model Cv {
   id          String    @id @default(cuid())
   candidateId String
@@ -636,6 +644,11 @@ model Cv {
   fileName    String
   isDefault   Boolean   @default(false)
   uploadedAt  DateTime  @default(now())
+
+  extractionStatus CvExtractionStatus @default(NOT_STARTED)
+  // Kết quả thô từ LLM (CvExtractionResult) — Phase 2 đọc lại để ghi vào hồ sơ.
+  extractedData    Json?
+  extractedAt      DateTime?
 
   applications Application[]
 

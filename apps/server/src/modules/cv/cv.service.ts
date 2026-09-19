@@ -1,21 +1,35 @@
 import type { PrismaClient } from "@prisma/client";
 import type { MediaStorage } from "../../shared/ports/MediaStorage";
 import { AppError } from "../../shared/errors/AppError";
+import type { CvExtractionPipelineService } from "./cv-extraction-pipeline.service";
 
 const MAX_CV_FILE_SIZE = 5 * 1024 * 1024;
-const ALLOWED_CV_MIME_TYPES = new Set([
+// Ảnh chụp CV được nhận thêm để phân tích bằng AI (cv-ai-extraction-phase1 Quyết định #1).
+export const ALLOWED_CV_MIME_TYPES = [
   "application/pdf",
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-]);
+  "image/jpeg",
+  "image/png",
+];
 
 export class CvService {
   private readonly prisma: PrismaClient;
   private readonly mediaStorage: MediaStorage;
+  private readonly cvExtractionPipelineService: CvExtractionPipelineService;
 
-  constructor({ prisma, mediaStorage }: { prisma: PrismaClient; mediaStorage: MediaStorage }) {
+  constructor({
+    prisma,
+    mediaStorage,
+    cvExtractionPipelineService,
+  }: {
+    prisma: PrismaClient;
+    mediaStorage: MediaStorage;
+    cvExtractionPipelineService: CvExtractionPipelineService;
+  }) {
     this.prisma = prisma;
     this.mediaStorage = mediaStorage;
+    this.cvExtractionPipelineService = cvExtractionPipelineService;
   }
 
   async listForCandidate(userId: string) {
@@ -42,8 +56,8 @@ export class CvService {
       throw new AppError(400, "CV file size must be under 5MB");
     }
 
-    if (!ALLOWED_CV_MIME_TYPES.has(file.mimetype)) {
-      throw new AppError(400, "Only PDF or DOCX files are allowed for CV upload");
+    if (!ALLOWED_CV_MIME_TYPES.includes(file.mimetype)) {
+      throw new AppError(400, "Only PDF, DOCX, JPG or PNG files are allowed for CV upload");
     }
 
     const candidate = await this.ensureCandidate(userId);
@@ -62,6 +76,11 @@ export class CvService {
         isDefault: false,
       },
     });
+  }
+
+  async extractForCandidate(userId: string, cvId: string) {
+    const cv = await this.getForCandidate(userId, cvId);
+    return this.cvExtractionPipelineService.run(userId, cv);
   }
 
   async setDefaultForCandidate(userId: string, cvId: string) {
