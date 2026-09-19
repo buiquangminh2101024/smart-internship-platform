@@ -4,13 +4,11 @@ import { Role } from "@prisma/client";
 import { authenticate } from "../../shared/middleware/authenticate";
 import { authorize } from "../../shared/middleware/authorize";
 import { validate } from "../../shared/middleware/validate";
-import { GeminiSkillMatchVerifier } from "../../infrastructure/gemini-skill-match-verifier";
 import { SkillsController } from "./skills.controller";
 import { SkillsService } from "./skills.service";
 import { SkillsRepository } from "./skills.repository";
 import { SkillAliasRepository } from "./skill-alias.repository";
 import { SkillEmbeddingService } from "./skill-embedding.service";
-import { SkillRateLimitService } from "./skill-rate-limit.service";
 import { SkillDedupeService } from "./skill-dedupe.service";
 import { adminSkillListQuerySchema, mergeSkillSchema, suggestSkillSchema } from "./skills.dto";
 
@@ -23,8 +21,6 @@ export function skillsRouter(container: AwilixContainer): Router {
     // singleton quan trọng với embedding service: model chỉ được load một lần
     // cho cả process, không phải mỗi request.
     skillEmbeddingService: asClass(SkillEmbeddingService).singleton(),
-    skillRateLimitService: asClass(SkillRateLimitService).singleton(),
-    skillMatchVerifier: asClass(GeminiSkillMatchVerifier).singleton(),
     skillDedupeService: asClass(SkillDedupeService).singleton(),
     skillsService: asClass(SkillsService).singleton(),
     skillsController: asClass(SkillsController).singleton(),

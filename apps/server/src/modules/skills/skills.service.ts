@@ -1,4 +1,4 @@
-import type { SkillStatus } from "@prisma/client";
+import type { CatalogEntryStatus } from "@prisma/client";
 import type { AdminSkillDto, PaginatedResponse, SuggestSkillResponse } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
 import type { SkillDedupeService } from "./skill-dedupe.service";
@@ -28,7 +28,7 @@ export class SkillsService {
   // ─── Admin ───────────────────────────────────────────────────────────────
 
   async listForAdmin(
-    status: SkillStatus | undefined,
+    status: CatalogEntryStatus | undefined,
     cursor: string | undefined,
   ): Promise<PaginatedResponse<AdminSkillDto>> {
     const page = await this.skillsRepository.listForAdmin(status, cursor);

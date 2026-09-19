@@ -30,3 +30,12 @@ export function useCities() {
 export function useSkills() {
   return useCatalogList("/catalog/skills", "skills");
 }
+
+/** Chỉ trường/ngành đã duyệt — mục người dùng tự đề xuất (PENDING) không có ở đây. */
+export function useUniversities() {
+  return useCatalogList("/catalog/universities", "universities");
+}
+
+export function useMajors() {
+  return useCatalogList("/catalog/majors", "majors");
+}

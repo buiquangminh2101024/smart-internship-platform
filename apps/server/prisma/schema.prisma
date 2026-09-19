@@ -128,19 +128,20 @@ enum CompanyVerificationMethod {
   MANUAL_REVIEW
 }
 
-// Vòng đời một Skill trong catalog (xem docs/06-backend/jobpost-skill-huong-b/PLAN.md).
-// Skill seed sẵn/Admin duyệt = APPROVED (hiện trong GET /catalog/skills công
-// khai); skill do Candidate/Employer tự gõ = PENDING (gắn được vào hồ sơ/tin
-// của chính người tạo nhưng chưa vào danh mục công khai) tới khi cron LLM merge
-// hoặc Admin duyệt/từ chối/gộp.
-enum SkillStatus {
+// Vòng đời một mục catalog do người dùng đóng góp — Skill (xem
+// docs/06-backend/jobpost-skill-huong-b/PLAN.md) và University/Major (xem
+// docs/06-backend/cv-ai-extraction-phase2/PLAN.md). Seed sẵn/Admin duyệt =
+// APPROVED (hiện trong GET /catalog/* công khai); mục do người dùng tự gõ =
+// PENDING (gắn được vào hồ sơ/tin của chính người tạo nhưng chưa vào danh mục
+// công khai) tới khi cron LLM merge hoặc Admin duyệt/từ chối/gộp.
+enum CatalogEntryStatus {
   APPROVED
   PENDING
 }
 
-// Nguồn gốc một dòng SkillAlias — phân biệt alias seed sẵn, alias sinh ra khi
+// Nguồn gốc một dòng *Alias — phân biệt alias seed sẵn, alias sinh ra khi
 // Admin gộp tay, và alias sinh ra khi cron để Gemini kết luận MATCH.
-enum SkillAliasSource {
+enum CatalogAliasSource {
   SEED
   ADMIN_MERGE
   LLM_MERGE
@@ -169,12 +170,14 @@ model User {
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
-  candidate         Candidate?
-  employer          Employer?
-  moderationActions JobPostModerationAction[]
-  messages          Message[]
-  notifications     Notification[]
-  createdSkills     Skill[]
+  candidate           Candidate?
+  employer            Employer?
+  moderationActions   JobPostModerationAction[]
+  messages            Message[]
+  notifications       Notification[]
+  createdSkills       Skill[]
+  createdUniversities University[]
+  createdMajors       Major[]
 
   @@map("users")
 }
@@ -184,21 +187,66 @@ model User {
 // named in PROJECT_STRUCTURE.md, since CandidateSkill needs a catalog to
 // reference and it fits the same small admin-CRUD-list shape.
 
+// University/Major dùng chung vòng đời duyệt với Skill (CatalogEntryStatus) nhưng
+// KHÔNG có cột embedding: tên trường/ngành ít biến thể hơn tên kỹ năng, so khớp
+// token/bigram là đủ (docs/06-backend/cv-ai-extraction-phase2/PLAN.md Quyết định #2).
+// pendingMatch*Id: mục gần nhất tìm được lúc tạo (vùng xám 0.6-0.85) để cron hỏi
+// Gemini — cùng ý nghĩa với Skill.pendingMatchSkillId.
 model Major {
-  id         String      @id @default(cuid())
-  name       String      @unique
-  educations Education[]
+  id                  String             @id @default(cuid())
+  name                String             @unique
+  status              CatalogEntryStatus @default(APPROVED)
+  createdByUserId     String?
+  createdBy           User?              @relation(fields: [createdByUserId], references: [id])
+  pendingMatchMajorId String?
+  pendingMatchMajor   Major?             @relation("MajorPendingMatch", fields: [pendingMatchMajorId], references: [id])
+  pendingMatchOf      Major[]            @relation("MajorPendingMatch")
+  createdAt           DateTime           @default(now())
+  educations          Education[]
+  aliases             MajorAlias[]
 
+  @@index([status])
   @@map("majors")
 }
 
-model University {
-  id         String      @id @default(cuid())
-  name       String      @unique
-  code       String?     @unique
-  educations Education[]
+model MajorAlias {
+  id        String             @id @default(cuid())
+  alias     String             @unique
+  majorId   String
+  major     Major              @relation(fields: [majorId], references: [id], onDelete: Cascade)
+  source    CatalogAliasSource @default(ADMIN_MERGE)
+  createdAt DateTime           @default(now())
 
+  @@map("major_aliases")
+}
+
+model University {
+  id                       String             @id @default(cuid())
+  name                     String             @unique
+  code                     String?            @unique
+  status                   CatalogEntryStatus @default(APPROVED)
+  createdByUserId          String?
+  createdBy                User?              @relation(fields: [createdByUserId], references: [id])
+  pendingMatchUniversityId String?
+  pendingMatchUniversity   University?        @relation("UniversityPendingMatch", fields: [pendingMatchUniversityId], references: [id])
+  pendingMatchOf           University[]       @relation("UniversityPendingMatch")
+  createdAt                DateTime           @default(now())
+  educations               Education[]
+  aliases                  UniversityAlias[]
+
+  @@index([status])
   @@map("universities")
+}
+
+model UniversityAlias {
+  id           String             @id @default(cuid())
+  alias        String             @unique
+  universityId String
+  university   University         @relation(fields: [universityId], references: [id], onDelete: Cascade)
+  source       CatalogAliasSource @default(ADMIN_MERGE)
+  createdAt    DateTime           @default(now())
+
+  @@map("university_aliases")
 }
 
 model Industry {
@@ -232,7 +280,7 @@ model CompanyType {
 model Skill {
   id                  String                      @id @default(cuid())
   name                String                      @unique
-  status              SkillStatus                 @default(APPROVED)
+  status              CatalogEntryStatus          @default(APPROVED)
   createdByUserId     String?
   createdBy           User?                       @relation(fields: [createdByUserId], references: [id])
   // Vector 384 chiều sinh bởi Xenova/paraphrase-multilingual-MiniLM-L12-v2.
@@ -260,12 +308,12 @@ model Skill {
 // thể đã từng gặp. Feedback loop: mỗi lần merge (Admin hoặc cron LLM) ghi thêm
 // một dòng, catalog càng dùng càng ít phải gọi LLM.
 model SkillAlias {
-  id        String           @id @default(cuid())
-  alias     String           @unique
+  id        String             @id @default(cuid())
+  alias     String             @unique
   skillId   String
-  skill     Skill            @relation(fields: [skillId], references: [id], onDelete: Cascade)
-  source    SkillAliasSource @default(ADMIN_MERGE)
-  createdAt DateTime         @default(now())
+  skill     Skill              @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  source    CatalogAliasSource @default(ADMIN_MERGE)
+  createdAt DateTime           @default(now())
 
   @@map("skill_aliases")
 }
@@ -628,6 +676,14 @@ model JobPostModerationAction {
 
 // ─── cv / saved-jobs ────────────────────────────────────────────────────
 
+// Trích xuất CV bằng AI — xem docs/06-backend/cv-ai-extraction-phase1/PLAN.md.
+enum CvExtractionStatus {
+  NOT_STARTED
+  PROCESSING
+  DONE
+  FAILED
+}
+
 model Cv {
   id          String    @id @default(cuid())
   candidateId String
@@ -636,6 +692,11 @@ model Cv {
   fileName    String
   isDefault   Boolean   @default(false)
   uploadedAt  DateTime  @default(now())
+
+  extractionStatus CvExtractionStatus @default(NOT_STARTED)
+  // Kết quả thô từ LLM (CvExtractionResult) — Phase 2 đọc lại để ghi vào hồ sơ.
+  extractedData    Json?
+  extractedAt      DateTime?
 
   applications Application[]
 

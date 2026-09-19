@@ -15,9 +15,11 @@ import { RedisCompanyInviteCodeStore } from "./infrastructure/redis-company-invi
 import { CloudinaryMediaStorage } from "./infrastructure/cloudinary-media-storage";
 import { VnpayGatewayAdapter } from "./infrastructure/vnpay-gateway-adapter";
 import { MomoGatewayAdapter } from "./infrastructure/momo-gateway-adapter";
+import { GeminiCatalogMatchVerifier } from "./infrastructure/gemini-catalog-match-verifier";
 import { UserRepository } from "./modules/users/user.repository";
 import { CompanyRepository } from "./modules/companies/company.repository";
 import { EmployerRepository } from "./modules/employers/employer.repository";
+import { CatalogRateLimitService } from "./modules/shared/catalog-rate-limit.service";
 import { logger, type Logger } from "./shared/logger";
 import { config } from "./shared/config/env";
 import type { RateLimiter } from "./shared/ports/RateLimiter";
@@ -28,6 +30,7 @@ import type { RealtimeNotifier } from "./shared/ports/RealtimeNotifier";
 import type { CompanyInviteCodeStore } from "./shared/ports/CompanyInviteCodeStore";
 import type { MediaStorage } from "./shared/ports/MediaStorage";
 import type { PaymentGatewayAdapter } from "./shared/ports/PaymentGatewayAdapter";
+import type { CatalogMatchVerifier } from "./shared/ports/CatalogMatchVerifier";
 import type { PaymentProvider, PrismaClient } from "@prisma/client";
 
 // Cradle gốc — mỗi module nghiệp vụ mở rộng type này khi đăng ký thêm
@@ -60,6 +63,10 @@ export interface Cradle {
   vnpayGatewayAdapter: PaymentGatewayAdapter;
   momoGatewayAdapter: PaymentGatewayAdapter;
   paymentGatewayAdapters: Record<PaymentProvider, PaymentGatewayAdapter>;
+  // Dùng chung bởi skills và education-catalog (Skill/University/Major cùng cơ
+  // chế PENDING — docs/06-backend/cv-ai-extraction-phase2/PLAN.md Quyết định #3/#4).
+  catalogRateLimitService: CatalogRateLimitService;
+  catalogMatchVerifier: CatalogMatchVerifier;
 }
 
 export function buildContainer(): AwilixContainer<Cradle> {
@@ -92,6 +99,8 @@ export function buildContainer(): AwilixContainer<Cradle> {
         MOMO: cradle.momoGatewayAdapter,
       }),
     ).singleton(),
+    catalogRateLimitService: asClass(CatalogRateLimitService).singleton(),
+    catalogMatchVerifier: asClass(GeminiCatalogMatchVerifier).singleton(),
   });
 
   return container;

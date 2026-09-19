@@ -1,12 +1,28 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CvRecord } from "@sip/shared-types";
+import type { CandidateCvRecord, ImportFromCvRequest, ImportFromCvResponse } from "@sip/shared-types";
 import { apiFetch, apiUpload } from "@/lib/api-client";
 
 // ─── Query keys ────────────────────────────────────────────────────────────
 
 const QUERY_KEY = ["candidateCvs"] as const;
+const PROFILE_QUERY_KEY = ["candidateProfile"] as const;
+
+/**
+ * Chỉ những field preview CV cần để quyết định mặc định "Giữ" / "Dùng mới"
+ * (docs/05-frontend/phases/cv-ai-extraction-phase2/PLAN.md Quyết định #2).
+ * GET /candidates/me còn trả nhiều thứ khác, không cần khai báo hết ở đây.
+ */
+export interface CandidateProfileSnapshot {
+  headline: string | null;
+  bio: string | null;
+  phone: string | null;
+  dateOfBirth: string | null;
+  gender: "MALE" | "FEMALE" | "OTHER" | null;
+  cityId: string | null;
+  city: { id: string; name: string } | null;
+}
 
 // ─── Hooks ─────────────────────────────────────────────────────────────────
 
@@ -14,7 +30,7 @@ const QUERY_KEY = ["candidateCvs"] as const;
 export function useCvList() {
   return useQuery({
     queryKey: QUERY_KEY,
-    queryFn: () => apiFetch<CvRecord[]>("candidate", "/candidates/me/cvs"),
+    queryFn: () => apiFetch<CandidateCvRecord[]>("candidate", "/candidates/me/cvs"),
   });
 }
 
@@ -25,9 +41,56 @@ export function useCvUpload() {
     mutationFn: (file: File) => {
       const formData = new FormData();
       formData.append("file", file);
-      return apiUpload<CvRecord>("candidate", "/candidates/me/cvs", formData);
+      return apiUpload<CandidateCvRecord>("candidate", "/candidates/me/cvs", formData);
     },
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+    },
+  });
+}
+
+/**
+ * Phân tích CV bằng AI (POST /candidates/me/cvs/:id/extract). Backend chạy
+ * đồng bộ, có thể mất vài chục giây — axios không đặt timeout nên không cần
+ * cấu hình riêng. Trả CV đã có extractedData; ghi thẳng vào cache để preview
+ * hiện ngay, rồi invalidate để đồng bộ lại danh sách.
+ */
+export function useCvExtract() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (cvId: string) =>
+      apiFetch<CandidateCvRecord>("candidate", `/candidates/me/cvs/${cvId}/extract`, { method: "POST" }),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<CandidateCvRecord[]>(QUERY_KEY, (prev) =>
+        prev?.map((cv) => (cv.id === updated.id ? updated : cv)),
+      );
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+    },
+  });
+}
+
+/** Hồ sơ hiện tại — để preview CV so sánh field đơn lẻ trước khi import. */
+export function useCandidateProfile() {
+  return useQuery({
+    queryKey: PROFILE_QUERY_KEY,
+    queryFn: () => apiFetch<CandidateProfileSnapshot>("candidate", "/candidates/me"),
+  });
+}
+
+/**
+ * "Lưu vào hồ sơ" — POST /candidates/me/profile/import-from-cv. Trang hồ sơ
+ * (CandidateProfileClient) tự fetch lại khi mở nên chỉ cần làm mới snapshot ở đây.
+ */
+export function useCvProfileImport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: ImportFromCvRequest) =>
+      apiFetch<ImportFromCvResponse>("candidate", "/candidates/me/profile/import-from-cv", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
       void queryClient.invalidateQueries({ queryKey: QUERY_KEY });
     },
   });
@@ -38,7 +101,7 @@ export function useCvSetDefault() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (cvId: string) =>
-      apiFetch<CvRecord>("candidate", `/candidates/me/cvs/${cvId}/default`, { method: "PATCH" }),
+      apiFetch<CandidateCvRecord>("candidate", `/candidates/me/cvs/${cvId}/default`, { method: "PATCH" }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QUERY_KEY });
     },

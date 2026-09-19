@@ -129,20 +129,24 @@ export interface CatalogItem {
   name: string;
 }
 
+/**
+ * Vòng đời một mục catalog do người dùng đóng góp — dùng chung cho Skill,
+ * University, Major (docs/06-backend/cv-ai-extraction-phase2/PLAN.md Quyết định #1).
+ */
+export type CatalogEntryStatus = "APPROVED" | "PENDING";
+
 // ─── Skills (JobPost Skill — Hướng B) ────────────────────────────────────
 // Xem docs/06-backend/jobpost-skill-huong-b/PLAN.md. Catalog kỹ năng cho phép
 // Candidate/Employer tự gõ tên chưa có; hệ thống khử trùng lặp rồi Admin duyệt.
 
-export type SkillStatus = "APPROVED" | "PENDING";
-
 /**
- * Cách một tên gõ vào được giải quyết:
- * - ALIAS: trùng một tên gọi khác đã biết của skill có sẵn;
- * - AUTO: khớp đủ gần với skill có sẵn (so khớp chuỗi hoặc embedding);
- * - PENDING_REVIEW: đã tạo skill mới, đang chờ duyệt — UI phải báo rõ cho người
- *   dùng biết kỹ năng này chưa công khai.
+ * Cách một tên gõ vào được giải quyết (Skill/University/Major):
+ * - ALIAS: trùng một tên gọi khác đã biết của mục có sẵn;
+ * - AUTO: khớp đủ gần với mục có sẵn (so khớp chuỗi, hoặc embedding với Skill);
+ * - PENDING_REVIEW: đã tạo mục mới, đang chờ duyệt — UI phải báo rõ cho người
+ *   dùng biết mục này chưa công khai.
  */
-export type SkillMatchType = "ALIAS" | "AUTO" | "PENDING_REVIEW";
+export type CatalogMatchType = "ALIAS" | "AUTO" | "PENDING_REVIEW";
 
 export interface SuggestSkillRequest {
   name: string;
@@ -151,14 +155,14 @@ export interface SuggestSkillRequest {
 export interface SuggestSkillResponse {
   skillId: string;
   name: string;
-  status: SkillStatus;
-  matchType: SkillMatchType;
+  status: CatalogEntryStatus;
+  matchType: CatalogMatchType;
 }
 
 export interface AdminSkillDto {
   id: string;
   name: string;
-  status: SkillStatus;
+  status: CatalogEntryStatus;
   createdByEmail: string | null;
   /** Skill gần nhất hệ thống tìm được — gợi ý sẵn cho Admin khi gộp. */
   pendingMatchSkill: { id: string; name: string } | null;
@@ -176,7 +180,50 @@ export interface MergeSkillRequest {
  * chính Employer trả cả PENDING để form sửa tin không làm mất kỹ năng họ vừa đề xuất.
  */
 export interface JobPostSkillDto extends CatalogItem {
-  status: SkillStatus;
+  status: CatalogEntryStatus;
+}
+
+// ─── Education catalog: University / Major ───────────────────────────────
+// docs/06-backend/cv-ai-extraction-phase2/PLAN.md. Cùng cơ chế PENDING/duyệt với
+// Skill, thêm hành động "Sửa tên & duyệt".
+
+export interface SuggestCatalogEntryRequest {
+  name: string;
+}
+
+export interface SuggestCatalogEntryResponse {
+  id: string;
+  name: string;
+  status: CatalogEntryStatus;
+  matchType: CatalogMatchType;
+}
+
+export type SuggestUniversityResponse = SuggestCatalogEntryResponse;
+export type SuggestMajorResponse = SuggestCatalogEntryResponse;
+
+export interface AdminEducationCatalogEntryDto {
+  id: string;
+  name: string;
+  /** Mã trường theo Bộ GD&ĐT — chỉ University seed sẵn mới có; Major luôn null. */
+  code: string | null;
+  status: CatalogEntryStatus;
+  createdByEmail: string | null;
+  /** Mục gần nhất hệ thống tìm được — gợi ý sẵn cho Admin khi gộp. */
+  pendingMatch: { id: string; name: string } | null;
+  /** Số dòng học vấn đang gắn mục này (mất liên kết nếu từ chối). */
+  usageCount: number;
+  createdAt: string;
+}
+
+export type AdminUniversityDto = AdminEducationCatalogEntryDto;
+export type AdminMajorDto = AdminEducationCatalogEntryDto;
+
+export interface MergeCatalogEntryRequest {
+  targetId: string;
+}
+
+export interface RenameApproveCatalogRequest {
+  correctedName: string;
 }
 
 // ─── Companies & Employers (Phase 4) ─────────────────────────────────────
@@ -511,6 +558,128 @@ export interface CvRecord {
   fileName: string;
   isDefault: boolean;
   uploadedAt: string;
+}
+
+/**
+ * CV nhìn từ phía chính chủ (GET/POST /candidates/me/cvs...) — thêm kết quả
+ * phân tích AI. Tách khỏi CvRecord vì CvRecord còn đi kèm Application sang
+ * phía Employer, không có lý do để lộ dữ liệu trích xuất ra đó.
+ */
+export interface CandidateCvRecord extends CvRecord {
+  extractionStatus: CvExtractionStatus;
+  extractedData: CvExtractionResult | null;
+  extractedAt: string | null;
+}
+
+// ─── CV AI Extraction (docs/06-backend/cv-ai-extraction-phase1/PLAN.md) ───
+
+export type CvExtractionStatus = "NOT_STARTED" | "PROCESSING" | "DONE" | "FAILED";
+
+/**
+ * Kết quả LLM đọc CV, lưu nguyên vào Cv.extractedData. Ngày tháng giữ dạng
+ * chuỗi như model trả về ("YYYY-MM" hoặc "YYYY-MM-DD") — Phase 2 mới chuẩn hoá
+ * khi ghi vào hồ sơ.
+ */
+export interface CvExtractionResult {
+  isValidCv: boolean;
+  invalidReason: string | null;
+  extractionConfidence: "high" | "low";
+  // Chỉ có giá trị khi cả 2 LLM đều lỗi và phải rơi về OCR offline (Tesseract).
+  rawOcrText: string | null;
+  candidate: {
+    // Không có field tương ứng trong hồ sơ — giữ lại để dùng sau.
+    fullName: string | null;
+    headline: string | null;
+    bio: string | null;
+    phone: string | null;
+    dateOfBirth: string | null;
+    gender: "MALE" | "FEMALE" | "OTHER" | null;
+    // Thêm ở Phase 2 (map sang Candidate.cityId) — CV phân tích trước đó không có.
+    city?: string | null;
+  };
+  educations: Array<{
+    universityName: string | null;
+    majorName: string | null;
+    degree: string | null;
+    startYear: number | null;
+    endYear: number | null;
+    isCurrent: boolean;
+    description: string | null;
+  }>;
+  workExperiences: Array<{
+    company: string;
+    position: string;
+    startDate: string | null;
+    endDate: string | null;
+    isCurrent: boolean;
+    description: string | null;
+  }>;
+  projects: Array<{
+    name: string;
+    description: string | null;
+    url: string | null;
+    isWorkingOn: boolean;
+    startDate: string | null;
+    endDate: string | null;
+  }>;
+  certificates: Array<{
+    name: string;
+    issuer: string | null;
+    issueDate: string | null;
+    credentialUrl: string | null;
+    description: string | null;
+  }>;
+  awards: Array<{
+    name: string;
+    issuer: string | null;
+    date: string | null;
+    description: string | null;
+  }>;
+  skills: string[];
+}
+
+// ─── CV → hồ sơ (docs/06-backend/cv-ai-extraction-phase2/PLAN.md) ────────
+
+/**
+ * Field đơn lẻ trên Candidate được ghi đè bằng giá trị trích từ CV. Không có
+ * cờ (hoặc false) = giữ giá trị hiện tại (Quyết định #8).
+ */
+export interface ImportFromCvFieldOverrides {
+  headline?: boolean;
+  bio?: boolean;
+  phone?: boolean;
+  dateOfBirth?: boolean;
+  gender?: boolean;
+  cityId?: boolean;
+}
+
+export interface ImportFromCvRequest {
+  /** Chỉ để truy vết nguồn gốc, không bắt buộc. */
+  cvId?: string;
+  /** Kết quả trích xuất SAU KHI Candidate đã bỏ bớt mục/kỹ năng ở preview. */
+  extractedData: Pick<
+    CvExtractionResult,
+    "candidate" | "educations" | "workExperiences" | "projects" | "certificates" | "awards" | "skills"
+  >;
+  fieldOverrides: ImportFromCvFieldOverrides;
+}
+
+export interface ImportFromCvResponse {
+  created: {
+    educations: number;
+    workExperiences: number;
+    projects: number;
+    certificates: number;
+    awards: number;
+    /** Kỹ năng mới gắn vào hồ sơ (không tính kỹ năng đã có sẵn). */
+    skills: number;
+  };
+  updatedFields: Array<keyof ImportFromCvFieldOverrides>;
+  /**
+   * Phần không ghi được nhưng không làm hỏng cả lần import (hết lượt đề xuất
+   * kỹ năng/trường mới, tên thành phố không có trong danh mục...).
+   */
+  warnings: string[];
 }
 
 export interface SavedJobEntry {

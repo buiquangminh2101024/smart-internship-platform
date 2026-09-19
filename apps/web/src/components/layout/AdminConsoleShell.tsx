@@ -18,6 +18,7 @@ const NAV_ITEMS: SideNavItem[] = [
   { label: "Tin tuyển dụng", icon: "clipboard-check", href: "/admin/jobs", matchNested: true },
   { label: "Nhà tuyển dụng", icon: "building-2", href: "/admin/companies", matchNested: true },
   { label: "Kỹ năng", icon: "sparkles", href: "/admin/skills", matchNested: true },
+  { label: "Danh mục học vấn", icon: "graduation-cap", href: "/admin/education-catalog", matchNested: true },
   { label: "Người dùng", icon: "users", soon: true },
   { label: "Báo cáo", icon: "flag", soon: true },
   { label: "Cài đặt", icon: "settings", href: "/admin/settings" },
@@ -27,6 +28,7 @@ const CRUMB_LABELS: Record<string, string> = {
   jobs: "Kiểm duyệt tin",
   companies: "Nhà tuyển dụng",
   skills: "Kỹ năng",
+  "education-catalog": "Danh mục học vấn",
   notifications: "Thông báo",
   settings: "Cài đặt",
 };

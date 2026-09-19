@@ -3,6 +3,7 @@ import { asClass, type AwilixContainer } from "awilix";
 import { CandidateController } from "./candidate.controller";
 import { CandidateService } from "./candidate.service";
 import { CandidateRepository } from "./candidate.repository";
+import { CandidateCvImportService } from "./candidate-cv-import.service";
 import { Role } from "@prisma/client";
 import { authenticate } from "../../shared/middleware/authenticate";
 import { authorize } from "../../shared/middleware/authorize";
@@ -15,6 +16,7 @@ import {
   certificatePatchSchema,
   educationSchema,
   educationPatchSchema,
+  importFromCvSchema,
   projectSchema,
   projectPatchSchema,
   skillSchema,
@@ -26,6 +28,10 @@ export function candidatesRouter(container: AwilixContainer): Router {
   container.register({
     candidateRepository: asClass(CandidateRepository).singleton(),
     candidateService: asClass(CandidateService).singleton(),
+    // Phụ thuộc skillDedupeService/universityDedupeService/majorDedupeService
+    // đăng ký ở skillsRouter/educationCatalogRouter — awilix resolve lười lúc
+    // có request nên thứ tự mount router trong main.ts không ảnh hưởng.
+    candidateCvImportService: asClass(CandidateCvImportService).singleton(),
     candidateController: asClass(CandidateController).singleton(),
   });
 
@@ -39,6 +45,11 @@ export function candidatesRouter(container: AwilixContainer): Router {
 
   router.patch("/candidates/me", ...candidateOnly, validate(candidateProfilePatchSchema), (req, res, next) => {
     void controller().updateMe(req, res, next);
+  });
+
+  // docs/06-backend/cv-ai-extraction-phase2/PLAN.md — "Lưu vào hồ sơ" từ kết quả đọc CV.
+  router.post("/candidates/me/profile/import-from-cv", ...candidateOnly, validate(importFromCvSchema), (req, res, next) => {
+    void controller().importFromCv(req, res, next);
   });
 
   router.post("/candidates/me/education", ...candidateOnly, validate(educationSchema), (req, res, next) => {

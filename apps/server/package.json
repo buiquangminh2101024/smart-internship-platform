@@ -15,7 +15,8 @@
     "db:seed": "dotenv -e ../../.env -- prisma db seed",
     "db:studio": "dotenv -e ../../.env -- prisma studio",
     "create-admin": "dotenv -e ../../.env -- tsx scripts/create-admin.ts",
-    "db:clear": "dotenv -e ../../.env -- tsx scripts/clear-data.ts"
+    "db:clear": "dotenv -e ../../.env -- tsx scripts/clear-data.ts",
+    "seed-education-catalog": "dotenv -e ../../.env -- tsx scripts/seed-education-catalog.ts"
   },
   "prisma": {
     "seed": "tsx scripts/seed.ts"
@@ -50,10 +51,13 @@
     "google-auth-library": "^11.0.2",
     "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.3",
+    "mammoth": "^1.12.3",
     "multer": "^2.0.1",
     "node-cron": "^3.0.3",
+    "pdf-parse": "^2.4.5",
     "resend": "^6.25.0",
     "socket.io": "^4.8.3",
+    "tesseract.js": "^7.0.0",
     "zod": "^4.5.4"
   }
 }

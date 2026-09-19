@@ -108,6 +108,17 @@ const baseSchema = z.object({
   GEMINI_MODEL: z.string().min(1).default("gemini-3.6-flash"),
   EMBEDDING_MODEL_CACHE_DIR: z.string().optional(),
   EMBEDDING_MODEL_ID: z.string().min(1).default("Xenova/paraphrase-multilingual-MiniLM-L12-v2"),
+
+  // Trích xuất CV bằng AI (xem docs/06-backend/cv-ai-extraction-phase1/PLAN.md).
+  // Model Gemini thứ 2 (cùng GEMINI_API_KEY) dùng khi GEMINI_MODEL báo 503
+  // "high demand" — lỗi này theo từng model. Đặt rỗng trong .env để tắt tầng này.
+  GEMINI_FALLBACK_MODEL: z.string().default("gemini-3.5-flash-lite"),
+  // OpenRouter là LLM dự phòng khi cả 2 model Gemini lỗi; thiếu key thì bỏ qua tầng này.
+  // Thiếu TESSERACT_CACHE_DIR thì traineddata (~30MB) được cache ngay trong
+  // thư mục chạy server — vẫn chạy, chỉ làm bẩn thư mục dự án.
+  OPENROUTER_API_KEY: z.string().optional(),
+  OPENROUTER_MODEL: z.string().min(1).default("google/gemma-4-26b-a4b-it:free,dots-studio/dots-3-note-preview:free,qwen/qwen3.8-27b:free"),
+  TESSERACT_CACHE_DIR: z.string().optional(),
 });
 
 // Resend/Google chỉ optional khi OTP_HARDCODE=true hoặc DEV_SKIP_EMAIL_SENDING=true

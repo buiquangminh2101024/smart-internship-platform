@@ -13,14 +13,17 @@ const majors = [
   "Thiết kế đồ họa",
 ];
 
+// Đúng tên + mã trường như scripts/seed-education-catalog.ts nạp từ dữ liệu Bộ
+// GD&ĐT — tên tự đặt khác đi (vd. "Đại học FPT" vs "Trường Đại Học FPT") sẽ tạo
+// hai mục APPROVED trùng nhau và pipeline dedupe khớp ngẫu nhiên vào một trong hai.
 const universities = [
-  "Đại học Bách khoa Hà Nội",
-  "Đại học Bách khoa TP.HCM",
-  "Đại học Công nghệ - ĐHQGHN",
-  "Đại học Khoa học Tự nhiên - ĐHQG-HCM",
-  "Đại học Kinh tế Quốc dân",
-  "Đại học FPT",
-  "Đại học Ngoại thương",
+  { code: "BKA", name: "Đại Học Bách Khoa Hà Nội" },
+  { code: "QSB", name: "Trường Đại Học Bách Khoa HCM" },
+  { code: "QHI", name: "Trường Đại Học Công Nghệ – Đại Học Quốc Gia Hà Nội" },
+  { code: "QST", name: "Trường Đại Học Khoa Học Tự Nhiên TPHCM" },
+  { code: "KHA", name: "Đại Học Kinh Tế Quốc Dân" },
+  { code: "FPT", name: "Trường Đại Học FPT" },
+  { code: "NTH", name: "Trường Đại học Ngoại thương" },
 ];
 
 const industries = [
@@ -73,8 +76,8 @@ async function main() {
   await seedCatalog("majors", majors, (name) =>
     prisma.major.upsert({ where: { name }, update: {}, create: { name } }),
   );
-  await seedCatalog("universities", universities, (name) =>
-    prisma.university.upsert({ where: { name }, update: {}, create: { name } }),
+  await seedCatalog("universities", universities, ({ code, name }) =>
+    prisma.university.upsert({ where: { code }, update: {}, create: { code, name } }),
   );
   await seedCatalog("industries", industries, (name) =>
     prisma.industry.upsert({ where: { name }, update: {}, create: { name } }),

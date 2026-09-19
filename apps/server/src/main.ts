@@ -21,10 +21,13 @@ import { startJobPostExpiryJob } from "./modules/job-posts/job-post-expiry.job";
 import type { JobPostRepository } from "./modules/job-posts/job-post.repository";
 import { candidatesRouter } from "./modules/candidates/candidates.routes";
 import { skillsRouter } from "./modules/skills/skills.routes";
-import { startSkillSuggestionQueueJob } from "./modules/skills/skill-suggestion-queue.job";
+import { educationCatalogRouter } from "./modules/education-catalog/education-catalog.routes";
+import { startCatalogSuggestionQueueJob } from "./modules/shared/catalog-suggestion-queue.job";
 import type { SkillsRepository } from "./modules/skills/skills.repository";
 import type { SkillEmbeddingService } from "./modules/skills/skill-embedding.service";
-import type { SkillMatchVerifier } from "./shared/ports/SkillMatchVerifier";
+import type { UniversityRepository } from "./modules/education-catalog/university.repository";
+import type { MajorRepository } from "./modules/education-catalog/major.repository";
+import type { CatalogMatchVerifier } from "./shared/ports/CatalogMatchVerifier";
 import { cvRouter } from "./modules/cv/cv.routes";
 import { savedJobsRouter } from "./modules/saved-jobs/saved-jobs.routes";
 import { applicationsRouter } from "./modules/applications/applications.routes";
@@ -68,9 +71,11 @@ app.use("/api", paymentsRouter(container));
 app.use("/api", subscriptionsRouter(container));
 app.use("/api", jobPostsRouter(container));
 app.use("/api", candidatesRouter(container));
-// Mount trước cron bên dưới: skillsRouter là nơi đăng ký skillsRepository/
-// skillEmbeddingService/skillMatchVerifier vào container (giống notificationsRouter).
+// Mount trước cron bên dưới: skillsRouter/educationCatalogRouter là nơi đăng ký
+// skillsRepository/skillEmbeddingService/universityRepository/majorRepository
+// vào container (giống notificationsRouter).
 app.use("/api", skillsRouter(container));
+app.use("/api", educationCatalogRouter(container));
 app.use("/api", cvRouter(container));
 app.use("/api", savedJobsRouter(container));
 app.use("/api", applicationsRouter(container));
@@ -100,12 +105,14 @@ startOutboxJob(
   logger,
 );
 
-// Xác nhận bằng Gemini cho skill "vùng xám" + backfill embedding — chạy lệch
-// khỏi request để người dùng không phải chờ LLM khi thêm một cái tag kỹ năng.
-startSkillSuggestionQueueJob({
+// Xác nhận bằng Gemini cho skill/trường/ngành "vùng xám" + backfill embedding
+// skill — chạy lệch khỏi request để người dùng không phải chờ LLM.
+startCatalogSuggestionQueueJob({
   skillsRepository: container.resolve<SkillsRepository>("skillsRepository"),
   skillEmbeddingService: container.resolve<SkillEmbeddingService>("skillEmbeddingService"),
-  skillMatchVerifier: container.resolve<SkillMatchVerifier>("skillMatchVerifier"),
+  universityRepository: container.resolve<UniversityRepository>("universityRepository"),
+  majorRepository: container.resolve<MajorRepository>("majorRepository"),
+  catalogMatchVerifier: container.resolve<CatalogMatchVerifier>("catalogMatchVerifier"),
   logger,
 });
 

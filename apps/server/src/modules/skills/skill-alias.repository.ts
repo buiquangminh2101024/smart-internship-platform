@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient, SkillAlias, SkillAliasSource } from "@prisma/client";
+import type { CatalogAliasSource, Prisma, PrismaClient, SkillAlias } from "@prisma/client";
 import { normalizeSkillName } from "./skill-normalize.util";
 
 type Db = PrismaClient | Prisma.TransactionClient;
@@ -26,7 +26,7 @@ export class SkillAliasRepository {
   async upsert(
     alias: string,
     skillId: string,
-    source: SkillAliasSource,
+    source: CatalogAliasSource,
     db: Db = this.prisma,
   ): Promise<void> {
     const normalized = normalizeSkillName(alias);

@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import type { SkillStatus } from "@prisma/client";
+import type { CatalogEntryStatus } from "@prisma/client";
 import type { AdminSkillDto, ApiResponse, PaginatedResponse, SuggestSkillResponse } from "@sip/shared-types";
 import type { SkillsService } from "./skills.service";
 
@@ -23,7 +23,7 @@ export class SkillsController {
   list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const data = await this.skillsService.listForAdmin(
-        req.query.status as SkillStatus | undefined,
+        req.query.status as CatalogEntryStatus | undefined,
         req.query.cursor as string | undefined,
       );
       const body: ApiResponse<PaginatedResponse<AdminSkillDto>> = { success: true, data };
