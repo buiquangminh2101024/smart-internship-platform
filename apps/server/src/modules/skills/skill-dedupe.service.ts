@@ -3,7 +3,7 @@ import type { SuggestSkillResponse } from "@sip/shared-types";
 import type { Logger } from "../../shared/logger";
 import type { SkillEmbeddingService } from "./skill-embedding.service";
 import type { SkillAliasRepository } from "./skill-alias.repository";
-import type { SkillRateLimitService } from "./skill-rate-limit.service";
+import type { CatalogRateLimitService } from "../shared/catalog-rate-limit.service";
 import type { SkillsRepository } from "./skills.repository";
 import { rankSkillsByName, type SkillSimilarity } from "./skill-token-match.util";
 
@@ -29,7 +29,7 @@ export class SkillDedupeService {
   private readonly skillsRepository: SkillsRepository;
   private readonly skillAliasRepository: SkillAliasRepository;
   private readonly skillEmbeddingService: SkillEmbeddingService;
-  private readonly skillRateLimitService: SkillRateLimitService;
+  private readonly catalogRateLimitService: CatalogRateLimitService;
   private readonly logger: Logger;
 
   constructor({
@@ -37,21 +37,21 @@ export class SkillDedupeService {
     skillsRepository,
     skillAliasRepository,
     skillEmbeddingService,
-    skillRateLimitService,
+    catalogRateLimitService,
     logger,
   }: {
     prisma: PrismaClient;
     skillsRepository: SkillsRepository;
     skillAliasRepository: SkillAliasRepository;
     skillEmbeddingService: SkillEmbeddingService;
-    skillRateLimitService: SkillRateLimitService;
+    catalogRateLimitService: CatalogRateLimitService;
     logger: Logger;
   }) {
     this.prisma = prisma;
     this.skillsRepository = skillsRepository;
     this.skillAliasRepository = skillAliasRepository;
     this.skillEmbeddingService = skillEmbeddingService;
-    this.skillRateLimitService = skillRateLimitService;
+    this.catalogRateLimitService = catalogRateLimitService;
     this.logger = logger;
   }
 
@@ -60,28 +60,10 @@ export class SkillDedupeService {
 
     // Chặn sớm theo PLAN Phần 2 bước 1: người đã hết quota không chạy tiếp
     // pipeline (đỡ tải embedding vô ích). Bộ đếm chỉ tăng ở recordCreation().
-    await this.skillRateLimitService.assertWithinQuota(userId);
+    await this.catalogRateLimitService.assertWithinQuota("skill", userId);
 
-    const alias = await this.skillAliasRepository.findByName(name);
-    if (alias) {
-      return { skillId: alias.skill.id, name: alias.skill.name, status: "APPROVED", matchType: "ALIAS" };
-    }
-
-    // Trùng tên với skill đã tồn tại (kể cả PENDING do người khác vừa gõ): trả
-    // luôn skill đó, vừa tránh vi phạm ràng buộc unique trên `name`, vừa tránh
-    // hai bản ghi chờ duyệt y hệt nhau trong hàng đợi của Admin.
-    const existing = await this.prisma.skill.findFirst({
-      where: { name: { equals: name, mode: "insensitive" } },
-      select: { id: true, name: true, status: true },
-    });
-    if (existing) {
-      return {
-        skillId: existing.id,
-        name: existing.name,
-        status: existing.status,
-        matchType: existing.status === "APPROVED" ? "AUTO" : "PENDING_REVIEW",
-      };
-    }
+    const existing = await this.findExisting(name);
+    if (existing) return existing;
 
     const best = await this.findBestMatch(name);
 
@@ -99,9 +81,38 @@ export class SkillDedupeService {
     });
 
     await this.storeEmbedding(created.id, name);
-    await this.skillRateLimitService.recordCreation(userId);
+    await this.catalogRateLimitService.recordCreation("skill", userId);
 
     return { skillId: created.id, name: created.name, status: "PENDING", matchType: "PENDING_REVIEW" };
+  }
+
+  /**
+   * Chỉ bậc 0 + trùng tên — không so gần đúng, không tạo gì. Dùng riêng cho
+   * import từ CV (candidate-cv-import.service.ts): tên AI trích ra như "C", "R"
+   * không qua được validate của ô tự gõ nhưng vẫn phải khớp được skill đã seed.
+   */
+  async findExisting(rawName: string): Promise<SuggestSkillResponse | null> {
+    const name = rawName.trim();
+
+    const alias = await this.skillAliasRepository.findByName(name);
+    if (alias) {
+      return { skillId: alias.skill.id, name: alias.skill.name, status: "APPROVED", matchType: "ALIAS" };
+    }
+
+    // Trùng tên với skill đã tồn tại (kể cả PENDING do người khác vừa gõ): trả
+    // luôn skill đó, vừa tránh vi phạm ràng buộc unique trên `name`, vừa tránh
+    // hai bản ghi chờ duyệt y hệt nhau trong hàng đợi của Admin.
+    const existing = await this.prisma.skill.findFirst({
+      where: { name: { equals: name, mode: "insensitive" } },
+      select: { id: true, name: true, status: true },
+    });
+    if (!existing) return null;
+    return {
+      skillId: existing.id,
+      name: existing.name,
+      status: existing.status,
+      matchType: existing.status === "APPROVED" ? "AUTO" : "PENDING_REVIEW",
+    };
   }
 
   /** Điểm cao nhất giữa so khớp chuỗi (bậc 1) và embedding ngữ nghĩa (bậc 2). */

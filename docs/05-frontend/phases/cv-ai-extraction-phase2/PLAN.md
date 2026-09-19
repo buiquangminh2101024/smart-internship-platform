@@ -2,7 +2,7 @@
 
 Tiếp nối `docs/05-frontend/phases/cv-ai-extraction-phase1/PLAN.md`, dựa trên kế hoạch backend song song `docs/06-backend/cv-ai-extraction-phase2/PLAN.md` và bản nháp `docs/temp/CV_JSON_TO_CANDIDATE_PROFILE_PROPOSAL.md` (đặc biệt mục 4.1, 9.5) — không chép lại nội dung đã bàn. Không thuộc phase đánh số nào trong `FRONTEND_PHASES.md`. Phạm vi: từ lúc Candidate bấm **"Lưu vào hồ sơ"** trên preview (Phase 1) tới hết luồng, cộng thêm trang Admin duyệt `University`/`Major`.
 
-**Trạng thái: chưa triển khai.**
+**Trạng thái: đã triển khai (2026-09-19).** Xem "Ghi chú triển khai" ngay trước Phần 4.
 
 ## Quyết định mới chốt khi lên kế hoạch
 
@@ -47,6 +47,13 @@ Tiếp nối `docs/05-frontend/phases/cv-ai-extraction-phase1/PLAN.md`, dựa tr
 
 - Tạo trang theo Phần 1/2 (Quyết định #4), thêm nav sidebar (Phần 2).
 - **Test:** tab Trường/Ngành hiển thị đúng danh sách `PENDING`; 4 hành động (Duyệt/Từ chối/Gộp/Sửa tên & duyệt) hoạt động đúng, `rename-approve` trùng tên với entry `APPROVED` khác hiện lỗi rõ ràng từ backend (409).
+
+## Ghi chú triển khai (khác/bổ sung so với kế hoạch)
+
+- **Kỹ năng trong preview dùng chip bật/tắt, không dùng `SkillMultiSelect`** (Quyết định #5): backend nhận `skills: string[]` rồi tự khử trùng lặp; `SkillMultiSelect` gọi `/skills/suggest` ngay khi chọn → tạo Skill PENDING trước cả khi Candidate bấm "Lưu vào hồ sơ".
+- **Sau khi lưu** (Quyết định #3): toast + khung kết quả ngay trong preview có nút "Xem hồ sơ" (`/profile`) và danh sách cảnh báo từ backend — `Toast` hiện không có chỗ đặt nút.
+- `CandidateProfileClient.tsx` không dùng react-query → thêm query mới `["candidateProfile"]` (`useCandidateProfile` trong `useCvs.ts`) chỉ để preview so sánh field đơn lẻ; nút lưu bị khoá tới khi tải xong hồ sơ, để mặc định "Giữ"/"Dùng mới" luôn đúng.
+- Trang `/admin/education-catalog` có nút "Tải thêm" (danh sách trường/ngành đã duyệt dài hơn nhiều so với kỹ năng).
 
 ## Phần 4 — Ghi chú của chủ dự án
 

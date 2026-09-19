@@ -1,12 +1,28 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CandidateCvRecord } from "@sip/shared-types";
+import type { CandidateCvRecord, ImportFromCvRequest, ImportFromCvResponse } from "@sip/shared-types";
 import { apiFetch, apiUpload } from "@/lib/api-client";
 
 // ─── Query keys ────────────────────────────────────────────────────────────
 
 const QUERY_KEY = ["candidateCvs"] as const;
+const PROFILE_QUERY_KEY = ["candidateProfile"] as const;
+
+/**
+ * Chỉ những field preview CV cần để quyết định mặc định "Giữ" / "Dùng mới"
+ * (docs/05-frontend/phases/cv-ai-extraction-phase2/PLAN.md Quyết định #2).
+ * GET /candidates/me còn trả nhiều thứ khác, không cần khai báo hết ở đây.
+ */
+export interface CandidateProfileSnapshot {
+  headline: string | null;
+  bio: string | null;
+  phone: string | null;
+  dateOfBirth: string | null;
+  gender: "MALE" | "FEMALE" | "OTHER" | null;
+  cityId: string | null;
+  city: { id: string; name: string } | null;
+}
 
 // ─── Hooks ─────────────────────────────────────────────────────────────────
 
@@ -48,6 +64,33 @@ export function useCvExtract() {
       queryClient.setQueryData<CandidateCvRecord[]>(QUERY_KEY, (prev) =>
         prev?.map((cv) => (cv.id === updated.id ? updated : cv)),
       );
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+    },
+  });
+}
+
+/** Hồ sơ hiện tại — để preview CV so sánh field đơn lẻ trước khi import. */
+export function useCandidateProfile() {
+  return useQuery({
+    queryKey: PROFILE_QUERY_KEY,
+    queryFn: () => apiFetch<CandidateProfileSnapshot>("candidate", "/candidates/me"),
+  });
+}
+
+/**
+ * "Lưu vào hồ sơ" — POST /candidates/me/profile/import-from-cv. Trang hồ sơ
+ * (CandidateProfileClient) tự fetch lại khi mở nên chỉ cần làm mới snapshot ở đây.
+ */
+export function useCvProfileImport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: ImportFromCvRequest) =>
+      apiFetch<ImportFromCvResponse>("candidate", "/candidates/me/profile/import-from-cv", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: PROFILE_QUERY_KEY });
       void queryClient.invalidateQueries({ queryKey: QUERY_KEY });
     },
   });

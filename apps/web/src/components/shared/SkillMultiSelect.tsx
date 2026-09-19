@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { CatalogItem, SkillStatus, SuggestSkillResponse } from "@sip/shared-types";
+import type { CatalogItem, CatalogEntryStatus, SuggestSkillResponse } from "@sip/shared-types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
@@ -34,7 +34,7 @@ export function validateSkillName(name: string): string | null {
 export interface SelectedSkill {
   id: string;
   name: string;
-  status: SkillStatus;
+  status: CatalogEntryStatus;
   yearsOfExperience?: number;
 }
 
@@ -96,7 +96,7 @@ export function SkillMultiSelect({
   const validationError = query.trim() ? validateSkillName(query) : null;
   const canAdd = !disabled && !busy && query.trim().length > 0 && validationError === null;
 
-  async function pick(item: { id: string; name: string; status: SkillStatus }) {
+  async function pick(item: { id: string; name: string; status: CatalogEntryStatus }) {
     if (selectedIds.has(item.id)) {
       setError("Kỹ năng này đã được thêm.");
       return;

@@ -14,7 +14,7 @@ export const CV_EXTRACTION_INSTRUCTIONS = [
   "4. Ngày tháng: 'YYYY-MM-DD' nếu biết ngày, 'YYYY-MM' nếu chỉ biết tháng, 'YYYY' nếu chỉ biết năm. Mục đang diễn ra ('hiện tại', 'present', 'nay') thì endDate=null và isCurrent/isWorkingOn=true.",
   "   CV Việt Nam ghi ngày theo thứ tự NGÀY/THÁNG/NĂM (vd. '12/03/2026' là ngày 12 tháng 3). Nếu đọc ra ngày kết thúc sớm hơn ngày bắt đầu thì gần như chắc chắn đã đảo ngày/tháng — đọc lại.",
   "5. headline: chức danh/vị trí mong muốn ngắn gọn (vd. 'Frontend Developer Intern'). bio: đoạn mục tiêu nghề nghiệp / giới thiệu bản thân.",
-  "6. gender chỉ điền khi CV ghi rõ (Nam → MALE, Nữ → FEMALE, khác → OTHER).",
+  "6. gender chỉ điền khi CV ghi rõ (Nam → MALE, Nữ → FEMALE, khác → OTHER). city: tên tỉnh/thành phố nơi ở trong địa chỉ (vd. 'Hà Nội', 'TP. Hồ Chí Minh'), chỉ tên tỉnh/thành, không kèm quận/đường.",
   "7. educations: universityName là tên trường, majorName là tên ngành/chuyên ngành, degree là bậc học (Cử nhân, Kỹ sư, ...). startYear/endYear là số năm (vd. 2021).",
   "8. skills: mỗi phần tử là MỘT kỹ năng ngắn gọn (vd. 'ReactJS', 'SQL', 'Giao tiếp'), không trùng lặp, không ghép nhiều kỹ năng vào một chuỗi.",
   "9. extractionConfidence='low' nếu tài liệu khó đọc (mờ, bị cắt, lẫn lộn) khiến kết quả có thể thiếu/sai; ngược lại 'high'.",
@@ -39,6 +39,7 @@ export const CV_EXTRACTION_RESPONSE_SCHEMA = {
         phone: nullableString,
         dateOfBirth: nullableString,
         gender: { type: "string", enum: ["MALE", "FEMALE", "OTHER"], nullable: true },
+        city: nullableString,
       },
     },
     educations: {
@@ -161,6 +162,7 @@ export function parseCvExtraction(text: string | undefined | null): CvExtraction
       phone: str(candidate.phone),
       dateOfBirth: str(candidate.dateOfBirth),
       gender: oneOf(candidate.gender, ["MALE", "FEMALE", "OTHER"] as const),
+      city: str(candidate.city),
     },
     educations: list(payload.educations)
       .map((item) => ({
@@ -234,7 +236,7 @@ export function emptyExtraction(overrides: Partial<CvExtractionResult> = {}): Cv
     invalidReason: null,
     extractionConfidence: "high",
     rawOcrText: null,
-    candidate: { fullName: null, headline: null, bio: null, phone: null, dateOfBirth: null, gender: null },
+    candidate: { fullName: null, headline: null, bio: null, phone: null, dateOfBirth: null, gender: null, city: null },
     educations: [],
     workExperiences: [],
     projects: [],

@@ -1,8 +1,17 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import type { CandidateCvRecord } from "@sip/shared-types";
-import { useCvDelete, useCvExtract, useCvList, useCvSetDefault, useCvUpload } from "@/hooks/useCvs";
+import type { CandidateCvRecord, ImportFromCvRequest, ImportFromCvResponse } from "@sip/shared-types";
+import {
+  useCandidateProfile,
+  useCvDelete,
+  useCvExtract,
+  useCvList,
+  useCvProfileImport,
+  useCvSetDefault,
+  useCvUpload,
+  type CandidateProfileSnapshot,
+} from "@/hooks/useCvs";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
@@ -58,6 +67,9 @@ interface CvCardProps {
   isDeleting: boolean;
   isExtracting: boolean;
   isResultOpen: boolean;
+  currentProfile: CandidateProfileSnapshot | null;
+  onImport: (payload: ImportFromCvRequest) => Promise<ImportFromCvResponse>;
+  isImporting: boolean;
 }
 
 // Badge theo extractionStatus (docs/05-frontend/phases/cv-ai-extraction-phase1/PLAN.md
@@ -98,6 +110,9 @@ function CvCard({
   isDeleting,
   isExtracting,
   isResultOpen,
+  currentProfile,
+  onImport,
+  isImporting,
 }: CvCardProps) {
   const busy = isExtracting || cv.extractionStatus === "PROCESSING";
 
@@ -166,7 +181,16 @@ function CvCard({
 
       {isResultOpen && cv.extractedData ? (
         <div className="rounded-lg border border-border-subtle bg-surface-page p-4">
-          <CvExtractionPreview data={cv.extractedData} extractedAt={cv.extractedAt} />
+          {/* key theo extractedAt: phân tích lại thì bỏ hết lựa chọn cũ trên kết quả cũ. */}
+          <CvExtractionPreview
+            key={cv.extractedAt ?? "none"}
+            data={cv.extractedData}
+            extractedAt={cv.extractedAt}
+            cvId={cv.id}
+            currentProfile={currentProfile}
+            onImport={onImport}
+            isImporting={isImporting}
+          />
         </div>
       ) : null}
     </Card>
@@ -244,6 +268,8 @@ export function CvManagementClient() {
   const setDefaultMutation = useCvSetDefault();
   const deleteMutation = useCvDelete();
   const extractMutation = useCvExtract();
+  const importMutation = useCvProfileImport();
+  const { data: currentProfile } = useCandidateProfile();
   const { toasts, push, dismiss } = useToast();
 
   // Track which cv is currently being set default / deleted
@@ -307,6 +333,22 @@ export function CvManagementClient() {
     const cv = cvToReExtract;
     setCvToReExtract(null);
     await runExtract(cv);
+  }
+
+  async function handleImport(payload: ImportFromCvRequest): Promise<ImportFromCvResponse> {
+    try {
+      const result = await importMutation.mutateAsync(payload);
+      push(
+        "success",
+        result.warnings.length > 0
+          ? `Đã lưu vào hồ sơ, kèm ${result.warnings.length} lưu ý — xem chi tiết bên dưới.`
+          : "Đã lưu thông tin từ CV vào hồ sơ.",
+      );
+      return result;
+    } catch (err) {
+      push("danger", err instanceof Error ? err.message : "Không thể lưu vào hồ sơ. Vui lòng thử lại.");
+      throw err;
+    }
   }
 
   function handleDeleteClick(cv: CandidateCvRecord) {
@@ -377,6 +419,9 @@ export function CvManagementClient() {
                 isDeleting={deletingId === cv.id}
                 isExtracting={extractingId === cv.id}
                 isResultOpen={openResultId === cv.id}
+                currentProfile={currentProfile ?? null}
+                onImport={handleImport}
+                isImporting={importMutation.isPending}
               />
             ))}
           </div>

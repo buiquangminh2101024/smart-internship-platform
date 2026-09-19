@@ -1,13 +1,33 @@
 import type { NextFunction, Request, Response } from "express";
-import type { ApiResponse } from "@sip/shared-types";
+import type { ApiResponse, ImportFromCvResponse } from "@sip/shared-types";
 import { CandidateService } from "./candidate.service";
+import type { CandidateCvImportService } from "./candidate-cv-import.service";
+import type { ImportFromCvInput } from "./candidates.dto";
 
 export class CandidateController {
   private readonly candidateService: CandidateService;
+  private readonly candidateCvImportService: CandidateCvImportService;
 
-  constructor({ candidateService }: { candidateService: CandidateService }) {
+  constructor({
+    candidateService,
+    candidateCvImportService,
+  }: {
+    candidateService: CandidateService;
+    candidateCvImportService: CandidateCvImportService;
+  }) {
     this.candidateService = candidateService;
+    this.candidateCvImportService = candidateCvImportService;
   }
+
+  importFromCv = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const data = await this.candidateCvImportService.importFromCv(req.user!.id, req.body as ImportFromCvInput);
+      const body: ApiResponse<ImportFromCvResponse> = { success: true, data };
+      res.json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
 
   me = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {

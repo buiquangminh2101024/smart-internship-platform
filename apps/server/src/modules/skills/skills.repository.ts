@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient, Skill, SkillAliasSource, SkillStatus } from "@prisma/client";
+import type { CatalogAliasSource, CatalogEntryStatus, Prisma, PrismaClient, Skill } from "@prisma/client";
 import type { SkillAliasRepository } from "./skill-alias.repository";
 
 type Db = PrismaClient | Prisma.TransactionClient;
@@ -91,7 +91,7 @@ export class SkillsRepository {
   }
 
   async listForAdmin(
-    status: SkillStatus | undefined,
+    status: CatalogEntryStatus | undefined,
     cursor: string | undefined,
   ): Promise<{ items: AdminSkillRow[]; hasMore: boolean; nextCursor?: string }> {
     const rows = await this.prisma.skill.findMany({
@@ -131,7 +131,7 @@ export class SkillsRepository {
    * đích, ghi lại tên cũ thành alias (feedback loop — lần sau gõ đúng tên đó sẽ
    * khớp ngay ở bậc 0, không cần LLM), rồi xoá skill nguồn.
    */
-  async merge(sourceId: string, targetId: string, aliasSource: SkillAliasSource): Promise<void> {
+  async merge(sourceId: string, targetId: string, aliasSource: CatalogAliasSource): Promise<void> {
     if (sourceId === targetId) return;
 
     await this.prisma.$transaction(async (tx) => {

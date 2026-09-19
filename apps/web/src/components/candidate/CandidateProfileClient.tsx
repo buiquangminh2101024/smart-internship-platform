@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { SkillStatus } from "@sip/shared-types";
+import type { CatalogEntryStatus } from "@sip/shared-types";
 import { apiFetch } from "@/lib/api-client";
 import { suggestSkill } from "@/lib/skills";
 import { Button } from "@/components/ui/Button";
@@ -20,7 +20,7 @@ type Profile = {
   certificates: Resource[]; awards: Resource[];
   // `status` có từ khi ứng viên được tự gõ kỹ năng mới (Hướng B) — PENDING nghĩa
   // là kỹ năng đã gắn vào hồ sơ nhưng chưa được Admin duyệt vào danh mục chung.
-  skills: Array<Resource & { skill: CatalogItem & { status?: SkillStatus }; yearsOfExperience: number }>;
+  skills: Array<Resource & { skill: CatalogItem & { status?: CatalogEntryStatus }; yearsOfExperience: number }>;
 };
 type Resource = Record<string, unknown> & { id: string };
 

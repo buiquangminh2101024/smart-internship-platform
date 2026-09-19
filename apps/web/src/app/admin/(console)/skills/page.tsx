@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { AdminSkillDto, CatalogItem, PaginatedResponse, SkillStatus } from "@sip/shared-types";
+import type { AdminSkillDto, CatalogItem, PaginatedResponse, CatalogEntryStatus } from "@sip/shared-types";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { useSkills } from "@/hooks/useCatalog";
 import { Badge } from "@/components/ui/Badge";
@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 
-const FILTERS: { value: SkillStatus | "ALL"; label: string }[] = [
+const FILTERS: { value: CatalogEntryStatus | "ALL"; label: string }[] = [
   { value: "PENDING", label: "Chờ duyệt" },
   { value: "APPROVED", label: "Đã duyệt" },
   { value: "ALL", label: "Tất cả" },
@@ -26,7 +26,7 @@ const FILTERS: { value: SkillStatus | "ALL"; label: string }[] = [
  */
 export default function AdminSkillsPage() {
   const queryClient = useQueryClient();
-  const [status, setStatus] = useState<SkillStatus | "ALL">("PENDING");
+  const [status, setStatus] = useState<CatalogEntryStatus | "ALL">("PENDING");
   const [mergingId, setMergingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 

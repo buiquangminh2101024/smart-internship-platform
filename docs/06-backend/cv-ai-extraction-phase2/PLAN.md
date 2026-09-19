@@ -2,7 +2,7 @@
 
 Tiếp nối `docs/06-backend/cv-ai-extraction-phase1/PLAN.md` — không thuộc phase đánh số nào trong `PROJECT_PHASES.md`, đi trước Phase 11. Dựa trên `docs/temp/CV_JSON_TO_CANDIDATE_PROFILE_PROPOSAL.md` (đặc biệt mục 2, 3, 4, 4.1, 9.2, 9.5) — không chép lại nội dung đã bàn, chỉ ghi phần đặc thù/bổ sung khi lên kế hoạch cụ thể. Phạm vi: từ lúc Candidate xem preview (Phase 1) và bấm **"Lưu vào hồ sơ"** cho tới khi dữ liệu đã nằm trong `Education`/`WorkExperience`/`CandidateSkill`/... và catalog `University`/`Major` đã có cơ chế duyệt tương đương `Skill`.
 
-**Trạng thái: chưa triển khai.**
+**Trạng thái: đã triển khai code (2026-09-19); migration `20260919120000_education_catalog_moderation` chạy trên DB sau khi chủ dự án xác nhận.** Xem "Ghi chú triển khai" ngay trước Phần 4 cho các điểm khác/bổ sung so với kế hoạch.
 
 ## Quyết định mới chốt khi lên kế hoạch
 
@@ -194,6 +194,19 @@ model UniversityAlias {
 - Import 1 skill mà Candidate đã có sẵn trong hồ sơ → không lỗi, không tạo dòng trùng, `yearsOfExperience` giữ nguyên giá trị cũ.
 - Import với `fieldOverrides.phone: false` dù `extractedData.candidate.phone` khác giá trị hiện tại → `Candidate.phone` giữ nguyên, không bị ghi đè.
 - Import với tên thành phố không khớp catalog nào → `Candidate.cityId` giữ `null`, không tạo `City` mới.
+
+## Ghi chú triển khai (khác/bổ sung so với kế hoạch)
+
+- **Schema**: ngoài snippet Phần 1, `University`/`Major` có thêm `pendingMatchUniversityId`/`pendingMatchMajorId` (self-relation, cùng ý nghĩa `Skill.pendingMatchSkillId` — cron cần biết hỏi Gemini so với mục nào) và `createdAt` (sắp xếp hàng đợi Admin).
+- **Migration viết tay** (`ALTER TYPE ... RENAME`): `prisma migrate dev` tự sinh sẽ DROP rồi ADD lại cột `skills.status`/`skill_aliases.source` → mọi Skill PENDING bị reset về APPROVED.
+- **Dedupe**: logic 4 bậc nằm ở một hàm dùng chung `education-catalog/education-catalog-dedupe.ts`; `university-dedupe.service.ts`/`major-dedupe.service.ts` chỉ gắn repository + hàm chuẩn hoá (hai repository cùng implement `EducationCatalogRepository`). Quota chỉ kiểm tra ngay trước khi tạo PENDING (khác Skill kiểm tra từ đầu) — người hết lượt vẫn chọn được mục có sẵn.
+- **Chống gắn nhầm tên chung chung**: không trùng tên chính xác mà 2 ứng viên đầu cách nhau < 0.1 điểm (vd. "Đại học Bách khoa" khớp 0.90 với Bách khoa HCM, 0.84 với Bách khoa Hà Nội) → không AUTO, đẩy sang vùng xám (PENDING + cron hỏi Gemini). Phát hiện khi test với dữ liệu seed thật.
+- **Chuẩn hoá tên** (`education-catalog-normalize.util.ts`): trường bỏ tiền tố "Trường", mở rộng "ĐH"/"CĐ"; ngành cắt chú thích cuối "(...)"/", chuyên ngành ..." và tiền tố "Ngành" — cùng quy tắc `scripts/seed-education-catalog.ts` dùng khi seed.
+- `CatalogRateLimitService`, `CatalogMatchVerifier` đăng ký ở `container.ts` (dùng chung 2 module); cron chuyển sang `modules/shared/catalog-suggestion-queue.job.ts`. Key Redis quota của Skill giữ nguyên dạng `skill-quota:*`.
+- `POST /universities/suggest`, `/majors/suggest`: chỉ `CANDIDATE`; response `SuggestCatalogEntryResponse { id, name, status, matchType }`.
+- **Import (`candidate-cv-import.service.ts`)**: phân giải catalog trước, rồi ghi hồ sơ trong **một transaction** (không gọi lại `candidateService.updateProfile` như Phần 2 bước 5 — cần nguyên tử để bấm lại không nhân đôi dữ liệu). Lỗi nghiệp vụ từng mục (hết quota 429, tên kỹ năng không hợp lệ, thành phố không có trong danh mục) → trả trong `warnings`, không làm hỏng cả lần import. Kỹ năng: khớp alias/trùng tên trước (không tốn quota), mới gọi `suggest`. Phone/ngày sinh sai định dạng khi đã chọn ghi đè → 400.
+- **Dọn trùng lặp catalog (2026-09-19)**: gộp 7 trường tên cứng cũ của `scripts/seed.ts` vào bản có mã Bộ GD&ĐT và 91 ngành trùng sau chuẩn hoá (vd. "Ngành Luật"/"Luật", "Tài chính - Ngân hàng"/"Tài chính – Ngân hàng"); tên bị gộp giữ lại làm alias (`source = SEED`). `seed.ts` giờ upsert trường theo `code` với đúng tên chuẩn; `seed-education-catalog.ts` gộp ngành bằng chính `normalizeMajorName` và bỏ qua mục đã có trong DB/alias — chạy lại không đẻ lại bản trùng.
+- **City**: Phase 1 không trích thành phố → thêm `candidate.city` vào prompt/schema trích xuất (`cv-extraction-prompt.ts`) và `CvExtractionResult` (optional — CV phân tích trước đó không có field này).
 
 ## Phần 4 — Ghi chú của chủ dự án
 

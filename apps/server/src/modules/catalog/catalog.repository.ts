@@ -1,4 +1,4 @@
-import type { City, CompanyType, Industry, Major, PrismaClient, University } from "@prisma/client";
+import type { City, CompanyType, Industry, PrismaClient } from "@prisma/client";
 
 type CatalogRow = { id: string; name: string };
 
@@ -21,12 +21,23 @@ export class CatalogRepository {
     return this.prisma.city.findMany({ orderBy: { name: "asc" } });
   }
 
-  listMajors(): Promise<Major[]> {
-    return this.prisma.major.findMany({ orderBy: { name: "asc" } });
+  // Chỉ mục đã duyệt, cùng lý do với listSkills bên dưới: trường/ngành người
+  // dùng tự gõ (PENDING) chưa được lọt vào dropdown công khai
+  // (docs/06-backend/cv-ai-extraction-phase2/PLAN.md Quyết định #6).
+  listMajors(): Promise<CatalogRow[]> {
+    return this.prisma.major.findMany({
+      where: { status: "APPROVED" },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    });
   }
 
-  listUniversities(): Promise<University[]> {
-    return this.prisma.university.findMany({ orderBy: { name: "asc" } });
+  listUniversities(): Promise<CatalogRow[]> {
+    return this.prisma.university.findMany({
+      where: { status: "APPROVED" },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    });
   }
 
   // Chỉ skill đã duyệt: skill do người dùng tự gõ (PENDING) chỉ hiện trong hồ sơ/
