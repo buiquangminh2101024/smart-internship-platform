@@ -169,7 +169,16 @@ export const importFromCvSchema = z.object({
       )
       .max(50)
       .default([]),
-    skills: z.array(z.string().trim().min(1).max(100)).max(100).default([]),
+    // Số năm do Candidate nhập ở preview, không phải do AI đọc. 0 = chưa khai.
+    skills: z
+      .array(
+        z.object({
+          name: z.string().trim().min(1).max(100),
+          yearsOfExperience: z.coerce.number().min(0).max(60).default(0),
+        }),
+      )
+      .max(100)
+      .default([]),
   }),
 });
 

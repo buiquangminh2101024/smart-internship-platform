@@ -653,14 +653,27 @@ export interface ImportFromCvFieldOverrides {
   cityId?: boolean;
 }
 
+/**
+ * Kỹ năng ở bước import: khác `CvExtractionResult.skills` (chỉ là tên) vì
+ * Candidate nhập thêm số năm kinh nghiệm ngay trong preview. `0` nghĩa là
+ * CHƯA KHAI, không phải "chắc chắn 0 năm" — cột không cho null nên đây là quy
+ * ước chung của hệ thống.
+ */
+export interface ImportFromCvSkill {
+  name: string;
+  yearsOfExperience: number;
+}
+
 export interface ImportFromCvRequest {
   /** Chỉ để truy vết nguồn gốc, không bắt buộc. */
   cvId?: string;
   /** Kết quả trích xuất SAU KHI Candidate đã bỏ bớt mục/kỹ năng ở preview. */
   extractedData: Pick<
     CvExtractionResult,
-    "candidate" | "educations" | "workExperiences" | "projects" | "certificates" | "awards" | "skills"
-  >;
+    "candidate" | "educations" | "workExperiences" | "projects" | "certificates" | "awards"
+  > & {
+    skills: ImportFromCvSkill[];
+  };
   fieldOverrides: ImportFromCvFieldOverrides;
 }
 

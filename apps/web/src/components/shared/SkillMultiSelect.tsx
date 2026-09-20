@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import type { CatalogItem, CatalogEntryStatus, SuggestSkillResponse } from "@sip/shared-types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -47,12 +47,55 @@ export interface SkillMultiSelectProps {
   onSuggestNew: (name: string) => Promise<SuggestSkillResponse>;
   /** Chỉ bật cho hồ sơ ứng viên; tin tuyển dụng không có số năm kinh nghiệm. */
   allowYearsOfExperience?: boolean;
+  /**
+   * Có truyền thì mỗi kỹ năng sửa được số năm tại chỗ (trước đây phải xóa rồi
+   * thêm lại). Không truyền → chỉ đọc, giữ nguyên hành vi cho form tin tuyển dụng.
+   */
+  onUpdateYears?: (skillId: string, yearsOfExperience: number) => Promise<void> | void;
   label?: string;
   hint?: string;
   disabled?: boolean;
 }
 
 const MAX_SUGGESTIONS = 6;
+const MAX_YEARS = 60;
+/** Chỉ là tiện ích của riêng trình duyệt này — không đồng bộ lên server. */
+const YEARS_HINT_KEY = "sip.skill-years-hint-dismissed";
+
+// localStorage là "external store" theo đúng nghĩa của React: đọc trong
+// useEffect rồi setState sẽ thành render thừa (và bị eslint chặn), còn đọc
+// thẳng lúc render thì server không có localStorage nên lệch HTML khi hydrate.
+let hintDismissedCache: boolean | null = null;
+const hintListeners = new Set<() => void>();
+
+function readHintDismissed(): boolean {
+  if (hintDismissedCache === null) {
+    try {
+      hintDismissedCache = window.localStorage.getItem(YEARS_HINT_KEY) === "1";
+    } catch {
+      // Trình duyệt chặn lưu trữ (tab ẩn danh, chặn cookie) — cứ hiện gợi ý.
+      hintDismissedCache = false;
+    }
+  }
+  return hintDismissedCache;
+}
+
+function subscribeHint(listener: () => void): () => void {
+  hintListeners.add(listener);
+  return () => {
+    hintListeners.delete(listener);
+  };
+}
+
+function dismissHint(): void {
+  hintDismissedCache = true;
+  try {
+    window.localStorage.setItem(YEARS_HINT_KEY, "1");
+  } catch {
+    // Không lưu được thì lần sau hiện lại — chấp nhận được.
+  }
+  for (const listener of hintListeners) listener();
+}
 
 /**
  * Ô chọn kỹ năng dùng chung cho hồ sơ Ứng viên và form tin tuyển dụng của
@@ -66,6 +109,7 @@ export function SkillMultiSelect({
   onRemove,
   onSuggestNew,
   allowYearsOfExperience = false,
+  onUpdateYears,
   label = "Kỹ năng",
   hint,
   disabled = false,
@@ -74,8 +118,20 @@ export function SkillMultiSelect({
   const [years, setYears] = useState("0");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Server snapshot = "đã ẩn": HTML render trên server không có gợi ý, client
+  // đọc localStorage rồi tự hiện lại nếu cần.
+  const yearsHintDismissed = useSyncExternalStore(subscribeHint, readHintDismissed, () => true);
 
   const selectedIds = useMemo(() => new Set(selected.map((skill) => skill.id)), [selected]);
+
+  // Gợi ý CHUNG, không cảnh báo từng kỹ năng: phần lớn người dùng là sinh viên
+  // chưa đi làm, 8 kỹ năng 0 năm mà 8 cảnh báo thì chỉ gây nhiễu.
+  const showYearsHint =
+    allowYearsOfExperience &&
+    Boolean(onUpdateYears) &&
+    !disabled &&
+    !yearsHintDismissed &&
+    selected.some((skill) => (skill.yearsOfExperience ?? 0) === 0);
 
   const suggestions = useMemo(() => {
     const keyword = query.trim().toLowerCase();
@@ -172,9 +228,31 @@ export function SkillMultiSelect({
           {selected.length === 0 ? (
             <p className="text-sm text-text-muted">Chưa có kỹ năng nào.</p>
           ) : (
-            selected.map((skill) => <SkillTag key={skill.id} skill={skill} disabled={disabled} onRemove={remove} />)
+            selected.map((skill) => (
+              <SkillTag
+                key={skill.id}
+                skill={skill}
+                disabled={disabled}
+                onRemove={remove}
+                {...(onUpdateYears ? { onUpdateYears } : {})}
+                onError={setError}
+              />
+            ))
           )}
         </div>
+
+        {showYearsHint ? (
+          <div className="flex items-start gap-2 rounded-lg bg-surface-page px-3 py-2 text-sm text-text-muted">
+            <Icon name="info" size={16} className="mt-0.5 shrink-0" />
+            <p className="flex-1">
+              Bạn có thể bấm vào số năm của từng kỹ năng để cập nhật, giúp nhà tuyển dụng hiểu rõ hơn. Bỏ qua nếu bạn
+              chưa có kinh nghiệm.
+            </p>
+            <button type="button" className="shrink-0 hover:text-text-body" aria-label="Ẩn gợi ý" onClick={dismissHint}>
+              <Icon name="x" size={14} />
+            </button>
+          </div>
+        ) : null}
 
         <div className="relative grid gap-2 rounded-lg bg-surface-page p-3 sm:flex sm:items-start">
           <div className="relative flex-1">
@@ -243,12 +321,44 @@ function SkillTag({
   skill,
   disabled,
   onRemove,
+  onUpdateYears,
+  onError,
 }: {
   skill: SelectedSkill;
   disabled: boolean;
   onRemove: (skillId: string) => void;
+  onUpdateYears?: (skillId: string, yearsOfExperience: number) => Promise<void> | void;
+  onError: (message: string | null) => void;
 }) {
   const pending = skill.status === "PENDING";
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const yearsTone = pending ? "text-marigold-600" : "text-pine-600";
+  const editable = Boolean(onUpdateYears) && !disabled && skill.yearsOfExperience !== undefined;
+
+  async function save() {
+    if (!onUpdateYears) return;
+    const value = Number(draft);
+    const years = !draft || !Number.isFinite(value) || value < 0 ? 0 : Math.min(value, MAX_YEARS);
+    // Không gọi API khi số không đổi — bấm vào rồi bấm ra ngoài là thao tác rất
+    // hay gặp.
+    if (years === skill.yearsOfExperience) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    onError(null);
+    try {
+      await onUpdateYears(skill.id, years);
+      setEditing(false);
+    } catch (cause) {
+      onError(cause instanceof Error ? cause.message : "Không lưu được số năm kinh nghiệm, vui lòng thử lại.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <span
       className={[
@@ -257,8 +367,47 @@ function SkillTag({
       ].join(" ")}
     >
       {skill.name}
-      {skill.yearsOfExperience !== undefined ? (
-        <span className={pending ? "text-marigold-600" : "text-pine-600"}>{skill.yearsOfExperience} năm</span>
+      {editing ? (
+        <span className={`flex items-center gap-1 ${yearsTone}`}>
+          <input
+            autoFocus
+            type="number"
+            min="0"
+            max={MAX_YEARS}
+            step="0.5"
+            aria-label={`Số năm kinh nghiệm ${skill.name}`}
+            value={draft}
+            disabled={saving}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={() => void save()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void save();
+              } else if (e.key === "Escape") {
+                setEditing(false);
+              }
+            }}
+            className="w-14 rounded-md border border-border-default bg-surface-card px-1.5 py-0.5 text-sm text-text-body"
+          />
+          năm
+        </span>
+      ) : skill.yearsOfExperience !== undefined ? (
+        editable ? (
+          <button
+            type="button"
+            aria-label={`Sửa số năm kinh nghiệm ${skill.name}`}
+            className={`${yearsTone} underline decoration-dotted underline-offset-2`}
+            onClick={() => {
+              setDraft(skill.yearsOfExperience ? String(skill.yearsOfExperience) : "");
+              setEditing(true);
+            }}
+          >
+            {skill.yearsOfExperience} năm
+          </button>
+        ) : (
+          <span className={yearsTone}>{skill.yearsOfExperience} năm</span>
+        )
       ) : null}
       {/* Người dùng cần biết kỹ năng tự gõ chưa công khai — nếu không họ sẽ
           tưởng đã xong và thắc mắc sao tìm kiếm không ra. */}
