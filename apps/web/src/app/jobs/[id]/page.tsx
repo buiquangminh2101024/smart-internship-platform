@@ -4,6 +4,8 @@ import { use } from "react";
 import { usePublicJobPost } from "@/hooks/useJobPosts";
 import { useSavedJobCheck, useSaveJob, useUnsaveJob } from "@/hooks/useSavedJobs";
 import { useJobApplicationStatus } from "@/hooks/useApplications";
+import { useCandidateJobMatch } from "@/hooks/useJobMatch";
+import { JobMatchCard, JobMatchCardSkeleton } from "@/components/jobs/JobMatchCard";
 import { JobPostContent, JobPostCompanyCard, JobPostHeaderCard } from "@/components/jobs/JobPostContent";
 import { CandidateHomeHeader } from "@/components/marketing/CandidateHomeHeader";
 import { SiteFooter } from "@/components/marketing/SiteFooter";
@@ -26,6 +28,9 @@ export default function PublicJobDetailPage({ params }: { params: Promise<{ id: 
 
   // Kiểm tra trạng thái đơn ứng tuyển hiện tại cho job này
   const { status: appStatus } = useJobApplicationStatus(id, isCandidate);
+
+  // Mức độ phù hợp — chỉ CANDIDATE; lỗi thì ẩn thẻ, không chặn trang.
+  const match = useCandidateJobMatch(id, isCandidate);
 
   const saveMutation = useSaveJob();
   const unsaveMutation = useUnsaveJob();
@@ -122,14 +127,23 @@ export default function PublicJobDetailPage({ params }: { params: Promise<{ id: 
             <JobPostContent
               job={job}
               aside={
-                <JobPostCompanyCard
-                  job={job}
-                  footer={
-                    <p className="text-sm text-text-muted">
-                      {job.viewCount} lượt xem tin này.
-                    </p>
-                  }
-                />
+                <>
+                  {isCandidate ? (
+                    match.isLoading ? (
+                      <JobMatchCardSkeleton />
+                    ) : match.data ? (
+                      <JobMatchCard result={match.data} audience="candidate" />
+                    ) : null
+                  ) : null}
+                  <JobPostCompanyCard
+                    job={job}
+                    footer={
+                      <p className="text-sm text-text-muted">
+                        {job.viewCount} lượt xem tin này.
+                      </p>
+                    }
+                  />
+                </>
               }
             />
           </>

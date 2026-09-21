@@ -37,6 +37,8 @@ export interface JobPostFormProps {
 }
 
 const JOB_POST_TYPES = ["INTERNSHIP", "PART_TIME", "FULL_TIME", "CONTRACT"] as const;
+/** Cùng trần với minExperienceYears ở apps/server/src/modules/job-posts/job-posts.dto.ts. */
+const MAX_MIN_EXPERIENCE_YEARS = 20;
 
 // Mọi field text luôn có giá trị string (mặc định "" từ toDefaultValues, chưa
 // bao giờ undefined) — không dùng .optional() để tránh phải rải `| undefined`
@@ -55,6 +57,15 @@ const baseFields = {
   expiresAt: z.string().trim(),
   requirements: z.string().trim(),
   benefits: z.string().trim(),
+  // Tuỳ chọn ở mọi action (không thuộc bộ ràng buộc gửi duyệt AD-10); "" = không yêu cầu.
+  minExperienceYears: z
+    .string()
+    .trim()
+    .refine((value) => {
+      if (!value) return true;
+      const years = Number(value);
+      return Number.isFinite(years) && years >= 0 && years <= MAX_MIN_EXPERIENCE_YEARS;
+    }, `Số năm kinh nghiệm phải từ 0 đến ${MAX_MIN_EXPERIENCE_YEARS}`),
 };
 
 const draftSchema = z.object(baseFields);
@@ -102,6 +113,7 @@ function toDefaultValues(job: JobPost | undefined): FormValues {
     expiresAt: toDateInputValue(job?.expiresAt ?? null),
     requirements: job?.requirements ?? "",
     benefits: job?.benefits ?? "",
+    minExperienceYears: job?.minExperienceYears != null ? String(job.minExperienceYears) : "",
   };
 }
 
@@ -115,10 +127,16 @@ function toDefaultValues(job: JobPost | undefined): FormValues {
 export function JobPostForm({ initial, saving = false, error, notice, onAction, onCancel }: JobPostFormProps) {
   const actionRef = useRef<JobPostFormAction>("draft");
   // Kỹ năng nằm ở bảng nối nên không đi cùng FormValues (toàn string) — giữ
-  // state riêng, gom vào `skillIds` lúc submit. Skill PENDING employer vừa đề
-  // xuất cũng nằm trong danh sách này và được gửi lên như skill thường.
-  const [skills, setSkills] = useState<SelectedSkill[]>(
-    () => (initial?.skills ?? []).map((skill) => ({ id: skill.id, name: skill.name, status: skill.status })),
+  // state riêng, gom vào `skillIds` (Bắt buộc) / `preferredSkillIds` (Ưu tiên)
+  // lúc submit. Skill PENDING employer vừa đề xuất cũng nằm trong danh sách này
+  // và được gửi lên như skill thường.
+  const [skills, setSkills] = useState<SelectedSkill[]>(() =>
+    (initial?.skills ?? []).map((skill) => ({
+      id: skill.id,
+      name: skill.name,
+      status: skill.status,
+      importance: skill.importance,
+    })),
   );
   const [skillsError, setSkillsError] = useState<string | null>(null);
   // Giữ song song với RHF (setValue đồng bộ) thay vì watch("isNegotiable") —
@@ -171,7 +189,11 @@ export function JobPostForm({ initial, saving = false, error, notice, onAction, 
       requirements: values.requirements.trim(),
       benefits: values.benefits.trim(),
       isNegotiable: values.isNegotiable,
-      skillIds: skills.map((skill) => skill.id),
+      // Luôn gửi cả hai danh sách — backend ghi kỹ năng thành một khối.
+      skillIds: skills.filter((skill) => skill.importance !== "PREFERRED").map((skill) => skill.id),
+      preferredSkillIds: skills.filter((skill) => skill.importance === "PREFERRED").map((skill) => skill.id),
+      // null khi để trống để xoá được yêu cầu đã lưu trước đó.
+      minExperienceYears: values.minExperienceYears ? Number(values.minExperienceYears) : null,
       ...(values.isNegotiable
         ? {}
         : { ...(salaryMin !== undefined ? { salaryMin } : {}), ...(salaryMax !== undefined ? { salaryMax } : {}) }),
@@ -313,18 +335,32 @@ export function JobPostForm({ initial, saving = false, error, notice, onAction, 
         />
         <SkillMultiSelect
           label="Kỹ năng yêu cầu"
-          hint="Bắt buộc ít nhất 1 kỹ năng trước khi xem trước/gửi duyệt. Không tìm thấy kỹ năng cần tuyển? Gõ tên rồi bấm Thêm — kỹ năng mới sẽ được quản trị viên duyệt trước khi vào danh mục chung."
+          hint="Bắt buộc ít nhất 1 kỹ năng trước khi xem trước/gửi duyệt. Kỹ năng mới thêm là Bắt buộc — bấm nhãn trên kỹ năng để đổi sang Ưu tiên. Không tìm thấy kỹ năng cần tuyển? Gõ tên rồi bấm Thêm — kỹ năng mới sẽ được quản trị viên duyệt trước khi vào danh mục chung."
           selected={skills}
           catalog={skillCatalog ?? []}
           disabled={saving}
           onAdd={(skill) => {
-            setSkills((prev) => [...prev, skill]);
+            setSkills((prev) => [...prev, { ...skill, importance: "REQUIRED" }]);
             setSkillsError(null);
           }}
           onRemove={(skillId) => setSkills((prev) => prev.filter((skill) => skill.id !== skillId))}
+          onChangeImportance={(skillId, importance) =>
+            setSkills((prev) => prev.map((skill) => (skill.id === skillId ? { ...skill, importance } : skill)))
+          }
           onSuggestNew={(name) => suggestSkill("employer", name)}
         />
         {skillsError ? <p className="text-sm text-red-600">{skillsError}</p> : null}
+        <Input
+          label="Kinh nghiệm tối thiểu (năm)"
+          type="number"
+          min={0}
+          max={MAX_MIN_EXPERIENCE_YEARS}
+          step={0.5}
+          className="w-40"
+          hint="Tuỳ chọn. Để trống nếu không yêu cầu kinh nghiệm (phổ biến với tin thực tập)."
+          error={errors.minExperienceYears?.message}
+          {...register("minExperienceYears")}
+        />
       </Card>
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}

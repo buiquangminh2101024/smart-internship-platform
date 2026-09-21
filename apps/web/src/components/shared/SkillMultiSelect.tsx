@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useSyncExternalStore } from "react";
-import type { CatalogItem, CatalogEntryStatus, SuggestSkillResponse } from "@sip/shared-types";
+import type { CatalogItem, CatalogEntryStatus, SkillImportance, SuggestSkillResponse } from "@sip/shared-types";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
@@ -36,6 +36,8 @@ export interface SelectedSkill {
   name: string;
   status: CatalogEntryStatus;
   yearsOfExperience?: number;
+  /** Chỉ dùng ở form tin tuyển dụng; không có = coi như REQUIRED. */
+  importance?: SkillImportance;
 }
 
 export interface SkillMultiSelectProps {
@@ -52,6 +54,11 @@ export interface SkillMultiSelectProps {
    * thêm lại). Không truyền → chỉ đọc, giữ nguyên hành vi cho form tin tuyển dụng.
    */
   onUpdateYears?: (skillId: string, yearsOfExperience: number) => Promise<void> | void;
+  /**
+   * Có truyền thì mỗi kỹ năng có công tắc Bắt buộc/Ưu tiên (form tin tuyển
+   * dụng — Job Matcher). Không truyền → chip giữ nguyên như hồ sơ ứng viên.
+   */
+  onChangeImportance?: (skillId: string, importance: SkillImportance) => void;
   label?: string;
   hint?: string;
   disabled?: boolean;
@@ -110,6 +117,7 @@ export function SkillMultiSelect({
   onSuggestNew,
   allowYearsOfExperience = false,
   onUpdateYears,
+  onChangeImportance,
   label = "Kỹ năng",
   hint,
   disabled = false,
@@ -235,6 +243,7 @@ export function SkillMultiSelect({
                 disabled={disabled}
                 onRemove={remove}
                 {...(onUpdateYears ? { onUpdateYears } : {})}
+                {...(onChangeImportance ? { onChangeImportance } : {})}
                 onError={setError}
               />
             ))
@@ -322,14 +331,17 @@ function SkillTag({
   disabled,
   onRemove,
   onUpdateYears,
+  onChangeImportance,
   onError,
 }: {
   skill: SelectedSkill;
   disabled: boolean;
   onRemove: (skillId: string) => void;
   onUpdateYears?: (skillId: string, yearsOfExperience: number) => Promise<void> | void;
+  onChangeImportance?: (skillId: string, importance: SkillImportance) => void;
   onError: (message: string | null) => void;
 }) {
+  const importance = skill.importance ?? "REQUIRED";
   const pending = skill.status === "PENDING";
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -367,6 +379,21 @@ function SkillTag({
       ].join(" ")}
     >
       {skill.name}
+      {onChangeImportance ? (
+        <button
+          type="button"
+          disabled={disabled}
+          title="Bấm để đổi giữa Bắt buộc và Ưu tiên"
+          aria-label={`${skill.name}: ${importance === "REQUIRED" ? "Bắt buộc" : "Ưu tiên"} — bấm để đổi`}
+          className={[
+            "rounded-full px-2 py-0.5 text-xs font-medium",
+            importance === "REQUIRED" ? "bg-brand-100 text-brand-800" : "bg-surface-hover text-text-body",
+          ].join(" ")}
+          onClick={() => onChangeImportance(skill.id, importance === "REQUIRED" ? "PREFERRED" : "REQUIRED")}
+        >
+          {importance === "REQUIRED" ? "Bắt buộc" : "Ưu tiên"}
+        </button>
+      ) : null}
       {editing ? (
         <span className={`flex items-center gap-1 ${yearsTone}`}>
           <input

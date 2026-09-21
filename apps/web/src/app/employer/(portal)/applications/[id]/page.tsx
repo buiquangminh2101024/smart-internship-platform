@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useEmployerApplication, useUpdateApplicationStatus, useUpdateApplicationEvaluation } from "@/hooks/useApplications";
+import { useEmployerApplicationMatch } from "@/hooks/useJobMatch";
+import { JobMatchCard, JobMatchCardSkeleton } from "@/components/jobs/JobMatchCard";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -16,6 +18,7 @@ export default function EmployerApplicationDetailPage() {
   const { data: application, isLoading, isError } = useEmployerApplication(id);
   const statusMutation = useUpdateApplicationStatus();
   const evaluationMutation = useUpdateApplicationEvaluation();
+  const match = useEmployerApplicationMatch(id);
 
   const [notes, setNotes] = useState("");
   const [rating, setRating] = useState<number>(0);
@@ -87,6 +90,16 @@ export default function EmployerApplicationDetailPage() {
               </div>
             </div>
           </Card>
+
+          {match.isLoading ? (
+            <JobMatchCardSkeleton />
+          ) : match.data ? (
+            <JobMatchCard result={match.data} audience="employer" />
+          ) : (
+            <Card padding="lg">
+              <p className="text-sm text-text-muted">Mức độ phù hợp: —</p>
+            </Card>
+          )}
         </div>
 
         <div className="space-y-6">

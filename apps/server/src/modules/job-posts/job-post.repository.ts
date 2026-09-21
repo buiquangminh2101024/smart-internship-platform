@@ -6,6 +6,7 @@ import type {
   ModerationActionType,
   Prisma,
   PrismaClient,
+  SkillImportance,
 } from "@prisma/client";
 
 type Db = PrismaClient | Prisma.TransactionClient;
@@ -45,6 +46,7 @@ export interface JobPostWriteData {
   requirements?: string | null;
   benefits?: string | null;
   expiresAt?: Date | null;
+  minExperienceYears?: number | null;
   status?: JobPostStatus;
   publishedAt?: Date | null;
   closedAt?: Date | null;
@@ -124,13 +126,27 @@ export class JobPostRepository {
     return paginate(rows);
   }
 
-  /** Ghi đè danh sách kỹ năng của tin (diff-write: xoá cái bỏ, thêm cái mới). */
-  async setSkills(jobPostId: string, skillIds: string[], db: Db = this.prisma): Promise<void> {
+  /**
+   * Ghi đè danh sách kỹ năng của tin (diff-write: xoá cái bỏ, cập nhật
+   * importance của cái còn giữ, thêm cái mới).
+   */
+  async setSkills(
+    jobPostId: string,
+    skills: { skillId: string; importance: SkillImportance }[],
+    db: Db = this.prisma,
+  ): Promise<void> {
+    const skillIds = skills.map((skill) => skill.skillId);
     await db.jobPostSkill.deleteMany({ where: { jobPostId, skillId: { notIn: skillIds } } });
-    if (skillIds.length === 0) return;
+    if (skills.length === 0) return;
 
+    // Hai nhóm importance ⇒ tối đa 2 lệnh updateMany cho các dòng đã có.
+    for (const importance of ["REQUIRED", "PREFERRED"] as const) {
+      const ids = skills.filter((skill) => skill.importance === importance).map((skill) => skill.skillId);
+      if (ids.length === 0) continue;
+      await db.jobPostSkill.updateMany({ where: { jobPostId, skillId: { in: ids } }, data: { importance } });
+    }
     await db.jobPostSkill.createMany({
-      data: skillIds.map((skillId) => ({ jobPostId, skillId })),
+      data: skills.map((skill) => ({ jobPostId, skillId: skill.skillId, importance: skill.importance })),
       skipDuplicates: true,
     });
   }

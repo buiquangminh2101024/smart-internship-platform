@@ -612,33 +612,36 @@ model PaymentMethod {
 // ─── job-posts ──────────────────────────────────────────────────────────
 
 model JobPost {
-  id           String        @id @default(cuid())
-  companyId    String
-  company      Company       @relation(fields: [companyId], references: [id])
-  employerId   String
-  employer     Employer      @relation(fields: [employerId], references: [id])
-  title        String
-  description  String
-  jobType      JobPostType
-  status       JobPostStatus @default(DRAFT)
-  salaryMin    Int?
-  salaryMax    Int?
-  isNegotiable Boolean       @default(false)
-  requirements String?
-  benefits     String?
-  cityId       String?
-  city         City?         @relation(fields: [cityId], references: [id])
-  address      String?
-  industryId   String?
-  industry     Industry?     @relation(fields: [industryId], references: [id])
-  publishedAt  DateTime?
-  expiresAt    DateTime?
-  closedAt     DateTime?
+  id                 String        @id @default(cuid())
+  companyId          String
+  company            Company       @relation(fields: [companyId], references: [id])
+  employerId         String
+  employer           Employer      @relation(fields: [employerId], references: [id])
+  title              String
+  description        String
+  jobType            JobPostType
+  status             JobPostStatus @default(DRAFT)
+  salaryMin          Int?
+  salaryMax          Int?
+  isNegotiable       Boolean       @default(false)
+  requirements       String?
+  benefits           String?
+  cityId             String?
+  city               City?         @relation(fields: [cityId], references: [id])
+  address            String?
+  industryId         String?
+  industry           Industry?     @relation(fields: [industryId], references: [id])
+  publishedAt        DateTime?
+  expiresAt          DateTime?
+  closedAt           DateTime?
   // Tăng 1 mỗi lần Guest xem chi tiết tin PUBLISHED qua API công khai
   // (quyết định Phase 6, xem docs/06-backend/phase-06-job-recruitment/PLAN.md).
-  viewCount    Int           @default(0)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  viewCount          Int           @default(0)
+  // Số năm kinh nghiệm tối thiểu Employer yêu cầu; null = không yêu cầu.
+  // Dùng cho Job Matcher (xem docs/06-backend/job-matcher-phase1/PLAN.md).
+  minExperienceYears Float?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
   moderationActions JobPostModerationAction[]
   applications      Application[]
@@ -649,13 +652,20 @@ model JobPost {
   @@map("job_posts")
 }
 
+enum SkillImportance {
+  REQUIRED
+  PREFERRED
+}
+
 // Kỹ năng yêu cầu của tin tuyển dụng, dùng chung catalog Skill với
 // CandidateSkill để so khớp được khi triển khai AI matching (Phase 10).
 model JobPostSkill {
-  jobPostId String
-  jobPost   JobPost @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
-  skillId   String
-  skill     Skill   @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  jobPostId  String
+  jobPost    JobPost         @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  skillId    String
+  skill      Skill           @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  // Default REQUIRED ⇒ mọi tin cũ giữ nguyên nghĩa, không cần backfill.
+  importance SkillImportance @default(REQUIRED)
 
   @@id([jobPostId, skillId])
   @@map("job_post_skills")
