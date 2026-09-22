@@ -183,9 +183,20 @@ export interface JobPostSkillDto extends CatalogItem {
   status: CatalogEntryStatus;
   /** REQUIRED = bắt buộc, PREFERRED = ưu tiên (Job Matcher — docs/06-backend/job-matcher-phase1/PLAN.md). */
   importance: SkillImportance;
+  /** Số năm kinh nghiệm tối thiểu riêng cho kỹ năng này; null = không yêu cầu cụ thể (Job Matcher GĐ3). */
+  minYears: number | null;
 }
 
 export type SkillImportance = "REQUIRED" | "PREFERRED";
+
+/** PRIMARY = đúng ngành yêu cầu, RELATED = ngành liên quan được xác nhận là chấp nhận được (Job Matcher GĐ3). */
+export type MajorRelevance = "PRIMARY" | "RELATED";
+
+export interface JobPostMajorDto {
+  majorId: string;
+  name: string;
+  relevance: MajorRelevance;
+}
 
 // ─── Education catalog: University / Major ───────────────────────────────
 // docs/06-backend/cv-ai-extraction-phase2/PLAN.md. Cùng cơ chế PENDING/duyệt với
@@ -484,6 +495,12 @@ export interface JobPost {
   minExperienceYears: number | null;
   /** Kỹ năng yêu cầu — chỉ skill đã duyệt mới lộ ra API công khai. */
   skills: JobPostSkillDto[];
+  /** Ngành học phù hợp (Job Matcher GĐ3). */
+  majors: JobPostMajorDto[];
+  /** { languages: [...], other: string[] } trích từ AI — chỉ hiển thị, không chấm điểm (Job Matcher GĐ3). */
+  requirementsExtra: { languages: Array<{ language: string; level: string | null; importance: SkillImportance }>; other: string[] } | null;
+  /** null = Employer chưa dùng tính năng AI xác nhận yêu cầu (Job Matcher GĐ3). */
+  requirementsConfirmedAt: string | null;
   /** Số hồ sơ ứng tuyển — luôn 0 cho tới Phase 8 (module applications). */
   applicationCount: number;
   /** Hành động kiểm duyệt mới nhất — nguồn dữ liệu banner từ chối/thu hồi. */
@@ -519,9 +536,63 @@ export interface CreateJobPostRequest {
   preferredSkillIds?: string[];
   /** Số năm kinh nghiệm tối thiểu (0–20); null/0 = không yêu cầu. */
   minExperienceYears?: number | null;
+  /**
+   * Số năm tối thiểu cho từng kỹ năng (Job Matcher GĐ3), khoá = skillId. Chỉ có
+   * tác dụng khi gửi kèm `skillIds`; kỹ năng không có trong map giữ nguyên giá
+   * trị đang lưu, `null`/0 = xoá yêu cầu.
+   */
+  skillMinYears?: Record<string, number | null>;
+  /** Ngành học phù hợp — ghi đè toàn bộ khi có mặt, bỏ qua khi undefined (Job Matcher GĐ3). */
+  majors?: Array<{ majorId: string; relevance: MajorRelevance }>;
 }
 
 export type UpdateJobPostRequest = Partial<CreateJobPostRequest>;
+
+// ─── Job Matcher GĐ3: AI phân tích yêu cầu của tin ──────────────────────
+// docs/06-backend/job-matcher-phase3/PLAN.md. Bản nháp AI trả về, KHÔNG lưu DB
+// tới khi Employer bấm "Áp dụng".
+
+export type ExtractionConfidence = "LOW" | "MEDIUM" | "HIGH";
+
+/** Cách một tên do AI đọc ra được khớp vào catalog APPROVED (chỉ tra cứu, không tạo mới). */
+export type CatalogResolveMatchType = "ALIAS" | "EXACT" | "TOKEN";
+
+export interface ExtractedJobRequirements {
+  skills: Array<{
+    rawName: string;
+    importance: SkillImportance;
+    /** "6 tháng" → 0.5; tin không nêu số → null (không bịa). */
+    minYears: number | null;
+    /** Câu trích trong tin, để Employer đối chiếu. */
+    evidence: string;
+    resolved: { skillId: string; name: string; matchType: CatalogResolveMatchType } | null;
+    /** Chỉ để tô màu bảng xem trước, không vào công thức chấm điểm. */
+    confidence: ExtractionConfidence;
+  }>;
+  overallMinExperienceYears: number | null;
+  majors: Array<{
+    rawName: string;
+    resolved: { majorId: string; name: string; matchType: CatalogResolveMatchType } | null;
+    relevance: MajorRelevance;
+    evidence: string;
+    confidence: ExtractionConfidence;
+  }>;
+  languages: Array<{ language: string; level: string | null; importance: SkillImportance; evidence: string }>;
+  /** Yêu cầu khác — chỉ hiển thị. */
+  other: string[];
+  confidence: ExtractionConfidence;
+}
+
+/** Body của PUT /employer/job-posts/:id/requirements — Employer xác nhận bản đã sửa. */
+export interface ConfirmRequirementsRequest {
+  /** Đồng bộ toàn bộ tập kỹ năng của tin (importance + minYears). */
+  skills: Array<{ skillId: string; importance: SkillImportance; minYears: number | null }>;
+  minExperienceYears: number | null;
+  /** Đồng bộ toàn bộ tập ngành của tin. */
+  majors: Array<{ majorId: string; relevance: MajorRelevance }>;
+  languages: Array<{ language: string; level: string | null; importance: SkillImportance }>;
+  other: string[];
+}
 
 // ─── Job Matcher (A2) ────────────────────────────────────────────────────
 // docs/06-backend/job-matcher-phase1/PLAN.md. Điểm chỉ mang tính tham khảo —
@@ -550,6 +621,22 @@ export interface MatchSkillEvidence {
   status: "MATCHED" | "MISSING";
   /** Số năm ứng viên khai cho kỹ năng này; null = chưa khai (hoặc không có). */
   candidateYears: number | null;
+  /** Số năm tin yêu cầu riêng cho kỹ năng này; null = không yêu cầu (GĐ3). */
+  requiredYears: number | null;
+}
+
+/**
+ * PRIMARY/RELATED = có ngành khớp; NONE = có học vấn nhưng không khớp ngành nào;
+ * UNKNOWN = chưa có học vấn đối chiếu được; NOT_REQUIRED = tin không nêu ngành (GĐ3).
+ */
+export type MatchEducationStatus = "PRIMARY" | "RELATED" | "NONE" | "UNKNOWN" | "NOT_REQUIRED";
+
+export interface MatchEducationEvidence {
+  status: MatchEducationStatus;
+  /** Ngành của ứng viên đã khớp (PRIMARY/RELATED); null ở các trạng thái khác. */
+  matchedMajorName: string | null;
+  /** Tên ngành tin yêu cầu, PRIMARY trước. */
+  requiredMajors: string[];
 }
 
 export type MatchExperienceStatus = "MATCH" | "PARTIAL" | "BELOW" | "UNKNOWN" | "NOT_REQUIRED";
@@ -579,6 +666,7 @@ export interface MatchResult {
   components: MatchComponentResult[];
   skills: MatchSkillEvidence[];
   experience: MatchExperienceEvidence;
+  education: MatchEducationEvidence;
   semantic: MatchSemanticInfo;
   /** Câu giải thích tiếng Việt do server sinh. */
   notes: string[];

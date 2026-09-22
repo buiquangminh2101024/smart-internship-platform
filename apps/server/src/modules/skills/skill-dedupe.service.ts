@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
-import type { SuggestSkillResponse } from "@sip/shared-types";
+import type { CatalogResolveMatchType, SuggestSkillResponse } from "@sip/shared-types";
 import type { Logger } from "../../shared/logger";
 import type { SkillEmbeddingService } from "./skill-embedding.service";
 import type { SkillAliasRepository } from "./skill-alias.repository";
@@ -10,6 +10,12 @@ import { rankSkillsByName, type SkillSimilarity } from "./skill-token-match.util
 // Ngưỡng chốt ở docs/06-backend/jobpost-skill-huong-b/PLAN.md mục 4.
 export const AUTO_MATCH_THRESHOLD = 0.85;
 export const GRAY_ZONE_THRESHOLD = 0.6;
+
+export interface ApprovedCatalogMatch {
+  id: string;
+  name: string;
+  matchType: CatalogResolveMatchType;
+}
 
 /**
  * Orchestrator pipeline khử trùng lặp skill, chạy đồng bộ trong request:
@@ -113,6 +119,29 @@ export class SkillDedupeService {
       status: existing.status,
       matchType: existing.status === "APPROVED" ? "AUTO" : "PENDING_REVIEW",
     };
+  }
+
+  /**
+   * Chỉ tra cứu, chỉ skill APPROVED: bậc 0 alias → trùng tên → bậc 1 token ≥ 0.85.
+   * Không embedding, không kiểm quota, không tạo PENDING — dùng cho tên do AI đọc
+   * từ tin tuyển dụng (Job Matcher GĐ3), Employer còn xác nhận lại ở bảng xem trước.
+   */
+  async findBestApproved(rawName: string): Promise<ApprovedCatalogMatch | null> {
+    const name = rawName.trim().replace(/\s+/g, " ");
+    if (!name) return null;
+
+    // Alias chỉ sinh ra khi gộp vào skill đích đã APPROVED (skills.service.ts merge) hoặc từ seed.
+    const alias = await this.skillAliasRepository.findByName(name);
+    if (alias) return { id: alias.skill.id, name: alias.skill.name, matchType: "ALIAS" };
+
+    const approved = await this.skillsRepository.listApproved();
+    const lowered = name.toLowerCase();
+    const exact = approved.find((skill) => skill.name.toLowerCase() === lowered);
+    if (exact) return { id: exact.id, name: exact.name, matchType: "EXACT" };
+
+    const best = rankSkillsByName(name, approved, 1)[0];
+    if (best && best.score >= AUTO_MATCH_THRESHOLD) return { id: best.skillId, name: best.name, matchType: "TOKEN" };
+    return null;
   }
 
   /** Điểm cao nhất giữa so khớp chuỗi (bậc 1) và embedding ngữ nghĩa (bậc 2). */

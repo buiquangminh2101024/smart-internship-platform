@@ -1,8 +1,10 @@
 import type { NextFunction, Request, Response } from "express";
 import type {
   ApiResponse,
+  ConfirmRequirementsRequest,
   CreateJobPostRequest,
   EmployerJobPostListQuery,
+  ExtractedJobRequirements,
   JobPost,
   JobPostSearchQuery,
   JobPostStats,
@@ -13,13 +15,22 @@ import type {
   SubmitJobPostResponse,
   UpdateJobPostRequest,
 } from "@sip/shared-types";
+import type { JobPostRequirementsService } from "./job-post-requirements.service";
 import type { JobPostsService } from "./job-posts.service";
 
 export class JobPostsController {
   private readonly jobPostsService: JobPostsService;
+  private readonly jobPostRequirementsService: JobPostRequirementsService;
 
-  constructor({ jobPostsService }: { jobPostsService: JobPostsService }) {
+  constructor({
+    jobPostsService,
+    jobPostRequirementsService,
+  }: {
+    jobPostsService: JobPostsService;
+    jobPostRequirementsService: JobPostRequirementsService;
+  }) {
     this.jobPostsService = jobPostsService;
+    this.jobPostRequirementsService = jobPostRequirementsService;
   }
 
   // ─── Public ──────────────────────────────────────────────────────────────
@@ -122,6 +133,30 @@ export class JobPostsController {
   close = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const result = await this.jobPostsService.close(req.user!.id, req.params.id as string);
+      const body: ApiResponse<JobPost> = { success: true, data: result };
+      res.json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  extractRequirements = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await this.jobPostRequirementsService.extract(req.user!.id, req.params.id as string);
+      const body: ApiResponse<ExtractedJobRequirements> = { success: true, data: result };
+      res.json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  confirmRequirements = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await this.jobPostRequirementsService.confirm(
+        req.user!.id,
+        req.params.id as string,
+        req.body as ConfirmRequirementsRequest,
+      );
       const body: ApiResponse<JobPost> = { success: true, data: result };
       res.json(body);
     } catch (error) {

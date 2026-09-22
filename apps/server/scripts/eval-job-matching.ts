@@ -10,6 +10,11 @@
 //
 // Script không sửa config: đổi SEMANTIC_CALIBRATION / trọng số / JOB_MATCHER_MODE là việc làm
 // tay sau khi đọc kết quả trên nhãn cuối cùng (không làm trên kết quả tạm).
+//
+// GĐ3 (bước 7 trong docs/06-backend/job-matcher-phase3/PLAN.md): cùng các cặp/cosine đó, so
+// hybrid-v2 trên tin dạng GĐ2 với hybrid-v2 trên tin đã gắn yêu cầu xác nhận
+// (job-matcher-phase3/eval/confirmed-requirements.json, áp trong bộ nhớ — không ghi DB), quét
+// lưới RELATED_MAJOR_SCORE trên dev, ghi job-matcher-phase3/eval/eval-results.md.
 import { PrismaClient } from "@prisma/client";
 import type { MatchResult } from "@sip/shared-types";
 import { promises as fs } from "node:fs";
@@ -26,12 +31,20 @@ import { ScoringJobMatcher } from "../src/modules/job-matching/scoring-job-match
 import {
   EMBEDDING_ONLY_WEIGHTS_V1,
   HYBRID_WEIGHTS_V1,
+  HYBRID_WEIGHTS_V2,
+  RELATED_MAJOR_SCORE,
   RULE_WEIGHTS_V1,
   SEMANTIC_CALIBRATION,
 } from "../src/modules/job-matching/job-matching.config";
 import type { MatchWeights, SemanticCalibration } from "../src/modules/job-matching/job-matching.types";
 import type { CandidateMatchProfile, JobMatchProfile } from "../src/shared/ports/JobMatcher";
 import { DEMO_EMAIL_DOMAIN, DEMO_EMPLOYER_EMAIL } from "./lib/match-demo-fixture";
+import {
+  applyConfirmedRequirements,
+  validateConfirmedRequirements,
+  withoutPhase3Requirements,
+  type ConfirmedRequirements,
+} from "./lib/confirmed-requirements";
 import {
   DEFAULT_THRESHOLDS,
   MATCH_LABELS,
@@ -59,8 +72,19 @@ const LABELS_PATH = path.join(EVAL_DIR, "labels.json");
 const RESULTS_PATH = path.join(EVAL_DIR, "eval-results.md");
 const FIXTURE_PATH = path.resolve(__dirname, "data/match-demo.json");
 
+const PHASE3_EVAL_DIR = path.resolve(__dirname, "../../../docs/06-backend/job-matcher-phase3/eval");
+const CONFIRMED_PATH = path.join(PHASE3_EVAL_DIR, "confirmed-requirements.json");
+const PHASE3_RESULTS_PATH = path.join(PHASE3_EVAL_DIR, "eval-results.md");
+
 /** Lưới trọng số semantic (PLAN); phần còn lại chia theo đúng tỉ lệ của hybrid-v1. */
 const SEMANTIC_WEIGHT_GRID = [0.2, 0.3, 0.4];
+/** Lưới RELATED_MAJOR_SCORE (PLAN GĐ3 bước 7). */
+const RELATED_MAJOR_GRID = [0.3, 0.5, 0.65, 0.8];
+/**
+ * Chốt trước khi chạy: dưới số cặp dev có học vấn RELATED này thì không coi lưới là hiệu chỉnh
+ * (giữ giá trị hiện tại và ghi rõ "chưa hiệu chỉnh được vì thiếu dữ liệu").
+ */
+const MIN_RELATED_DEV_PAIRS = 5;
 const SPLITS: Split[] = ["dev", "test"];
 
 const prisma = new PrismaClient();
@@ -372,7 +396,7 @@ async function main() {
     kappa,
     hardCases,
   });
-  await fs.writeFile(RESULTS_PATH, report, "utf8");
+  const gd2Written = await writeReport(RESULTS_PATH, report);
 
   console.log("");
   for (const split of SPLITS) {
@@ -384,7 +408,313 @@ async function main() {
   }
   console.log(`\nlo/hi (dev): ${fmt(calibrated.lo)} / ${fmt(calibrated.hi)}; trọng số semantic chọn: ${chosen.weights.weights.semantic}`);
   console.log(`Quy tắc quyết định: ${decision.pass ? "ĐẠT — có thể đổi mặc định sang hybrid" : "KHÔNG ĐẠT — giữ rule"}${provisional ? " (nhãn TẠM, chưa áp dụng)" : ""}`);
-  console.log(`✓ Đã ghi ${RESULTS_PATH}`);
+  console.log(gd2Written ? `✓ Đã ghi ${RESULTS_PATH}` : `= ${RESULTS_PATH} không đổi (ngoài dấu thời gian) — giữ nguyên file`);
+
+  await evaluatePhase3(rows, { provisional, hardCases });
+}
+
+// ─── GĐ3: yêu cầu có cấu trúc đã xác nhận ───────────────────────────────────
+
+interface Phase3Config {
+  key: string;
+  title: string;
+  relatedMajorScore: number | null;
+  matcher: ScoringJobMatcher;
+  /** Hồ sơ tin mà cấu hình này thấy. */
+  jobOf: (row: EvalRow) => JobMatchProfile;
+}
+
+async function loadConfirmedRequirements(): Promise<{ data: ConfirmedRequirements; majorIdByName: Map<string, string> }> {
+  let raw: unknown;
+  let fixture: { jobs: { title: string; skills: { name: string }[] }[] };
+  try {
+    raw = JSON.parse(await fs.readFile(CONFIRMED_PATH, "utf8"));
+    fixture = JSON.parse(await fs.readFile(FIXTURE_PATH, "utf8"));
+  } catch (error) {
+    throw new Error(`Không đọc được dữ liệu GĐ3: ${error instanceof Error ? error.message : error}`);
+  }
+  const names = [
+    ...new Set(
+      ((raw as { jobs?: { majors?: { name?: unknown }[] }[] }).jobs ?? []).flatMap((job) =>
+        (job.majors ?? []).flatMap((major) => (typeof major.name === "string" ? [major.name] : [])),
+      ),
+    ),
+  ];
+  const majors = await prisma.major.findMany({
+    where: { status: "APPROVED", name: { in: names } },
+    select: { id: true, name: true },
+  });
+  const { data, errors } = validateConfirmedRequirements(raw, {
+    jobs: fixture.jobs.map((job) => ({ title: job.title, skills: job.skills.map((skill) => skill.name) })),
+    majors: majors.map((major) => major.name),
+  });
+  if (!data) {
+    console.error(`✗ confirmed-requirements.json có ${errors.length} lỗi:`);
+    for (const error of errors) console.error(`  - ${error}`);
+    throw new Error("confirmed-requirements.json không hợp lệ.");
+  }
+  return { data, majorIdByName: new Map(majors.map((major) => [major.name, major.id])) };
+}
+
+async function evaluatePhase3(rows: EvalRow[], ctx: { provisional: boolean; hardCases: Map<string, string> }) {
+  const { data, majorIdByName } = await loadConfirmedRequirements();
+  const confirmedByTitle = new Map(data.jobs.map((job) => [job.jobTitle, job]));
+  const phase3Jobs = new Map<string, JobMatchProfile>();
+  const phase3Job = (row: EvalRow) => {
+    let job = phase3Jobs.get(row.pair.jobRef);
+    if (!job) {
+      job = applyConfirmedRequirements(row.job, confirmedByTitle.get(row.pair.jobRef), majorIdByName);
+      phase3Jobs.set(row.pair.jobRef, job);
+    }
+    return job;
+  };
+
+  const baseline: Phase3Config = {
+    key: "gd2",
+    title: "GĐ2 — hybrid-v2, tin chưa có ngành/số năm theo kỹ năng",
+    relatedMajorScore: null,
+    matcher: new ScoringJobMatcher(HYBRID_WEIGHTS_V2, SEMANTIC_CALIBRATION),
+    jobOf: (row) => withoutPhase3Requirements(row.job),
+  };
+  const grid: Phase3Config[] = RELATED_MAJOR_GRID.map((value) => ({
+    key: `gd3-r${value}`,
+    title: `GĐ3 — hybrid-v2 + yêu cầu xác nhận, RELATED = ${fmt(value, 2)}`,
+    relatedMajorScore: value,
+    matcher: new ScoringJobMatcher(HYBRID_WEIGHTS_V2, SEMANTIC_CALIBRATION, value),
+    jobOf: phase3Job,
+  }));
+  const configs = [baseline, ...grid];
+
+  const results = new Map(
+    configs.map((cfg) => [
+      cfg.key,
+      new Map(rows.map((row) => [row.pair.id, cfg.matcher.match({ candidate: row.candidate, job: cfg.jobOf(row), semanticSimilarity: row.cosine })])),
+    ]),
+  );
+  const scoreTable = new Map(
+    configs.map((cfg) => {
+      const scores = new Map<string, number>();
+      for (const [id, result] of results.get(cfg.key)!) {
+        if (result.score === null) throw new Error(`${cfg.key}: cặp ${id} không chấm được (${result.status}).`);
+        scores.set(id, result.score);
+      }
+      return [cfg.key, scores];
+    }),
+  );
+  const bySplit = (split: Split) => rows.filter((row) => row.pair.split === split);
+  const dev = bySplit("dev");
+  const tuned = new Map(
+    configs.map((cfg) => [cfg.key, tuneThresholds(dev.map((row) => ({ score: scoreTable.get(cfg.key)!.get(row.pair.id)!, label: row.label })))]),
+  );
+  const metrics = (cfg: Phase3Config, split: Split) => metricsFor(bySplit(split), scoreTable.get(cfg.key)!, tuned.get(cfg.key)!);
+
+  // Trạng thái học vấn không phụ thuộc giá trị RELATED — lấy từ một cấu hình GĐ3 bất kỳ.
+  const educationStatus = (row: EvalRow) => results.get(grid[0]!.key)!.get(row.pair.id)!.education.status;
+  const relatedDev = dev.filter((row) => educationStatus(row) === "RELATED").length;
+
+  // Chọn trên dev; hoà thì giữ giá trị hiện tại (better() là so sánh chặt).
+  const current = grid.find((cfg) => cfg.relatedMajorScore === RELATED_MAJOR_SCORE) ?? grid[0]!;
+  let best = current;
+  for (const cfg of grid) if (cfg !== current && better(metrics(cfg, "dev"), metrics(best, "dev"))) best = cfg;
+  const gridHasSignal = grid.some((cfg) => {
+    const a = metrics(cfg, "dev");
+    const b = metrics(current, "dev");
+    return a.rho !== b.rho || a.ndcg !== b.ndcg || a.fp !== b.fp;
+  });
+  const calibrated = relatedDev >= MIN_RELATED_DEV_PAIRS && gridHasSignal;
+  const chosen = calibrated ? best : current;
+
+  const report = renderPhase3Report({
+    ...ctx,
+    data,
+    rows,
+    baseline,
+    grid,
+    chosen,
+    calibrated,
+    gridHasSignal,
+    relatedDev,
+    results,
+    scoreTable,
+    tuned,
+    metrics,
+    educationStatus,
+  });
+  await writeReport(PHASE3_RESULTS_PATH, report, true);
+
+  console.log("\n[GĐ3]");
+  for (const split of SPLITS) {
+    for (const cfg of [baseline, chosen]) {
+      const m = metrics(cfg, split);
+      console.log(`  ${split.padEnd(4)} ${cfg.title.padEnd(62)} ρ=${fmt(m.rho)} NDCG@3=${fmt(m.ndcg)} acc=${pct(m.accuracyDefault)} FP=${m.fp} FN=${m.fn}`);
+    }
+  }
+  console.log(
+    `RELATED_MAJOR_SCORE: ${calibrated ? `chọn ${chosen.relatedMajorScore} trên dev` : `giữ ${RELATED_MAJOR_SCORE} — chưa hiệu chỉnh được (${relatedDev} cặp dev RELATED${gridHasSignal ? "" : ", lưới không đổi chỉ số"})`}`,
+  );
+  console.log(`✓ Đã ghi ${PHASE3_RESULTS_PATH}`);
+}
+
+function renderPhase3Report(ctx: {
+  provisional: boolean;
+  hardCases: Map<string, string>;
+  data: ConfirmedRequirements;
+  rows: EvalRow[];
+  baseline: Phase3Config;
+  grid: Phase3Config[];
+  chosen: Phase3Config;
+  calibrated: boolean;
+  gridHasSignal: boolean;
+  relatedDev: number;
+  results: Map<string, Map<string, MatchResult>>;
+  scoreTable: Map<string, Map<string, number>>;
+  tuned: Map<string, Thresholds>;
+  metrics: (cfg: Phase3Config, split: Split) => SplitMetrics;
+  educationStatus: (row: EvalRow) => MatchResult["education"]["status"];
+}): string {
+  const { rows, baseline, grid, chosen, metrics, scoreTable, educationStatus } = ctx;
+  const out: string[] = [];
+  const line = (text = "") => out.push(text);
+  const minYearsCount = ctx.data.jobs.reduce((sum, job) => sum + Object.keys(job.skillMinYears).length, 0);
+
+  line("# Kết quả đánh giá Job Matcher GĐ3");
+  line();
+  line(`> Sinh tự động bởi \`apps/server/scripts/eval-job-matching.ts\` lúc ${new Date().toISOString()} — không sửa tay; chạy lại script để cập nhật. Phương pháp: \`../PLAN.md\` bước 7; cặp, nhãn, cosine và cách đo dùng lại nguyên của GĐ2 (\`../../job-matcher-phase2/eval/\`).`);
+  line();
+  if (ctx.provisional) {
+    line("> **KẾT QUẢ TẠM** — còn nhãn một người gán.");
+    line();
+  }
+  line("Cỡ mẫu nhỏ, dữ liệu tổng hợp: mọi con số chỉ mang tính chỉ báo.");
+  line();
+
+  line("## Dữ liệu GĐ3");
+  line();
+  line("Yêu cầu \"Employer đã xác nhận\" nằm ở `confirmed-requirements.json` (cùng thư mục), áp trong bộ nhớ lên hồ sơ tin — không ghi DB, không sửa `match-demo.json`/`labels.json`. Quy tắc gắn ngành chốt trước khi chạy, không dựa vào nhãn hay điểm (xem trường `description` của file).");
+  line();
+  line("| Tin | Tập | Căn cứ trong tin | Đúng ngành (PRIMARY) | Ngành liên quan (RELATED) |");
+  line("| --- | --- | --- | --- | --- |");
+  const splitOfJob = new Map(rows.map((row) => [row.pair.jobRef, row.pair.split]));
+  for (const job of ctx.data.jobs) {
+    const names = (relevance: "PRIMARY" | "RELATED") =>
+      job.majors.filter((major) => major.relevance === relevance).map((major) => major.name).join(", ") || "—";
+    line(`| ${job.jobTitle} | ${splitOfJob.get(job.jobTitle) ?? "—"} | "${job.evidence}" | ${names("PRIMARY")} | ${names("RELATED")} |`);
+  }
+  const untouched = [...new Set(rows.map((row) => row.pair.jobRef))].filter((title) => !ctx.data.jobs.some((job) => job.jobTitle === title));
+  if (untouched.length > 0) line(`\nTin không nêu ngành (giữ nguyên, education không áp dụng): ${untouched.join(", ")}.`);
+  line();
+  line(
+    minYearsCount === 0
+      ? "**Số năm theo từng kỹ năng (`JobPostSkill.minYears`): không đánh giá được trên bộ dữ liệu này** — không tin demo nào nêu số năm cho riêng một kỹ năng (fixture viết cho GĐ2), và quy tắc là không tự đặt số năm khi văn bản tin không nêu. Phần chấm này chỉ được kiểm bằng test đơn vị (`scoring-job-matcher.test.ts`, E1–E5)."
+      : `Số năm theo kỹ năng đã xác nhận: ${minYearsCount} dòng.`,
+  );
+  line();
+
+  line("### Trạng thái học vấn của các cặp (theo nhãn)");
+  line();
+  const statuses = ["PRIMARY", "RELATED", "NONE", "UNKNOWN", "NOT_REQUIRED"] as const;
+  line(`| Tập | Nhãn | ${statuses.join(" | ")} |`);
+  line(`| --- | --- | ${statuses.map(() => "---").join(" | ")} |`);
+  for (const split of SPLITS) {
+    for (const label of [...MATCH_LABELS].reverse()) {
+      const subset = rows.filter((row) => row.pair.split === split && row.label === label);
+      const counts = countBy(subset, educationStatus);
+      line(`| ${split} | ${short(label)} | ${statuses.map((s) => counts.get(s) ?? 0).join(" | ")} |`);
+    }
+  }
+  line();
+
+  line("## Lưới `RELATED_MAJOR_SCORE` (chỉ trên dev)");
+  line();
+  line(`Chọn theo ρ, rồi NDCG@3, rồi ít FP hơn; hoà thì giữ giá trị hiện tại (${fmt(RELATED_MAJOR_SCORE, 2)}). Quy tắc chốt trước: cần ≥ ${MIN_RELATED_DEV_PAIRS} cặp dev có học vấn RELATED và lưới phải làm đổi ít nhất một chỉ số thì mới coi là hiệu chỉnh.`);
+  line();
+  line("| RELATED | ρ | NDCG@3 | Acc (mặc định) | FP | FN | |");
+  line("| --- | --- | --- | --- | --- | --- | --- |");
+  for (const cfg of grid) {
+    const m = metrics(cfg, "dev");
+    line(`| ${fmt(cfg.relatedMajorScore, 2)} | ${fmt(m.rho)} | ${fmt(m.ndcg)} | ${pct(m.accuracyDefault)} | ${m.fp} | ${m.fn} | ${cfg === chosen ? "**chọn**" : ""} |`);
+  }
+  line();
+  if (ctx.calibrated) {
+    const rhos = grid.map((cfg) => metrics(cfg, "dev").rho ?? 0);
+    const spread = Math.max(...rhos) - Math.min(...rhos);
+    const ndcgFpFlat = grid.every((cfg) => {
+      const m = metrics(cfg, "dev");
+      const c = metrics(chosen, "dev");
+      return m.ndcg === c.ndcg && m.fp === c.fp;
+    });
+    line(`Kết quả: **${fmt(chosen.relatedMajorScore, 2)}** (${ctx.relatedDev} cặp dev RELATED). ρ giữa các giá trị trong lưới chỉ chênh ${fmt(spread)}${ndcgFpFlat ? ", NDCG@3 và FP không đổi" : ""} — ${spread < 0.02 ? "mức chênh nằm trong nhiễu của cỡ mẫu này: giá trị được chọn **không bị dữ liệu bác bỏ**, nhưng cũng chưa đủ căn cứ để nói nó tốt hơn các giá trị lân cận" : "có tín hiệu nhưng vẫn trên cỡ mẫu nhỏ"}.`);
+  } else {
+    const reasons = [
+      ...(ctx.relatedDev < MIN_RELATED_DEV_PAIRS ? [`chỉ ${ctx.relatedDev} cặp dev có học vấn RELATED (< ${MIN_RELATED_DEV_PAIRS})`] : []),
+      ...(ctx.gridHasSignal ? [] : ["mọi giá trị trong lưới cho cùng ρ/NDCG@3/FP"]),
+    ];
+    line(`**Chưa hiệu chỉnh được vì thiếu dữ liệu** — ${reasons.join("; ")}. Giữ \`RELATED_MAJOR_SCORE = ${fmt(RELATED_MAJOR_SCORE, 2)}\` như giá trị đề xuất, **chưa được kiểm chứng**.`);
+  }
+  line();
+
+  line("## GĐ2 so với GĐ3");
+  line();
+  line(`Cùng trọng số \`hybrid-v2\` và \`lo/hi\` đang dùng (${fmt(SEMANTIC_CALIBRATION.lo, 4)}/${fmt(SEMANTIC_CALIBRATION.hi, 4)}); khác nhau duy nhất ở dữ liệu tin. Ở GĐ2 trọng số \`education\` (${fmt(HYBRID_WEIGHTS_V2.weights.education, 4)}) luôn bị chia lại cho các thành phần khác; ở GĐ3 nó có điểm khi tin có ngành. rule-v1 có \`education = 0\` nên không đổi giữa hai giai đoạn khi không có số năm theo kỹ năng — không liệt kê.`);
+  line();
+  for (const split of SPLITS) {
+    line(`### Tập ${split}${split === "test" ? " (chỉ để báo cáo)" : ""}`);
+    line();
+    line("| Cấu hình | n | Spearman ρ | NDCG@3 (số tin) | Acc (mặc định) | Acc (dev) — ngưỡng | FP | FN |");
+    line("| --- | --- | --- | --- | --- | --- | --- | --- |");
+    for (const cfg of [baseline, chosen]) {
+      const m = metrics(cfg, split);
+      const t = ctx.tuned.get(cfg.key)!;
+      line(`| ${cfg.title} | ${m.n} | ${fmt(m.rho)} | ${fmt(m.ndcg)} (${m.ndcgJobs}) | ${pct(m.accuracyDefault)} | ${pct(m.accuracyTuned)} — ${t.good}/${t.partial} | ${m.fp} | ${m.fn} |`);
+    }
+    line();
+  }
+
+  line("## Các cặp đổi điểm");
+  line();
+  const hard = (row: EvalRow) =>
+    [...new Set([ctx.hardCases.get(`c:${row.pair.candidateRef}`), ctx.hardCases.get(`j:${row.pair.jobRef}`)].filter(Boolean))].join(", ") || "—";
+  const changed = rows
+    .filter((row) => scoreTable.get(baseline.key)!.get(row.pair.id) !== scoreTable.get(chosen.key)!.get(row.pair.id))
+    .sort((a, b) => a.pair.id.localeCompare(b.pair.id));
+  if (changed.length === 0) {
+    line("Không có.");
+  } else {
+    line(`Dấu ✗ khi lớp suy ra từ điểm (ngưỡng mặc định) khác nhãn. ${changed.length}/${rows.length} cặp đổi điểm.`);
+    line();
+    line("| Cặp | Tập | Hồ sơ | Tin | Nhãn | Học vấn | Ngành ứng viên khớp | GĐ2 | GĐ3 | Ca khó |");
+    line("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+    const cell = (cfg: Phase3Config, row: EvalRow) => {
+      const score = scoreTable.get(cfg.key)!.get(row.pair.id)!;
+      return `${score}${classify(score, DEFAULT_THRESHOLDS) === row.label ? "" : " ✗"}`;
+    };
+    for (const row of changed) {
+      const education = ctx.results.get(chosen.key)!.get(row.pair.id)!.education;
+      line(`| ${row.pair.id} | ${row.pair.split} | ${row.pair.candidateRef} | ${row.pair.jobRef} | ${short(row.label)} | ${education.status} | ${education.matchedMajorName ?? "—"} | ${cell(baseline, row)} | ${cell(chosen, row)} | ${hard(row)} |`);
+    }
+  }
+  line();
+
+  line("## Hạn chế");
+  line();
+  line("- Trọng số `education` của hybrid-v2 chỉ 0,0429 nên một cặp đổi tối đa khoảng 4 điểm giữa \"đúng ngành\" và \"khác ngành\"; lưới RELATED chỉ dịch điểm cặp RELATED khoảng 1–2 điểm — khó đổi thứ hạng trên vài chục cặp.");
+  line("- Nhãn GĐ2 được gán khi hệ thống chưa chấm ngành; người gán vẫn nhìn thấy ngành của ứng viên nên nhãn phản ánh ngành một phần, nhưng không có ca nào được thiết kế riêng để tách tác động của ngành liên quan.");
+  line("- Tập ngành RELATED do người viết file xác nhận theo nhóm ngành của Bộ GD&ĐT, không phải do Employer thật chọn qua giao diện.");
+  line();
+  return out.join("\n");
+}
+
+/** Ghi báo cáo; bỏ qua khi chỉ khác dòng dấu thời gian (tránh làm bẩn file đã chốt). Trả true nếu có ghi. */
+async function writeReport(filePath: string, content: string, createDir = false): Promise<boolean> {
+  const stripStamp = (text: string) => text.replace(/lúc \d{4}-\d{2}-\d{2}T[\d:.]+Z/, "");
+  try {
+    if (stripStamp(await fs.readFile(filePath, "utf8")) === stripStamp(content)) return false;
+  } catch {
+    // Chưa có file.
+  }
+  if (createDir) await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, content, "utf8");
+  return true;
 }
 
 // ─── Báo cáo ────────────────────────────────────────────────────────────────

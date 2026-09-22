@@ -33,12 +33,13 @@ function profile(candidateId: string, skillIds: string[]): CandidateMatchProfile
 const JOB: JobMatchProfile = {
   jobPostId: "job-1",
   skills: [
-    { skillId: "java", name: "java", importance: "REQUIRED" },
-    { skillId: "spring", name: "spring", importance: "REQUIRED" },
-    { skillId: "postgres", name: "postgres", importance: "REQUIRED" },
-    { skillId: "docker", name: "docker", importance: "PREFERRED" },
+    { skillId: "java", name: "java", importance: "REQUIRED", minYears: null },
+    { skillId: "spring", name: "spring", importance: "REQUIRED", minYears: null },
+    { skillId: "postgres", name: "postgres", importance: "REQUIRED", minYears: null },
+    { skillId: "docker", name: "docker", importance: "PREFERRED", minYears: null },
   ],
   minExperienceYears: null,
+  majors: [],
   matchText: "Vị trí: Backend",
 };
 

@@ -7,6 +7,16 @@ const JOB_POST_STATUSES = ["DRAFT", "PENDING", "PUBLISHED", "EXPIRED", "CLOSED",
 // không phải lỗi validate — service tự quy về null khi ghi DB.
 const optionalText = z.string().trim().optional();
 
+const IMPORTANCES = ["REQUIRED", "PREFERRED"] as const;
+
+// Số năm tối thiểu cho một kỹ năng: null/0 = không yêu cầu (service quy 0 về null).
+const yearsValue = z.number().min(0).max(20).nullable();
+
+const majorList = z
+  .array(z.object({ majorId: z.string().trim().min(1), relevance: z.enum(["PRIMARY", "RELATED"]) }))
+  .max(10)
+  .refine((majors) => new Set(majors.map((major) => major.majorId)).size === majors.length, "Duplicate major");
+
 const jobPostFields = {
   title: z.string().trim().min(1, "Title is required"),
   description: z.string().trim().min(1, "Description is required"),
@@ -28,6 +38,9 @@ const jobPostFields = {
   preferredSkillIds: z.array(z.string().trim().min(1)).max(30).optional(),
   // null = xoá yêu cầu; 0 cũng được coi là "không yêu cầu".
   minExperienceYears: z.number().min(0).max(20).nullable().optional(),
+  // Job Matcher GĐ3: số năm theo từng kỹ năng (khoá = skillId), chỉ ghi cùng skillIds.
+  skillMinYears: z.record(z.string().trim().min(1), yearsValue).optional(),
+  majors: majorList.optional(),
 };
 
 export const createJobPostSchema = z.object(jobPostFields);
@@ -66,6 +79,27 @@ export const jobPostSearchQuerySchema = z.object({
 
 export const rejectJobPostSchema = z.object({
   reason: z.string().trim().min(1, "A reason is required"),
+});
+
+// PUT /employer/job-posts/:id/requirements — Job Matcher GĐ3. Trần khớp với
+// form tin (30 kỹ năng) và bộ làm sạch output AI (10 ngành/5 ngoại ngữ/15 mục khác).
+export const confirmRequirementsSchema = z.object({
+  skills: z
+    .array(z.object({ skillId: z.string().trim().min(1), importance: z.enum(IMPORTANCES), minYears: yearsValue }))
+    .max(30)
+    .refine((skills) => new Set(skills.map((skill) => skill.skillId)).size === skills.length, "Duplicate skill"),
+  minExperienceYears: yearsValue,
+  majors: majorList,
+  languages: z
+    .array(
+      z.object({
+        language: z.string().trim().min(1).max(100),
+        level: z.string().trim().max(300).nullable(),
+        importance: z.enum(IMPORTANCES),
+      }),
+    )
+    .max(5),
+  other: z.array(z.string().trim().min(1).max(300)).max(15),
 });
 
 export const retractJobPostSchema = z.object({

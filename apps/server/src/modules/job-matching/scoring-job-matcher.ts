@@ -2,12 +2,13 @@ import type {
   MatchComponentKey,
   MatchComponentResult,
   MatchConfidence,
+  MatchEducationEvidence,
   MatchExperienceEvidence,
   MatchResult,
   MatchSkillEvidence,
 } from "@sip/shared-types";
 import type { JobMatcher, MatchInput } from "../../shared/ports/JobMatcher";
-import { EXPERIENCE_PARTIAL_RATIO, SEMANTIC_CALIBRATION } from "./job-matching.config";
+import { EXPERIENCE_PARTIAL_RATIO, RELATED_MAJOR_SCORE, SEMANTIC_CALIBRATION } from "./job-matching.config";
 import type { MatchWeights, SemanticCalibration } from "./job-matching.types";
 
 const COMPONENT_ORDER: MatchComponentKey[] = ["requiredSkills", "preferredSkills", "experience", "education", "semantic"];
@@ -22,13 +23,23 @@ const SEMANTIC_PENDING_NOTE = "Lần này chưa tính được mức tương đ�
 export class ScoringJobMatcher implements JobMatcher {
   private readonly config: MatchWeights;
   private readonly calibration: SemanticCalibration;
+  private readonly relatedMajorScore: number;
 
-  constructor(config: MatchWeights, calibration: SemanticCalibration = SEMANTIC_CALIBRATION) {
+  /** `relatedMajorScore` là tham số để bộ đánh giá quét lưới giá trị (PLAN GĐ3 bước 7). */
+  constructor(
+    config: MatchWeights,
+    calibration: SemanticCalibration = SEMANTIC_CALIBRATION,
+    relatedMajorScore: number = RELATED_MAJOR_SCORE,
+  ) {
     if (!(calibration.hi > calibration.lo)) {
       throw new Error(`SemanticCalibration cần hi > lo (lo=${calibration.lo}, hi=${calibration.hi})`);
     }
+    if (!(relatedMajorScore >= 0 && relatedMajorScore <= 1)) {
+      throw new Error(`relatedMajorScore phải trong [0, 1] (nhận ${relatedMajorScore})`);
+    }
     this.config = config;
     this.calibration = calibration;
+    this.relatedMajorScore = relatedMajorScore;
   }
 
   match(input: MatchInput): MatchResult {
@@ -51,12 +62,14 @@ export class ScoringJobMatcher implements JobMatcher {
           status: owned ? "MATCHED" : "MISSING",
           // D1: 0 = chưa khai.
           candidateYears: owned && owned.yearsOfExperience > 0 ? owned.yearsOfExperience : null,
+          requiredYears: skill.minYears !== null && skill.minYears > 0 ? skill.minYears : null,
         };
       });
 
     const required = skills.filter((skill) => skill.importance === "REQUIRED");
     const preferred = skills.filter((skill) => skill.importance === "PREFERRED");
     const experience = this.experienceEvidence(job.minExperienceYears, candidate.totalExperienceYears);
+    const education = this.educationEvidence(input);
 
     // Cấu hình không dùng semantic (rule) bỏ qua cosine hoàn toàn ⇒ kết quả y hệt GĐ1.
     const semanticEnabled = weights.semantic > 0;
@@ -66,12 +79,8 @@ export class ScoringJobMatcher implements JobMatcher {
     const rawScores: Record<MatchComponentKey, number | null> = {
       requiredSkills: required.length > 0 ? matchedRatio(required) : null,
       preferredSkills: preferred.length > 0 ? matchedRatio(preferred) : null,
-      experience:
-        experience.requiredYears !== null && experience.candidateYears !== null
-          ? Math.min(1, experience.candidateYears / experience.requiredYears)
-          : null,
-      // GĐ3 mới chấm học vấn.
-      education: null,
+      experience: experienceScore(experience, skills),
+      education: this.educationScore(education.status),
       semantic: semanticScore,
     };
 
@@ -98,6 +107,7 @@ export class ScoringJobMatcher implements JobMatcher {
       components,
       skills,
       experience,
+      education,
       semantic: {
         enabled: semanticEnabled,
         available: semanticScore !== null,
@@ -124,13 +134,14 @@ export class ScoringJobMatcher implements JobMatcher {
           // Cấu hình chỉ có semantic (bộ đánh giá) mà thiếu cosine: lý do không nằm ở tin.
           COMPONENT_ORDER.every((key) => key === "semantic" || weights[key] === 0)
             ? "Chưa tính được mức tương đồng nội dung nên chưa tính được mức phù hợp."
-            : "Tin chưa có kỹ năng đã duyệt hay yêu cầu kinh nghiệm nên chưa tính được mức phù hợp.",
+            : "Tin chưa có kỹ năng đã duyệt, yêu cầu kinh nghiệm hay ngành học nên chưa tính được mức phù hợp.",
         ],
       };
     }
 
     const total = components.reduce((sum, component) => sum + component.effectiveWeight * (component.score ?? 0), 0);
-    const notes = this.notes(required, preferred, experience, confidence);
+    // rule-v1 không có trọng số học vấn — không giải thích một thành phần không được tính.
+    const notes = this.notes(required, preferred, experience, weights.education > 0 ? education : null, confidence);
     if (semanticScore !== null) {
       notes.push(`Mức tương đồng nội dung giữa hồ sơ và tin (so bằng mô hình ngôn ngữ): ${Math.round(100 * semanticScore)}/100.`);
     } else if (semanticEnabled) {
@@ -169,10 +180,52 @@ export class ScoringJobMatcher implements JobMatcher {
     return "LOW";
   }
 
+  /** GĐ3: đối chiếu toàn bộ học vấn có majorId với tập ngành tin đã xác nhận. */
+  private educationEvidence({ candidate, job }: MatchInput): MatchEducationEvidence {
+    const requiredMajors = [...job.majors]
+      .sort(
+        (left, right) =>
+          Number(left.relevance === "RELATED") - Number(right.relevance === "RELATED") ||
+          left.name.localeCompare(right.name),
+      )
+      .map((major) => major.name);
+    if (job.majors.length === 0) {
+      return { status: "NOT_REQUIRED", matchedMajorName: null, requiredMajors };
+    }
+    // Học vấn không gắn ngành trong danh mục thì không đối chiếu được — coi như
+    // chưa có dữ liệu (không trừ điểm), giống D1 với số năm chưa khai.
+    const comparable = candidate.educations.filter((education) => education.majorId !== null);
+    if (comparable.length === 0) {
+      return { status: "UNKNOWN", matchedMajorName: null, requiredMajors };
+    }
+    for (const relevance of ["PRIMARY", "RELATED"] as const) {
+      const ids = new Set(job.majors.filter((major) => major.relevance === relevance).map((major) => major.majorId));
+      const matched = comparable.find((education) => ids.has(education.majorId!));
+      if (matched) {
+        return { status: relevance, matchedMajorName: matched.majorName, requiredMajors };
+      }
+    }
+    return { status: "NONE", matchedMajorName: null, requiredMajors };
+  }
+
+  private educationScore(status: MatchEducationEvidence["status"]): number | null {
+    switch (status) {
+      case "PRIMARY":
+        return 1;
+      case "RELATED":
+        return this.relatedMajorScore;
+      case "NONE":
+        return 0;
+      default:
+        return null;
+    }
+  }
+
   private notes(
     required: MatchSkillEvidence[],
     preferred: MatchSkillEvidence[],
     experience: MatchExperienceEvidence,
+    education: MatchEducationEvidence | null,
     confidence: MatchConfidence,
   ): string[] {
     const notes: string[] = [];
@@ -204,6 +257,39 @@ export class ScoringJobMatcher implements JobMatcher {
         );
     }
 
+    // Kỹ năng còn thiếu đã được nêu ở câu kỹ năng — không nhắc lại ở đây.
+    const perSkill = [...required, ...preferred].filter(
+      (skill) => skill.requiredYears !== null && skill.status === "MATCHED",
+    );
+    if (perSkill.length > 0) {
+      const parts = perSkill.map((skill) =>
+        skill.candidateYears === null
+          ? `${skill.name} chưa khai số năm (tin yêu cầu ${formatYears(skill.requiredYears!)})`
+          : `${skill.name} ${formatYears(skill.candidateYears)}/${formatYears(skill.requiredYears!)} năm`,
+      );
+      notes.push(`Số năm theo từng kỹ năng (ứng viên/tin yêu cầu): ${parts.join("; ")}.`);
+    }
+
+    if (education) {
+      const majors = education.requiredMajors.join(", ");
+      switch (education.status) {
+        case "PRIMARY":
+          notes.push(`Học đúng ngành tin yêu cầu (${education.matchedMajorName}).`);
+          break;
+        case "RELATED":
+          notes.push(`Học ngành liên quan mà tin chấp nhận (${education.matchedMajorName}), chưa phải ngành chính.`);
+          break;
+        case "NONE":
+          notes.push(`Ngành học chưa khớp với ngành tin yêu cầu (${majors}).`);
+          break;
+        case "UNKNOWN":
+          notes.push(`Tin yêu cầu ngành ${majors} nhưng hồ sơ chưa có ngành học để đối chiếu — phần học vấn không được tính.`);
+          break;
+        case "NOT_REQUIRED":
+          break;
+      }
+    }
+
     if (confidence === "LOW") {
       notes.push("Hồ sơ còn thiếu nhiều thông tin nên độ tin cậy của điểm thấp.");
     }
@@ -221,6 +307,25 @@ export function markSemanticPending(result: MatchResult): MatchResult {
     semantic: { enabled: true, available: false, similarity: null, normalized: null },
     notes: result.status === "SCORED" ? [...result.notes, SEMANTIC_PENDING_NOTE] : result.notes,
   };
+}
+
+/**
+ * GĐ3: trung bình cộng các phần đo được — (a) tổng thời gian làm việc so
+ * minExperienceYears, (b) mỗi kỹ năng có số năm yêu cầu riêng. Kỹ năng ứng
+ * viên có nhưng chưa khai năm (D1) hoặc không có (đã bị trừ ở requiredSkills/
+ * preferredSkills — không phạt hai lần) thì bỏ khỏi trung bình. Không còn phần
+ * nào ⇒ null (không áp dụng), y hệt GĐ1 khi tin không có số năm riêng.
+ */
+function experienceScore(experience: MatchExperienceEvidence, skills: MatchSkillEvidence[]): number | null {
+  const parts: number[] = [];
+  if (experience.requiredYears !== null && experience.candidateYears !== null) {
+    parts.push(Math.min(1, experience.candidateYears / experience.requiredYears));
+  }
+  for (const skill of skills) {
+    if (skill.requiredYears === null || skill.status !== "MATCHED" || skill.candidateYears === null) continue;
+    parts.push(Math.min(1, skill.candidateYears / skill.requiredYears));
+  }
+  return parts.length > 0 ? parts.reduce((sum, part) => sum + part, 0) / parts.length : null;
 }
 
 function matchedRatio(skills: MatchSkillEvidence[]): number {

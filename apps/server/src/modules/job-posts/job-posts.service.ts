@@ -122,8 +122,8 @@ export class JobPostsService {
       jobType: dto.jobType,
     });
 
-    if (dto.skillIds) {
-      await this.jobPostRepository.setSkills(created.id, this.toSkillRows(dto.skillIds, dto.preferredSkillIds));
+    if (dto.skillIds || dto.majors) {
+      await this.writeRelations(created.id, dto);
       return toJobPostDto(await this.requireJobPost(created.id));
     }
     return toJobPostDto(created);
@@ -142,11 +142,33 @@ export class JobPostsService {
     // undefined = form không đụng tới kỹ năng; mảng rỗng = cố ý xoá hết.
     // preferredSkillIds chỉ được ghi cùng skillIds (một khối) — client cũ chỉ
     // gửi skillIds sẽ xoá kỹ năng ưu tiên đã có (PLAN Job Matcher GĐ1 #6).
-    if (dto.skillIds) {
-      await this.jobPostRepository.setSkills(id, this.toSkillRows(dto.skillIds, dto.preferredSkillIds));
+    if (dto.skillIds || dto.majors) {
+      await this.writeRelations(id, dto);
       return toJobPostDto(await this.requireJobPost(id));
     }
     return toJobPostDto(updated);
+  }
+
+  /** Kỹ năng (kèm số năm) và ngành nằm ở bảng nối — ghi riêng, cùng một transaction. */
+  private async writeRelations(jobPostId: string, dto: UpdateJobPostRequest): Promise<void> {
+    if (dto.majors?.length) {
+      const existing = await this.jobPostRepository.findExistingMajorIds(dto.majors.map((major) => major.majorId));
+      if (existing.size !== dto.majors.length) {
+        throw new AppError(400, "One or more majors do not exist");
+      }
+    }
+    await this.prisma.$transaction(async (tx) => {
+      if (dto.skillIds) {
+        await this.jobPostRepository.setSkills(
+          jobPostId,
+          this.toSkillRows(dto.skillIds, dto.preferredSkillIds, dto.skillMinYears),
+          tx,
+        );
+      }
+      if (dto.majors) {
+        await this.jobPostRepository.setMajors(jobPostId, dto.majors, tx);
+      }
+    });
   }
 
   /** Hard delete, chỉ cho DRAFT — tin nháp chưa từng công khai nên không có hồ sơ ứng tuyển/hội thoại. */
@@ -363,16 +385,24 @@ export class JobPostsService {
     return data;
   }
 
-  /** skillIds → REQUIRED, preferredSkillIds → PREFERRED; trùng ở cả hai thì REQUIRED thắng. */
+  /**
+   * skillIds → REQUIRED, preferredSkillIds → PREFERRED; trùng ở cả hai thì REQUIRED thắng.
+   * Kỹ năng không có trong `skillMinYears` giữ số năm đang lưu (minYears undefined).
+   */
   private toSkillRows(
     skillIds: string[],
     preferredSkillIds: string[] | undefined,
-  ): { skillId: string; importance: "REQUIRED" | "PREFERRED" }[] {
+    skillMinYears: Record<string, number | null> | undefined,
+  ): { skillId: string; importance: "REQUIRED" | "PREFERRED"; minYears?: number | null }[] {
     const required = new Set(skillIds);
     const preferred = new Set((preferredSkillIds ?? []).filter((skillId) => !required.has(skillId)));
+    const withYears = (skillId: string, importance: "REQUIRED" | "PREFERRED") =>
+      skillMinYears && skillId in skillMinYears
+        ? { skillId, importance, minYears: skillMinYears[skillId] || null }
+        : { skillId, importance };
     return [
-      ...[...required].map((skillId) => ({ skillId, importance: "REQUIRED" as const })),
-      ...[...preferred].map((skillId) => ({ skillId, importance: "PREFERRED" as const })),
+      ...[...required].map((skillId) => withYears(skillId, "REQUIRED")),
+      ...[...preferred].map((skillId) => withYears(skillId, "PREFERRED")),
     ];
   }
 

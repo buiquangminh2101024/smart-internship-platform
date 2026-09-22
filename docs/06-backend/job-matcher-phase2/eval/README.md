@@ -65,7 +65,7 @@ Mở `labels.json` (sinh ở bước 2 nếu dùng `--label-sheet`, hoặc file 
 npm run eval-job-matching
 ```
 
-Cần dữ liệu đã seed (bước 2) và `labels.json` hợp lệ. Script tự báo lỗi kèm đúng id cặp nếu `labels.json` sai định dạng. Kết quả ghi vào `eval-results.md` (tự sinh, không sửa tay — chạy lại script để cập nhật).
+Cần dữ liệu đã seed (bước 2) và `labels.json` hợp lệ. Script tự báo lỗi kèm đúng id cặp nếu `labels.json` sai định dạng. Kết quả ghi vào `eval-results.md` (tự sinh, không sửa tay — chạy lại script để cập nhật). Cùng lượt chạy, script so thêm GĐ2 ↔ GĐ3 và ghi `docs/06-backend/job-matcher-phase3/eval/eval-results.md` (dữ liệu GĐ3: `confirmed-requirements.json` cùng thư mục đó).
 
 ## Sự cố thường gặp
 

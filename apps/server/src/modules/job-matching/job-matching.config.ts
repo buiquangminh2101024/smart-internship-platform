@@ -45,3 +45,11 @@ export const MAX_NEW_EMBEDDINGS_PER_REQUEST = 30;
 
 /** Tỉ lệ số năm tối thiểu để kinh nghiệm được xếp PARTIAL thay vì BELOW. */
 export const EXPERIENCE_PARTIAL_RATIO = 0.5;
+
+// GĐ3: điểm education khi ứng viên học ngành Employer xác nhận là "liên quan"
+// (RELATED) — giữa "khác ngành" (0) và "đúng ngành" (1). Bước 7 của
+// docs/06-backend/job-matcher-phase3/PLAN.md quét lưới {0.3, 0.5, 0.65, 0.8} trên
+// dev (7 cặp RELATED): 0.65 có ρ cao nhất nhưng cả lưới chỉ chênh 0.006, NDCG@3/FP
+// không đổi ⇒ giá trị không bị dữ liệu bác bỏ, chưa đủ căn cứ nói tốt hơn giá trị
+// lân cận. Kết quả: docs/06-backend/job-matcher-phase3/eval/eval-results.md.
+export const RELATED_MAJOR_SCORE = 0.65;

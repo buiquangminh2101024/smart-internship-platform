@@ -1,12 +1,24 @@
 import { Router } from "express";
-import { asClass, type AwilixContainer } from "awilix";
+import { asClass, asFunction, type AwilixContainer } from "awilix";
 import { authenticate } from "../../shared/middleware/authenticate";
 import { authorize } from "../../shared/middleware/authorize";
 import { validate } from "../../shared/middleware/validate";
+import type { Logger } from "../../shared/logger";
+import type { RequirementExtractor } from "../../shared/ports/RequirementExtractor";
+import { GeminiRequirementExtractor } from "../../infrastructure/gemini-requirement-extractor";
+import { OpenRouterRequirementExtractor } from "../../infrastructure/openrouter-requirement-extractor";
+import {
+  FallbackRequirementExtractor,
+  type RequirementExtractorTier,
+} from "../../infrastructure/fallback-requirement-extractor";
+import type { Cradle } from "../../container";
 import { JobPostRepository } from "./job-post.repository";
 import { JobPostsController } from "./job-posts.controller";
 import { JobPostsService } from "./job-posts.service";
+import { JobPostRequirementsService } from "./job-post-requirements.service";
+import { RequirementExtractionRateLimitService } from "./requirement-extraction-rate-limit.service";
 import {
+  confirmRequirementsSchema,
   createJobPostSchema,
   employerJobPostListQuerySchema,
   jobPostSearchQuerySchema,
@@ -21,6 +33,37 @@ import {
 // companies.routes.ts (xem PROJECT_STRUCTURE.md §5).
 export function jobPostsRouter(container: AwilixContainer): Router {
   container.register({
+    // Job Matcher GĐ3: Gemini chính → Gemini model khác (cùng key) → OpenRouter
+    // free, cùng thứ tự tầng với cvExtractor (cv.routes.ts).
+    geminiRequirementExtractor: asClass(GeminiRequirementExtractor).singleton(),
+    openRouterRequirementExtractor: asClass(OpenRouterRequirementExtractor).singleton(),
+    requirementExtractor: asFunction(
+      ({
+        geminiRequirementExtractor,
+        openRouterRequirementExtractor,
+        config,
+        logger,
+      }: {
+        geminiRequirementExtractor: RequirementExtractor;
+        openRouterRequirementExtractor: RequirementExtractor;
+        config: Cradle["config"];
+        logger: Logger;
+      }) => {
+        const tiers: RequirementExtractorTier[] = [
+          { name: `gemini:${config.GEMINI_MODEL}`, extractor: geminiRequirementExtractor },
+        ];
+        if (config.GEMINI_FALLBACK_MODEL) {
+          tiers.push({
+            name: `gemini:${config.GEMINI_FALLBACK_MODEL}`,
+            extractor: new GeminiRequirementExtractor({ config, logger }, config.GEMINI_FALLBACK_MODEL),
+          });
+        }
+        tiers.push({ name: "openrouter", extractor: openRouterRequirementExtractor });
+        return new FallbackRequirementExtractor({ tiers, logger });
+      },
+    ).singleton(),
+    requirementExtractionRateLimitService: asClass(RequirementExtractionRateLimitService).singleton(),
+    jobPostRequirementsService: asClass(JobPostRequirementsService).singleton(),
     jobPostRepository: asClass(JobPostRepository).singleton(),
     jobPostsService: asClass(JobPostsService).singleton(),
     jobPostsController: asClass(JobPostsController).singleton(),
@@ -63,6 +106,19 @@ export function jobPostsRouter(container: AwilixContainer): Router {
   router.post("/employer/job-posts/:id/close", ...employerGuard, (req, res, next) => {
     void resolveController().close(req, res, next);
   });
+  // Job Matcher GĐ3 — gọi LLM đồng bộ, có thể lâu khi rơi xuống tầng dự phòng
+  // (nginx nới timeout riêng cho route này).
+  router.post("/employer/job-posts/:id/requirements/extract", ...employerGuard, (req, res, next) => {
+    void resolveController().extractRequirements(req, res, next);
+  });
+  router.put(
+    "/employer/job-posts/:id/requirements",
+    ...employerGuard,
+    validate(confirmRequirementsSchema),
+    (req, res, next) => {
+      void resolveController().confirmRequirements(req, res, next);
+    },
+  );
 
   // ─── Admin ─────────────────────────────────────────────────────────────
   router.get("/admin/job-posts", ...adminGuard, validate(moderationQueueQuerySchema, "query"), (req, res, next) => {

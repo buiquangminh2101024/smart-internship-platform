@@ -1,17 +1,21 @@
 "use client";
 
 import { useRef, useState, type ReactNode } from "react";
-import { useForm, type Resolver } from "react-hook-form";
+import { useForm, useWatch, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import type { CreateJobPostRequest, JobPost } from "@sip/shared-types";
-import { useCities, useIndustries, useSkills } from "@/hooks/useCatalog";
+import type { ConfirmRequirementsRequest, CreateJobPostRequest, ExtractedJobRequirements, JobPost } from "@sip/shared-types";
+import { useCities, useIndustries, useMajors, useSkills } from "@/hooks/useCatalog";
+import { useConfirmJobRequirements, useExtractJobRequirements } from "@/hooks/useJobPosts";
 import { suggestSkill } from "@/lib/skills";
 import { SkillMultiSelect, type SelectedSkill } from "@/components/shared/SkillMultiSelect";
+import { MajorRequirementSelect, type SelectedMajor } from "@/components/employer/MajorRequirementSelect";
+import { RequirementExtractionPreview } from "@/components/employer/RequirementExtractionPreview";
 import {
   JOB_TYPE_OPTIONS,
   MAX_EXPIRY_DAYS,
   expiryInputToIso,
+  formatDate,
   maxExpiryInputValue,
   minExpiryInputValue,
   toDateInputValue,
@@ -20,6 +24,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Field } from "@/components/ui/Field";
+import { Icon } from "@/components/ui/Icon";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
@@ -117,6 +122,31 @@ function toDefaultValues(job: JobPost | undefined): FormValues {
   };
 }
 
+function toSelectedSkills(job: JobPost | undefined): SelectedSkill[] {
+  return (job?.skills ?? []).map((skill) => ({
+    id: skill.id,
+    name: skill.name,
+    status: skill.status,
+    importance: skill.importance,
+    minYears: skill.minYears,
+  }));
+}
+
+function toSelectedMajors(job: JobPost | undefined): SelectedMajor[] {
+  return (job?.majors ?? []).map((major) => ({ majorId: major.majorId, majorName: major.name, relevance: major.relevance }));
+}
+
+/** Nudge #1 (PLAN FE GĐ3 Quyết định #5): ví dụ mẫu cho thấy nên viết gì để AI/ứng viên đọc được. */
+const REQUIREMENTS_PLACEHOLDER = [
+  "VD:",
+  "- Sinh viên năm cuối ngành Công nghệ thông tin, Khoa học máy tính hoặc ngành liên quan",
+  "- Bắt buộc: ReactJS (tối thiểu 6 tháng), HTML/CSS, Git",
+  "- Ưu tiên: TypeScript, đã làm việc với REST API",
+  "- Tiếng Anh đọc hiểu tài liệu kỹ thuật",
+].join("\n");
+
+type TextSnapshot = { title: string; description: string; requirements: string };
+
 /**
  * Form tạo/sửa tin tuyển dụng — khớp ảnh mẫu
  * `Screenshot 2026-09-12 134041.png` (panel 2): 1 cột, 2 nhóm "Thông tin cơ
@@ -130,15 +160,9 @@ export function JobPostForm({ initial, saving = false, error, notice, onAction, 
   // state riêng, gom vào `skillIds` (Bắt buộc) / `preferredSkillIds` (Ưu tiên)
   // lúc submit. Skill PENDING employer vừa đề xuất cũng nằm trong danh sách này
   // và được gửi lên như skill thường.
-  const [skills, setSkills] = useState<SelectedSkill[]>(() =>
-    (initial?.skills ?? []).map((skill) => ({
-      id: skill.id,
-      name: skill.name,
-      status: skill.status,
-      importance: skill.importance,
-    })),
-  );
+  const [skills, setSkills] = useState<SelectedSkill[]>(() => toSelectedSkills(initial));
   const [skillsError, setSkillsError] = useState<string | null>(null);
+  const [majors, setMajors] = useState<SelectedMajor[]>(() => toSelectedMajors(initial));
   // Giữ song song với RHF (setValue đồng bộ) thay vì watch("isNegotiable") —
   // watch() trả về hàm không memo-hoá được, khiến React Compiler bỏ qua tối
   // ưu cho cả component (cảnh báo react-hooks/incompatible-library).
@@ -146,6 +170,24 @@ export function JobPostForm({ initial, saving = false, error, notice, onAction, 
   const { data: industries } = useIndustries();
   const { data: cities } = useCities();
   const { data: skillCatalog } = useSkills();
+  const { data: majorCatalog } = useMajors();
+
+  // ─── AI phân tích yêu cầu (Job Matcher GĐ3) — chỉ với tin nháp đã lưu ───
+  const jobPostId = initial?.id ?? "";
+  const canAnalyze = initial?.status === "DRAFT";
+  const extract = useExtractJobRequirements(jobPostId);
+  const confirm = useConfirmJobRequirements(jobPostId);
+  const [extraction, setExtraction] = useState<{ draft: ExtractedJobRequirements; key: number } | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [confirmedAt, setConfirmedAt] = useState(initial?.requirementsConfirmedAt ?? null);
+  // Nội dung chữ server đang có — backend phân tích bản ĐÃ LƯU, nên khác thì lưu trước.
+  const [savedText, setSavedText] = useState<TextSnapshot>({
+    title: initial?.title ?? "",
+    description: initial?.description ?? "",
+    requirements: initial?.requirements ?? "",
+  });
+  // Mô tả + yêu cầu lúc phân tích gần nhất (chỉ trong phiên này) — cho nudge "Phân tích lại".
+  const [lastAnalyzed, setLastAnalyzed] = useState<string | null>(null);
 
   // resolver chọn schema theo action lúc bấm nút (xem `handle`) — cùng một
   // useForm nhưng lưu nháp không bị áp các ràng buộc chỉ cần khi gửi duyệt.
@@ -158,11 +200,64 @@ export function JobPostForm({ initial, saving = false, error, notice, onAction, 
     register,
     handleSubmit,
     setValue,
+    control,
     formState: { errors },
   } = useForm<FormValues>({
     resolver,
     defaultValues: toDefaultValues(initial),
   });
+  const [title, description, requirements, minExperienceYears] = useWatch({
+    control,
+    name: ["title", "description", "requirements", "minExperienceYears"],
+  });
+  const analyzedTextChanged = lastAnalyzed !== null && lastAnalyzed !== `${description.trim()}\n${requirements.trim()}`;
+
+  async function analyze() {
+    setAiError(null);
+    const text: TextSnapshot = { title: title.trim(), description: description.trim(), requirements: requirements.trim() };
+    if (!text.title || !text.description) {
+      setAiError("Cần có tiêu đề và mô tả công việc trước khi phân tích.");
+      return;
+    }
+    const dirty =
+      text.title !== savedText.title || text.description !== savedText.description || text.requirements !== savedText.requirements;
+    try {
+      const draft = await extract.mutateAsync(dirty ? text : undefined);
+      if (dirty) setSavedText(text);
+      setLastAnalyzed(`${text.description}\n${text.requirements}`);
+      // key mới ⇒ bảng xem trước dựng lại từ kết quả mới (bỏ chỉnh sửa của lần trước).
+      setExtraction((prev) => ({ draft, key: (prev?.key ?? 0) + 1 }));
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "Không phân tích được, vui lòng thử lại.");
+    }
+  }
+
+  async function applyRequirements(payload: ConfirmRequirementsRequest) {
+    const job = await confirm.mutateAsync(payload);
+    // Đồng bộ lại form theo đúng dữ liệu đã lưu để lần "Lưu nháp" sau không ghi đè ngược.
+    setSkills(toSelectedSkills(job));
+    setMajors(toSelectedMajors(job));
+    setValue("minExperienceYears", job.minExperienceYears != null ? String(job.minExperienceYears) : "");
+    setConfirmedAt(job.requirementsConfirmedAt);
+    setSkillsError(null);
+    setExtraction(null);
+  }
+
+  // Nudge #2: chỉ báo độ đầy đủ, KHÔNG chặn lưu/gửi duyệt.
+  const skillsWithYears = skills.filter((skill) => skill.minYears != null).length;
+  const completeness = [
+    { done: skills.length > 0, label: skills.length > 0 ? `${skills.length} kỹ năng` : "Chưa có kỹ năng" },
+    {
+      done: skillsWithYears > 0,
+      label: `${skillsWithYears}/${skills.length} kỹ năng có số năm yêu cầu`,
+    },
+    { done: majors.length > 0, label: majors.length > 0 ? `${majors.length} ngành phù hợp` : "Ngành phù hợp: chưa chọn" },
+    {
+      done: confirmedAt !== null,
+      label: confirmedAt ? `Đã xác nhận yêu cầu (${formatDate(confirmedAt)})` : "Chưa xác nhận yêu cầu bằng AI",
+    },
+  ];
+  const missing = completeness.filter((item) => !item.done).length;
 
   function setNegotiable(value: boolean) {
     setIsNegotiable(value);
@@ -192,6 +287,9 @@ export function JobPostForm({ initial, saving = false, error, notice, onAction, 
       // Luôn gửi cả hai danh sách — backend ghi kỹ năng thành một khối.
       skillIds: skills.filter((skill) => skill.importance !== "PREFERRED").map((skill) => skill.id),
       preferredSkillIds: skills.filter((skill) => skill.importance === "PREFERRED").map((skill) => skill.id),
+      // Gửi đủ mọi kỹ năng (null = không yêu cầu riêng) để xoá được số đã lưu.
+      skillMinYears: Object.fromEntries(skills.map((skill) => [skill.id, skill.minYears ?? null])),
+      majors: majors.map((major) => ({ majorId: major.majorId, relevance: major.relevance })),
       // null khi để trống để xoá được yêu cầu đã lưu trước đó.
       minExperienceYears: values.minExperienceYears ? Number(values.minExperienceYears) : null,
       ...(values.isNegotiable
@@ -323,10 +421,66 @@ export function JobPostForm({ initial, saving = false, error, notice, onAction, 
         />
         <Textarea
           label="Yêu cầu ứng viên"
-          rows={5}
-          placeholder="Sinh viên năm cuối hoặc mới tốt nghiệp."
+          rows={6}
+          hint="Ghi rõ kỹ năng bắt buộc/ưu tiên, số năm kinh nghiệm và ngành học phù hợp để hệ thống gợi ý ứng viên chính xác hơn."
+          placeholder={REQUIREMENTS_PLACEHOLDER}
           {...register("requirements")}
         />
+        <div className="grid gap-3 rounded-lg border border-border-subtle bg-surface-page p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="flex items-center gap-2 text-sm font-medium text-text-strong">
+              <Icon name="sparkles" size={16} className="text-pine-700" />
+              Yêu cầu có cấu trúc
+              <span className="font-normal text-text-muted">
+                {missing === 0 ? "— đầy đủ" : `— còn ${missing} mục có thể bổ sung (không bắt buộc)`}
+              </span>
+            </p>
+            {canAnalyze ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                icon="sparkles"
+                loading={extract.isPending}
+                disabled={saving || confirm.isPending}
+                onClick={() => void analyze()}
+              >
+                Phân tích yêu cầu bằng AI
+              </Button>
+            ) : null}
+          </div>
+          <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+            {completeness.map((item) => (
+              <li key={item.label} className={`flex items-center gap-1 ${item.done ? "text-success-700" : "text-text-muted"}`}>
+                <Icon name={item.done ? "circle-check" : "circle-dashed"} size={13} />
+                {item.label}
+              </li>
+            ))}
+          </ul>
+          {canAnalyze ? (
+            <p className="text-xs text-text-muted">
+              AI đọc tiêu đề, mô tả và yêu cầu để gợi ý kỹ năng, số năm và ngành học — bạn xem lại trước khi áp dụng.
+              Nội dung vừa sửa sẽ được lưu nháp trước khi phân tích.
+            </p>
+          ) : !initial ? (
+            <p className="text-xs text-text-muted">Lưu nháp tin trước để dùng AI phân tích yêu cầu.</p>
+          ) : null}
+          {extract.isPending ? (
+            <p className="text-xs text-text-muted">Đang phân tích, có thể mất tới vài chục giây…</p>
+          ) : null}
+          {analyzedTextChanged && canAnalyze && !extract.isPending ? (
+            <div className="flex flex-wrap items-center gap-2 text-sm text-marigold-700">
+              <Icon name="info" size={15} />
+              Bạn đã sửa mô tả/yêu cầu kể từ lần phân tích gần nhất.
+              <Button type="button" size="sm" variant="link" icon="refresh-cw" disabled={saving} onClick={() => void analyze()}>
+                Phân tích lại
+              </Button>
+            </div>
+          ) : null}
+          {aiError ? (
+            <p className="text-sm text-red-600">{aiError} Bạn vẫn có thể nhập kỹ năng, số năm và ngành học bằng tay bên dưới.</p>
+          ) : null}
+        </div>
         <Textarea
           label="Quyền lợi"
           rows={5}
@@ -335,7 +489,7 @@ export function JobPostForm({ initial, saving = false, error, notice, onAction, 
         />
         <SkillMultiSelect
           label="Kỹ năng yêu cầu"
-          hint="Bắt buộc ít nhất 1 kỹ năng trước khi xem trước/gửi duyệt. Kỹ năng mới thêm là Bắt buộc — bấm nhãn trên kỹ năng để đổi sang Ưu tiên. Không tìm thấy kỹ năng cần tuyển? Gõ tên rồi bấm Thêm — kỹ năng mới sẽ được quản trị viên duyệt trước khi vào danh mục chung."
+          hint="Bắt buộc ít nhất 1 kỹ năng trước khi xem trước/gửi duyệt. Kỹ năng mới thêm là Bắt buộc — bấm nhãn trên kỹ năng để đổi sang Ưu tiên. Ô “≥ … năm” là số năm tối thiểu cho riêng kỹ năng đó, để trống nếu không yêu cầu. Không tìm thấy kỹ năng cần tuyển? Gõ tên rồi bấm Thêm — kỹ năng mới sẽ được quản trị viên duyệt trước khi vào danh mục chung."
           selected={skills}
           catalog={skillCatalog ?? []}
           disabled={saving}
@@ -346,6 +500,9 @@ export function JobPostForm({ initial, saving = false, error, notice, onAction, 
           onRemove={(skillId) => setSkills((prev) => prev.filter((skill) => skill.id !== skillId))}
           onChangeImportance={(skillId, importance) =>
             setSkills((prev) => prev.map((skill) => (skill.id === skillId ? { ...skill, importance } : skill)))
+          }
+          onChangeMinYears={(skillId, minYears) =>
+            setSkills((prev) => prev.map((skill) => (skill.id === skillId ? { ...skill, minYears } : skill)))
           }
           onSuggestNew={(name) => suggestSkill("employer", name)}
         />
@@ -361,7 +518,36 @@ export function JobPostForm({ initial, saving = false, error, notice, onAction, 
           error={errors.minExperienceYears?.message}
           {...register("minExperienceYears")}
         />
+        <MajorRequirementSelect
+          hint="Tuỳ chọn. “Đúng ngành” là ngành tin nhắm tới; “Ngành liên quan” vẫn được chấp nhận nhưng tính điểm phù hợp thấp hơn. Để trống nếu không yêu cầu ngành."
+          selected={majors}
+          catalog={majorCatalog ?? []}
+          disabled={saving}
+          onAdd={(major) => setMajors((prev) => [...prev, major])}
+          onRemove={(majorId) => setMajors((prev) => prev.filter((major) => major.majorId !== majorId))}
+          onChangeRelevance={(majorId, relevance) =>
+            setMajors((prev) => prev.map((major) => (major.majorId === majorId ? { ...major, relevance } : major)))
+          }
+        />
       </Card>
+
+      {extraction ? (
+        <RequirementExtractionPreview
+          key={extraction.key}
+          draft={extraction.draft}
+          current={{
+            skills,
+            majors,
+            minExperienceYears: minExperienceYears ? Number(minExperienceYears) || null : null,
+          }}
+          skillCatalog={skillCatalog ?? []}
+          majorCatalog={majorCatalog ?? []}
+          onApply={applyRequirements}
+          onCancel={() => setExtraction(null)}
+          onReanalyze={() => void analyze()}
+          reanalyzing={extract.isPending}
+        />
+      ) : null}
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
 

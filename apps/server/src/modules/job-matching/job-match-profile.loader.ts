@@ -22,8 +22,9 @@ export class JobMatchProfileLoader {
         description: true,
         skills: {
           where: { skill: { status: "APPROVED" } },
-          select: { importance: true, skill: { select: { id: true, name: true } } },
+          select: { importance: true, minYears: true, skill: { select: { id: true, name: true } } },
         },
+        majors: { select: { relevance: true, major: { select: { id: true, name: true } } } },
       },
     });
     if (!jobPost) return null;
@@ -32,11 +33,13 @@ export class JobMatchProfileLoader {
       skillId: link.skill.id,
       name: link.skill.name,
       importance: link.importance,
+      minYears: link.minYears,
     }));
     return {
       jobPostId: jobPost.id,
       skills,
       minExperienceYears: jobPost.minExperienceYears,
+      majors: jobPost.majors.map((link) => ({ majorId: link.major.id, name: link.major.name, relevance: link.relevance })),
       matchText: buildJobMatchText({
         title: jobPost.title,
         requirements: jobPost.requirements,

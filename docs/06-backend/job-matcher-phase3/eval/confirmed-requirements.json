@@ -1,0 +1,85 @@
+{
+  "description": "Yêu cầu có cấu trúc 'Employer đã xác nhận' cho các tin demo GĐ2, dùng cho cấu hình GĐ3 của apps/server/scripts/eval-job-matching.ts. Chỉ áp trong bộ nhớ lúc đánh giá, không ghi DB. Quy tắc (chốt TRƯỚC khi chạy, không nhìn nhãn/điểm): (1) chỉ gắn ngành khi requirements của tin nêu tên ngành; ngành nêu tên ⇒ PRIMARY, dùng tên ngành chuẩn trong Danh mục ngành đào tạo của Bộ GD&ĐT; (2) chỉ khi tin viết 'hoặc ngành gần' mới thêm RELATED = các ngành khác cùng nhóm ngành cấp III của Bộ GD&ĐT với một ngành PRIMARY (vd. 748 Máy tính và CNTT, 73401 Kinh doanh, 7320 Báo chí và thông tin, 7460 Toán và thống kê); (3) skillMinYears chỉ ghi khi văn bản tin nêu số năm cho riêng kỹ năng đó — không tin demo nào nêu, nên để trống.",
+  "jobs": [
+    {
+      "jobTitle": "Thực tập sinh Frontend Web",
+      "evidence": "SV năm 3-4 CNTT hoặc ngành gần",
+      "majors": [
+        { "name": "Công nghệ thông tin", "relevance": "PRIMARY" },
+        { "name": "Khoa học máy tính", "relevance": "RELATED" },
+        { "name": "Kỹ thuật phần mềm", "relevance": "RELATED" },
+        { "name": "Hệ thống thông tin", "relevance": "RELATED" },
+        { "name": "Kỹ thuật máy tính", "relevance": "RELATED" },
+        { "name": "An toàn thông tin", "relevance": "RELATED" }
+      ],
+      "skillMinYears": {}
+    },
+    {
+      "jobTitle": "Thực tập sinh Java Backend",
+      "evidence": "SV CNTT, Kỹ thuật phần mềm hoặc ngành gần",
+      "majors": [
+        { "name": "Công nghệ thông tin", "relevance": "PRIMARY" },
+        { "name": "Kỹ thuật phần mềm", "relevance": "PRIMARY" },
+        { "name": "Khoa học máy tính", "relevance": "RELATED" },
+        { "name": "Hệ thống thông tin", "relevance": "RELATED" },
+        { "name": "Kỹ thuật máy tính", "relevance": "RELATED" },
+        { "name": "An toàn thông tin", "relevance": "RELATED" }
+      ],
+      "skillMinYears": {}
+    },
+    {
+      "jobTitle": "Thực tập sinh Data & AI",
+      "evidence": "Phù hợp SV Khoa học dữ liệu, AI hoặc ngành gần",
+      "majors": [
+        { "name": "Khoa học dữ liệu", "relevance": "PRIMARY" },
+        { "name": "Trí tuệ nhân tạo", "relevance": "PRIMARY" },
+        { "name": "Toán học", "relevance": "RELATED" },
+        { "name": "Toán ứng dụng", "relevance": "RELATED" },
+        { "name": "Thống kê", "relevance": "RELATED" },
+        { "name": "Khoa học máy tính", "relevance": "RELATED" },
+        { "name": "Công nghệ thông tin", "relevance": "RELATED" },
+        { "name": "Kỹ thuật phần mềm", "relevance": "RELATED" },
+        { "name": "Hệ thống thông tin", "relevance": "RELATED" },
+        { "name": "Kỹ thuật máy tính", "relevance": "RELATED" }
+      ],
+      "skillMinYears": {}
+    },
+    {
+      "jobTitle": "Thực tập sinh Content Marketing",
+      "evidence": "SV Marketing, Truyền thông hoặc ngành gần",
+      "majors": [
+        { "name": "Marketing", "relevance": "PRIMARY" },
+        { "name": "Truyền thông đa phương tiện", "relevance": "PRIMARY" },
+        { "name": "Truyền thông đại chúng", "relevance": "PRIMARY" },
+        { "name": "Quản trị kinh doanh", "relevance": "RELATED" },
+        { "name": "Thương mại điện tử", "relevance": "RELATED" },
+        { "name": "Kinh doanh quốc tế", "relevance": "RELATED" },
+        { "name": "Báo chí", "relevance": "RELATED" },
+        { "name": "Quan hệ công chúng", "relevance": "RELATED" }
+      ],
+      "skillMinYears": {}
+    },
+    {
+      "jobTitle": "Thực tập sinh Kế toán",
+      "evidence": "SV Kế toán, Kiểm toán hoặc Tài chính",
+      "majors": [
+        { "name": "Kế toán", "relevance": "PRIMARY" },
+        { "name": "Kiểm toán", "relevance": "PRIMARY" },
+        { "name": "Tài chính - Ngân hàng", "relevance": "PRIMARY" }
+      ],
+      "skillMinYears": {}
+    },
+    {
+      "jobTitle": "Thực tập sinh Digital Marketing",
+      "evidence": "SV Marketing, Thương mại điện tử hoặc ngành gần",
+      "majors": [
+        { "name": "Marketing", "relevance": "PRIMARY" },
+        { "name": "Thương mại điện tử", "relevance": "PRIMARY" },
+        { "name": "Quản trị kinh doanh", "relevance": "RELATED" },
+        { "name": "Kinh doanh quốc tế", "relevance": "RELATED" },
+        { "name": "Kinh doanh thương mại", "relevance": "RELATED" }
+      ],
+      "skillMinYears": {}
+    }
+  ]
+}
