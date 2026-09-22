@@ -5,3 +5,9 @@ export interface MatchWeights {
   version: string;
   weights: Record<MatchComponentKey, number>;
 }
+
+/** Khoảng cosine được kéo giãn về 0..1 cho thành phần semantic; cần hi > lo. */
+export interface SemanticCalibration {
+  lo: number;
+  hi: number;
+}

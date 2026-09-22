@@ -80,7 +80,7 @@ app.use("/api", educationCatalogRouter(container));
 app.use("/api", cvRouter(container));
 app.use("/api", savedJobsRouter(container));
 app.use("/api", applicationsRouter(container));
-// Sau skillsRouter: GĐ2 sẽ dùng skillEmbeddingService do router đó đăng ký.
+// Sau skillsRouter: Job Matcher GĐ2 dùng skillEmbeddingService do router đó đăng ký.
 app.use("/api", jobMatchingRouter(container));
 
 app.use("/api/conversations", messagingRoutes(container));

@@ -345,6 +345,7 @@ model Candidate {
   savedJobs       SavedJob[]
   applications    Application[]
   conversations   Conversation[]
+  matchEmbedding  CandidateEmbedding?
 
   @@map("candidates")
 }
@@ -648,6 +649,7 @@ model JobPost {
   savedBy           SavedJob[]
   conversations     Conversation[]
   skills            JobPostSkill[]
+  matchEmbedding    JobPostEmbedding?
 
   @@map("job_posts")
 }
@@ -669,6 +671,36 @@ model JobPostSkill {
 
   @@id([jobPostId, skillId])
   @@map("job_post_skills")
+}
+
+// Vector embedding của hồ sơ / tin cho Job Matcher GĐ2 (thành phần `semantic`,
+// xem docs/06-backend/job-matcher-phase2/PLAN.md). Bảng riêng, không thêm cột vào
+// Candidate/JobPost: hai model đó dùng rất rộng, và cascade xoá sạch khi xoá
+// hồ sơ/tin. Cột vector chỉ đọc/ghi được qua $queryRaw/$executeRaw (như
+// Skill.embedding) — xem match-embedding.repository.ts.
+model CandidateEmbedding {
+  candidateId     String                     @id
+  candidate       Candidate                  @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  embedding       Unsupported("vector(384)")
+  // sha256(templateVersion|modelId|văn bản) — khác hash ⇒ tính lại lúc xem điểm lần sau.
+  contentHash     String
+  model           String
+  templateVersion Int
+  embeddedAt      DateTime                   @default(now())
+
+  @@map("candidate_embeddings")
+}
+
+model JobPostEmbedding {
+  jobPostId       String                     @id
+  jobPost         JobPost                    @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  embedding       Unsupported("vector(384)")
+  contentHash     String
+  model           String
+  templateVersion Int
+  embeddedAt      DateTime                   @default(now())
+
+  @@map("job_post_embeddings")
 }
 
 model JobPostModerationAction {

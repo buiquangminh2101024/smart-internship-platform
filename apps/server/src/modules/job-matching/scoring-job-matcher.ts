@@ -7,25 +7,33 @@ import type {
   MatchSkillEvidence,
 } from "@sip/shared-types";
 import type { JobMatcher, MatchInput } from "../../shared/ports/JobMatcher";
-import { EXPERIENCE_PARTIAL_RATIO } from "./job-matching.config";
-import type { MatchWeights } from "./job-matching.types";
+import { EXPERIENCE_PARTIAL_RATIO, SEMANTIC_CALIBRATION } from "./job-matching.config";
+import type { MatchWeights, SemanticCalibration } from "./job-matching.types";
 
 const COMPONENT_ORDER: MatchComponentKey[] = ["requiredSkills", "preferredSkills", "experience", "education", "semantic"];
+
+const SEMANTIC_PENDING_NOTE = "Lần này chưa tính được mức tương đồng nội dung — điểm chỉ dựa trên kỹ năng và kinh nghiệm.";
 
 /**
  * Bộ chấm điểm duy nhất của Job Matcher — mỗi cấu hình (rule / hybrid …) chỉ
  * là một bảng trọng số khác. Hàm thuần, đồng bộ. Công thức: PLAN GĐ1 mục
- * "Công thức chấm điểm (rule-v1)".
+ * "Công thức chấm điểm (rule-v1)"; thành phần semantic: PLAN GĐ2.
  */
 export class ScoringJobMatcher implements JobMatcher {
   private readonly config: MatchWeights;
+  private readonly calibration: SemanticCalibration;
 
-  constructor(config: MatchWeights) {
+  constructor(config: MatchWeights, calibration: SemanticCalibration = SEMANTIC_CALIBRATION) {
+    if (!(calibration.hi > calibration.lo)) {
+      throw new Error(`SemanticCalibration cần hi > lo (lo=${calibration.lo}, hi=${calibration.hi})`);
+    }
     this.config = config;
+    this.calibration = calibration;
   }
 
   match(input: MatchInput): MatchResult {
     const { candidate, job } = input;
+    const weights = this.config.weights;
     const candidateSkills = new Map(candidate.skills.map((skill) => [skill.skillId, skill]));
 
     const skills: MatchSkillEvidence[] = [...job.skills]
@@ -50,6 +58,11 @@ export class ScoringJobMatcher implements JobMatcher {
     const preferred = skills.filter((skill) => skill.importance === "PREFERRED");
     const experience = this.experienceEvidence(job.minExperienceYears, candidate.totalExperienceYears);
 
+    // Cấu hình không dùng semantic (rule) bỏ qua cosine hoàn toàn ⇒ kết quả y hệt GĐ1.
+    const semanticEnabled = weights.semantic > 0;
+    const similarity = semanticEnabled ? input.semanticSimilarity : null;
+    const semanticScore = similarity === null ? null : this.normalizeSimilarity(similarity);
+
     const rawScores: Record<MatchComponentKey, number | null> = {
       requiredSkills: required.length > 0 ? matchedRatio(required) : null,
       preferredSkills: preferred.length > 0 ? matchedRatio(preferred) : null,
@@ -57,12 +70,11 @@ export class ScoringJobMatcher implements JobMatcher {
         experience.requiredYears !== null && experience.candidateYears !== null
           ? Math.min(1, experience.candidateYears / experience.requiredYears)
           : null,
-      // GĐ3 mới chấm học vấn; semantic do GĐ2 bổ sung.
+      // GĐ3 mới chấm học vấn.
       education: null,
-      semantic: null,
+      semantic: semanticScore,
     };
 
-    const weights = this.config.weights;
     const applicableWeight = COMPONENT_ORDER.reduce(
       (sum, key) => (rawScores[key] !== null ? sum + weights[key] : sum),
       0,
@@ -86,7 +98,12 @@ export class ScoringJobMatcher implements JobMatcher {
       components,
       skills,
       experience,
-      semantic: { enabled: weights.semantic > 0, available: false, similarity: null, normalized: null },
+      semantic: {
+        enabled: semanticEnabled,
+        available: semanticScore !== null,
+        similarity,
+        normalized: semanticScore,
+      },
     };
 
     // Thứ tự kiểm tra: hồ sơ trước, tin sau (PLAN GĐ1).
@@ -103,17 +120,29 @@ export class ScoringJobMatcher implements JobMatcher {
         ...base,
         status: "INSUFFICIENT_JOB_DATA",
         score: null,
-        notes: ["Tin chưa có kỹ năng đã duyệt hay yêu cầu kinh nghiệm nên chưa tính được mức phù hợp."],
+        notes: [
+          // Cấu hình chỉ có semantic (bộ đánh giá) mà thiếu cosine: lý do không nằm ở tin.
+          COMPONENT_ORDER.every((key) => key === "semantic" || weights[key] === 0)
+            ? "Chưa tính được mức tương đồng nội dung nên chưa tính được mức phù hợp."
+            : "Tin chưa có kỹ năng đã duyệt hay yêu cầu kinh nghiệm nên chưa tính được mức phù hợp.",
+        ],
       };
     }
 
     const total = components.reduce((sum, component) => sum + component.effectiveWeight * (component.score ?? 0), 0);
-    return {
-      ...base,
-      status: "SCORED",
-      score: Math.round(100 * total),
-      notes: this.notes(required, preferred, experience, confidence),
-    };
+    const notes = this.notes(required, preferred, experience, confidence);
+    if (semanticScore !== null) {
+      notes.push(`Mức tương đồng nội dung giữa hồ sơ và tin (so bằng mô hình ngôn ngữ): ${Math.round(100 * semanticScore)}/100.`);
+    } else if (semanticEnabled) {
+      notes.push(SEMANTIC_PENDING_NOTE);
+    }
+    return { ...base, status: "SCORED", score: Math.round(100 * total), notes };
+  }
+
+  /** clamp((cosine − lo) / (hi − lo), 0, 1) — cosine thô của model hiếm khi ra ngoài 0.2–0.9. */
+  private normalizeSimilarity(similarity: number): number {
+    const { lo, hi } = this.calibration;
+    return Math.min(1, Math.max(0, (similarity - lo) / (hi - lo)));
   }
 
   private experienceEvidence(requiredYears: number | null, candidateYears: number | null): MatchExperienceEvidence {
@@ -180,6 +209,18 @@ export class ScoringJobMatcher implements JobMatcher {
     }
     return notes;
   }
+}
+
+/**
+ * Kết quả rule-v1 dùng thay hybrid khi thiếu cosine (PLAN GĐ2 quyết định #5):
+ * giữ nguyên điểm và weightsVersion, chỉ báo rằng semantic đang bật nhưng chưa có.
+ */
+export function markSemanticPending(result: MatchResult): MatchResult {
+  return {
+    ...result,
+    semantic: { enabled: true, available: false, similarity: null, normalized: null },
+    notes: result.status === "SCORED" ? [...result.notes, SEMANTIC_PENDING_NOTE] : result.notes,
+  };
 }
 
 function matchedRatio(skills: MatchSkillEvidence[]): number {

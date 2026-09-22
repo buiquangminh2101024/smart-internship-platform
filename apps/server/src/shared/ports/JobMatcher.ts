@@ -20,6 +20,8 @@ export interface CandidateMatchProfile {
     hasEducation: boolean;
     hasHeadlineOrBio: boolean;
   };
+  /** Văn bản đưa vào model embedding (GĐ2, match-text.builder); bộ chấm điểm không đọc. Rỗng ⇒ không có semantic. */
+  matchText: string;
 }
 
 export interface JobMatchProfile {
@@ -28,12 +30,14 @@ export interface JobMatchProfile {
   skills: { skillId: string; name: string; importance: SkillImportance }[];
   /** null = không yêu cầu. */
   minExperienceYears: number | null;
+  /** Văn bản đưa vào model embedding (GĐ2, match-text.builder); bộ chấm điểm không đọc. */
+  matchText: string;
 }
 
 export interface MatchInput {
   candidate: CandidateMatchProfile;
   job: JobMatchProfile;
-  /** Cosine giữa vector hồ sơ và vector tin (GĐ2); GĐ1 luôn null. */
+  /** Cosine thô giữa vector hồ sơ và vector tin (GĐ2); null = chưa có. Cấu hình không có trọng số semantic bỏ qua giá trị này. */
   semanticSimilarity: number | null;
 }
 

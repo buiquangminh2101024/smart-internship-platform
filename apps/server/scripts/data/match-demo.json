@@ -1,0 +1,1735 @@
+{
+    "extraSkills": [
+        "HTML",
+        "CSS",
+        "Vue.js",
+        "Next.js",
+        "Docker",
+        "Git",
+        "PostgreSQL",
+        "C#",
+        ".NET",
+        "Flutter",
+        "Kotlin",
+        "Machine Learning",
+        "Pandas",
+        "Power BI",
+        "Selenium",
+        "Manual Testing",
+        "Content Marketing",
+        "SEO",
+        "Google Analytics",
+        "Facebook Ads",
+        "Copywriting",
+        "Email Marketing",
+        "Excel",
+        "Kế toán tổng hợp",
+        "MISA",
+        "Phân tích tài chính",
+        "Báo cáo tài chính",
+        "Photoshop",
+        "Illustrator",
+        "UI/UX Design",
+        "Tiếng Anh giao tiếp",
+        "Làm việc nhóm",
+        "Thuyết trình",
+        "ReactJS",
+        "NodeJS",
+        "JS",
+        "MS SQL Server"
+    ],
+    "jobs": [
+        {
+            "title": "Thực tập sinh Frontend Web",
+            "description": "Tham gia dựng giao diện cho các màn hình quản trị và trang web nội bộ, phối hợp với backend để tích hợp API.",
+            "requirements": "SV năm 3-4 CNTT hoặc ngành gần; đã làm giao diện web; biết làm việc với API và có tinh thần học hỏi.",
+            "minExperienceYears": null,
+            "hardCase": "adjacent-field",
+            "split": "dev",
+            "skills": [
+                {
+                    "name": "React",
+                    "importance": "REQUIRED"
+                },
+                {
+                    "name": "JavaScript",
+                    "importance": "REQUIRED"
+                },
+                {
+                    "name": "HTML",
+                    "importance": "PREFERRED"
+                },
+                {
+                    "name": "CSS",
+                    "importance": "PREFERRED"
+                },
+                {
+                    "name": "Git",
+                    "importance": "PREFERRED"
+                }
+            ]
+        },
+        {
+            "title": "Thực tập sinh Frontend Product",
+            "description": "Hỗ trợ phát triển các màn hình sản phẩm, cải thiện trải nghiệm người dùng và chuyển thiết kế thành giao diện có thể sử dụng.",
+            "requirements": "Ưu tiên SV có dự án web cá nhân hoặc đồ án; hiểu component và responsive; biết đọc thiết kế là lợi thế.",
+            "minExperienceYears": 0.5,
+            "split": "dev",
+            "skills": [
+                {
+                    "name": "TypeScript",
+                    "importance": "REQUIRED"
+                },
+                {
+                    "name": "React",
+                    "importance": "REQUIRED"
+                },
+                {
+                    "name": "Figma",
+                    "importance": "PREFERRED"
+                },
+                {
+                    "name": "UI/UX Design",
+                    "importance": "PREFERRED"
+                },
+                {
+                    "name": "Git",
+                    "importance": "PREFERRED"
+                }
+            ]
+        },
+        {
+            "title": "Thực tập sinh Backend Node TypeScript",
+            "description": "Tham gia xây dựng API cho hệ thống quản lý nghiệp vụ, xử lý dữ liệu và kết nối các dịch vụ nội bộ.",
+            "requirements": "Biết lập trình backend; từng làm API hoặc đồ án có server; hiểu cơ bản về cơ sở dữ liệu và xử lý bất đồng bộ.",
+            "minExperienceYears": null,
+            "split": "dev",
+            "skills": [
+                {
+                    "name": "Node.js",
+                    "importance": "REQUIRED"
+                },
+                {
+                    "name": "TypeScript",
+                    "importance": "REQUIRED"
+                },
+                {
+                    "name": "Express",
+                    "importance": "PREFERRED"
+                },
+                {
+                    "name": "PostgreSQL",
+                    "importance": "PREFERRED"
+                },
+                {
+                    "name": "Redis",
+                    "importance": "PREFERRED"
+                }
+            ]
+        },
+        {
+            "title": "Thực tập sinh Java Backend",
+            "description": "Hỗ trợ nhóm phát triển các API nghiệp vụ, viết truy vấn và tham gia kiểm thử các chức năng phía máy chủ.",
+            "requirements": "SV CNTT, Kỹ thuật phần mềm hoặc ngành gần; nắm Java cơ bản; có đồ án backend là lợi thế.",
+            "minExperienceYears": null,
+            "split": "dev",
+            "skills": [
+                {
+                    "name": "Java",
+                    "importance": "REQUIRED"
+                },
+                {
+                    "name": "Spring Boot",
+                    "importance": "REQUIRED"
+                },
+                {
+                    "name": "SQL",
+                    "importance": "PREFERRED"
+                },
+                {
+                    "name": "MariaDB",
+                    "importance": "PREFERRED"
+                },
+                {
+                    "name": "Git",
+                    "importance": "PREFERRED"
+                }
+            ]
+        },
+        {
+            "title": "Thực tập sinh Data & AI",
+            "description": "Hỗ trợ làm sạch dữ liệu, xây dựng thử nghiệm mô hình và trực quan hóa kết quả cho một số bài toán nội bộ.",
+            "requirements": "Phù hợp SV Khoa học dữ liệu, AI hoặc ngành gần; có nền tảng Python; biết xử lý dữ liệu và đọc tài liệu kỹ thuật.",
+            "minExperienceYears": 0.5,
+            "split": "dev",
+            "skills": [
+                {
+                    "name": "Python",
+                    "importance": "REQUIRED"
+                },
+                {
+                    "name": "Pandas",
+                    "importance": "REQUIRED"
+                },
+                {
+                    "name": "Machine Learning",
+                    "importance": "PREFERRED"
+                },  
+                {
+                    "name": "SQL",
+                    "importance": "PREFERRED"
+                },
+                {
+                    "name": "Power BI",
+                    "importance": "PREFERRED"
+                }
+            ]
+        },
+        {
+            "title": "Thực tập sinh QA Automation",
+            "description": "Tham gia kiểm thử chức năng web, ghi nhận lỗi và hỗ trợ xây dựng bộ kiểm thử tự động cho các luồng ổn định.",
+            "requirements": "Có tư duy kiểm thử, cẩn thận; từng thực hành test web hoặc API; biết viết kịch bản tự động là điểm cộng.",
+            "minExperienceYears": null,
+            "hardCase": "abbreviated-jd",
+            "split": "dev",
+            "skills": [
+                {
+                    "name": "Manual Testing",
+                    "importance": "REQUIRED"
+                },
+                {
+                    "name": "Selenium",
+                    "importance": "PREFERRED"
+                },
+                {
+                    "name": "JavaScript",
+                    "importance": "PREFERRED"
+                },
+                {
+                    "name": "SQL",
+                    "importance": "PREFERRED"
+                },
+                {
+                    "name": "Giao tiếp",
+                    "importance": "PREFERRED"
+                }
+            ]
+        },
+        {
+            "title": "Thực tập sinh Content Marketing",
+            "description": "Hỗ trợ lên ý tưởng nội dung cho các kênh trực tuyến, viết bài ngắn và theo dõi hiệu quả từng nhóm nội dung.",
+            "requirements": "SV Marketing, Truyền thông hoặc ngành gần; viết tiếng Việt tốt; biết tìm hiểu khách hàng và theo dõi số liệu cơ bản.",
+            "minExperienceYears": null,
+            "split": "test",
+            "skills": [
+                {
+                    "name": "Content Marketing",
+                    "importance": "REQUIRED"
+                },
+                {
+                    "name": "Copywriting",
+                    "importance": "REQUIRED"
+                },
+                {
+                    "name": "SEO",
+                    "importance": "PREFERRED"
+                },
+                {
+                    "name": "Google Analytics",
+                    "importance": "PREFERRED"
+                },
+                {
+                    "name": "Thuyết trình",
+                    "importance": "PREFERRED"
+                }
+            ]
+        },
+        {
+            "title": "Thực tập sinh Kế toán",
+            "description": "Hỗ trợ nhập liệu, đối chiếu chứng từ và chuẩn bị bảng tổng hợp phục vụ công việc kế toán định kỳ.",
+            "requirements": "SV Kế toán, Kiểm toán hoặc Tài chính; cẩn thận với số liệu; biết Excel; ưu tiên đã học kế toán thực hành.",
+            "minExperienceYears": null,
+            "split": "test",
+            "skills": [
+                {
+                    "name": "Excel",
+                    "importance": "REQUIRED"
+                },
+                {
+                    "name": "Kế toán tổng hợp",
+                    "importance": "REQUIRED"
+                },
+                {
+                    "name": "Báo cáo tài chính",
+                    "importance": "PREFERRED"
+                },
+                {
+                    "name": "MISA",
+                    "importance": "PREFERRED"
+                },
+                {
+                    "name": "Quản lý thời gian",
+                    "importance": "PREFERRED"
+                }
+            ]
+        },
+        {
+            "title": "Thực tập sinh Thiết kế UI",
+            "description": "Hỗ trợ thiết kế banner, màn hình web và tài liệu hình ảnh cho các hoạt động sản phẩm và truyền thông.",
+            "requirements": "Có portfolio đồ án hoặc sản phẩm cá nhân; hiểu bố cục và màu sắc; sử dụng được công cụ thiết kế đồ họa.",
+            "minExperienceYears": 0.5,
+            "split": "test",
+            "skills": [
+                {
+                    "name": "Figma",
+                    "importance": "REQUIRED"
+                },
+                {
+                    "name": "UI/UX Design",
+                    "importance": "REQUIRED"
+                },
+                {
+                    "name": "Photoshop",
+                    "importance": "PREFERRED"
+                },
+                {
+                    "name": "Illustrator",
+                    "importance": "PREFERRED"
+                },
+                {
+                    "name": "Thuyết trình",
+                    "importance": "PREFERRED"
+                }
+            ]
+        },
+        {
+            "title": "Thực tập sinh Digital Marketing",
+            "description": "Hỗ trợ triển khai nội dung và các hoạt động quảng bá trực tuyến, theo dõi số liệu và đề xuất điều chỉnh.",
+            "requirements": "SV Marketing, Thương mại điện tử hoặc ngành gần; có tư duy số liệu; biết quảng cáo trực tuyến và viết nội dung cơ bản.",
+            "minExperienceYears": 0.5,
+            "split": "test",
+            "skills": [
+                {
+                    "name": "Facebook Ads",
+                    "importance": "REQUIRED"
+                },
+                {
+                    "name": "Content Marketing",
+                    "importance": "REQUIRED"
+                },
+                {
+                    "name": "Google Analytics",
+                    "importance": "PREFERRED"
+                },
+                {
+                    "name": "SEO",
+                    "importance": "PREFERRED"
+                },
+                {
+                    "name": "Giao tiếp",
+                    "importance": "PREFERRED"
+                }
+            ]
+        }
+    ],
+    "candidates": [
+        {
+            "ref": "fe-react-03",
+            "headline": "Sinh viên năm 3 CNTT | Frontend",
+            "bio": "Tập trung vào phát triển giao diện web, đã làm vài đồ án nhóm và muốn tìm môi trường thực tập có quy trình rõ ràng.",
+            "hardCase": "synonym-skill",
+            "skills": [
+                {
+                    "name": "ReactJS",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "JS",
+                    "yearsOfExperience": 1.5
+                },
+                {
+                    "name": "HTML",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "CSS",
+                    "yearsOfExperience": 1
+                }
+            ],
+            "educations": [
+                {
+                    "majorName": "Công nghệ thông tin",
+                    "degree": "Đại học",
+                    "startYear": 2023,
+                    "endYear": 2027,
+                    "isCurrent": true
+                }
+            ],
+            "workExperiences": [
+                {
+                    "company": "Studio Gió Mới",
+                    "position": "Cộng tác viên giao diện",
+                    "start": "2025-06",
+                    "end": "2025-09",
+                    "isCurrent": false,
+                    "description": "Dựng landing page và chỉnh sửa bố cục theo bản thiết kế."
+                }
+            ],
+            "projects": [
+                {
+                    "name": "Web đặt lịch",
+                    "description": "Đồ án môn học, phụ trách giao diện và tích hợp API.",
+                    "start": "2025-09",
+                    "end": "2026-01"
+                }
+            ]
+        },
+        {
+            "ref": "fe-typescript-04",
+            "headline": "Sinh viên năm 4 Kỹ thuật phần mềm | Web",
+            "bio": "Quan tâm đến frontend nhưng cũng thích tìm hiểu cách hệ thống kết nối với backend. Đã quen làm việc theo nhóm trong các đồ án.",
+            "skills": [
+                {
+                    "name": "React",
+                    "yearsOfExperience": 1.5
+                },
+                {
+                    "name": "TypeScript",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "Figma",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "Git",
+                    "yearsOfExperience": 1.5
+                },
+                {
+                    "name": "Làm việc nhóm",
+                    "yearsOfExperience": 2
+                }
+            ],
+            "educations": [
+                {
+                    "majorName": "Kỹ thuật phần mềm",
+                    "degree": "Đại học",
+                    "startYear": 2022,
+                    "endYear": 2026,
+                    "isCurrent": true
+                }
+            ],
+            "workExperiences": [
+                {
+                    "company": "Công ty TNHH Mây Số",
+                    "position": "Thực tập sinh phát triển web",
+                    "start": "2025-06",
+                    "end": "2025-09",
+                    "isCurrent": false,
+                    "description": "Hỗ trợ xây dựng các màn hình quản trị và sửa lỗi giao diện."
+                }
+            ],
+            "projects": [
+                {
+                    "name": "Cổng quản lý câu lạc bộ",
+                    "description": "Ứng dụng web nhóm, phụ trách component và luồng đăng nhập.",
+                    "start": "2025-02",
+                    "end": "2025-06"
+                }
+            ]
+        },
+        {
+            "ref": "backend-node-02",
+            "headline": "Sinh viên năm 4 Hệ thống thông tin | Backend",
+            "bio": "Đã làm API cho một số đồ án và thích các bài toán xử lý dữ liệu phía server. Muốn cải thiện kỹ năng triển khai hệ thống thực tế.",
+            "hardCase": "synonym-skill",
+            "skills": [
+                {
+                    "name": "NodeJS",
+                    "yearsOfExperience": 1.5
+                },
+                {
+                    "name": "TypeScript",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "Express",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "PostgreSQL",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "Redis",
+                    "yearsOfExperience": 0.5
+                }
+            ],
+            "educations": [
+                {
+                    "majorName": "Hệ thống thông tin",
+                    "degree": "Đại học",
+                    "startYear": 2022,
+                    "endYear": 2026,
+                    "isCurrent": true
+                }
+            ],
+            "workExperiences": [
+                {
+                    "company": "Công ty TNHH Sao Khuê Số",
+                    "position": "Cộng tác viên backend",
+                    "start": "2025-08",
+                    "end": "2026-02",
+                    "isCurrent": false,
+                    "description": "Viết API và xử lý một số chức năng dữ liệu cho ứng dụng nội bộ."
+                }
+            ],
+            "projects": [
+                {
+                    "name": "Hệ thống mượn thiết bị",
+                    "description": "Backend cho đồ án nhóm, có phân quyền và quản lý dữ liệu.",
+                    "start": "2025-03",
+                    "end": "2025-07"
+                }
+            ]
+        },
+        {
+            "ref": "backend-java-01",
+            "headline": "Sinh viên năm 4 Khoa học máy tính | Java",
+            "bio": "Tập trung vào lập trình Java và backend. Có kinh nghiệm làm đồ án nhóm, viết truy vấn và xây dựng API cơ bản.",
+            "skills": [
+                {
+                    "name": "Java",
+                    "yearsOfExperience": 2
+                },
+                {
+                    "name": "Spring Boot",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "SQL",
+                    "yearsOfExperience": 1.5
+                },
+                {
+                    "name": "MariaDB",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "Git",
+                    "yearsOfExperience": 1
+                }
+            ],
+            "educations": [
+                {
+                    "majorName": "Khoa học máy tính",
+                    "degree": "Đại học",
+                    "startYear": 2022,
+                    "endYear": 2026,
+                    "isCurrent": true
+                }
+            ],
+            "workExperiences": [
+                {
+                    "company": "Studio Bản Đồ Số",
+                    "position": "Thực tập sinh backend",
+                    "start": "2025-07",
+                    "end": "2025-10",
+                    "isCurrent": false,
+                    "description": "Hỗ trợ API và kiểm tra dữ liệu cho ứng dụng quản lý."
+                }
+            ],
+            "projects": [
+                {
+                    "name": "Quản lý kho mini",
+                    "description": "Đồ án Java có CRUD, phân quyền và truy vấn dữ liệu.",
+                    "start": "2025-02",
+                    "end": "2025-05"
+                }
+            ]
+        },
+        {
+            "ref": "data-ai-02",
+            "headline": "Sinh viên năm 3 Khoa học dữ liệu | Data",
+            "bio": "Thích phân tích dữ liệu và thử nghiệm mô hình dự báo. Đang tìm cơ hội thực tập để làm quen với dữ liệu thực tế.",
+            "hardCase": "adjacent-field",
+            "skills": [
+                {
+                    "name": "Python",
+                    "yearsOfExperience": 1.5
+                },
+                {
+                    "name": "Pandas",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "Machine Learning",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "SQL",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "Power BI",
+                    "yearsOfExperience": 0.5
+                }
+            ],
+            "educations": [
+                {
+                    "majorName": "Khoa học dữ liệu",
+                    "degree": "Đại học",
+                    "startYear": 2023,
+                    "endYear": 2027,
+                    "isCurrent": true
+                }
+            ],
+            "workExperiences": [],
+            "projects": [
+                {
+                    "name": "Phân tích dữ liệu bán hàng",
+                    "description": "Làm sạch dữ liệu và xây dựng báo cáo trực quan cho đồ án.",
+                    "start": "2025-09",
+                    "end": "2026-01"
+                },
+                {
+                    "name": "Dự báo nhu cầu",
+                    "description": "Thử nghiệm một số mô hình học máy trên bộ dữ liệu học tập.",
+                    "start": "2026-02",
+                    "end": null
+                }
+            ]
+        },
+        {
+            "ref": "qa-03",
+            "headline": "Sinh viên năm 3 CNTT | QA",
+            "bio": "Cẩn thận, thích tìm lỗi và kiểm tra các luồng người dùng. Có kinh nghiệm test thủ công qua đồ án và tự học automation.",
+            "skills": [
+                {
+                    "name": "Manual Testing",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "Selenium",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "JavaScript",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "SQL",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "Giao tiếp",
+                    "yearsOfExperience": 2
+                }
+            ],
+            "educations": [
+                {
+                    "majorName": "Công nghệ thông tin",
+                    "degree": "Đại học",
+                    "startYear": 2023,
+                    "endYear": 2027,
+                    "isCurrent": true
+                }
+            ],
+            "workExperiences": [],
+            "projects": [
+                {
+                    "name": "Kiểm thử web bán hàng",
+                    "description": "Viết test case, ghi nhận lỗi và thử một số kịch bản tự động.",
+                    "start": "2025-10",
+                    "end": "2026-01"
+                }
+            ]
+        },
+        {
+            "ref": "marketing-content-01",
+            "headline": "Sinh viên năm 3 Marketing | Content",
+            "bio": "Quan tâm đến nội dung số và hành vi khách hàng. Thường viết bài cho các dự án môn học và theo dõi phản hồi của người đọc.",
+            "skills": [
+                {
+                    "name": "Content Marketing",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "Copywriting",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "SEO",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "Thuyết trình",
+                    "yearsOfExperience": 2
+                }
+            ],
+            "educations": [
+                {
+                    "majorName": "Marketing",
+                    "degree": "Đại học",
+                    "startYear": 2023,
+                    "endYear": 2027,
+                    "isCurrent": true
+                }
+            ],
+            "workExperiences": [
+                {
+                    "company": "Studio Nắng Mai",
+                    "position": "Cộng tác viên nội dung",
+                    "start": "2025-06",
+                    "end": "2025-11",
+                    "isCurrent": false,
+                    "description": "Viết nội dung ngắn và hỗ trợ biên tập bài đăng."
+                }
+            ],
+            "projects": [
+                {
+                    "name": "Kế hoạch truyền thông học kỳ",
+                    "description": "Lập kế hoạch nội dung và trình bày trước lớp.",
+                    "start": "2025-03",
+                    "end": "2025-05"
+                }
+            ]
+        },
+        {
+            "ref": "marketing-digital-02",
+            "headline": "Sinh viên năm 4 Thương mại điện tử | Digital",
+            "bio": "Có hứng thú với quảng cáo trực tuyến, dữ liệu và tối ưu nội dung. Đã tham gia một số bài tập nhóm liên quan đến bán hàng online.",
+            "skills": [
+                {
+                    "name": "Facebook Ads",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "Content Marketing",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "Google Analytics",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "SEO",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "Excel",
+                    "yearsOfExperience": 2
+                }
+            ],
+            "educations": [
+                {
+                    "majorName": "Thương mại điện tử",
+                    "degree": "Đại học",
+                    "startYear": 2022,
+                    "endYear": 2026,
+                    "isCurrent": true
+                }
+            ],
+            "workExperiences": [
+                {
+                    "company": "Công ty TNHH Bốn Mùa Số",
+                    "position": "Cộng tác viên marketing",
+                    "start": "2025-08",
+                    "end": "2026-01",
+                    "isCurrent": false,
+                    "description": "Hỗ trợ nội dung và tổng hợp số liệu chiến dịch."
+                }
+            ],
+            "projects": [
+                {
+                    "name": "Gian hàng trực tuyến",
+                    "description": "Đồ án nhóm về nội dung, quảng bá và phân tích lượt truy cập.",
+                    "start": "2025-02",
+                    "end": "2025-06"
+                }
+            ]
+        },
+        {
+            "ref": "accounting-01",
+            "headline": "Sinh viên năm 4 Kế toán | Thực tập kế toán",
+            "bio": "Cẩn thận với số liệu, đang tìm nơi thực tập để làm quen với chứng từ và quy trình kế toán thực tế.",
+            "skills": [
+                {
+                    "name": "Excel",
+                    "yearsOfExperience": 2
+                },
+                {
+                    "name": "Kế toán tổng hợp",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "MISA",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "Báo cáo tài chính",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "Quản lý thời gian",
+                    "yearsOfExperience": 2
+                }
+            ],
+            "educations": [
+                {
+                    "majorName": "Kế toán",
+                    "degree": "Đại học",
+                    "startYear": 2022,
+                    "endYear": 2026,
+                    "isCurrent": true
+                }
+            ],
+            "workExperiences": [],
+            "projects": [
+                {
+                    "name": "Thực hành sổ sách",
+                    "description": "Nhập liệu và lập bảng tổng hợp cho bài tập môn kế toán.",
+                    "start": "2025-09",
+                    "end": "2026-01"
+                }
+            ]
+        },
+        {
+            "ref": "finance-02",
+            "headline": "Vừa tốt nghiệp Tài chính - Ngân hàng | Phân tích",
+            "bio": "Muốn bắt đầu công việc liên quan đến dữ liệu tài chính và báo cáo. Có kinh nghiệm làm bài tập phân tích và tổng hợp số liệu.",
+            "skills": [
+                {
+                    "name": "Excel",
+                    "yearsOfExperience": 2
+                },
+                {
+                    "name": "Phân tích tài chính",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "Báo cáo tài chính",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "Power BI",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "Thuyết trình",
+                    "yearsOfExperience": 2
+                }
+            ],
+            "educations": [
+                {
+                    "majorName": "Tài chính - Ngân hàng",
+                    "degree": "Đại học",
+                    "startYear": 2022,
+                    "endYear": 2026,
+                    "isCurrent": false
+                }
+            ],
+            "workExperiences": [
+                {
+                    "company": "Công ty TNHH Dòng Tiền Xanh",
+                    "position": "Cộng tác viên nhập liệu",
+                    "start": "2025-07",
+                    "end": "2025-10",
+                    "isCurrent": false,
+                    "description": "Đối chiếu và tổng hợp dữ liệu bảng tính."
+                }
+            ],
+            "projects": []
+        },
+        {
+            "ref": "designer-01",
+            "headline": "Sinh viên năm 3 Thiết kế đồ họa | UI",
+            "bio": "Quan tâm đến thiết kế giao diện và hình ảnh số. Có portfolio đồ án cá nhân, muốn học thêm về quy trình thiết kế sản phẩm.",
+            "skills": [
+                {
+                    "name": "Figma",
+                    "yearsOfExperience": 1.5
+                },
+                {
+                    "name": "UI/UX Design",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "Photoshop",
+                    "yearsOfExperience": 2
+                },
+                {
+                    "name": "Illustrator",
+                    "yearsOfExperience": 2
+                },
+                {
+                    "name": "Thuyết trình",
+                    "yearsOfExperience": 1
+                }
+            ],
+            "educations": [
+                {
+                    "majorName": "Thiết kế đồ họa",
+                    "degree": "Đại học",
+                    "startYear": 2023,
+                    "endYear": 2027,
+                    "isCurrent": true
+                }
+            ],
+            "workExperiences": [
+                {
+                    "company": "Studio Màu Sớm",
+                    "position": "Cộng tác viên thiết kế",
+                    "start": "2025-07",
+                    "end": "2025-12",
+                    "isCurrent": false,
+                    "description": "Thiết kế hình ảnh và chỉnh sửa bố cục cho các ấn phẩm nhỏ."
+                }
+            ],
+            "projects": [
+                {
+                    "name": "Ứng dụng đặt phòng",
+                    "description": "Thiết kế luồng người dùng và bộ giao diện cho đồ án.",
+                    "start": "2025-09",
+                    "end": "2026-01"
+                }
+            ]
+        },
+        {
+            "ref": "mobile-02",
+            "headline": "Sinh viên năm 3 Kỹ thuật máy tính | Mobile",
+            "bio": "Đang học phát triển ứng dụng di động, từng làm ứng dụng nhóm và có nền tảng lập trình khá rộng.",
+            "hardCase": "adjacent-field",
+            "skills": [
+                {
+                    "name": "Flutter",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "Kotlin",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "Java",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "SQL",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "Git",
+                    "yearsOfExperience": 1
+                }
+            ],
+            "educations": [
+                {
+                    "majorName": "Kỹ thuật máy tính",
+                    "degree": "Đại học",
+                    "startYear": 2023,
+                    "endYear": 2027,
+                    "isCurrent": true
+                }
+            ],
+            "workExperiences": [],
+            "projects": [
+                {
+                    "name": "Ứng dụng ghi chú",
+                    "description": "Ứng dụng mobile nhóm, phụ trách màn hình và lưu trữ dữ liệu.",
+                    "start": "2025-10",
+                    "end": "2026-02"
+                }
+            ]
+        },
+        {
+            "ref": "irrelevant-experience-01",
+            "headline": "Sinh viên năm 4 CNTT | Đang chuyển sang backend",
+            "bio": "Có thời gian đi làm thêm khá dài trong thời gian học. Gần đây bắt đầu học backend và muốn tìm cơ hội thực tập đúng chuyên ngành.",
+            "hardCase": "irrelevant-experience",
+            "skills": [
+                {
+                    "name": "Node.js",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "JavaScript",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "SQL",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "Giao tiếp",
+                    "yearsOfExperience": 3
+                }
+            ],
+            "educations": [
+                {
+                    "majorName": "Công nghệ thông tin",
+                    "degree": "Đại học",
+                    "startYear": 2022,
+                    "endYear": 2026,
+                    "isCurrent": true
+                }
+            ],
+            "workExperiences": [
+                {
+                    "company": "Quán Mộc Phố",
+                    "position": "Nhân viên phục vụ",
+                    "start": "2022-08",
+                    "end": "2024-02",
+                    "isCurrent": false,
+                    "description": "Phục vụ khách hàng và hỗ trợ kiểm kê cuối ca."
+                },
+                {
+                    "company": "Cửa hàng Bốn Góc",
+                    "position": "Nhân viên bán hàng",
+                    "start": "2024-03",
+                    "end": "2025-05",
+                    "isCurrent": false,
+                    "description": "Tư vấn khách hàng, sắp xếp hàng hóa và tổng hợp doanh số."
+                }
+            ],
+            "projects": [
+                {
+                    "name": "API quản lý lớp học",
+                    "description": "Đồ án cá nhân nhỏ dùng để luyện API và truy vấn dữ liệu.",
+                    "start": "2026-02",
+                    "end": null
+                }
+            ]
+        },
+        {
+            "ref": "sparse-profile-01",
+            "headline": "Sinh viên CNTT | Tìm thực tập",
+            "bio": "Đang tìm cơ hội thực tập đầu tiên trong lĩnh vực phát triển web.",
+            "hardCase": "sparse-profile",
+            "skills": [
+                {
+                    "name": "React",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "JavaScript",
+                    "yearsOfExperience": 0.5
+                }
+            ],
+            "educations": [
+                {
+                    "majorName": "Công nghệ thông tin",
+                    "degree": "Đại học",
+                    "startYear": 2024,
+                    "endYear": 2028,
+                    "isCurrent": true
+                }
+            ],
+            "workExperiences": [],
+            "projects": []
+        },
+        {
+            "ref": "keyword-stuffing-01",
+            "headline": "Sinh viên năm 4 CNTT | Full-stack",
+            "bio": "Tự học nhiều công nghệ và muốn tìm môi trường thực tập để có kinh nghiệm thực tế.",
+            "hardCase": "keyword-stuffing",
+            "skills": [
+                {
+                    "name": "JavaScript",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "TypeScript",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "React",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "Node.js",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "Python",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "Java",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "Docker",
+                    "yearsOfExperience": 0.2
+                },
+                {
+                    "name": "Git",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "MongoDB",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "SQL",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "Redis",
+                    "yearsOfExperience": 0.2
+                },
+                {
+                    "name": "RabbitMQ",
+                    "yearsOfExperience": 0.2
+                },
+                {
+                    "name": "Figma",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "Flutter",
+                    "yearsOfExperience": 0.2
+                },
+                {
+                    "name": "C#",
+                    "yearsOfExperience": 0.2
+                },
+                {
+                    "name": "Manual Testing",
+                    "yearsOfExperience": 0.2
+                }
+            ],
+            "educations": [
+                {
+                    "majorName": "Kỹ thuật phần mềm",
+                    "degree": "Đại học",
+                    "startYear": 2022,
+                    "endYear": 2026,
+                    "isCurrent": true
+                }
+            ],
+            "workExperiences": [
+                {
+                    "company": "Nhóm Sáng Tạo Số",
+                    "position": "Cộng tác viên nhập liệu",
+                    "start": "2025-08",
+                    "end": "2025-10",
+                    "isCurrent": false,
+                    "description": "Nhập và kiểm tra dữ liệu theo biểu mẫu."
+                }
+            ],
+            "projects": [
+                {
+                    "name": "Trang giới thiệu cá nhân",
+                    "description": "Website đơn giản phục vụ bài tập môn học.",
+                    "start": "2025-09",
+                    "end": "2025-10"
+                }
+            ]
+        },
+        {
+            "ref": "career-switch-01",
+            "headline": "Sinh viên năm 4 Marketing | Đang học phân tích dữ liệu",
+            "bio": "Học Marketing nhưng gần đây chuyển hướng sang phân tích dữ liệu. Đang bổ sung Python và kỹ năng xử lý bảng dữ liệu qua các dự án cá nhân.",
+            "hardCase": "career-switch",
+            "skills": [
+                {
+                    "name": "Python",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "Pandas",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "Excel",
+                    "yearsOfExperience": 2
+                },
+                {
+                    "name": "Power BI",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "Content Marketing",
+                    "yearsOfExperience": 1
+                }
+            ],
+            "educations": [
+                {
+                    "majorName": "Marketing",
+                    "degree": "Đại học",
+                    "startYear": 2022,
+                    "endYear": 2026,
+                    "isCurrent": true
+                }
+            ],
+            "workExperiences": [
+                {
+                    "company": "Công ty TNHH Góc Thị Trường",
+                    "position": "Cộng tác viên nội dung",
+                    "start": "2025-06",
+                    "end": "2025-11",
+                    "isCurrent": false,
+                    "description": "Viết nội dung và tổng hợp số liệu tương tác."
+                }
+            ],
+            "projects": [
+                {
+                    "name": "Phân tích hành vi khách hàng",
+                    "description": "Dùng bảng dữ liệu mẫu để phân nhóm và trực quan hóa kết quả.",
+                    "start": "2026-01",
+                    "end": null
+                }
+            ]
+        },
+        {
+            "ref": "language-01",
+            "headline": "Sinh viên năm 3 Ngôn ngữ Anh | Truyền thông",
+            "bio": "Thích viết và thuyết trình, có kinh nghiệm tham gia các hoạt động truyền thông ở lớp và câu lạc bộ.",
+            "skills": [
+                {
+                    "name": "Tiếng Anh giao tiếp",
+                    "yearsOfExperience": 3
+                },
+                {
+                    "name": "Copywriting",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "Thuyết trình",
+                    "yearsOfExperience": 2
+                },
+                {
+                    "name": "Giao tiếp",
+                    "yearsOfExperience": 3
+                },
+                {
+                    "name": "Làm việc nhóm",
+                    "yearsOfExperience": 2
+                }
+            ],
+            "educations": [
+                {
+                    "majorName": "Ngôn ngữ Anh",
+                    "degree": "Đại học",
+                    "startYear": 2023,
+                    "endYear": 2027,
+                    "isCurrent": true
+                }
+            ],
+            "workExperiences": [],
+            "projects": [
+                {
+                    "name": "Bản tin sinh viên",
+                    "description": "Tham gia viết và biên tập nội dung cho dự án môn học.",
+                    "start": "2025-09",
+                    "end": "2026-01"
+                }
+            ]
+        },
+        {
+            "ref": "logistics-01",
+            "headline": "Sinh viên năm 4 Logistics | Vận hành",
+            "bio": "Quan tâm đến quy trình vận hành và quản lý dữ liệu đơn hàng. Có khả năng làm việc với bảng tính và phối hợp nhóm.",
+            "skills": [
+                {
+                    "name": "Excel",
+                    "yearsOfExperience": 2
+                },
+                {
+                    "name": "Quản lý thời gian",
+                    "yearsOfExperience": 2
+                },
+                {
+                    "name": "Giao tiếp",
+                    "yearsOfExperience": 2
+                },
+                {
+                    "name": "Làm việc nhóm",
+                    "yearsOfExperience": 2
+                }
+            ],
+            "educations": [
+                {
+                    "majorName": "Logistics",
+                    "degree": "Đại học",
+                    "startYear": 2022,
+                    "endYear": 2026,
+                    "isCurrent": true
+                }
+            ],
+            "workExperiences": [
+                {
+                    "company": "Kho Hàng Sao Bắc",
+                    "position": "Cộng tác viên kho",
+                    "start": "2025-06",
+                    "end": "2025-09",
+                    "isCurrent": false,
+                    "description": "Hỗ trợ kiểm kê và đối chiếu số lượng hàng hóa."
+                }
+            ],
+            "projects": []
+        },
+        {
+            "ref": "it-adjacent-01",
+            "headline": "Sinh viên năm 4 Điện tử viễn thông | Web",
+            "bio": "Xuất phát từ điện tử viễn thông nhưng có nhiều thời gian tự học lập trình web. Đã làm một số dự án nhỏ để chuyển hướng sang phần mềm.",
+            "hardCase": "adjacent-field",
+            "skills": [
+                {
+                    "name": "JavaScript",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "React",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "Node.js",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "SQL",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "Git",
+                    "yearsOfExperience": 1
+                }
+            ],
+            "educations": [
+                {
+                    "majorName": "Điện tử viễn thông",
+                    "degree": "Đại học",
+                    "startYear": 2022,
+                    "endYear": 2026,
+                    "isCurrent": true
+                }
+            ],
+            "workExperiences": [],
+            "projects": [
+                {
+                    "name": "Trang quản lý thiết bị",
+                    "description": "Web nhỏ để theo dõi thiết bị trong phòng thực hành.",
+                    "start": "2025-10",
+                    "end": "2026-02"
+                }
+            ]
+        },
+        {
+            "ref": "backend-sql-03",
+            "headline": "Vừa tốt nghiệp Hệ thống thông tin | Backend",
+            "bio": "Đã hoàn thành chương trình đại học và từng làm backend trong đồ án. Có xu hướng thích cơ sở dữ liệu và các hệ thống nghiệp vụ.",
+            "skills": [
+                {
+                    "name": "Node.js",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "Express",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "MS SQL Server",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "SQL",
+                    "yearsOfExperience": 1.5
+                },
+                {
+                    "name": "Docker",
+                    "yearsOfExperience": 0.5
+                }
+            ],
+            "educations": [
+                {
+                    "majorName": "Hệ thống thông tin",
+                    "degree": "Đại học",
+                    "startYear": 2022,
+                    "endYear": 2026,
+                    "isCurrent": false
+                }
+            ],
+            "workExperiences": [
+                {
+                    "company": "Công ty TNHH Nền Tảng Mộc",
+                    "position": "Thực tập sinh phát triển hệ thống",
+                    "start": "2025-08",
+                    "end": "2025-12",
+                    "isCurrent": false,
+                    "description": "Hỗ trợ xử lý API và truy vấn dữ liệu."
+                }
+            ],
+            "projects": [
+                {
+                    "name": "Quản lý phiếu yêu cầu",
+                    "description": "Xây dựng API và cơ sở dữ liệu cho đồ án tốt nghiệp.",
+                    "start": "2026-01",
+                    "end": "2026-05"
+                }
+            ]
+        },
+        {
+            "ref": "communication-02",
+            "headline": "Sinh viên năm 2 Truyền thông đa phương tiện | Content",
+            "bio": "Mới bắt đầu tích lũy kinh nghiệm thực tế, thích viết nội dung và trình bày ý tưởng. Có tham gia một số bài tập nhóm về truyền thông.",
+            "skills": [
+                {
+                    "name": "Content Marketing",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "Copywriting",
+                    "yearsOfExperience": 0.5
+                },
+                {
+                    "name": "Thuyết trình",
+                    "yearsOfExperience": 1
+                },
+                {
+                    "name": "Làm việc nhóm",
+                    "yearsOfExperience": 1
+                }
+            ],
+            "educations": [
+                {
+                    "majorName": "Truyền thông đa phương tiện",
+                    "degree": "Đại học",
+                    "startYear": 2024,
+                    "endYear": 2028,
+                    "isCurrent": true
+                }
+            ],
+            "workExperiences": [],
+            "projects": [
+                {
+                    "name": "Chiến dịch truyền thông lớp",
+                    "description": "Tham gia lên ý tưởng và viết nội dung cho bài tập nhóm.",
+                    "start": "2025-10",
+                    "end": "2025-12"
+                }
+            ]
+        }
+    ],
+    "pairsToLabel": [
+        {
+            "candidateRef": "fe-react-03",
+            "jobTitle": "Thực tập sinh Frontend Web",
+            "category": "hard-case"
+        },
+        {
+            "candidateRef": "fe-react-03",
+            "jobTitle": "Thực tập sinh Frontend Product",
+            "category": "same-domain"
+        },
+        {
+            "candidateRef": "fe-react-03",
+            "jobTitle": "Thực tập sinh Backend Node TypeScript",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "fe-react-03",
+            "jobTitle": "Thực tập sinh QA Automation",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "fe-typescript-04",
+            "jobTitle": "Thực tập sinh Frontend Product",
+            "category": "same-domain"
+        },
+        {
+            "candidateRef": "fe-typescript-04",
+            "jobTitle": "Thực tập sinh Backend Node TypeScript",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "fe-typescript-04",
+            "jobTitle": "Thực tập sinh Thiết kế UI",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "fe-typescript-04",
+            "jobTitle": "Thực tập sinh Content Marketing",
+            "category": "cross-domain"
+        },
+        {
+            "candidateRef": "backend-node-02",
+            "jobTitle": "Thực tập sinh Backend Node TypeScript",
+            "category": "hard-case"
+        },
+        {
+            "candidateRef": "backend-node-02",
+            "jobTitle": "Thực tập sinh Java Backend",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "backend-node-02",
+            "jobTitle": "Thực tập sinh Frontend Web",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "backend-node-02",
+            "jobTitle": "Thực tập sinh Data & AI",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "backend-java-01",
+            "jobTitle": "Thực tập sinh Java Backend",
+            "category": "same-domain"
+        },
+        {
+            "candidateRef": "backend-java-01",
+            "jobTitle": "Thực tập sinh Backend Node TypeScript",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "backend-java-01",
+            "jobTitle": "Thực tập sinh QA Automation",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "backend-java-01",
+            "jobTitle": "Thực tập sinh Kế toán",
+            "category": "cross-domain"
+        },
+        {
+            "candidateRef": "data-ai-02",
+            "jobTitle": "Thực tập sinh Data & AI",
+            "category": "hard-case"
+        },
+        {
+            "candidateRef": "data-ai-02",
+            "jobTitle": "Thực tập sinh Backend Node TypeScript",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "data-ai-02",
+            "jobTitle": "Thực tập sinh QA Automation",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "data-ai-02",
+            "jobTitle": "Thực tập sinh Kế toán",
+            "category": "cross-domain"
+        },
+        {
+            "candidateRef": "qa-03",
+            "jobTitle": "Thực tập sinh QA Automation",
+            "category": "same-domain"
+        },
+        {
+            "candidateRef": "qa-03",
+            "jobTitle": "Thực tập sinh Backend Node TypeScript",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "qa-03",
+            "jobTitle": "Thực tập sinh Frontend Web",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "qa-03",
+            "jobTitle": "Thực tập sinh Kế toán",
+            "category": "cross-domain"
+        },
+        {
+            "candidateRef": "marketing-content-01",
+            "jobTitle": "Thực tập sinh Content Marketing",
+            "category": "same-domain"
+        },
+        {
+            "candidateRef": "marketing-content-01",
+            "jobTitle": "Thực tập sinh Digital Marketing",
+            "category": "same-domain"
+        },
+        {
+            "candidateRef": "marketing-content-01",
+            "jobTitle": "Thực tập sinh Thiết kế UI",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "marketing-content-01",
+            "jobTitle": "Thực tập sinh Frontend Product",
+            "category": "cross-domain"
+        },
+        {
+            "candidateRef": "marketing-digital-02",
+            "jobTitle": "Thực tập sinh Digital Marketing",
+            "category": "same-domain"
+        },
+        {
+            "candidateRef": "marketing-digital-02",
+            "jobTitle": "Thực tập sinh Content Marketing",
+            "category": "same-domain"
+        },
+        {
+            "candidateRef": "marketing-digital-02",
+            "jobTitle": "Thực tập sinh Kế toán",
+            "category": "cross-domain"
+        },
+        {
+            "candidateRef": "marketing-digital-02",
+            "jobTitle": "Thực tập sinh Data & AI",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "accounting-01",
+            "jobTitle": "Thực tập sinh Kế toán",
+            "category": "same-domain"
+        },
+        {
+            "candidateRef": "accounting-01",
+            "jobTitle": "Thực tập sinh Digital Marketing",
+            "category": "cross-domain"
+        },
+        {
+            "candidateRef": "accounting-01",
+            "jobTitle": "Thực tập sinh Data & AI",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "finance-02",
+            "jobTitle": "Thực tập sinh Kế toán",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "finance-02",
+            "jobTitle": "Thực tập sinh Data & AI",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "finance-02",
+            "jobTitle": "Thực tập sinh Content Marketing",
+            "category": "cross-domain"
+        },
+        {
+            "candidateRef": "designer-01",
+            "jobTitle": "Thực tập sinh Thiết kế UI",
+            "category": "same-domain"
+        },
+        {
+            "candidateRef": "designer-01",
+            "jobTitle": "Thực tập sinh Frontend Product",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "designer-01",
+            "jobTitle": "Thực tập sinh Content Marketing",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "mobile-02",
+            "jobTitle": "Thực tập sinh Java Backend",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "mobile-02",
+            "jobTitle": "Thực tập sinh Frontend Web",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "irrelevant-experience-01",
+            "jobTitle": "Thực tập sinh Backend Node TypeScript",
+            "category": "hard-case"
+        },
+        {
+            "candidateRef": "irrelevant-experience-01",
+            "jobTitle": "Thực tập sinh Content Marketing",
+            "category": "cross-domain"
+        },
+        {
+            "candidateRef": "sparse-profile-01",
+            "jobTitle": "Thực tập sinh Frontend Web",
+            "category": "hard-case"
+        },
+        {
+            "candidateRef": "sparse-profile-01",
+            "jobTitle": "Thực tập sinh QA Automation",
+            "category": "hard-case"
+        },
+        {
+            "candidateRef": "keyword-stuffing-01",
+            "jobTitle": "Thực tập sinh Backend Node TypeScript",
+            "category": "hard-case"
+        },
+        {
+            "candidateRef": "keyword-stuffing-01",
+            "jobTitle": "Thực tập sinh Frontend Product",
+            "category": "hard-case"
+        },
+        {
+            "candidateRef": "career-switch-01",
+            "jobTitle": "Thực tập sinh Data & AI",
+            "category": "hard-case"
+        },
+        {
+            "candidateRef": "career-switch-01",
+            "jobTitle": "Thực tập sinh Digital Marketing",
+            "category": "same-domain"
+        },
+        {
+            "candidateRef": "language-01",
+            "jobTitle": "Thực tập sinh Content Marketing",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "language-01",
+            "jobTitle": "Thực tập sinh Digital Marketing",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "language-01",
+            "jobTitle": "Thực tập sinh Thiết kế UI",
+            "category": "cross-domain"
+        },
+        {
+            "candidateRef": "logistics-01",
+            "jobTitle": "Thực tập sinh Kế toán",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "logistics-01",
+            "jobTitle": "Thực tập sinh Digital Marketing",
+            "category": "cross-domain"
+        },
+        {
+            "candidateRef": "it-adjacent-01",
+            "jobTitle": "Thực tập sinh Frontend Web",
+            "category": "hard-case"
+        },
+        {
+            "candidateRef": "it-adjacent-01",
+            "jobTitle": "Thực tập sinh Backend Node TypeScript",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "backend-sql-03",
+            "jobTitle": "Thực tập sinh Backend Node TypeScript",
+            "category": "same-domain"
+        },
+        {
+            "candidateRef": "backend-sql-03",
+            "jobTitle": "Thực tập sinh QA Automation",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "communication-02",
+            "jobTitle": "Thực tập sinh Content Marketing",
+            "category": "same-domain"
+        },
+        {
+            "candidateRef": "communication-02",
+            "jobTitle": "Thực tập sinh Thiết kế UI",
+            "category": "adjacent"
+        },
+        {
+            "candidateRef": "backend-sql-03",
+            "jobTitle": "Thực tập sinh Java Backend",
+            "category": "same-domain"
+        },
+        {
+            "candidateRef": "it-adjacent-01",
+            "jobTitle": "Thực tập sinh Java Backend",
+            "category": "adjacent"
+        }
+    ]
+}

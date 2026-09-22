@@ -1,11 +1,23 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import type { CandidateMatchProfile } from "../../shared/ports/JobMatcher";
 import { computeTotalExperienceYears } from "./candidate-experience.util";
+import { buildCandidateMatchText } from "./match-text.builder";
 
 const candidateMatchInclude = {
   skills: { include: { skill: { select: { id: true, name: true } } } },
-  workExperiences: { select: { startDate: true, endDate: true, isCurrent: true } },
-  educations: { select: { majorId: true, degree: true, major: { select: { name: true } } } },
+  workExperiences: { select: { position: true, startDate: true, endDate: true, isCurrent: true } },
+  educations: {
+    select: {
+      majorId: true,
+      degree: true,
+      startYear: true,
+      endYear: true,
+      isCurrent: true,
+      major: { select: { name: true } },
+    },
+  },
+  // GĐ2: chỉ để dựng văn bản embed.
+  projects: { select: { name: true, startDate: true } },
 } satisfies Prisma.CandidateInclude;
 
 type CandidateForMatch = Prisma.CandidateGetPayload<{ include: typeof candidateMatchInclude }>;
@@ -60,5 +72,23 @@ function toProfile(candidate: CandidateForMatch, today: Date = new Date()): Cand
       hasEducation: candidate.educations.length > 0,
       hasHeadlineOrBio: Boolean(candidate.headline?.trim() || candidate.bio?.trim()),
     },
+    // Liệt kê từng trường: không truyền nguyên bản ghi Candidate (có SĐT, ngày sinh…) sang builder.
+    matchText: buildCandidateMatchText({
+      headline: candidate.headline,
+      bio: candidate.bio,
+      skills: candidate.skills.map((link) => ({ name: link.skill.name, yearsOfExperience: link.yearsOfExperience })),
+      educations: candidate.educations.map((education) => ({
+        majorName: education.major?.name ?? null,
+        degree: education.degree,
+        startYear: education.startYear,
+        endYear: education.endYear,
+        isCurrent: education.isCurrent,
+      })),
+      workExperiences: candidate.workExperiences.map((experience) => ({
+        position: experience.position,
+        startDate: experience.startDate,
+      })),
+      projects: candidate.projects.map((project) => ({ name: project.name, startDate: project.startDate })),
+    }),
   };
 }

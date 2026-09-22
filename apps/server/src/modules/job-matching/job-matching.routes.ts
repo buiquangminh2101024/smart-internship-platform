@@ -2,17 +2,25 @@ import { Router } from "express";
 import { asClass, asValue, type AwilixContainer } from "awilix";
 import { authenticate } from "../../shared/middleware/authenticate";
 import { authorize } from "../../shared/middleware/authorize";
+import { SkillEmbeddingProvider } from "../../infrastructure/skill-embedding-provider";
 import { CandidateMatchProfileLoader } from "./candidate-match-profile.loader";
 import { JobMatchProfileLoader } from "./job-match-profile.loader";
-import { RULE_WEIGHTS_V1 } from "./job-matching.config";
+import { HYBRID_WEIGHTS_V2, RULE_WEIGHTS_V1 } from "./job-matching.config";
 import { JobMatchingController } from "./job-matching.controller";
 import { JobMatchingService } from "./job-matching.service";
+import { MatchEmbeddingRepository } from "./match-embedding.repository";
+import { MatchEmbeddingService } from "./match-embedding.service";
 import { ScoringJobMatcher } from "./scoring-job-matcher";
 
 export function jobMatchingRouter(container: AwilixContainer): Router {
   container.register({
-    // GĐ1 chỉ có cấu hình rule; GĐ2 chọn cấu hình theo JOB_MATCHER_MODE.
-    jobMatcher: asValue(new ScoringJobMatcher(RULE_WEIGHTS_V1)),
+    // Service giữ cả hai và chọn theo JOB_MATCHER_MODE + việc có cosine hay không.
+    ruleJobMatcher: asValue(new ScoringJobMatcher(RULE_WEIGHTS_V1)),
+    hybridJobMatcher: asValue(new ScoringJobMatcher(HYBRID_WEIGHTS_V2)),
+    // skillEmbeddingService do skillsRouter đăng ký (mount trước router này trong main.ts).
+    embeddingProvider: asClass(SkillEmbeddingProvider).singleton(),
+    matchEmbeddingRepository: asClass(MatchEmbeddingRepository).singleton(),
+    matchEmbeddingService: asClass(MatchEmbeddingService).singleton(),
     candidateMatchProfileLoader: asClass(CandidateMatchProfileLoader).singleton(),
     jobMatchProfileLoader: asClass(JobMatchProfileLoader).singleton(),
     jobMatchingService: asClass(JobMatchingService).singleton(),

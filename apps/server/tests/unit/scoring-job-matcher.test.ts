@@ -3,8 +3,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { CandidateMatchProfile, JobMatchProfile } from "../../src/shared/ports/JobMatcher";
-import { RULE_WEIGHTS_V1 } from "../../src/modules/job-matching/job-matching.config";
-import { ScoringJobMatcher } from "../../src/modules/job-matching/scoring-job-matcher";
+import {
+  EMBEDDING_ONLY_WEIGHTS_V1,
+  HYBRID_WEIGHTS_V1,
+  RULE_WEIGHTS_V1,
+  SEMANTIC_CALIBRATION,
+} from "../../src/modules/job-matching/job-matching.config";
+import { markSemanticPending, ScoringJobMatcher } from "../../src/modules/job-matching/scoring-job-matcher";
 
 const matcher = new ScoringJobMatcher(RULE_WEIGHTS_V1);
 
@@ -20,6 +25,7 @@ function candidate(
     totalExperienceYears: null,
     educations: [],
     completeness: FULL,
+    matchText: "",
     ...overrides,
   };
 }
@@ -32,6 +38,7 @@ function job(required: string[], preferred: string[] = [], minExperienceYears: n
       ...preferred.map((skillId) => ({ skillId, name: skillId, importance: "PREFERRED" as const })),
     ],
     minExperienceYears,
+    matchText: "",
   };
 }
 
@@ -165,4 +172,106 @@ test("GĐ1 — semantic luôn tắt và chưa có", () => {
   const result = run(candidate(["a"]), job(["a"]));
   assert.deepEqual(result.semantic, { enabled: false, available: false, similarity: null, normalized: null });
   assert.equal(result.weightsVersion, "rule-v1");
+});
+
+// ─── GĐ2: thành phần semantic (docs/06-backend/job-matcher-phase2/PLAN.md) ────
+
+const CALIBRATION_EXAMPLE = { lo: 0.25, hi: 0.75 };
+const hybrid = new ScoringJobMatcher(HYBRID_WEIGHTS_V1, CALIBRATION_EXAMPLE);
+const embeddingOnly = new ScoringJobMatcher(EMBEDDING_ONLY_WEIGHTS_V1, CALIBRATION_EXAMPLE);
+// Tin của ví dụ GĐ1 (T2): 2/3 bắt buộc, 1/1 ưu tiên, không yêu cầu năm.
+const exampleCandidate = candidate(["java", "spring", "docker"]);
+const exampleJob = job(["java", "spring", "postgres"], ["docker"]);
+
+test("S1 — ví dụ tính tay hybrid-v1: cosine 0.62 ⇒ semantic 0.74 ⇒ 74", () => {
+  const result = hybrid.match({ candidate: exampleCandidate, job: exampleJob, semanticSimilarity: 0.62 });
+  assert.equal(result.status, "SCORED");
+  assert.equal(result.weightsVersion, "hybrid-v1");
+  assert.equal(result.score, 74);
+  const semantic = component(result, "semantic");
+  assert.equal(semantic.applicable, true);
+  assert.ok(Math.abs(semantic.score! - 0.74) < 1e-9);
+  // Σw áp dụng = 0.40 + 0.10 + 0.30 = 0.80 (experience, education bị chia lại).
+  assert.ok(Math.abs(semantic.effectiveWeight - 0.3 / 0.8) < 1e-9);
+  assert.equal(component(result, "education").applicable, false);
+  assert.equal(result.semantic.enabled, true);
+  assert.equal(result.semantic.available, true);
+  assert.equal(result.semantic.similarity, 0.62);
+  assert.ok(Math.abs(result.semantic.normalized! - 0.74) < 1e-9);
+  assert.ok(result.notes.some((note) => note.includes("tương đồng nội dung") && note.includes("74/100")));
+});
+
+test("S2 — chuẩn hoá bị kẹp trong [0, 1]", () => {
+  const semanticOf = (cosine: number) =>
+    component(embeddingOnly.match({ candidate: exampleCandidate, job: exampleJob, semanticSimilarity: cosine }), "semantic").score;
+  assert.equal(semanticOf(0.1), 0);
+  assert.equal(semanticOf(0.25), 0);
+  assert.equal(semanticOf(0.75), 1);
+  assert.equal(semanticOf(0.95), 1);
+  assert.ok(Math.abs(semanticOf(0.5)! - 0.5) < 1e-9);
+});
+
+test("S3 — EMBEDDING_ONLY: điểm = semantic × 100", () => {
+  const result = embeddingOnly.match({ candidate: exampleCandidate, job: exampleJob, semanticSimilarity: 0.62 });
+  assert.equal(result.score, 74);
+  assert.equal(result.weightsVersion, "embedding-only-v1");
+  assert.equal(component(result, "requiredSkills").applicable, false);
+});
+
+test("S4 — cosine null ⇒ semantic không áp dụng (không phải 0), trọng số chia lại", () => {
+  const result = hybrid.match({ candidate: exampleCandidate, job: exampleJob, semanticSimilarity: null });
+  const semantic = component(result, "semantic");
+  assert.equal(semantic.applicable, false);
+  assert.equal(semantic.effectiveWeight, 0);
+  // (0.40×2/3 + 0.10×1) / 0.50 = 0.733 — cùng tỉ lệ bắt buộc/ưu tiên như rule-v1 (0.60/0.15).
+  assert.equal(result.score, 73);
+  assert.deepEqual(result.semantic, { enabled: true, available: false, similarity: null, normalized: null });
+  assert.ok(result.notes.some((note) => note.includes("chưa tính được mức tương đồng")));
+});
+
+test("S5 — EMBEDDING_ONLY + cosine null ⇒ INSUFFICIENT_JOB_DATA, không phải điểm 0", () => {
+  const result = embeddingOnly.match({ candidate: exampleCandidate, job: exampleJob, semanticSimilarity: null });
+  assert.equal(result.status, "INSUFFICIENT_JOB_DATA");
+  assert.equal(result.score, null);
+  assert.deepEqual(result.notes, ["Chưa tính được mức tương đồng nội dung nên chưa tính được mức phù hợp."]);
+});
+
+test("S6 — rule-v1 bỏ qua cosine: kết quả y hệt khi không có cosine", () => {
+  const withoutCosine = run(exampleCandidate, exampleJob);
+  const ignored = matcher.match({ candidate: exampleCandidate, job: exampleJob, semanticSimilarity: 0.9 });
+  assert.deepEqual(ignored, withoutCosine);
+  assert.equal(ignored.score, 73);
+});
+
+test("S7 — hồ sơ chưa có kỹ năng vẫn INSUFFICIENT_PROFILE dù có cosine (kiểm hồ sơ trước)", () => {
+  const result = hybrid.match({ candidate: candidate([]), job: exampleJob, semanticSimilarity: 0.8 });
+  assert.equal(result.status, "INSUFFICIENT_PROFILE");
+});
+
+test("S8 — tin không kỹ năng, không yêu cầu năm nhưng có cosine ⇒ hybrid chấm bằng semantic", () => {
+  const result = hybrid.match({ candidate: candidate(["a"]), job: job([]), semanticSimilarity: 0.5 });
+  assert.equal(result.status, "SCORED");
+  assert.equal(result.score, 50);
+});
+
+test("S9 — calibration mặc định là SEMANTIC_CALIBRATION; hi ≤ lo bị từ chối", () => {
+  const result = new ScoringJobMatcher(HYBRID_WEIGHTS_V1).match({
+    candidate: exampleCandidate,
+    job: exampleJob,
+    semanticSimilarity: SEMANTIC_CALIBRATION.hi,
+  });
+  assert.equal(component(result, "semantic").score, 1);
+  assert.throws(() => new ScoringJobMatcher(HYBRID_WEIGHTS_V1, { lo: 0.5, hi: 0.5 }));
+});
+
+test("S10 — markSemanticPending: giữ điểm rule-v1, báo semantic bật nhưng chưa có", () => {
+  const rule = run(exampleCandidate, exampleJob);
+  const pending = markSemanticPending(rule);
+  assert.equal(pending.score, rule.score);
+  assert.equal(pending.weightsVersion, "rule-v1");
+  assert.deepEqual(pending.semantic, { enabled: true, available: false, similarity: null, normalized: null });
+  assert.equal(pending.notes.length, rule.notes.length + 1);
+  // Không cộng câu semantic vào kết quả chưa chấm được.
+  const insufficient = run(candidate([]), exampleJob);
+  assert.deepEqual(markSemanticPending(insufficient).notes, insufficient.notes);
 });

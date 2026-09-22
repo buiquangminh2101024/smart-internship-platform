@@ -16,7 +16,9 @@
     "db:studio": "dotenv -e ../../.env -- prisma studio",
     "create-admin": "dotenv -e ../../.env -- tsx scripts/create-admin.ts",
     "db:clear": "dotenv -e ../../.env -- tsx scripts/clear-data.ts",
-    "seed-education-catalog": "dotenv -e ../../.env -- tsx scripts/seed-education-catalog.ts"
+    "seed-education-catalog": "dotenv -e ../../.env -- tsx scripts/seed-education-catalog.ts",
+    "seed-match-demo": "dotenv -e ../../.env -- tsx scripts/seed-match-demo.ts",
+    "eval-job-matching": "dotenv -e ../../.env -- tsx scripts/eval-job-matching.ts"
   },
   "prisma": {
     "seed": "tsx scripts/seed.ts"
