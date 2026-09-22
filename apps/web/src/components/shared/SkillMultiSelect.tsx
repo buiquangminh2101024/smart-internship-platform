@@ -38,6 +38,8 @@ export interface SelectedSkill {
   yearsOfExperience?: number;
   /** Chỉ dùng ở form tin tuyển dụng; không có = coi như REQUIRED. */
   importance?: SkillImportance;
+  /** Số năm tối thiểu tin yêu cầu cho kỹ năng này (form tin, Job Matcher GĐ3); null = không yêu cầu riêng. */
+  minYears?: number | null;
 }
 
 export interface SkillMultiSelectProps {
@@ -59,6 +61,11 @@ export interface SkillMultiSelectProps {
    * dụng — Job Matcher). Không truyền → chip giữ nguyên như hồ sơ ứng viên.
    */
   onChangeImportance?: (skillId: string, importance: SkillImportance) => void;
+  /**
+   * Số năm tối thiểu cho từng kỹ năng của tin (Job Matcher GĐ3). Ô số chỉ hiện
+   * khi truyền CẢ prop này lẫn `onChangeImportance` — hồ sơ ứng viên không đổi.
+   */
+  onChangeMinYears?: (skillId: string, minYears: number | null) => void;
   label?: string;
   hint?: string;
   disabled?: boolean;
@@ -118,6 +125,7 @@ export function SkillMultiSelect({
   allowYearsOfExperience = false,
   onUpdateYears,
   onChangeImportance,
+  onChangeMinYears,
   label = "Kỹ năng",
   hint,
   disabled = false,
@@ -244,6 +252,7 @@ export function SkillMultiSelect({
                 onRemove={remove}
                 {...(onUpdateYears ? { onUpdateYears } : {})}
                 {...(onChangeImportance ? { onChangeImportance } : {})}
+                {...(onChangeImportance && onChangeMinYears ? { onChangeMinYears } : {})}
                 onError={setError}
               />
             ))
@@ -326,12 +335,77 @@ export function SkillMultiSelect({
   );
 }
 
+/** Cùng trần với `yearsValue` ở apps/server/src/modules/job-posts/job-posts.dto.ts. */
+export const MAX_JOB_SKILL_MIN_YEARS = 20;
+
+/** Ô trống / 0 / gõ bậy ⇒ null = "không yêu cầu số năm riêng" (backend cũng quy 0 về null). */
+export function parseMinYears(raw: string): number | null {
+  const value = Number(raw);
+  if (!raw.trim() || !Number.isFinite(value) || value <= 0) return null;
+  return Math.min(value, MAX_JOB_SKILL_MIN_YEARS);
+}
+
+/**
+ * Ô số năm tối thiểu cho một kỹ năng của tin (form tin + bảng xem trước AI).
+ * Chỉ báo giá trị lên khi rời ô: trong lúc gõ giữ chuỗi cục bộ để gõ được
+ * "0." hay xoá trắng mà không bị ép về số giữa chừng.
+ */
+export function MinYearsInput({
+  label,
+  value,
+  disabled = false,
+  onChange,
+  className = "",
+}: {
+  label: string;
+  value: number | null;
+  disabled?: boolean;
+  onChange: (minYears: number | null) => void;
+  className?: string;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft === null) return;
+    const next = parseMinYears(draft);
+    setDraft(null);
+    if (next !== value) onChange(next);
+  };
+  return (
+    <span className={`inline-flex items-center gap-1 text-xs ${className}`}>
+      ≥
+      <input
+        type="number"
+        min="0"
+        max={MAX_JOB_SKILL_MIN_YEARS}
+        step="0.5"
+        placeholder="–"
+        title="Số năm kinh nghiệm tối thiểu cho kỹ năng này. Để trống nếu không yêu cầu."
+        aria-label={label}
+        value={draft ?? (value === null ? "" : String(value))}
+        disabled={disabled}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            // Enter trong form tin sẽ submit cả form nếu không chặn.
+            e.preventDefault();
+            commit();
+          }
+        }}
+        className="w-12 rounded-md border border-border-default bg-surface-card px-1 py-0.5 text-xs text-text-body"
+      />
+      năm
+    </span>
+  );
+}
+
 function SkillTag({
   skill,
   disabled,
   onRemove,
   onUpdateYears,
   onChangeImportance,
+  onChangeMinYears,
   onError,
 }: {
   skill: SelectedSkill;
@@ -339,6 +413,7 @@ function SkillTag({
   onRemove: (skillId: string) => void;
   onUpdateYears?: (skillId: string, yearsOfExperience: number) => Promise<void> | void;
   onChangeImportance?: (skillId: string, importance: SkillImportance) => void;
+  onChangeMinYears?: (skillId: string, minYears: number | null) => void;
   onError: (message: string | null) => void;
 }) {
   const importance = skill.importance ?? "REQUIRED";
@@ -393,6 +468,14 @@ function SkillTag({
         >
           {importance === "REQUIRED" ? "Bắt buộc" : "Ưu tiên"}
         </button>
+      ) : null}
+      {onChangeMinYears ? (
+        <MinYearsInput
+          label={`Số năm kinh nghiệm tối thiểu cho ${skill.name}`}
+          value={skill.minYears ?? null}
+          disabled={disabled}
+          onChange={(minYears) => onChangeMinYears(skill.id, minYears)}
+        />
       ) : null}
       {editing ? (
         <span className={`flex items-center gap-1 ${yearsTone}`}>

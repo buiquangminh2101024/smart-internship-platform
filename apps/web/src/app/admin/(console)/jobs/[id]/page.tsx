@@ -79,6 +79,91 @@ function ModerationResult({ outcome }: { outcome: Outcome }) {
   );
 }
 
+/** Ngưỡng độ dài "có nội dung thật" — chỉ để nhắc Admin, không chặn duyệt. */
+const MIN_DESCRIPTION_LENGTH = 150;
+const MIN_REQUIREMENTS_LENGTH = 50;
+
+const MANUAL_CHECKS = ["Mô tả công việc cụ thể, không chung chung?", "Yêu cầu ứng viên rõ ràng, đo lường được?"];
+
+/**
+ * Checklist khi duyệt (docs/05-frontend/phases/job-matcher-phase3/PLAN.md Quyết
+ * định #6): auto-check tính từ dữ liệu tin đã tải, checklist thủ công chỉ là
+ * state cục bộ để nhắc Admin — không gửi server, không ràng buộc nút Duyệt/Từ chối.
+ */
+function ReviewChecklist({ job }: { job: JobPost }) {
+  const [checked, setChecked] = useState<string[]>([]);
+  const descriptionLength = job.description.trim().length;
+  const requirementsLength = job.requirements?.trim().length ?? 0;
+  const requiredSkills = job.skills.filter((skill) => skill.importance === "REQUIRED").length;
+  const autoChecks = [
+    {
+      ok: descriptionLength >= MIN_DESCRIPTION_LENGTH,
+      label: `Mô tả công việc đủ chi tiết (${descriptionLength}/${MIN_DESCRIPTION_LENGTH} ký tự)`,
+    },
+    {
+      ok: requirementsLength >= MIN_REQUIREMENTS_LENGTH,
+      label: `Có phần yêu cầu ứng viên (${requirementsLength}/${MIN_REQUIREMENTS_LENGTH} ký tự)`,
+    },
+    { ok: requiredSkills > 0, label: `Có kỹ năng bắt buộc (${requiredSkills})` },
+    {
+      ok: job.requirementsConfirmedAt !== null,
+      label: job.requirementsConfirmedAt
+        ? `Nhà tuyển dụng đã xác nhận yêu cầu (${formatDate(job.requirementsConfirmedAt)})`
+        : "Nhà tuyển dụng chưa xác nhận yêu cầu bằng AI",
+    },
+  ];
+
+  return (
+    <Card padding="md" className="grid gap-3">
+      <h2 className="text-xs font-semibold tracking-wide text-text-subtle uppercase">Checklist duyệt tin</h2>
+      <ul className="grid gap-1.5 text-sm">
+        {autoChecks.map((item) => (
+          <li key={item.label} className={`flex items-start gap-2 ${item.ok ? "text-success-700" : "text-marigold-700"}`}>
+            <Icon name={item.ok ? "circle-check" : "circle-alert"} size={15} className="mt-0.5 shrink-0" />
+            {item.label}
+          </li>
+        ))}
+      </ul>
+      {job.majors.length > 0 || job.minExperienceYears ? (
+        <dl className="grid gap-1 border-t border-border-subtle pt-3 text-sm">
+          {job.minExperienceYears ? (
+            <div className="flex justify-between gap-3">
+              <dt className="text-text-muted">Kinh nghiệm tối thiểu</dt>
+              <dd className="text-right text-text-body">{job.minExperienceYears} năm</dd>
+            </div>
+          ) : null}
+          {job.majors.length > 0 ? (
+            <div className="grid gap-0.5">
+              <dt className="text-text-muted">Ngành phù hợp</dt>
+              <dd className="text-text-body">
+                {job.majors
+                  .map((major) => `${major.name}${major.relevance === "RELATED" ? " (liên quan)" : ""}`)
+                  .join(", ")}
+              </dd>
+            </div>
+          ) : null}
+        </dl>
+      ) : null}
+      <fieldset className="grid gap-1.5 border-t border-border-subtle pt-3">
+        <legend className="mb-1.5 text-sm text-text-muted">Admin tự đánh giá</legend>
+        {MANUAL_CHECKS.map((label) => (
+          <label key={label} className="flex items-start gap-2 text-sm text-text-body">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={checked.includes(label)}
+              onChange={() =>
+                setChecked((prev) => (prev.includes(label) ? prev.filter((item) => item !== label) : [...prev, label]))
+              }
+            />
+            {label}
+          </label>
+        ))}
+      </fieldset>
+    </Card>
+  );
+}
+
 /**
  * Trang kiểm duyệt chi tiết một tin — khớp ảnh mẫu
  * `Screenshot 2026-09-12 134326.png` (panel 2): nội dung tin bên trái, card
@@ -204,6 +289,8 @@ export default function AdminJobPostReviewPage({ params }: { params: Promise<{ i
                 </div>
               ) : null}
             </Card>
+
+            {job.status === "PENDING" ? <ReviewChecklist job={job} /> : null}
           </>
         }
       />

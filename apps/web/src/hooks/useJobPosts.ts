@@ -1,13 +1,16 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  ConfirmRequirementsRequest,
   EmployerJobPostListQuery,
+  ExtractedJobRequirements,
   JobPost,
   JobPostSearchQuery,
   JobPostStats,
   JobPostStatus,
   PaginatedResponse,
+  UpdateJobPostRequest,
 } from "@sip/shared-types";
 import { apiFetch, publicFetch } from "@/lib/api-client";
 
@@ -56,6 +59,46 @@ export function useEmployerJobPost(id: string) {
     queryKey: ["employerJobPost", id],
     queryFn: () => apiFetch<JobPost>("employer", `/employer/job-posts/${id}`),
     enabled: !!id,
+  });
+}
+
+/**
+ * "Phân tích yêu cầu bằng AI" (Job Matcher GĐ3). Backend đọc nội dung tin ĐÃ
+ * LƯU, nên nếu Employer vừa sửa tiêu đề/mô tả/yêu cầu trong form thì truyền
+ * `pendingText` để lưu nháp phần chữ đó trước rồi mới phân tích. Không tự retry
+ * — 409/429/502 đã có thông báo tiếng Việt từ backend, Employer tự bấm lại.
+ */
+export function useExtractJobRequirements(jobPostId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    retry: false,
+    mutationFn: async (pendingText?: Pick<UpdateJobPostRequest, "title" | "description" | "requirements">) => {
+      if (pendingText) {
+        await apiFetch<JobPost>("employer", `/employer/job-posts/${jobPostId}`, {
+          method: "PATCH",
+          body: JSON.stringify(pendingText),
+        });
+        void queryClient.invalidateQueries({ queryKey: ["employerJobPost", jobPostId] });
+      }
+      return apiFetch<ExtractedJobRequirements>("employer", `/employer/job-posts/${jobPostId}/requirements/extract`, {
+        method: "POST",
+      });
+    },
+  });
+}
+
+/** "Áp dụng" bảng xem trước — đồng bộ toàn bộ kỹ năng/ngành/số năm của tin. */
+export function useConfirmJobRequirements(jobPostId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (dto: ConfirmRequirementsRequest) =>
+      apiFetch<JobPost>("employer", `/employer/job-posts/${jobPostId}/requirements`, {
+        method: "PUT",
+        body: JSON.stringify(dto),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["employerJobPost", jobPostId] });
+    },
   });
 }
 

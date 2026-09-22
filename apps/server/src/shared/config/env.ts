@@ -116,6 +116,10 @@ const baseSchema = z.object({
   // trên nhãn cuối cùng (64/64 cặp), quy tắc quyết định chốt trước trong PLAN ĐẠT
   // (ρ/NDCG@3/FP đều bằng hoặc tốt hơn rule trên dev) — xem eval/eval-results.md.
   JOB_MATCHER_MODE: z.enum(["rule", "hybrid"]).default("hybrid"),
+  // Job Matcher GĐ3: hạn mức lượt gọi LLM "Phân tích yêu cầu bằng AI" mỗi ngày
+  // (docs/06-backend/job-matcher-phase3/PLAN.md mục API). Lượt trả từ cache không bị trừ.
+  REQUIREMENT_EXTRACTION_DAILY_LIMIT_PER_USER: z.coerce.number().int().min(0).default(20),
+  REQUIREMENT_EXTRACTION_DAILY_LIMIT_GLOBAL: z.coerce.number().int().min(0).default(200),
 
   // Trích xuất CV bằng AI (xem docs/06-backend/cv-ai-extraction-phase1/PLAN.md).
   // Model Gemini thứ 2 (cùng GEMINI_API_KEY) dùng khi GEMINI_MODEL báo 503

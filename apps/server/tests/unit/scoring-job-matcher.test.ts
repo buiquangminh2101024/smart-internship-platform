@@ -6,6 +6,8 @@ import type { CandidateMatchProfile, JobMatchProfile } from "../../src/shared/po
 import {
   EMBEDDING_ONLY_WEIGHTS_V1,
   HYBRID_WEIGHTS_V1,
+  HYBRID_WEIGHTS_V2,
+  RELATED_MAJOR_SCORE,
   RULE_WEIGHTS_V1,
   SEMANTIC_CALIBRATION,
 } from "../../src/modules/job-matching/job-matching.config";
@@ -34,10 +36,11 @@ function job(required: string[], preferred: string[] = [], minExperienceYears: n
   return {
     jobPostId: "j1",
     skills: [
-      ...required.map((skillId) => ({ skillId, name: skillId, importance: "REQUIRED" as const })),
-      ...preferred.map((skillId) => ({ skillId, name: skillId, importance: "PREFERRED" as const })),
+      ...required.map((skillId) => ({ skillId, name: skillId, importance: "REQUIRED" as const, minYears: null })),
+      ...preferred.map((skillId) => ({ skillId, name: skillId, importance: "PREFERRED" as const, minYears: null })),
     ],
     minExperienceYears,
+    majors: [],
     matchText: "",
   };
 }
@@ -274,4 +277,169 @@ test("S10 — markSemanticPending: giữ điểm rule-v1, báo semantic bật nh
   // Không cộng câu semantic vào kết quả chưa chấm được.
   const insufficient = run(candidate([]), exampleJob);
   assert.deepEqual(markSemanticPending(insufficient).notes, insufficient.notes);
+});
+
+// ─── GĐ3: số năm theo kỹ năng + học vấn (docs/06-backend/job-matcher-phase3/PLAN.md) ────
+
+function jobWith(
+  skills: Array<{ id: string; minYears?: number | null; importance?: "REQUIRED" | "PREFERRED" }>,
+  extra: Partial<JobMatchProfile> = {},
+): JobMatchProfile {
+  return {
+    ...job([]),
+    skills: skills.map((skill) => ({
+      skillId: skill.id,
+      name: skill.id,
+      importance: skill.importance ?? "REQUIRED",
+      minYears: skill.minYears ?? null,
+    })),
+    ...extra,
+  };
+}
+
+function withYears(years: Record<string, number>, overrides: Partial<CandidateMatchProfile> = {}): CandidateMatchProfile {
+  return candidate([], {
+    skills: Object.entries(years).map(([skillId, yearsOfExperience]) => ({ skillId, name: skillId, yearsOfExperience })),
+    ...overrides,
+  });
+}
+
+test("E1 — ví dụ tính tay: tổng 2/1 năm (=1) + Java 1/2 năm (=0.5) ⇒ experience 0.75 ⇒ 93", () => {
+  const result = run(
+    withYears({ java: 1, spring: 1 }, { totalExperienceYears: 2 }),
+    jobWith([{ id: "java", minYears: 2 }, { id: "spring" }], { minExperienceYears: 1 }),
+  );
+  assert.equal(component(result, "experience").score, 0.75);
+  // (0.60×1 + 0.25×0.75) / 0.85 = 0.926
+  assert.equal(result.score, 93);
+  assert.equal(result.skills.find((skill) => skill.skillId === "java")!.requiredYears, 2);
+  assert.equal(result.skills.find((skill) => skill.skillId === "spring")!.requiredYears, null);
+  assert.ok(result.notes.some((note) => note.includes("java 1/2 năm")));
+});
+
+test("E2 — có kỹ năng nhưng chưa khai năm (D1) ⇒ phần đó bị loại khỏi trung bình, không phải 0", () => {
+  const result = run(
+    withYears({ java: 0 }, { totalExperienceYears: 2 }),
+    jobWith([{ id: "java", minYears: 2 }], { minExperienceYears: 1 }),
+  );
+  assert.equal(component(result, "experience").score, 1);
+  assert.equal(result.score, 100);
+  assert.ok(result.notes.some((note) => note.includes("java chưa khai số năm")));
+});
+
+test("E3 — thiếu hẳn kỹ năng có số năm ⇒ chỉ bị trừ ở requiredSkills, không phạt hai lần", () => {
+  const cand = withYears({ spring: 1 });
+  const withMinYears = run(cand, jobWith([{ id: "java", minYears: 2 }, { id: "spring" }]));
+  const without = run(cand, jobWith([{ id: "java" }, { id: "spring" }]));
+  assert.equal(component(withMinYears, "experience").applicable, false);
+  assert.equal(withMinYears.score, 50);
+  assert.equal(withMinYears.score, without.score);
+  // Kỹ năng thiếu đã có trong câu kỹ năng — không lặp lại ở câu số năm.
+  assert.ok(!withMinYears.notes.some((note) => note.startsWith("Số năm theo từng kỹ năng")));
+});
+
+test("E4 — chỉ có số năm theo kỹ năng (không yêu cầu tổng) vẫn chấm experience; vượt yêu cầu kẹp ở 1", () => {
+  const result = run(
+    withYears({ java: 3, react: 0.5 }),
+    jobWith([{ id: "java", minYears: 2 }, { id: "react", minYears: 1, importance: "PREFERRED" }]),
+  );
+  assert.equal(result.experience.status, "NOT_REQUIRED");
+  // (min(1, 3/2) + 0.5/1) / 2 = 0.75
+  assert.equal(component(result, "experience").score, 0.75);
+});
+
+test("E5 — tin cũ không có số năm riêng ⇒ experience y hệt GĐ1", () => {
+  const result = run(withYears({ a: 1 }, { totalExperienceYears: 0.5 }), jobWith([{ id: "a" }], { minExperienceYears: 1 }));
+  assert.equal(component(result, "experience").score, 0.5);
+  assert.equal(result.score, 85);
+});
+
+const hybridV2 = new ScoringJobMatcher(HYBRID_WEIGHTS_V2);
+const MAJORS: JobMatchProfile["majors"] = [
+  { majorId: "m-cs", name: "Khoa học máy tính", relevance: "PRIMARY" },
+  { majorId: "m-se", name: "Kỹ thuật phần mềm", relevance: "RELATED" },
+];
+// 1/2 kỹ năng bắt buộc; không semantic ⇒ chỉ requiredSkills (0.3429) + education (0.0429) áp dụng.
+const EDU_JOB = jobWith([{ id: "a" }, { id: "b" }], { majors: MAJORS });
+
+function studying(...majors: Array<{ majorId: string | null; majorName: string | null }>) {
+  return candidate(["a"], { educations: majors.map((major) => ({ ...major, degree: "Đại học" })) });
+}
+
+function runHybrid(cand: CandidateMatchProfile, jobProfile: JobMatchProfile, scorer: ScoringJobMatcher = hybridV2) {
+  return scorer.match({ candidate: cand, job: jobProfile, semanticSimilarity: null });
+}
+
+test("ED1 — ba mức ngành: đúng ngành 56 > liên quan 52 > khác ngành 44 (ví dụ tính tay)", () => {
+  const primary = runHybrid(studying({ majorId: "m-cs", majorName: "Khoa học máy tính" }), EDU_JOB);
+  const related = runHybrid(studying({ majorId: "m-se", majorName: "Kỹ thuật phần mềm" }), EDU_JOB);
+  const none = runHybrid(studying({ majorId: "m-biz", majorName: "Quản trị kinh doanh" }), EDU_JOB);
+  // (0.3429×0.5 + 0.0429×s) / 0.3858 với s = 1 / 0.65 / 0
+  assert.equal(primary.score, 56);
+  assert.equal(related.score, 52);
+  assert.equal(none.score, 44);
+  assert.equal(component(related, "education").score, RELATED_MAJOR_SCORE);
+  assert.deepEqual(primary.education, {
+    status: "PRIMARY",
+    matchedMajorName: "Khoa học máy tính",
+    requiredMajors: ["Khoa học máy tính", "Kỹ thuật phần mềm"],
+  });
+  assert.equal(related.education.status, "RELATED");
+  assert.equal(none.education.status, "NONE");
+  assert.ok(none.notes.some((note) => note.includes("chưa khớp") && note.includes("Khoa học máy tính")));
+});
+
+test("ED2 — chưa có học vấn, hoặc học vấn không gắn ngành trong danh mục ⇒ UNKNOWN, không áp dụng (không phải 0)", () => {
+  for (const cand of [studying(), studying({ majorId: null, majorName: null })]) {
+    const result = runHybrid(cand, EDU_JOB);
+    assert.equal(result.education.status, "UNKNOWN");
+    assert.equal(component(result, "education").applicable, false);
+    assert.equal(result.score, 50);
+  }
+});
+
+test("ED3 — xét TOÀN BỘ học vấn: có một bằng đúng ngành là đủ; PRIMARY thắng RELATED", () => {
+  const result = runHybrid(
+    studying(
+      { majorId: "m-biz", majorName: "Quản trị kinh doanh" },
+      { majorId: "m-se", majorName: "Kỹ thuật phần mềm" },
+      { majorId: "m-cs", majorName: "Khoa học máy tính" },
+    ),
+    EDU_JOB,
+  );
+  assert.equal(result.education.status, "PRIMARY");
+  assert.equal(result.education.matchedMajorName, "Khoa học máy tính");
+});
+
+test("ED4 — tin không nêu ngành ⇒ NOT_REQUIRED, education không áp dụng như GĐ2", () => {
+  const result = runHybrid(studying({ majorId: "m-cs", majorName: "Khoa học máy tính" }), jobWith([{ id: "a" }, { id: "b" }]));
+  assert.equal(result.education.status, "NOT_REQUIRED");
+  assert.equal(component(result, "education").applicable, false);
+  assert.equal(result.score, 50);
+});
+
+test("ED5 — rule-v1 (education = 0) không đổi điểm và không ghi chú học vấn", () => {
+  const cand = studying({ majorId: "m-biz", majorName: "Quản trị kinh doanh" });
+  const result = run(cand, EDU_JOB);
+  assert.equal(result.score, run(cand, jobWith([{ id: "a" }, { id: "b" }])).score);
+  assert.equal(result.education.status, "NONE");
+  assert.ok(!result.notes.some((note) => note.includes("ngành")));
+});
+
+test("ED6 — relatedMajorScore chỉnh được cho bộ đánh giá; ngoài [0, 1] bị từ chối", () => {
+  const low = new ScoringJobMatcher(HYBRID_WEIGHTS_V2, SEMANTIC_CALIBRATION, 0.3);
+  const result = runHybrid(studying({ majorId: "m-se", majorName: "Kỹ thuật phần mềm" }), EDU_JOB, low);
+  assert.equal(component(result, "education").score, 0.3);
+  // (0.17145 + 0.0429×0.3) / 0.3858 = 0.478
+  assert.equal(result.score, 48);
+  assert.throws(() => new ScoringJobMatcher(HYBRID_WEIGHTS_V2, SEMANTIC_CALIBRATION, 1.5));
+});
+
+test("ED7 — tin chỉ có ngành (không kỹ năng/năm): hybrid chấm được, rule-v1 vẫn INSUFFICIENT_JOB_DATA", () => {
+  const onlyMajors = jobWith([], { majors: MAJORS });
+  const cand = studying({ majorId: "m-cs", majorName: "Khoa học máy tính" });
+  const hybridResult = runHybrid(cand, onlyMajors);
+  assert.equal(hybridResult.status, "SCORED");
+  assert.equal(hybridResult.score, 100);
+  assert.equal(run(cand, onlyMajors).status, "INSUFFICIENT_JOB_DATA");
 });

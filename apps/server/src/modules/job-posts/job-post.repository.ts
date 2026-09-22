@@ -3,6 +3,7 @@ import type {
   JobPostModerationAction,
   JobPostStatus,
   JobPostType,
+  MajorRelevance,
   ModerationActionType,
   Prisma,
   PrismaClient,
@@ -28,6 +29,7 @@ export const jobPostInclude = {
   // Kèm cả skill PENDING (do chính employer vừa đề xuất) — form sửa tin cần
   // thấy chúng; mapper mới là chỗ lọc bớt khi trả ra API công khai.
   skills: { include: { skill: { select: { id: true, name: true, status: true } } } },
+  majors: { include: { major: { select: { id: true, name: true } } } },
   _count: { select: { applications: true } },
 } satisfies Prisma.JobPostInclude;
 
@@ -47,6 +49,8 @@ export interface JobPostWriteData {
   benefits?: string | null;
   expiresAt?: Date | null;
   minExperienceYears?: number | null;
+  requirementsExtra?: Prisma.InputJsonValue;
+  requirementsConfirmedAt?: Date | null;
   status?: JobPostStatus;
   publishedAt?: Date | null;
   closedAt?: Date | null;
@@ -128,27 +132,67 @@ export class JobPostRepository {
 
   /**
    * Ghi đè danh sách kỹ năng của tin (diff-write: xoá cái bỏ, cập nhật
-   * importance của cái còn giữ, thêm cái mới).
+   * importance của cái còn giữ, thêm cái mới). `minYears` undefined = giữ giá
+   * trị đang lưu (form cũ không gửi số năm không được xoá mất số đã xác nhận).
    */
   async setSkills(
     jobPostId: string,
-    skills: { skillId: string; importance: SkillImportance }[],
+    skills: { skillId: string; importance: SkillImportance; minYears?: number | null }[],
     db: Db = this.prisma,
   ): Promise<void> {
     const skillIds = skills.map((skill) => skill.skillId);
     await db.jobPostSkill.deleteMany({ where: { jobPostId, skillId: { notIn: skillIds } } });
     if (skills.length === 0) return;
 
-    // Hai nhóm importance ⇒ tối đa 2 lệnh updateMany cho các dòng đã có.
+    // Dòng không kèm số năm: hai nhóm importance ⇒ tối đa 2 lệnh updateMany.
     for (const importance of ["REQUIRED", "PREFERRED"] as const) {
-      const ids = skills.filter((skill) => skill.importance === importance).map((skill) => skill.skillId);
+      const ids = skills
+        .filter((skill) => skill.minYears === undefined && skill.importance === importance)
+        .map((skill) => skill.skillId);
       if (ids.length === 0) continue;
       await db.jobPostSkill.updateMany({ where: { jobPostId, skillId: { in: ids } }, data: { importance } });
     }
+    // Dòng có số năm: mỗi dòng một giá trị riêng, không gộp được (trần 30 kỹ năng).
+    for (const skill of skills) {
+      if (skill.minYears === undefined) continue;
+      await db.jobPostSkill.updateMany({
+        where: { jobPostId, skillId: skill.skillId },
+        data: { importance: skill.importance, minYears: skill.minYears },
+      });
+    }
     await db.jobPostSkill.createMany({
-      data: skills.map((skill) => ({ jobPostId, skillId: skill.skillId, importance: skill.importance })),
+      data: skills.map((skill) => ({
+        jobPostId,
+        skillId: skill.skillId,
+        importance: skill.importance,
+        minYears: skill.minYears ?? null,
+      })),
       skipDuplicates: true,
     });
+  }
+
+  /** Đồng bộ toàn bộ tập ngành của tin — bảng chỉ có một cột dữ liệu nên xoá-rồi-tạo là đủ. */
+  async setMajors(
+    jobPostId: string,
+    majors: { majorId: string; relevance: MajorRelevance }[],
+    db: Db = this.prisma,
+  ): Promise<void> {
+    await db.jobPostMajor.deleteMany({ where: { jobPostId } });
+    if (majors.length === 0) return;
+    await db.jobPostMajor.createMany({ data: majors.map((major) => ({ jobPostId, ...major })) });
+  }
+
+  /** Id trong danh sách thực sự tồn tại trong catalog (mọi trạng thái). */
+  async findExistingSkillIds(ids: string[], db: Db = this.prisma): Promise<Set<string>> {
+    if (ids.length === 0) return new Set();
+    const rows = await db.skill.findMany({ where: { id: { in: ids } }, select: { id: true } });
+    return new Set(rows.map((row) => row.id));
+  }
+
+  async findExistingMajorIds(ids: string[], db: Db = this.prisma): Promise<Set<string>> {
+    if (ids.length === 0) return new Set();
+    const rows = await db.major.findMany({ where: { id: { in: ids } }, select: { id: true } });
+    return new Set(rows.map((row) => row.id));
   }
 
   /** Tìm kiếm công khai — chỉ tin PUBLISHED và chưa quá hạn. */

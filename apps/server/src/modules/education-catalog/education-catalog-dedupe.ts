@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import type { SuggestCatalogEntryResponse } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
 import type { CatalogRateLimitService } from "../shared/catalog-rate-limit.service";
-import { AUTO_MATCH_THRESHOLD, GRAY_ZONE_THRESHOLD } from "../skills/skill-dedupe.service";
+import { AUTO_MATCH_THRESHOLD, GRAY_ZONE_THRESHOLD, type ApprovedCatalogMatch } from "../skills/skill-dedupe.service";
 import { rankSkillsByName } from "../skills/skill-token-match.util";
 import type { EducationCatalogDomain, EducationCatalogRepository } from "./education-catalog.types";
 
@@ -102,4 +102,34 @@ export async function suggestCatalogEntry(
 
   await catalogRateLimitService.recordCreation(domain, userId);
   return { id: created.id, name: created.name, status: "PENDING", matchType: "PENDING_REVIEW" };
+}
+
+/**
+ * Phần chỉ-đọc của pipeline trên, giới hạn mục APPROVED: bậc 0 alias → trùng tên
+ * sau chuẩn hoá → bậc 1 token ≥ 0.85 không mơ hồ. Không kiểm quota, không tạo
+ * PENDING — dùng cho tên do AI đọc từ tin tuyển dụng (Job Matcher GĐ3).
+ */
+export async function findApprovedCatalogEntry(
+  deps: Pick<CatalogDedupeDeps, "repository" | "normalize">,
+  rawName: string,
+): Promise<ApprovedCatalogMatch | null> {
+  const { repository, normalize } = deps;
+  const key = normalize(rawName.trim().replace(/\s+/g, " "));
+  if (!key) return null;
+
+  const aliased = await repository.findByAlias(key);
+  if (aliased?.status === "APPROVED") return { id: aliased.id, name: aliased.name, matchType: "ALIAS" };
+
+  const approved = (await repository.listForMatching()).filter((entry) => entry.status === "APPROVED");
+
+  const same = approved.find((entry) => normalize(entry.name) === key);
+  if (same) return { id: same.id, name: same.name, matchType: "EXACT" };
+
+  const candidates = approved.map((entry) => ({ id: entry.id, name: normalize(entry.name) }));
+  const [best, runnerUp] = rankSkillsByName(key, candidates, 2);
+  if (!best || best.score < AUTO_MATCH_THRESHOLD) return null;
+  if (runnerUp !== undefined && best.score - runnerUp.score < AMBIGUITY_MARGIN) return null;
+
+  const matched = approved.find((entry) => entry.id === best.skillId)!;
+  return { id: matched.id, name: matched.name, matchType: "TOKEN" };
 }
