@@ -108,6 +108,14 @@ const baseSchema = z.object({
   GEMINI_MODEL: z.string().min(1).default("gemini-3.6-flash"),
   EMBEDDING_MODEL_CACHE_DIR: z.string().optional(),
   EMBEDDING_MODEL_ID: z.string().min(1).default("Xenova/paraphrase-multilingual-MiniLM-L12-v2"),
+  // Job Matcher GĐ2 (docs/06-backend/job-matcher-phase2/PLAN.md): tăng số này khi
+  // đổi mẫu văn bản embed để mọi vector cũ tự hết hiệu lực (hash đổi ⇒ tính lại).
+  MATCH_EMBEDDING_TEMPLATE_VERSION: z.coerce.number().int().min(1).default(1),
+  // rule = chỉ kỹ năng + kinh nghiệm (GĐ1); hybrid = thêm độ tương đồng nội dung
+  // (embedding, HYBRID_WEIGHTS_V2). Đổi mặc định sang hybrid ở bước 6 (2026-09-22):
+  // trên nhãn cuối cùng (64/64 cặp), quy tắc quyết định chốt trước trong PLAN ĐẠT
+  // (ρ/NDCG@3/FP đều bằng hoặc tốt hơn rule trên dev) — xem eval/eval-results.md.
+  JOB_MATCHER_MODE: z.enum(["rule", "hybrid"]).default("hybrid"),
 
   // Trích xuất CV bằng AI (xem docs/06-backend/cv-ai-extraction-phase1/PLAN.md).
   // Model Gemini thứ 2 (cùng GEMINI_API_KEY) dùng khi GEMINI_MODEL báo 503

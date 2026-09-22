@@ -345,6 +345,7 @@ model Candidate {
   savedJobs       SavedJob[]
   applications    Application[]
   conversations   Conversation[]
+  matchEmbedding  CandidateEmbedding?
 
   @@map("candidates")
 }
@@ -612,53 +613,94 @@ model PaymentMethod {
 // ─── job-posts ──────────────────────────────────────────────────────────
 
 model JobPost {
-  id           String        @id @default(cuid())
-  companyId    String
-  company      Company       @relation(fields: [companyId], references: [id])
-  employerId   String
-  employer     Employer      @relation(fields: [employerId], references: [id])
-  title        String
-  description  String
-  jobType      JobPostType
-  status       JobPostStatus @default(DRAFT)
-  salaryMin    Int?
-  salaryMax    Int?
-  isNegotiable Boolean       @default(false)
-  requirements String?
-  benefits     String?
-  cityId       String?
-  city         City?         @relation(fields: [cityId], references: [id])
-  address      String?
-  industryId   String?
-  industry     Industry?     @relation(fields: [industryId], references: [id])
-  publishedAt  DateTime?
-  expiresAt    DateTime?
-  closedAt     DateTime?
+  id                 String        @id @default(cuid())
+  companyId          String
+  company            Company       @relation(fields: [companyId], references: [id])
+  employerId         String
+  employer           Employer      @relation(fields: [employerId], references: [id])
+  title              String
+  description        String
+  jobType            JobPostType
+  status             JobPostStatus @default(DRAFT)
+  salaryMin          Int?
+  salaryMax          Int?
+  isNegotiable       Boolean       @default(false)
+  requirements       String?
+  benefits           String?
+  cityId             String?
+  city               City?         @relation(fields: [cityId], references: [id])
+  address            String?
+  industryId         String?
+  industry           Industry?     @relation(fields: [industryId], references: [id])
+  publishedAt        DateTime?
+  expiresAt          DateTime?
+  closedAt           DateTime?
   // Tăng 1 mỗi lần Guest xem chi tiết tin PUBLISHED qua API công khai
   // (quyết định Phase 6, xem docs/06-backend/phase-06-job-recruitment/PLAN.md).
-  viewCount    Int           @default(0)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  viewCount          Int           @default(0)
+  // Số năm kinh nghiệm tối thiểu Employer yêu cầu; null = không yêu cầu.
+  // Dùng cho Job Matcher (xem docs/06-backend/job-matcher-phase1/PLAN.md).
+  minExperienceYears Float?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
   moderationActions JobPostModerationAction[]
   applications      Application[]
   savedBy           SavedJob[]
   conversations     Conversation[]
   skills            JobPostSkill[]
+  matchEmbedding    JobPostEmbedding?
 
   @@map("job_posts")
+}
+
+enum SkillImportance {
+  REQUIRED
+  PREFERRED
 }
 
 // Kỹ năng yêu cầu của tin tuyển dụng, dùng chung catalog Skill với
 // CandidateSkill để so khớp được khi triển khai AI matching (Phase 10).
 model JobPostSkill {
-  jobPostId String
-  jobPost   JobPost @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
-  skillId   String
-  skill     Skill   @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  jobPostId  String
+  jobPost    JobPost         @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  skillId    String
+  skill      Skill           @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  // Default REQUIRED ⇒ mọi tin cũ giữ nguyên nghĩa, không cần backfill.
+  importance SkillImportance @default(REQUIRED)
 
   @@id([jobPostId, skillId])
   @@map("job_post_skills")
+}
+
+// Vector embedding của hồ sơ / tin cho Job Matcher GĐ2 (thành phần `semantic`,
+// xem docs/06-backend/job-matcher-phase2/PLAN.md). Bảng riêng, không thêm cột vào
+// Candidate/JobPost: hai model đó dùng rất rộng, và cascade xoá sạch khi xoá
+// hồ sơ/tin. Cột vector chỉ đọc/ghi được qua $queryRaw/$executeRaw (như
+// Skill.embedding) — xem match-embedding.repository.ts.
+model CandidateEmbedding {
+  candidateId     String                     @id
+  candidate       Candidate                  @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  embedding       Unsupported("vector(384)")
+  // sha256(templateVersion|modelId|văn bản) — khác hash ⇒ tính lại lúc xem điểm lần sau.
+  contentHash     String
+  model           String
+  templateVersion Int
+  embeddedAt      DateTime                   @default(now())
+
+  @@map("candidate_embeddings")
+}
+
+model JobPostEmbedding {
+  jobPostId       String                     @id
+  jobPost         JobPost                    @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  embedding       Unsupported("vector(384)")
+  contentHash     String
+  model           String
+  templateVersion Int
+  embeddedAt      DateTime                   @default(now())
+
+  @@map("job_post_embeddings")
 }
 
 model JobPostModerationAction {

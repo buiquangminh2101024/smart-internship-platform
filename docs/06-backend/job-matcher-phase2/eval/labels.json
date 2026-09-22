@@ -1,0 +1,842 @@
+{
+  "_readme": [
+    "label: GOOD_MATCH | PARTIAL_MATCH | POOR_MATCH — nhãn CUỐI CÙNG sau khi hai người thống nhất (null = chưa gán).",
+    "ratings: nhãn ĐỘC LẬP của từng người gán trước khi bàn bạc, dùng tính Cohen's κ. Chỉ một người thì xoá rater2 và nêu hạn chế trong báo cáo.",
+    "split: theo tin (mọi cặp của một tin cùng tập) — lấy từ fixture, không đổi tay. dev để hiệu chỉnh, test chỉ để báo cáo.",
+    "category: kiểu cặp do lúc thiết kế fixture, dùng phân tích lỗi — KHÔNG phải nhãn, đừng để nó dẫn dắt khi gán."
+  ],
+  "pairs": [
+    {
+      "id": "p01",
+      "candidateRef": "fe-react-03",
+      "jobRef": "Thực tập sinh Frontend Web",
+      "label": null,
+      "ratings": {
+        "rater1": "GOOD_MATCH",
+        "rater2": "GOOD_MATCH"
+      },
+      "split": "dev",
+      "category": "hard-case",
+      "note": ""
+    },
+    {
+      "id": "p02",
+      "candidateRef": "fe-react-03",
+      "jobRef": "Thực tập sinh Frontend Product",
+      "label": "PARTIAL_MATCH",
+      "ratings": {
+        "rater1": "GOOD_MATCH",
+        "rater2": "PARTIAL_MATCH"
+      },
+      "split": "dev",
+      "category": "same-domain",
+      "note": "Đúng frontend, thiếu TypeScript cốt lõi."
+    },
+    {
+      "id": "p03",
+      "candidateRef": "fe-react-03",
+      "jobRef": "Thực tập sinh Backend Node TypeScript",
+      "label": null,
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "dev",
+      "category": "adjacent",
+      "note": ""
+    },
+    {
+      "id": "p04",
+      "candidateRef": "fe-react-03",
+      "jobRef": "Thực tập sinh QA Automation",
+      "label": "POOR_MATCH",
+      "ratings": {
+        "rater1": "PARTIAL_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "dev",
+      "category": "adjacent",
+      "note": "Thiếu nền tảng QA cốt lõi."
+    },
+    {
+      "id": "p05",
+      "candidateRef": "fe-typescript-04",
+      "jobRef": "Thực tập sinh Frontend Product",
+      "label": null,
+      "ratings": {
+        "rater1": "GOOD_MATCH",
+        "rater2": "GOOD_MATCH"
+      },
+      "split": "dev",
+      "category": "same-domain",
+      "note": ""
+    },
+    {
+      "id": "p06",
+      "candidateRef": "fe-typescript-04",
+      "jobRef": "Thực tập sinh Backend Node TypeScript",
+      "label": null,
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "dev",
+      "category": "adjacent",
+      "note": ""
+    },
+    {
+      "id": "p07",
+      "candidateRef": "fe-typescript-04",
+      "jobRef": "Thực tập sinh Thiết kế UI",
+      "label": "PARTIAL_MATCH",
+      "ratings": {
+        "rater1": "PARTIAL_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "test",
+      "category": "adjacent",
+      "note": "Có Figma nhưng thiếu UI/UX cốt lõi."
+    },
+    {
+      "id": "p08",
+      "candidateRef": "fe-typescript-04",
+      "jobRef": "Thực tập sinh Content Marketing",
+      "label": null,
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "test",
+      "category": "cross-domain",
+      "note": ""
+    },
+    {
+      "id": "p09",
+      "candidateRef": "backend-node-02",
+      "jobRef": "Thực tập sinh Backend Node TypeScript",
+      "label": null,
+      "ratings": {
+        "rater1": "GOOD_MATCH",
+        "rater2": "GOOD_MATCH"
+      },
+      "split": "dev",
+      "category": "hard-case",
+      "note": ""
+    },
+    {
+      "id": "p10",
+      "candidateRef": "backend-node-02",
+      "jobRef": "Thực tập sinh Java Backend",
+      "label": null,
+      "ratings": {
+        "rater1": "PARTIAL_MATCH",
+        "rater2": "PARTIAL_MATCH"
+      },
+      "split": "dev",
+      "category": "adjacent",
+      "note": ""
+    },
+    {
+      "id": "p11",
+      "candidateRef": "backend-node-02",
+      "jobRef": "Thực tập sinh Frontend Web",
+      "label": null,
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "dev",
+      "category": "adjacent",
+      "note": ""
+    },
+    {
+      "id": "p12",
+      "candidateRef": "backend-node-02",
+      "jobRef": "Thực tập sinh Data & AI",
+      "label": null,
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "dev",
+      "category": "adjacent",
+      "note": ""
+    },
+    {
+      "id": "p13",
+      "candidateRef": "backend-java-01",
+      "jobRef": "Thực tập sinh Java Backend",
+      "label": null,
+      "ratings": {
+        "rater1": "GOOD_MATCH",
+        "rater2": "GOOD_MATCH"
+      },
+      "split": "dev",
+      "category": "same-domain",
+      "note": ""
+    },
+    {
+      "id": "p14",
+      "candidateRef": "backend-java-01",
+      "jobRef": "Thực tập sinh Backend Node TypeScript",
+      "label": "PARTIAL_MATCH",
+      "ratings": {
+        "rater1": "PARTIAL_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "dev",
+      "category": "adjacent",
+      "note": "Đúng backend, thiếu Node.js/TypeScript."
+    },
+    {
+      "id": "p15",
+      "candidateRef": "backend-java-01",
+      "jobRef": "Thực tập sinh QA Automation",
+      "label": "POOR_MATCH",
+      "ratings": {
+        "rater1": "PARTIAL_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "dev",
+      "category": "adjacent",
+      "note": "Có SQL nhưng thiếu kinh nghiệm QA."
+    },
+    {
+      "id": "p16",
+      "candidateRef": "backend-java-01",
+      "jobRef": "Thực tập sinh Kế toán",
+      "label": null,
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "test",
+      "category": "cross-domain",
+      "note": ""
+    },
+    {
+      "id": "p17",
+      "candidateRef": "data-ai-02",
+      "jobRef": "Thực tập sinh Data & AI",
+      "label": null,
+      "ratings": {
+        "rater1": "GOOD_MATCH",
+        "rater2": "GOOD_MATCH"
+      },
+      "split": "dev",
+      "category": "hard-case",
+      "note": ""
+    },
+    {
+      "id": "p18",
+      "candidateRef": "data-ai-02",
+      "jobRef": "Thực tập sinh Backend Node TypeScript",
+      "label": null,
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "dev",
+      "category": "adjacent",
+      "note": ""
+    },
+    {
+      "id": "p19",
+      "candidateRef": "data-ai-02",
+      "jobRef": "Thực tập sinh QA Automation",
+      "label": null,
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "dev",
+      "category": "adjacent",
+      "note": ""
+    },
+    {
+      "id": "p20",
+      "candidateRef": "data-ai-02",
+      "jobRef": "Thực tập sinh Kế toán",
+      "label": "POOR_MATCH",
+      "ratings": {
+        "rater1": "PARTIAL_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "test",
+      "category": "cross-domain",
+      "note": "Không có nền tảng kế toán phù hợp."
+    },
+    {
+      "id": "p21",
+      "candidateRef": "qa-03",
+      "jobRef": "Thực tập sinh QA Automation",
+      "label": null,
+      "ratings": {
+        "rater1": "GOOD_MATCH",
+        "rater2": "GOOD_MATCH"
+      },
+      "split": "dev",
+      "category": "same-domain",
+      "note": ""
+    },
+    {
+      "id": "p22",
+      "candidateRef": "qa-03",
+      "jobRef": "Thực tập sinh Backend Node TypeScript",
+      "label": "POOR_MATCH",
+      "ratings": {
+        "rater1": "PARTIAL_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "dev",
+      "category": "adjacent",
+      "note": "Thiếu nền tảng backend Node/TypeScript."
+    },
+    {
+      "id": "p23",
+      "candidateRef": "qa-03",
+      "jobRef": "Thực tập sinh Frontend Web",
+      "label": "POOR_MATCH",
+      "ratings": {
+        "rater1": "PARTIAL_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "dev",
+      "category": "adjacent",
+      "note": "Có JavaScript nhưng thiếu nền tảng frontend."
+    },
+    {
+      "id": "p24",
+      "candidateRef": "qa-03",
+      "jobRef": "Thực tập sinh Kế toán",
+      "label": null,
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "test",
+      "category": "cross-domain",
+      "note": ""
+    },
+    {
+      "id": "p25",
+      "candidateRef": "marketing-content-01",
+      "jobRef": "Thực tập sinh Content Marketing",
+      "label": null,
+      "ratings": {
+        "rater1": "GOOD_MATCH",
+        "rater2": "GOOD_MATCH"
+      },
+      "split": "test",
+      "category": "same-domain",
+      "note": ""
+    },
+    {
+      "id": "p26",
+      "candidateRef": "marketing-content-01",
+      "jobRef": "Thực tập sinh Digital Marketing",
+      "label": "PARTIAL_MATCH",
+      "ratings": {
+        "rater1": "GOOD_MATCH",
+        "rater2": "PARTIAL_MATCH"
+      },
+      "split": "test",
+      "category": "same-domain",
+      "note": "Đúng marketing, thiếu Facebook Ads cốt lõi."
+    },
+    {
+      "id": "p27",
+      "candidateRef": "marketing-content-01",
+      "jobRef": "Thực tập sinh Thiết kế UI",
+      "label": null,
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "test",
+      "category": "adjacent",
+      "note": ""
+    },
+    {
+      "id": "p28",
+      "candidateRef": "marketing-content-01",
+      "jobRef": "Thực tập sinh Frontend Product",
+      "label": null,
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "dev",
+      "category": "cross-domain",
+      "note": ""
+    },
+    {
+      "id": "p29",
+      "candidateRef": "marketing-digital-02",
+      "jobRef": "Thực tập sinh Digital Marketing",
+      "label": null,
+      "ratings": {
+        "rater1": "GOOD_MATCH",
+        "rater2": "GOOD_MATCH"
+      },
+      "split": "test",
+      "category": "same-domain",
+      "note": ""
+    },
+    {
+      "id": "p30",
+      "candidateRef": "marketing-digital-02",
+      "jobRef": "Thực tập sinh Content Marketing",
+      "label": "PARTIAL_MATCH",
+      "ratings": {
+        "rater1": "GOOD_MATCH",
+        "rater2": "PARTIAL_MATCH"
+      },
+      "split": "test",
+      "category": "same-domain",
+      "note": "Đúng lĩnh vực, thiếu Copywriting cốt lõi."
+    },
+    {
+      "id": "p31",
+      "candidateRef": "marketing-digital-02",
+      "jobRef": "Thực tập sinh Kế toán",
+      "label": "POOR_MATCH",
+      "ratings": {
+        "rater1": "PARTIAL_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "test",
+      "category": "cross-domain",
+      "note": "Chỉ có Excel, thiếu nền tảng kế toán."
+    },
+    {
+      "id": "p32",
+      "candidateRef": "marketing-digital-02",
+      "jobRef": "Thực tập sinh Data & AI",
+      "label": null,
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "dev",
+      "category": "adjacent",
+      "note": ""
+    },
+    {
+      "id": "p33",
+      "candidateRef": "accounting-01",
+      "jobRef": "Thực tập sinh Kế toán",
+      "label": null,
+      "ratings": {
+        "rater1": "GOOD_MATCH",
+        "rater2": "GOOD_MATCH"
+      },
+      "split": "test",
+      "category": "same-domain",
+      "note": ""
+    },
+    {
+      "id": "p34",
+      "candidateRef": "accounting-01",
+      "jobRef": "Thực tập sinh Digital Marketing",
+      "label": "POOR_MATCH",
+      "ratings": {
+        "rater1": "PARTIAL_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "test",
+      "category": "cross-domain",
+      "note": "Khác lĩnh vực, thiếu nền tảng marketing."
+    },
+    {
+      "id": "p35",
+      "candidateRef": "accounting-01",
+      "jobRef": "Thực tập sinh Data & AI",
+      "label": "POOR_MATCH",
+      "ratings": {
+        "rater1": "PARTIAL_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "dev",
+      "category": "adjacent",
+      "note": "Thiếu Python/Pandas và nền tảng Data & AI."
+    },
+    {
+      "id": "p36",
+      "candidateRef": "finance-02",
+      "jobRef": "Thực tập sinh Kế toán",
+      "label": null,
+      "ratings": {
+        "rater1": "PARTIAL_MATCH",
+        "rater2": "PARTIAL_MATCH"
+      },
+      "split": "test",
+      "category": "adjacent",
+      "note": ""
+    },
+    {
+      "id": "p37",
+      "candidateRef": "finance-02",
+      "jobRef": "Thực tập sinh Data & AI",
+      "label": null,
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "dev",
+      "category": "adjacent",
+      "note": ""
+    },
+    {
+      "id": "p38",
+      "candidateRef": "finance-02",
+      "jobRef": "Thực tập sinh Content Marketing",
+      "label": null,
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "test",
+      "category": "cross-domain",
+      "note": ""
+    },
+    {
+      "id": "p39",
+      "candidateRef": "designer-01",
+      "jobRef": "Thực tập sinh Thiết kế UI",
+      "label": null,
+      "ratings": {
+        "rater1": "GOOD_MATCH",
+        "rater2": "GOOD_MATCH"
+      },
+      "split": "test",
+      "category": "same-domain",
+      "note": ""
+    },
+    {
+      "id": "p40",
+      "candidateRef": "designer-01",
+      "jobRef": "Thực tập sinh Frontend Product",
+      "label": "PARTIAL_MATCH",
+      "ratings": {
+        "rater1": "PARTIAL_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "dev",
+      "category": "adjacent",
+      "note": "Có nền tảng UI nhưng thiếu React/TypeScript."
+    },
+    {
+      "id": "p41",
+      "candidateRef": "designer-01",
+      "jobRef": "Thực tập sinh Content Marketing",
+      "label": null,
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "test",
+      "category": "adjacent",
+      "note": ""
+    },
+    {
+      "id": "p42",
+      "candidateRef": "mobile-02",
+      "jobRef": "Thực tập sinh Java Backend",
+      "label": "PARTIAL_MATCH",
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "PARTIAL_MATCH"
+      },
+      "split": "dev",
+      "category": "adjacent",
+      "note": "Có Java nhưng thiếu Spring Boot và backend."
+    },
+    {
+      "id": "p43",
+      "candidateRef": "mobile-02",
+      "jobRef": "Thực tập sinh Frontend Web",
+      "label": null,
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "dev",
+      "category": "adjacent",
+      "note": ""
+    },
+    {
+      "id": "p44",
+      "candidateRef": "irrelevant-experience-01",
+      "jobRef": "Thực tập sinh Backend Node TypeScript",
+      "label": "PARTIAL_MATCH",
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "PARTIAL_MATCH"
+      },
+      "split": "dev",
+      "category": "hard-case",
+      "note": "Có Node.js và dự án API nhưng còn ít kinh nghiệm."
+    },
+    {
+      "id": "p45",
+      "candidateRef": "irrelevant-experience-01",
+      "jobRef": "Thực tập sinh Content Marketing",
+      "label": null,
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "test",
+      "category": "cross-domain",
+      "note": ""
+    },
+    {
+      "id": "p46",
+      "candidateRef": "sparse-profile-01",
+      "jobRef": "Thực tập sinh Frontend Web",
+      "label": null,
+      "ratings": {
+        "rater1": "PARTIAL_MATCH",
+        "rater2": "PARTIAL_MATCH"
+      },
+      "split": "dev",
+      "category": "hard-case",
+      "note": ""
+    },
+    {
+      "id": "p47",
+      "candidateRef": "sparse-profile-01",
+      "jobRef": "Thực tập sinh QA Automation",
+      "label": "POOR_MATCH",
+      "ratings": {
+        "rater1": "PARTIAL_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "dev",
+      "category": "hard-case",
+      "note": "Thiếu kinh nghiệm và kỹ năng QA cốt lõi."
+    },
+    {
+      "id": "p48",
+      "candidateRef": "keyword-stuffing-01",
+      "jobRef": "Thực tập sinh Backend Node TypeScript",
+      "label": null,
+      "ratings": {
+        "rater1": "PARTIAL_MATCH",
+        "rater2": "PARTIAL_MATCH"
+      },
+      "split": "dev",
+      "category": "hard-case",
+      "note": ""
+    },
+    {
+      "id": "p49",
+      "candidateRef": "keyword-stuffing-01",
+      "jobRef": "Thực tập sinh Frontend Product",
+      "label": null,
+      "ratings": {
+        "rater1": "PARTIAL_MATCH",
+        "rater2": "PARTIAL_MATCH"
+      },
+      "split": "dev",
+      "category": "hard-case",
+      "note": ""
+    },
+    {
+      "id": "p50",
+      "candidateRef": "career-switch-01",
+      "jobRef": "Thực tập sinh Data & AI",
+      "label": null,
+      "ratings": {
+        "rater1": "PARTIAL_MATCH",
+        "rater2": "PARTIAL_MATCH"
+      },
+      "split": "dev",
+      "category": "hard-case",
+      "note": ""
+    },
+    {
+      "id": "p51",
+      "candidateRef": "career-switch-01",
+      "jobRef": "Thực tập sinh Digital Marketing",
+      "label": "PARTIAL_MATCH",
+      "ratings": {
+        "rater1": "GOOD_MATCH",
+        "rater2": "PARTIAL_MATCH"
+      },
+      "split": "test",
+      "category": "same-domain",
+      "note": "Có nền tảng marketing nhưng thiếu Facebook Ads."
+    },
+    {
+      "id": "p52",
+      "candidateRef": "language-01",
+      "jobRef": "Thực tập sinh Content Marketing",
+      "label": "PARTIAL_MATCH",
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "PARTIAL_MATCH"
+      },
+      "split": "test",
+      "category": "adjacent",
+      "note": "Có Copywriting, nhưng thiếu Content Marketing."
+    },
+    {
+      "id": "p53",
+      "candidateRef": "language-01",
+      "jobRef": "Thực tập sinh Digital Marketing",
+      "label": null,
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "test",
+      "category": "adjacent",
+      "note": ""
+    },
+    {
+      "id": "p54",
+      "candidateRef": "language-01",
+      "jobRef": "Thực tập sinh Thiết kế UI",
+      "label": null,
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "test",
+      "category": "cross-domain",
+      "note": ""
+    },
+    {
+      "id": "p55",
+      "candidateRef": "logistics-01",
+      "jobRef": "Thực tập sinh Kế toán",
+      "label": null,
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "test",
+      "category": "adjacent",
+      "note": ""
+    },
+    {
+      "id": "p56",
+      "candidateRef": "logistics-01",
+      "jobRef": "Thực tập sinh Digital Marketing",
+      "label": null,
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "test",
+      "category": "cross-domain",
+      "note": ""
+    },
+    {
+      "id": "p57",
+      "candidateRef": "it-adjacent-01",
+      "jobRef": "Thực tập sinh Frontend Web",
+      "label": "GOOD_MATCH",
+      "ratings": {
+        "rater1": "GOOD_MATCH",
+        "rater2": "PARTIAL_MATCH"
+      },
+      "split": "dev",
+      "category": "hard-case",
+      "note": "Có đủ React/JavaScript và dự án web."
+    },
+    {
+      "id": "p58",
+      "candidateRef": "it-adjacent-01",
+      "jobRef": "Thực tập sinh Backend Node TypeScript",
+      "label": "PARTIAL_MATCH",
+      "ratings": {
+        "rater1": "GOOD_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "dev",
+      "category": "adjacent",
+      "note": "Có Node.js nhưng thiếu TypeScript và kinh nghiệm backend rõ."
+    },
+    {
+      "id": "p59",
+      "candidateRef": "backend-sql-03",
+      "jobRef": "Thực tập sinh Backend Node TypeScript",
+      "label": "PARTIAL_MATCH",
+      "ratings": {
+        "rater1": "GOOD_MATCH",
+        "rater2": "PARTIAL_MATCH"
+      },
+      "split": "dev",
+      "category": "same-domain",
+      "note": "Đúng backend, thiếu TypeScript cốt lõi."
+    },
+    {
+      "id": "p60",
+      "candidateRef": "backend-sql-03",
+      "jobRef": "Thực tập sinh QA Automation",
+      "label": "POOR_MATCH",
+      "ratings": {
+        "rater1": "PARTIAL_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "dev",
+      "category": "adjacent",
+      "note": "Thiếu nền tảng kiểm thử QA."
+    },
+    {
+      "id": "p61",
+      "candidateRef": "communication-02",
+      "jobRef": "Thực tập sinh Content Marketing",
+      "label": "GOOD_MATCH",
+      "ratings": {
+        "rater1": "GOOD_MATCH",
+        "rater2": "PARTIAL_MATCH"
+      },
+      "split": "test",
+      "category": "same-domain",
+      "note": "Có đủ kỹ năng cốt lõi và dự án content."
+    },
+    {
+      "id": "p62",
+      "candidateRef": "communication-02",
+      "jobRef": "Thực tập sinh Thiết kế UI",
+      "label": null,
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "test",
+      "category": "adjacent",
+      "note": ""
+    },
+    {
+      "id": "p63",
+      "candidateRef": "backend-sql-03",
+      "jobRef": "Thực tập sinh Java Backend",
+      "label": "PARTIAL_MATCH",
+      "ratings": {
+        "rater1": "PARTIAL_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "dev",
+      "category": "same-domain",
+      "note": "Có backend và SQL nhưng thiếu Java/Spring Boot."
+    },
+    {
+      "id": "p64",
+      "candidateRef": "it-adjacent-01",
+      "jobRef": "Thực tập sinh Java Backend",
+      "label": null,
+      "ratings": {
+        "rater1": "POOR_MATCH",
+        "rater2": "POOR_MATCH"
+      },
+      "split": "dev",
+      "category": "adjacent",
+      "note": ""
+    }
+  ]
+}

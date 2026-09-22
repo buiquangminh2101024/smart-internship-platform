@@ -13,7 +13,7 @@ Tiếp nối `docs/06-backend/cv-ai-extraction-phase1/PLAN.md` — không thuộ
 5. **Module mới `apps/server/src/modules/education-catalog/`** gộp chung `University` + `Major` (thay vì 2 module riêng biệt) — vì luôn được bàn/triển khai theo cặp, cấu trúc giống hệt nhau. Chấp nhận trùng lặp nhỏ giữa `university-dedupe.service.ts`/`major-dedupe.service.ts` thay vì trừu tượng hoá `CatalogDedupeService<T>` generic — để dành sau nếu thấy thật sự cần, không làm ở lần triển khai đầu tiên (đúng tinh thần bản nháp mục 7.1: quyết định lúc implement, không ảnh hưởng thiết kế tổng thể).
 6. `catalog.repository.ts` (`listMajors`/`listUniversities`) thêm `WHERE status = 'APPROVED'` — khớp đúng cách `listSkills` đang lọc, tránh lộ `PENDING` ra dropdown công khai.
 7. `cityId`: **không** mở rộng cơ chế `PENDING` cho `City`. Nếu tên thành phố trích được không khớp catalog, bỏ qua, không set `cityId`, không tạo `City` mới (đã chốt ở bản nháp mục 9.5 — `City` là danh sách tỉnh/thành cố định, không phát sinh giá trị mới như tên trường/ngành).
-8. Ghi dữ liệu khi import (đã chốt ở bản nháp mục 9.5): danh sách (`Education`/`WorkExperience`/`Project`/`Certificate`/`Award`) **luôn insert dòng mới**, không dò/khớp để thay thế; `CandidateSkill` (khoá chính kép `[candidateId, skillId]`) **bỏ qua nếu đã có sẵn**, giữ nguyên `yearsOfExperience` cũ; field đơn lẻ trên `Candidate` (`headline`/`bio`/`phone`/`dateOfBirth`/`gender`/`cityId`) **chỉ ghi khi FE gửi cờ "dùng giá trị mới"** cho từng field riêng.
+8. Ghi dữ liệu khi import (đã chốt ở bản nháp mục 9.5): danh sách (`Education`/`WorkExperience`/`Project`/`Certificate`/`Award`) **luôn insert dòng mới**, không dò/khớp để thay thế; `CandidateSkill` (khoá chính kép `[candidateId, skillId]`) **bỏ qua nếu đã có sẵn**, giữ nguyên `yearsOfExperience` cũ (*bổ sung sau khi cho nhập số năm ở preview: chỉ giữ nguyên khi `yearsOfExperience > 0`; đang `0` nghĩa là chưa khai nên nhận số Candidate vừa nhập*); field đơn lẻ trên `Candidate` (`headline`/`bio`/`phone`/`dateOfBirth`/`gender`/`cityId`) **chỉ ghi khi FE gửi cờ "dùng giá trị mới"** cho từng field riêng.
 9. `candidate.fullName` trong `extractedData` **không map vào đâu** ở bước import (không có field lưu tên đầy đủ trong `User`/`Candidate`) — bỏ qua khi import, giữ nguyên trong `extractedData` đã lưu từ Phase 1 cho tương lai.
 
 ## Luồng xử lý
@@ -47,8 +47,9 @@ Với mỗi skill trong skills[]:
         │
         ▼
     upsert CandidateSkill (khoá kép candidateId+skillId)
-        đã có sẵn ──► bỏ qua, giữ nguyên yearsOfExperience cũ
-        chưa có   ──► tạo mới
+        đã có, years > 0 ──► bỏ qua, giữ nguyên yearsOfExperience cũ
+        đã có, years = 0 ──► cập nhật theo số Candidate nhập ở preview
+        chưa có          ──► tạo mới với số năm đã nhập
     │
     ▼
 candidate.cityId: fieldOverrides.cityId=true VÀ tên thành phố khớp City?
@@ -161,7 +162,7 @@ model UniversityAlias {
 - **`POST /candidates/me/profile/import-from-cv`** (auth `CANDIDATE`), body: `extractedData` (đã Candidate sửa ở FE) + `fieldOverrides: { headline?: boolean, bio?: boolean, phone?: boolean, dateOfBirth?: boolean, gender?: boolean, cityId?: boolean }` (cờ "dùng giá trị mới" cho từng field đơn lẻ, Quyết định #8) + `cvId` tuỳ chọn (chỉ để truy vết nguồn gốc, không bắt buộc trong logic ghi):
   1. Với mỗi `education`: gọi `universityDedupeService.suggest`/`majorDedupeService.suggest` lấy id tương ứng (`null` nếu bỏ trống) → insert `Education` mới.
   2. Insert mới toàn bộ `workExperiences`/`projects`/`certificates`/`awards` còn lại trong payload (đã được Candidate lọc/sửa ở FE).
-  3. Với mỗi skill trong `skills: string[]`: gọi `skillDedupeService.suggest` lấy `skillId` → `upsert CandidateSkill` (khoá kép `[candidateId, skillId]`, nhánh `update: {}` rỗng nếu đã tồn tại — giữ nguyên `yearsOfExperience` cũ, Quyết định #8).
+  3. Với mỗi skill trong `skills`: gọi `skillDedupeService.suggest` lấy `skillId` → ghi `CandidateSkill` (khoá kép `[candidateId, skillId]`) theo `planSkillWrites` (Quyết định #8) — đã có với `yearsOfExperience > 0` thì giữ nguyên, đang `0` thì nhận số Candidate nhập ở preview, chưa có thì tạo mới. *Bổ sung sau: `skills` là `Array<{ name, yearsOfExperience }>` chứ không còn `string[]` — số năm do Candidate tự nhập, không phải do AI đọc từ CV.*
   4. Với `candidate.cityId`: nếu `fieldOverrides.cityId === true` và có tên thành phố trích được → tìm `City` khớp tên (so khớp đơn giản trên catalog nhỏ, không cần fuzzy phức tạp) → set nếu khớp, bỏ qua nếu không (Quyết định #7).
   5. Với từng field đơn lẻ còn lại (`headline`/`bio`/`phone`/`dateOfBirth`/`gender`): chỉ ghi nếu `fieldOverrides[field] === true`, tái dùng logic cập nhật đã có ở `PATCH /candidates/me` (gọi thẳng method trong `candidate.service.ts`, không qua HTTP nội bộ).
   6. `candidate.fullName` trong payload: bỏ qua hoàn toàn (Quyết định #9).
@@ -191,7 +192,7 @@ model UniversityAlias {
 - Case vùng xám (tên gần giống 1 trường có sẵn, ví dụ viết tắt) → `PENDING` tạm có `pendingMatchId`; chạy cron thủ công → merge tự động nếu Gemini nói `MATCH`, giữ `PENDING` chờ Admin nếu `NEW`/`UNSURE`.
 - Admin `rename-approve` 1 entry `PENDING` mới thật với tên đã chuẩn hoá → chuyển `APPROVED`, tên đổi đúng; thử `rename-approve` trùng tên với 1 entry `APPROVED` khác → 409, message gợi ý dùng `merge`.
 - `POST /candidates/me/profile/import-from-cv` với 2 `educations` trong 1 lần gọi → tạo đúng 2 dòng `Education` mới (không gộp/thay thế `Education` cũ nếu Candidate đã có sẵn từ trước).
-- Import 1 skill mà Candidate đã có sẵn trong hồ sơ → không lỗi, không tạo dòng trùng, `yearsOfExperience` giữ nguyên giá trị cũ.
+- Import 1 skill mà Candidate đã có sẵn trong hồ sơ → không lỗi, không tạo dòng trùng, `yearsOfExperience` giữ nguyên giá trị cũ nếu nó `> 0`; nếu đang `0` thì nhận số mới Candidate nhập (xem `tests/unit/cv-import-skill-plan.test.ts`).
 - Import với `fieldOverrides.phone: false` dù `extractedData.candidate.phone` khác giá trị hiện tại → `Candidate.phone` giữ nguyên, không bị ghi đè.
 - Import với tên thành phố không khớp catalog nào → `Candidate.cityId` giữ `null`, không tạo `City` mới.
 

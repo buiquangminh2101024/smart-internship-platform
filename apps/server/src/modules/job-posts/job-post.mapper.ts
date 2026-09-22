@@ -23,9 +23,8 @@ function toModerationActionDto(action: ModerationActionWithActor): JobPostModera
 export function toJobPostDto(jobPost: JobPostWithRelations, options?: { publicOnly?: boolean }): JobPostDto {
   const latest = jobPost.moderationActions[0];
   const skills = jobPost.skills
-    .map((link) => link.skill)
-    .filter((skill) => !options?.publicOnly || skill.status === "APPROVED")
-    .map((skill) => ({ id: skill.id, name: skill.name, status: skill.status }))
+    .filter((link) => !options?.publicOnly || link.skill.status === "APPROVED")
+    .map((link) => ({ id: link.skill.id, name: link.skill.name, status: link.skill.status, importance: link.importance }))
     .sort((left, right) => left.name.localeCompare(right.name));
 
   return {
@@ -61,6 +60,7 @@ export function toJobPostDto(jobPost: JobPostWithRelations, options?: { publicOn
     expiresAt: jobPost.expiresAt?.toISOString() ?? null,
     closedAt: jobPost.closedAt?.toISOString() ?? null,
     viewCount: jobPost.viewCount,
+    minExperienceYears: jobPost.minExperienceYears,
     skills,
     applicationCount: jobPost._count?.applications ?? 0,
     latestModerationAction: latest ? toModerationActionDto(latest) : null,

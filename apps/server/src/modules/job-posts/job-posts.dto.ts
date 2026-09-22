@@ -23,6 +23,11 @@ const jobPostFields = {
   // Ghi đè toàn bộ danh sách kỹ năng của tin khi có mặt. Trần 30 để một tin
   // không gắn cả trăm tag làm nhiễu phần matching sau này (Phase 11).
   skillIds: z.array(z.string().trim().min(1)).max(30).optional(),
+  // Kỹ năng ưu tiên — chỉ được ghi cùng skillIds (một khối), xem
+  // docs/06-backend/job-matcher-phase1/PLAN.md quyết định #6.
+  preferredSkillIds: z.array(z.string().trim().min(1)).max(30).optional(),
+  // null = xoá yêu cầu; 0 cũng được coi là "không yêu cầu".
+  minExperienceYears: z.number().min(0).max(20).nullable().optional(),
 };
 
 export const createJobPostSchema = z.object(jobPostFields);

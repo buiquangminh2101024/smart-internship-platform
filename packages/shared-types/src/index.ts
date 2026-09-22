@@ -181,7 +181,11 @@ export interface MergeSkillRequest {
  */
 export interface JobPostSkillDto extends CatalogItem {
   status: CatalogEntryStatus;
+  /** REQUIRED = bắt buộc, PREFERRED = ưu tiên (Job Matcher — docs/06-backend/job-matcher-phase1/PLAN.md). */
+  importance: SkillImportance;
 }
+
+export type SkillImportance = "REQUIRED" | "PREFERRED";
 
 // ─── Education catalog: University / Major ───────────────────────────────
 // docs/06-backend/cv-ai-extraction-phase2/PLAN.md. Cùng cơ chế PENDING/duyệt với
@@ -476,6 +480,8 @@ export interface JobPost {
   expiresAt: string | null;
   closedAt: string | null;
   viewCount: number;
+  /** Số năm kinh nghiệm tối thiểu; null = không yêu cầu. */
+  minExperienceYears: number | null;
   /** Kỹ năng yêu cầu — chỉ skill đã duyệt mới lộ ra API công khai. */
   skills: JobPostSkillDto[];
   /** Số hồ sơ ứng tuyển — luôn 0 cho tới Phase 8 (module applications). */
@@ -503,11 +509,91 @@ export interface CreateJobPostRequest {
   /**
    * Danh sách kỹ năng yêu cầu — ghi đè toàn bộ (diff-write) khi có mặt, bỏ qua
    * khi undefined. Chấp nhận cả skill PENDING mà chính employer vừa đề xuất.
+   * Các skill này có importance REQUIRED.
    */
   skillIds?: string[];
+  /**
+   * Kỹ năng ưu tiên (PREFERRED). Chỉ có tác dụng khi gửi kèm `skillIds` — cả hai
+   * được ghi thành một khối; skill có ở cả hai danh sách được tính là REQUIRED.
+   */
+  preferredSkillIds?: string[];
+  /** Số năm kinh nghiệm tối thiểu (0–20); null/0 = không yêu cầu. */
+  minExperienceYears?: number | null;
 }
 
 export type UpdateJobPostRequest = Partial<CreateJobPostRequest>;
+
+// ─── Job Matcher (A2) ────────────────────────────────────────────────────
+// docs/06-backend/job-matcher-phase1/PLAN.md. Điểm chỉ mang tính tham khảo —
+// không dùng để lọc/ẩn đơn ứng tuyển.
+
+export type MatchStatus = "SCORED" | "INSUFFICIENT_PROFILE" | "INSUFFICIENT_JOB_DATA";
+
+export type MatchConfidence = "LOW" | "MEDIUM" | "HIGH";
+
+export type MatchComponentKey = "requiredSkills" | "preferredSkills" | "experience" | "education" | "semantic";
+
+export interface MatchComponentResult {
+  key: MatchComponentKey;
+  applicable: boolean;
+  /** 0..1; null khi không áp dụng. */
+  score: number | null;
+  weight: number;
+  /** Trọng số sau khi chia lại trên các thành phần áp dụng được. */
+  effectiveWeight: number;
+}
+
+export interface MatchSkillEvidence {
+  skillId: string;
+  name: string;
+  importance: SkillImportance;
+  status: "MATCHED" | "MISSING";
+  /** Số năm ứng viên khai cho kỹ năng này; null = chưa khai (hoặc không có). */
+  candidateYears: number | null;
+}
+
+export type MatchExperienceStatus = "MATCH" | "PARTIAL" | "BELOW" | "UNKNOWN" | "NOT_REQUIRED";
+
+export interface MatchExperienceEvidence {
+  status: MatchExperienceStatus;
+  requiredYears: number | null;
+  /** Tổng thời gian làm việc (chưa xét mức liên quan); null = không xác định. */
+  candidateYears: number | null;
+}
+
+export interface MatchSemanticInfo {
+  /** Cấu hình đang bật thành phần semantic (GĐ2). GĐ1 luôn false. */
+  enabled: boolean;
+  /** Đã có độ tương đồng cho cặp này. */
+  available: boolean;
+  similarity: number | null;
+  normalized: number | null;
+}
+
+export interface MatchResult {
+  status: MatchStatus;
+  /** 0..100 nguyên; null khi status khác SCORED. */
+  score: number | null;
+  confidence: MatchConfidence;
+  weightsVersion: string;
+  components: MatchComponentResult[];
+  skills: MatchSkillEvidence[];
+  experience: MatchExperienceEvidence;
+  semantic: MatchSemanticInfo;
+  /** Câu giải thích tiếng Việt do server sinh. */
+  notes: string[];
+}
+
+export type MatchSemanticStatus = "OFF" | "AVAILABLE" | "PENDING";
+
+export interface ApplicationMatchSummary {
+  applicationId: string;
+  candidateId: string;
+  score: number | null;
+  confidence: MatchConfidence;
+  status: MatchStatus;
+  semanticStatus: MatchSemanticStatus;
+}
 
 export interface JobPostSearchQuery {
   q?: string;
@@ -653,14 +739,27 @@ export interface ImportFromCvFieldOverrides {
   cityId?: boolean;
 }
 
+/**
+ * Kỹ năng ở bước import: khác `CvExtractionResult.skills` (chỉ là tên) vì
+ * Candidate nhập thêm số năm kinh nghiệm ngay trong preview. `0` nghĩa là
+ * CHƯA KHAI, không phải "chắc chắn 0 năm" — cột không cho null nên đây là quy
+ * ước chung của hệ thống.
+ */
+export interface ImportFromCvSkill {
+  name: string;
+  yearsOfExperience: number;
+}
+
 export interface ImportFromCvRequest {
   /** Chỉ để truy vết nguồn gốc, không bắt buộc. */
   cvId?: string;
   /** Kết quả trích xuất SAU KHI Candidate đã bỏ bớt mục/kỹ năng ở preview. */
   extractedData: Pick<
     CvExtractionResult,
-    "candidate" | "educations" | "workExperiences" | "projects" | "certificates" | "awards" | "skills"
-  >;
+    "candidate" | "educations" | "workExperiences" | "projects" | "certificates" | "awards"
+  > & {
+    skills: ImportFromCvSkill[];
+  };
   fieldOverrides: ImportFromCvFieldOverrides;
 }
 

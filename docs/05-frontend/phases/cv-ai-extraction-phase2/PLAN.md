@@ -50,7 +50,8 @@ Tiếp nối `docs/05-frontend/phases/cv-ai-extraction-phase1/PLAN.md`, dựa tr
 
 ## Ghi chú triển khai (khác/bổ sung so với kế hoạch)
 
-- **Kỹ năng trong preview dùng chip bật/tắt, không dùng `SkillMultiSelect`** (Quyết định #5): backend nhận `skills: string[]` rồi tự khử trùng lặp; `SkillMultiSelect` gọi `/skills/suggest` ngay khi chọn → tạo Skill PENDING trước cả khi Candidate bấm "Lưu vào hồ sơ".
+- **Kỹ năng trong preview dùng chip bật/tắt, không dùng `SkillMultiSelect`** (Quyết định #5): backend nhận `skills` rồi tự khử trùng lặp; `SkillMultiSelect` gọi `/skills/suggest` ngay khi chọn → tạo Skill PENDING trước cả khi Candidate bấm "Lưu vào hồ sơ".
+  - *Bổ sung sau:* mỗi chip có thêm ô nhập số năm kinh nghiệm, nên `skills` gửi lên là `Array<{ name, yearsOfExperience }>`. Chip đổi từ `<button>` sang `<span>` bọc nút bật/tắt + ô số, vì không được lồng `<input>` trong `<button>`. Bỏ trống = `0` = "chưa khai".
 - **Sau khi lưu** (Quyết định #3): toast + khung kết quả ngay trong preview có nút "Xem hồ sơ" (`/profile`) và danh sách cảnh báo từ backend — `Toast` hiện không có chỗ đặt nút.
 - `CandidateProfileClient.tsx` không dùng react-query → thêm query mới `["candidateProfile"]` (`useCandidateProfile` trong `useCvs.ts`) chỉ để preview so sánh field đơn lẻ; nút lưu bị khoá tới khi tải xong hồ sơ, để mặc định "Giữ"/"Dùng mới" luôn đúng.
 - Trang `/admin/education-catalog` có nút "Tải thêm" (danh sách trường/ngành đã duyệt dài hơn nhiều so với kỹ năng).

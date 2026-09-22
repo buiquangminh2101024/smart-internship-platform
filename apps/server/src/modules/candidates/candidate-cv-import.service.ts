@@ -17,7 +17,8 @@ type ExtractedData = ImportFromCvInput["extractedData"];
  * docs/06-backend/cv-ai-extraction-phase2/PLAN.md Phần 2 + Quyết định #7/#8/#9:
  *  - danh sách (Education/WorkExperience/Project/Certificate/Award): luôn thêm
  *    dòng mới, không dò để thay thế dòng đã có;
- *  - CandidateSkill: đã có thì bỏ qua, giữ nguyên yearsOfExperience cũ;
+ *  - CandidateSkill: đã có số năm > 0 thì giữ nguyên, đang 0 (= chưa khai) thì
+ *    nhận số năm Candidate nhập ở preview;
  *  - field đơn lẻ: chỉ ghi khi có cờ trong fieldOverrides;
  *  - fullName: bỏ qua (không có chỗ lưu).
  *
@@ -69,7 +70,7 @@ export class CandidateCvImportService {
 
     const cityId = fieldOverrides.cityId ? await this.resolveCity(data.candidate.city, warnings) : null;
     const educations = await this.resolveEducations(userId, data.educations, warnings);
-    const skillIds = await this.resolveSkills(userId, data.skills, warnings);
+    const resolvedSkills = await this.resolveSkills(userId, data.skills, warnings);
 
     const updatedFields = [...(Object.keys(profileData) as Array<keyof ImportFromCvFieldOverrides>)];
     if (cityId) updatedFields.push("cityId");
@@ -146,14 +147,25 @@ export class CandidateCvImportService {
         })),
       );
 
-      // skipDuplicates = "đã có thì bỏ qua": khoá kép [candidateId, skillId] giữ
-      // nguyên dòng cũ cùng yearsOfExperience của nó. Kỹ năng mới nhận mặc định
-      // 0 năm — CV hiếm khi ghi số năm theo từng kỹ năng.
+      // Số năm không nằm trong CV mà do Candidate nhập ở preview, nên phải đọc
+      // dòng cũ ra trước để biết cái nào được phép ghi đè (xem planSkillWrites).
+      const existingSkills = await tx.candidateSkill.findMany({
+        where: { candidateId: candidate.id },
+        select: { skillId: true, yearsOfExperience: true },
+      });
+      const skillWrites = planSkillWrites(existingSkills, resolvedSkills);
+
       const skillCount = await createRows(
         tx.candidateSkill,
-        skillIds.map((skillId) => ({ candidateId: candidate.id, skillId })),
+        skillWrites.creates.map((write) => ({ candidateId: candidate.id, ...write })),
         true,
       );
+      for (const write of skillWrites.updates) {
+        await tx.candidateSkill.update({
+          where: { candidateId_skillId: { candidateId: candidate.id, skillId: write.skillId } },
+          data: { yearsOfExperience: write.yearsOfExperience },
+        });
+      }
 
       return {
         educations: educationCount,
@@ -287,15 +299,24 @@ export class CandidateCvImportService {
     }
   }
 
-  private async resolveSkills(userId: string, names: string[], warnings: string[]): Promise<string[]> {
-    const skillIds = new Set<string>();
+  /**
+   * Tên kỹ năng → skillId, giữ kèm số năm Candidate nhập. Trả về mảng (không
+   * gộp trùng): hai tên khác nhau có thể cùng ra một skillId, planSkillWrites
+   * mới là nơi quyết định lấy số năm nào.
+   */
+  private async resolveSkills(
+    userId: string,
+    skills: ExtractedData["skills"],
+    warnings: string[],
+  ): Promise<ResolvedSkill[]> {
+    const resolved: ResolvedSkill[] = [];
     const seen = new Set<string>();
     // Hết quota một lần thì các tên mới phía sau chắc chắn cũng hết — gom lại
     // thành một cảnh báo thay vì lặp cùng một câu cho từng kỹ năng.
     let quotaError: string | null = null;
     const skippedByQuota: string[] = [];
 
-    for (const rawName of names) {
+    for (const { name: rawName, yearsOfExperience } of skills) {
       const key = normalizeSkillName(rawName);
       if (!key || seen.has(key)) continue;
       seen.add(key);
@@ -304,7 +325,7 @@ export class CandidateCvImportService {
       // vẫn gắn được kỹ năng có sẵn trong catalog.
       const existing = await this.skillDedupeService.findExisting(rawName);
       if (existing) {
-        skillIds.add(existing.skillId);
+        resolved.push({ skillId: existing.skillId, yearsOfExperience });
         continue;
       }
 
@@ -320,7 +341,7 @@ export class CandidateCvImportService {
 
       try {
         const suggested = await this.skillDedupeService.suggest(userId, validation.data);
-        skillIds.add(suggested.skillId);
+        resolved.push({ skillId: suggested.skillId, yearsOfExperience });
       } catch (error) {
         if (error instanceof AppError && error.statusCode === 429) {
           quotaError = error.message;
@@ -334,8 +355,59 @@ export class CandidateCvImportService {
     if (quotaError) {
       warnings.push(`Chưa thêm ${skippedByQuota.length} kỹ năng mới (${skippedByQuota.join(", ")}): ${quotaError}`);
     }
-    return [...skillIds];
+    return resolved;
   }
+}
+
+export interface ResolvedSkill {
+  skillId: string;
+  yearsOfExperience: number;
+}
+
+export interface SkillWritePlan {
+  creates: ResolvedSkill[];
+  updates: ResolvedSkill[];
+}
+
+/**
+ * Quyết định ghi gì vào CandidateSkill. Tách riêng (thuần, không đụng DB) vì
+ * đây là chỗ dễ sai nhất của lần import và cần test được.
+ *
+ * Quy tắc, dựa trên quy ước `yearsOfExperience = 0` nghĩa là CHƯA KHAI:
+ *  - kỹ năng chưa có trong hồ sơ → thêm mới với số năm vừa nhập;
+ *  - đã có với số năm > 0 → GIỮ NGUYÊN, không để một lần import ghi đè thông
+ *    tin người dùng đã tự khai (Quyết định #8 của Phase 2);
+ *  - đã có nhưng đang 0 → nhận số năm mới nếu số đó > 0 (ghi đè "chưa khai"
+ *    bằng dữ liệu thật thì không mất gì).
+ *
+ * Hai tên khác nhau cùng ra một skillId (ví dụ "ReactJS" và "React") thì lấy
+ * số năm LỚN HƠN — coi như người dùng khai cùng một kỹ năng hai lần.
+ */
+export function planSkillWrites(
+  existing: ReadonlyArray<ResolvedSkill>,
+  incoming: ReadonlyArray<ResolvedSkill>,
+): SkillWritePlan {
+  const merged = new Map<string, number>();
+  for (const skill of incoming) {
+    const current = merged.get(skill.skillId);
+    if (current === undefined || skill.yearsOfExperience > current) {
+      merged.set(skill.skillId, skill.yearsOfExperience);
+    }
+  }
+
+  const existingYears = new Map(existing.map((skill) => [skill.skillId, skill.yearsOfExperience]));
+  const plan: SkillWritePlan = { creates: [], updates: [] };
+
+  for (const [skillId, yearsOfExperience] of merged) {
+    const current = existingYears.get(skillId);
+    if (current === undefined) {
+      plan.creates.push({ skillId, yearsOfExperience });
+    } else if (current === 0 && yearsOfExperience > 0) {
+      plan.updates.push({ skillId, yearsOfExperience });
+    }
+  }
+
+  return plan;
 }
 
 /** createMany bỏ qua lượt gọi rỗng — Prisma vẫn chạy câu INSERT với mảng rỗng. */

@@ -33,6 +33,16 @@ function formatPartialDate(value: string | null | undefined): string | null {
   return value;
 }
 
+/** Cùng giới hạn với zod ở `apps/server/src/modules/candidates/candidates.dto.ts`. */
+const MAX_SKILL_YEARS = 60;
+
+/** Ô nhập để trống / gõ bậy → 0, nghĩa là "chưa khai" chứ không phải "0 năm". */
+function parseYears(raw: string | undefined): number {
+  const value = Number(raw);
+  if (!raw || !Number.isFinite(value) || value <= 0) return 0;
+  return Math.min(value, MAX_SKILL_YEARS);
+}
+
 function formatPeriod(start: string | number | null, end: string | number | null, ongoing: boolean): string | null {
   const from = typeof start === "number" ? String(start) : formatPartialDate(start);
   const to = ongoing ? "Hiện tại" : typeof end === "number" ? String(end) : formatPartialDate(end);
@@ -251,6 +261,9 @@ export function CvExtractionPreview({
 }: CvExtractionPreviewProps) {
   const [excluded, setExcluded] = useState<Record<ListKey, number[]>>(EMPTY_EXCLUDED);
   const [excludedSkills, setExcludedSkills] = useState<string[]>([]);
+  // Số năm kinh nghiệm từng kỹ năng — giữ dạng chuỗi để ô nhập còn xoá trắng
+  // được; chuyển sang số lúc gửi. Không có trong CV, do người dùng tự nhập.
+  const [skillYears, setSkillYears] = useState<Record<string, string>>({});
   // Chỉ lưu lựa chọn người dùng đã bấm; chưa bấm thì theo mặc định (Quyết định #2).
   const [choices, setChoices] = useState<Partial<Record<FieldKey, boolean>>>({});
   const [result, setResult] = useState<ImportFromCvResponse | null>(null);
@@ -330,7 +343,9 @@ export function CvExtractionPreview({
   const excludedSet = (list: ListKey) => new Set(editable ? excluded[list] : []);
   const kept = <T,>(list: ListKey, items: T[]) => items.filter((_, index) => !excluded[list].includes(index));
 
-  const keptSkills = data.skills.filter((skill) => !excludedSkills.includes(skill));
+  const keptSkills = data.skills
+    .filter((skill) => !excludedSkills.includes(skill))
+    .map((skill) => ({ name: skill, yearsOfExperience: parseYears(skillYears[skill]) }));
   const counts = {
     educations: kept("educations", data.educations).length,
     workExperiences: kept("workExperiences", data.workExperiences).length,
@@ -507,28 +522,55 @@ export function CvExtractionPreview({
         {data.skills.length === 0 ? (
           <EmptyNote />
         ) : editable ? (
-          <div className="flex flex-wrap gap-1.5">
-            {data.skills.map((skill) => {
-              const off = excludedSkills.includes(skill);
-              return (
-                <button
-                  key={skill}
-                  type="button"
-                  aria-pressed={!off}
-                  onClick={() =>
-                    setExcludedSkills((prev) => (off ? prev.filter((item) => item !== skill) : [...prev, skill]))
-                  }
-                  className={`inline-flex cursor-pointer items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors ${
-                    off
-                      ? "border-dashed border-border-default text-text-muted line-through"
-                      : "border-transparent bg-brand-100 text-brand-800 hover:bg-brand-200"
-                  }`}
-                >
-                  <Icon name={off ? "plus" : "check"} size={12} />
-                  {skill}
-                </button>
-              );
-            })}
+          <div className="grid gap-2">
+            <p className="text-xs text-text-muted">
+              Bạn có thể nhập số năm kinh nghiệm cho từng kỹ năng. Bỏ trống nếu bạn chưa có.
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {data.skills.map((skill) => {
+                const off = excludedSkills.includes(skill);
+                return (
+                  // Không lồng <input> trong <button>: nút bật/tắt và ô số là hai
+                  // control riêng nằm chung một chip.
+                  <span
+                    key={skill}
+                    className={`inline-flex items-center rounded-full border text-xs font-medium transition-colors ${
+                      off ? "border-dashed border-border-default" : "border-transparent bg-brand-100"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      aria-pressed={!off}
+                      onClick={() =>
+                        setExcludedSkills((prev) => (off ? prev.filter((item) => item !== skill) : [...prev, skill]))
+                      }
+                      className={`inline-flex cursor-pointer items-center gap-1 rounded-full px-2.5 py-1 ${
+                        off ? "text-text-muted line-through" : "text-brand-800 hover:bg-brand-200"
+                      }`}
+                    >
+                      <Icon name={off ? "plus" : "check"} size={12} />
+                      {skill}
+                    </button>
+                    {!off ? (
+                      <span className="flex items-center gap-1 pr-2.5 text-brand-800">
+                        <input
+                          type="number"
+                          min="0"
+                          max={MAX_SKILL_YEARS}
+                          step="0.5"
+                          placeholder="0"
+                          aria-label={`Số năm kinh nghiệm ${skill}`}
+                          value={skillYears[skill] ?? ""}
+                          onChange={(e) => setSkillYears((prev) => ({ ...prev, [skill]: e.target.value }))}
+                          className="w-14 rounded-md border border-brand-200 bg-surface-card px-1.5 py-0.5 text-xs text-text-body"
+                        />
+                        năm
+                      </span>
+                    ) : null}
+                  </span>
+                );
+              })}
+            </div>
           </div>
         ) : (
           <div className="flex flex-wrap gap-1.5">
@@ -546,8 +588,8 @@ export function CvExtractionPreview({
       {editable ? (
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle pt-4">
           <p className="text-xs text-text-muted">
-            Kỹ năng đã có trong hồ sơ sẽ được giữ nguyên số năm kinh nghiệm. Trường/ngành/kỹ năng chưa có trong danh mục
-            sẽ được gửi Admin duyệt.
+            Kỹ năng đã có số năm kinh nghiệm trong hồ sơ sẽ được giữ nguyên; kỹ năng đang để 0 sẽ nhận số bạn vừa nhập.
+            Trường/ngành/kỹ năng chưa có trong danh mục sẽ được gửi Admin duyệt.
           </p>
           <Button
             icon="save"

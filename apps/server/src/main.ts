@@ -31,6 +31,7 @@ import type { CatalogMatchVerifier } from "./shared/ports/CatalogMatchVerifier";
 import { cvRouter } from "./modules/cv/cv.routes";
 import { savedJobsRouter } from "./modules/saved-jobs/saved-jobs.routes";
 import { applicationsRouter } from "./modules/applications/applications.routes";
+import { jobMatchingRouter } from "./modules/job-matching/job-matching.routes";
 
 import { messagingRoutes } from "./modules/messaging/messaging.routes";
 
@@ -79,6 +80,8 @@ app.use("/api", educationCatalogRouter(container));
 app.use("/api", cvRouter(container));
 app.use("/api", savedJobsRouter(container));
 app.use("/api", applicationsRouter(container));
+// Sau skillsRouter: Job Matcher GĐ2 dùng skillEmbeddingService do router đó đăng ký.
+app.use("/api", jobMatchingRouter(container));
 
 app.use("/api/conversations", messagingRoutes(container));
 

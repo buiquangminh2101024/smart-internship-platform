@@ -123,7 +123,7 @@ export class JobPostsService {
     });
 
     if (dto.skillIds) {
-      await this.jobPostRepository.setSkills(created.id, dto.skillIds);
+      await this.jobPostRepository.setSkills(created.id, this.toSkillRows(dto.skillIds, dto.preferredSkillIds));
       return toJobPostDto(await this.requireJobPost(created.id));
     }
     return toJobPostDto(created);
@@ -140,8 +140,10 @@ export class JobPostsService {
     const updated = await this.jobPostRepository.update(id, this.toWriteData(dto));
     // skillIds nằm ở bảng nối nên phải ghi riêng, không đi qua JobPostWriteData.
     // undefined = form không đụng tới kỹ năng; mảng rỗng = cố ý xoá hết.
+    // preferredSkillIds chỉ được ghi cùng skillIds (một khối) — client cũ chỉ
+    // gửi skillIds sẽ xoá kỹ năng ưu tiên đã có (PLAN Job Matcher GĐ1 #6).
     if (dto.skillIds) {
-      await this.jobPostRepository.setSkills(id, dto.skillIds);
+      await this.jobPostRepository.setSkills(id, this.toSkillRows(dto.skillIds, dto.preferredSkillIds));
       return toJobPostDto(await this.requireJobPost(id));
     }
     return toJobPostDto(updated);
@@ -344,6 +346,9 @@ export class JobPostsService {
       throw new AppError(400, "Minimum salary cannot be greater than maximum salary");
     }
 
+    // 0 và null cùng nghĩa "không yêu cầu" — lưu null để Job Matcher chỉ phải xét một trường hợp.
+    if (dto.minExperienceYears !== undefined) data.minExperienceYears = dto.minExperienceYears || null;
+
     if (dto.expiresAt !== undefined) {
       const expiresAt = dto.expiresAt ? new Date(dto.expiresAt) : null;
       if (expiresAt) {
@@ -356,6 +361,19 @@ export class JobPostsService {
     }
 
     return data;
+  }
+
+  /** skillIds → REQUIRED, preferredSkillIds → PREFERRED; trùng ở cả hai thì REQUIRED thắng. */
+  private toSkillRows(
+    skillIds: string[],
+    preferredSkillIds: string[] | undefined,
+  ): { skillId: string; importance: "REQUIRED" | "PREFERRED" }[] {
+    const required = new Set(skillIds);
+    const preferred = new Set((preferredSkillIds ?? []).filter((skillId) => !required.has(skillId)));
+    return [
+      ...[...required].map((skillId) => ({ skillId, importance: "REQUIRED" as const })),
+      ...[...preferred].map((skillId) => ({ skillId, importance: "PREFERRED" as const })),
+    ];
   }
 
   /**

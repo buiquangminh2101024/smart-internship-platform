@@ -235,6 +235,16 @@ function SkillSection({ items, skills, refresh }: { items: Profile["skills"]; sk
     await refresh();
   }
 
+  // POST đã là upsert (candidate.repository.ts) nên sửa số năm dùng lại đúng
+  // endpoint thêm mới — không cần route riêng.
+  async function updateYears(skillId: string, yearsOfExperience: number) {
+    await apiFetch("candidate", "/candidates/me/skills", {
+      method: "POST",
+      body: JSON.stringify({ skillId, yearsOfExperience }),
+    });
+    await refresh();
+  }
+
   return (
     <SkillMultiSelect
       label=""
@@ -244,6 +254,7 @@ function SkillSection({ items, skills, refresh }: { items: Profile["skills"]; sk
       allowYearsOfExperience
       onAdd={add}
       onRemove={remove}
+      onUpdateYears={updateYears}
       onSuggestNew={(name) => suggestSkill("candidate", name)}
     />
   );

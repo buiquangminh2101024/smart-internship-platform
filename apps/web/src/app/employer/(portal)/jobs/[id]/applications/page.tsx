@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useEmployerJobApplications } from "@/hooks/useApplications";
+import { useEmployerApplicationMatches } from "@/hooks/useJobMatch";
+import { MatchScoreBadge } from "@/components/jobs/MatchScoreBadge";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -16,6 +18,9 @@ export default function EmployerJobApplicationsPage() {
   const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "">("");
   
   const { data: applications, isLoading, isError } = useEmployerJobApplications(jobId, statusFilter ? statusFilter : undefined);
+  // Điểm tham khảo, ghép theo applicationId — không đổi thứ tự hay lọc đơn theo điểm.
+  const { data: matches } = useEmployerApplicationMatches(jobId);
+  const matchByApplication = new Map((matches ?? []).map((match) => [match.applicationId, match]));
 
   return (
     <div className="space-y-6">
@@ -59,6 +64,9 @@ export default function EmployerJobApplicationsPage() {
                 <th className="p-4 font-medium">Email</th>
                 <th className="p-4 font-medium">Ngày nộp</th>
                 <th className="p-4 font-medium">Trạng thái</th>
+                <th className="p-4 font-medium" title="Theo hồ sơ hiện tại của ứng viên — chỉ mang tính tham khảo">
+                  Phù hợp
+                </th>
                 <th className="p-4 font-medium">Thao tác</th>
               </tr>
             </thead>
@@ -74,6 +82,12 @@ export default function EmployerJobApplicationsPage() {
                       app.status === "REJECTED" || app.status === "CANCELLED" ? "danger" :
                       app.status === "PENDING" ? "warning" : "info"
                     }>{app.status}</Badge>
+                  </td>
+                  <td className="p-4">
+                    <MatchScoreBadge
+                      score={matchByApplication.get(app.id)?.score}
+                      status={matchByApplication.get(app.id)?.status}
+                    />
                   </td>
                   <td className="p-4">
                     <Button as="a" href={"/employer/applications/" + app.id} size="sm" variant="secondary">
