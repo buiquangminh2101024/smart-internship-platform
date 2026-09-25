@@ -7,6 +7,7 @@ import { CandidateCvImportService } from "./candidate-cv-import.service";
 import { Role } from "@prisma/client";
 import { authenticate } from "../../shared/middleware/authenticate";
 import { authorize } from "../../shared/middleware/authorize";
+import { singleFileUpload } from "../../shared/middleware/upload";
 import { validate } from "../../shared/middleware/validate";
 import {
   awardSchema,
@@ -38,6 +39,11 @@ export function candidatesRouter(container: AwilixContainer): Router {
   const router = Router();
   const controller = () => container.resolve<CandidateController>("candidateController");
   const candidateOnly = [authenticate(container), authorize(Role.CANDIDATE)];
+  const employerOnly = [authenticate(container), authorize(Role.EMPLOYER)];
+
+  router.get("/employer/candidates/:id", ...employerOnly, (req, res, next) => {
+    void controller().getPublicProfile(req, res, next);
+  });
 
   router.get("/candidates/me", ...candidateOnly, (req, res, next) => {
     void controller().me(req, res, next);
@@ -45,6 +51,10 @@ export function candidatesRouter(container: AwilixContainer): Router {
 
   router.patch("/candidates/me", ...candidateOnly, validate(candidateProfilePatchSchema), (req, res, next) => {
     void controller().updateMe(req, res, next);
+  });
+
+  router.patch("/candidates/me/avatar", ...candidateOnly, singleFileUpload("avatar", ["image/jpeg", "image/png", "image/webp"]), (req, res, next) => {
+    void controller().uploadAvatar(req, res, next);
   });
 
   // docs/06-backend/cv-ai-extraction-phase2/PLAN.md — "Lưu vào hồ sơ" từ kết quả đọc CV.

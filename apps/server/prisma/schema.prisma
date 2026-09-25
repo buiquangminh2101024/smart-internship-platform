@@ -325,6 +325,7 @@ model Candidate {
   id          String    @id @default(cuid())
   userId      String    @unique
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName    String?
   headline    String?
   bio         String?
   phone       String?
@@ -761,7 +762,13 @@ model Cv {
   fileUrl     String
   fileName    String
   isDefault   Boolean   @default(false)
+  isHidden    Boolean   @default(false)
   uploadedAt  DateTime  @default(now())
+
+  // --- Builder CV fields ---
+  isBuilder   Boolean   @default(false)
+  templateId  String?
+  builderData Json?
 
   extractionStatus CvExtractionStatus @default(NOT_STARTED)
   // Kết quả thô từ LLM (CvExtractionResult) — Phase 2 đọc lại để ghi vào hồ sơ.

@@ -39,9 +39,29 @@ export class CandidateController {
     }
   };
 
+  getPublicProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const profile = await this.candidateService.getPublicProfile(req.params.id);
+      const body: ApiResponse = { success: true, data: profile };
+      res.json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
+
   updateMe = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const profile = await this.candidateService.updateProfile(req.user!.id, req.body);
+      const body: ApiResponse = { success: true, data: profile };
+      res.json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  uploadAvatar = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const profile = await this.candidateService.uploadAvatar(req.user!.id, req.file);
       const body: ApiResponse = { success: true, data: profile };
       res.json(body);
     } catch (error) {

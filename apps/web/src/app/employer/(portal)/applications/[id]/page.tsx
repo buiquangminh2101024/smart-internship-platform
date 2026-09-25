@@ -8,6 +8,7 @@ import { JobMatchCard, JobMatchCardSkeleton } from "@/components/jobs/JobMatchCa
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import type { ApplicationStatus } from "@sip/shared-types";
 
 export default function EmployerApplicationDetailPage() {
@@ -23,13 +24,14 @@ export default function EmployerApplicationDetailPage() {
   const [notes, setNotes] = useState("");
   const [rating, setRating] = useState<number>(0);
   const [isEditingEval, setIsEditingEval] = useState(false);
+  const [dialog, setDialog] = useState<{ isOpen: boolean; title: string; message: string; type: "success" | "error" }>({ isOpen: false, title: "", message: "", type: "success" });
 
   const handleStatusChange = async (newStatus: ApplicationStatus) => {
     try {
       await statusMutation.mutateAsync({ id, data: { status: newStatus } });
-      alert("Cập nhật trạng thái thành công!");
-    } catch (err: any) {
-      alert(err.message || "Không thể cập nhật trạng thái");
+      setDialog({ isOpen: true, title: "Thành công", message: "Cập nhật trạng thái thành công!", type: "success" });
+    } catch (err: unknown) {
+      setDialog({ isOpen: true, title: "Lỗi", message: err instanceof Error ? err.message : "Không thể cập nhật trạng thái", type: "error" });
     }
   };
 
@@ -43,9 +45,9 @@ export default function EmployerApplicationDetailPage() {
         } 
       });
       setIsEditingEval(false);
-      alert("Đã lưu đánh giá nội bộ.");
-    } catch (err: any) {
-      alert(err.message || "Lỗi lưu đánh giá.");
+      setDialog({ isOpen: true, title: "Thành công", message: "Đã lưu đánh giá nội bộ.", type: "success" });
+    } catch (err: unknown) {
+      setDialog({ isOpen: true, title: "Lỗi", message: err instanceof Error ? err.message : "Lỗi lưu đánh giá.", type: "error" });
     }
   };
 
@@ -68,9 +70,14 @@ export default function EmployerApplicationDetailPage() {
         <div className="md:col-span-2 space-y-6">
           <Card padding="lg">
             <h2 className="text-xl font-bold mb-4">Thông tin hồ sơ</h2>
-            <div className="mb-4">
-              <span className="text-gray-600 font-medium mr-2">Tên:</span>
-              <span>{application.candidate?.user?.email}</span>
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <span className="text-gray-600 font-medium mr-2">Tên:</span>
+                <span>{application.candidate?.user?.email}</span>
+              </div>
+              <Button as="a" href={`/employer/candidates/${application.candidateId}`} variant="secondary" size="sm">
+                Xem hồ sơ trực tuyến
+              </Button>
             </div>
             
             <div className="mb-6">
@@ -130,8 +137,8 @@ export default function EmployerApplicationDetailPage() {
                     })
                   });
                   router.push(`/employer/messages?conversationId=${res.id}`);
-                } catch (err: any) {
-                  alert(err.message || "Không thể tạo hội thoại");
+                } catch (err: unknown) {
+                  setDialog({ isOpen: true, title: "Lỗi", message: err instanceof Error ? err.message : "Không thể tạo hội thoại", type: "error" });
                 }
               }}
             >
@@ -176,6 +183,16 @@ export default function EmployerApplicationDetailPage() {
           </Card>
         </div>
       </div>
+      
+      <ConfirmDialog
+        isOpen={dialog.isOpen}
+        title={dialog.title}
+        message={dialog.message}
+        isDestructive={dialog.type === "error"}
+        hideCancel
+        onConfirm={() => setDialog(prev => ({ ...prev, isOpen: false }))}
+        onCancel={() => setDialog(prev => ({ ...prev, isOpen: false }))}
+      />
     </div>
   );
 }

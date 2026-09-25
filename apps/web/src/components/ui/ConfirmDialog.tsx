@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "./Button";
 import { Card } from "./Card";
 import { Icon } from "./Icon";
@@ -13,6 +14,7 @@ export interface ConfirmDialogProps {
   cancelLabel?: string;
   isDestructive?: boolean;
   isConfirming?: boolean;
+  hideCancel?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -25,10 +27,16 @@ export function ConfirmDialog({
   cancelLabel = "Hủy",
   isDestructive = false,
   isConfirming = false,
+  hideCancel = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -50,9 +58,9 @@ export function ConfirmDialog({
     };
   }, [isOpen, isConfirming, onCancel]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         ref={overlayRef}
@@ -70,7 +78,7 @@ export function ConfirmDialog({
               isDestructive ? "bg-red-100 text-red-600" : "bg-brand-100 text-brand-600"
             }`}
           >
-            <Icon name={isDestructive ? "triangle-alert" : "help-circle"} size={20} />
+            <Icon name={isDestructive ? "triangle-alert" : hideCancel ? "info" : "help-circle"} size={20} />
           </div>
           <div>
             <h3 className="text-lg font-semibold text-text-strong">{title}</h3>
@@ -78,9 +86,11 @@ export function ConfirmDialog({
           </div>
         </div>
         <div className="flex justify-end gap-3">
-          <Button variant="secondary" onClick={onCancel} disabled={isConfirming}>
-            {cancelLabel}
-          </Button>
+          {!hideCancel && (
+            <Button variant="secondary" onClick={onCancel} disabled={isConfirming}>
+              {cancelLabel}
+            </Button>
+          )}
           <Button
             variant={isDestructive ? "danger" : "primary"}
             loading={isConfirming}
@@ -90,6 +100,7 @@ export function ConfirmDialog({
           </Button>
         </div>
       </Card>
-    </div>
+    </div>,
+    document.body
   );
 }

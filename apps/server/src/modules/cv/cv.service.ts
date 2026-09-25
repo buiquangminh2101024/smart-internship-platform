@@ -35,7 +35,7 @@ export class CvService {
   async listForCandidate(userId: string) {
     const candidate = await this.ensureCandidate(userId);
     return this.prisma.cv.findMany({
-      where: { candidateId: candidate.id },
+      where: { candidateId: candidate.id, isHidden: false },
       orderBy: { uploadedAt: "desc" },
     });
   }
@@ -47,7 +47,7 @@ export class CvService {
     return item;
   }
 
-  async uploadForCandidate(userId: string, file: Express.Multer.File | undefined) {
+  async uploadForCandidate(userId: string, file: Express.Multer.File | undefined, isHidden = false) {
     if (!file) {
       throw new AppError(400, "A CV file is required");
     }
@@ -74,6 +74,7 @@ export class CvService {
         fileUrl: uploaded.url,
         fileName: file.originalname || "cv.pdf",
         isDefault: false,
+        isHidden,
       },
     });
   }
@@ -134,5 +135,60 @@ export class CvService {
 
   private safeFileName(fileName: string): string {
     return fileName.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 120) || "cv";
+  }
+
+  async saveBuilderCv(userId: string, cvId: string | undefined, templateId: string, builderData: any, file: Express.Multer.File | undefined) {
+    const candidate = await this.ensureCandidate(userId);
+
+    let fileUrl = "";
+    let fileName = "";
+
+    if (file) {
+      if (file.size > MAX_CV_FILE_SIZE) {
+        throw new AppError(400, "CV file size must be under 5MB");
+      }
+      if (!ALLOWED_CV_MIME_TYPES.includes(file.mimetype)) {
+        throw new AppError(400, "Only PDF, DOCX, JPG or PNG files are allowed for CV upload");
+      }
+
+      const uploaded = await this.mediaStorage.upload(file.buffer, {
+        folder: "candidate-cvs",
+        filename: `${candidate.id}-${Date.now()}-${this.safeFileName(file.originalname || "cv-builder.pdf")}`,
+        resourceType: "raw",
+      });
+      fileUrl = uploaded.url;
+      fileName = file.originalname || "cv.pdf";
+    }
+
+    if (cvId) {
+      const existing = await this.prisma.cv.findFirst({ where: { id: cvId, candidateId: candidate.id } });
+      if (!existing) throw new AppError(404, "CV not found");
+
+      return this.prisma.cv.update({
+        where: { id: cvId },
+        data: {
+          templateId,
+          builderData,
+          ...(fileUrl ? { fileUrl, fileName } : {}),
+        },
+      });
+    }
+
+    if (!fileUrl) {
+      throw new AppError(400, "A generated PDF file is required when creating a new Builder CV");
+    }
+
+    return this.prisma.cv.create({
+      data: {
+        candidateId: candidate.id,
+        fileUrl,
+        fileName,
+        isDefault: false,
+        isHidden: false,
+        isBuilder: true,
+        templateId,
+        builderData,
+      },
+    });
   }
 }

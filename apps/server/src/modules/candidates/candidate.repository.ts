@@ -57,6 +57,47 @@ export class CandidateRepository {
     });
   }
 
+  findById(id: string): Promise<(Candidate & {
+    user: { email: string; emailVerifiedAt: Date | null };
+    educations: Education[];
+    workExperiences: WorkExperience[];
+    projects: Project[];
+    certificates: Certificate[];
+    awards: Award[];
+    skills: Array<{ yearsOfExperience: number; skill: Skill }>;
+    city: { id: string; name: string } | null;
+  }) | null> {
+    return this.prisma.candidate.findUnique({
+      where: { id },
+      include: {
+        user: {
+          select: { email: true, emailVerifiedAt: true },
+        },
+        city: true,
+        educations: {
+          orderBy: { createdAt: "desc" },
+          include: { university: true, major: true },
+        },
+        workExperiences: {
+          orderBy: { createdAt: "desc" },
+        },
+        projects: {
+          orderBy: { createdAt: "desc" },
+        },
+        certificates: {
+          orderBy: { createdAt: "desc" },
+        },
+        awards: {
+          orderBy: { createdAt: "desc" },
+        },
+        skills: {
+          orderBy: { skill: { name: "asc" } },
+          include: { skill: true },
+        },
+      },
+    });
+  }
+
   async updateProfile(userId: string, data: Prisma.CandidateUpdateInput): Promise<Candidate> {
     const candidate = await this.ensureCandidate(userId);
     return this.prisma.candidate.update({

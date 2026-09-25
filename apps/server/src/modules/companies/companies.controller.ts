@@ -38,6 +38,16 @@ export class CompaniesController {
     }
   };
 
+  publicDetail = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await this.companiesService.getPublicDetail(req.params.id as string);
+      const body: ApiResponse<Company> = { success: true, data: result };
+      res.json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
+
   verify = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const result = await this.companiesService.verify(req.params.id as string);

@@ -22,6 +22,9 @@ export function companiesRouter(container: AwilixContainer): Router {
   router.get("/companies", ...guard, validate(listCompaniesQuerySchema, "query"), (req, res, next) => {
     void resolveController().list(req, res, next);
   });
+  router.get("/companies/:id/public", (req, res, next) => {
+    void resolveController().publicDetail(req, res, next);
+  });
   router.get("/companies/:id", ...guard, (req, res, next) => {
     void resolveController().detail(req, res, next);
   });

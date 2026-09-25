@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { CatalogEntryStatus } from "@sip/shared-types";
-import { apiFetch } from "@/lib/api-client";
+import { apiFetch, apiUpload } from "@/lib/api-client";
 import { suggestSkill } from "@/lib/skills";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -10,11 +10,13 @@ import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { SkillMultiSelect, type SelectedSkill } from "@/components/shared/SkillMultiSelect";
+import { CompanyImageUpload } from "@/components/employer/CompanyImageUpload";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 type CatalogItem = { id: string; name: string };
 type Values = Record<string, string | boolean>;
 type Profile = {
-  headline?: string | null; bio?: string | null; phone?: string | null; dateOfBirth?: string | null;
+  fullName?: string | null; headline?: string | null; bio?: string | null; phone?: string | null; dateOfBirth?: string | null;
   gender?: "MALE" | "FEMALE" | "OTHER" | null; avatarUrl?: string | null; cityId?: string | null;
   city?: CatalogItem | null; educations: Resource[]; workExperiences: Resource[]; projects: Resource[];
   certificates: Resource[]; awards: Resource[];
@@ -81,11 +83,17 @@ function CollectionSection({
     } finally { setSaving(false); }
   }
 
-  async function remove(id: string) {
-    if (!window.confirm("Xóa mục này khỏi hồ sơ?")) return;
+  const [confirmDialog, setConfirmDialog] = useState<{ isOpen: boolean; id: string }>({ isOpen: false, id: "" });
+
+  async function performRemove(id: string) {
     setError("");
     try { await apiFetch("candidate", `${endpoint}/${id}`, { method: "DELETE" }); await refresh(); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Không thể xóa thông tin."); }
+    finally { setConfirmDialog({ isOpen: false, id: "" }); }
+  }
+
+  function remove(id: string) {
+    setConfirmDialog({ isOpen: true, id });
   }
 
   return (
@@ -103,6 +111,14 @@ function CollectionSection({
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
         <Button type="submit" loading={saving} className="justify-self-start" icon={editing ? "save" : "plus"}>{editing ? "Lưu thay đổi" : "Thêm vào hồ sơ"}</Button>
       </form>
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        title="Xác nhận xóa"
+        message="Xóa mục này khỏi hồ sơ?"
+        isDestructive
+        onConfirm={() => performRemove(confirmDialog.id)}
+        onCancel={() => setConfirmDialog({ isOpen: false, id: "" })}
+      />
     </Section>
   );
 }
@@ -113,12 +129,13 @@ export function CandidateProfileClient() {
   const [loadError, setLoadError] = useState("");
   const [profileError, setProfileError] = useState("");
   const [profileSaving, setProfileSaving] = useState(false);
-  const [personal, setPersonal] = useState<Values>({ headline: "", bio: "", phone: "", dateOfBirth: "", gender: "", avatarUrl: "", cityId: "" });
+  const [personal, setPersonal] = useState<Values>({ fullName: "", headline: "", bio: "", phone: "", dateOfBirth: "", gender: "", avatarUrl: "", cityId: "" });
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
 
   const refresh = useCallback(async () => {
     const data = await apiFetch<Profile>("candidate", "/candidates/me");
     setProfile(data);
-    setPersonal({ headline: data.headline ?? "", bio: data.bio ?? "", phone: data.phone ?? "", dateOfBirth: dateInput(data.dateOfBirth), gender: data.gender ?? "", avatarUrl: data.avatarUrl ?? "", cityId: data.cityId ?? "" });
+    setPersonal({ fullName: data.fullName ?? "", headline: data.headline ?? "", bio: data.bio ?? "", phone: data.phone ?? "", dateOfBirth: dateInput(data.dateOfBirth), gender: data.gender ?? "", avatarUrl: data.avatarUrl ?? "", cityId: data.cityId ?? "" });
   }, []);
 
   useEffect(() => {
@@ -137,7 +154,24 @@ export function CandidateProfileClient() {
 
   async function savePersonal(event: React.FormEvent) {
     event.preventDefault(); setProfileSaving(true); setProfileError("");
-    try { await apiFetch("candidate", "/candidates/me", { method: "PATCH", body: JSON.stringify(emptyToUndefined(personal)) }); await refresh(); }
+    try {
+      if (avatarFile) {
+        const formData = new FormData();
+        formData.append("avatar", avatarFile);
+        await apiUpload("candidate", "/candidates/me/avatar", formData, "PATCH");
+        setAvatarFile(null);
+      }
+      const { avatarUrl: _unused, ...restPersonal } = personal;
+      await apiFetch("candidate", "/candidates/me", { method: "PATCH", body: JSON.stringify(emptyToUndefined(restPersonal)) });
+      
+      const freshData = await apiFetch<Profile>("candidate", "/candidates/me");
+      setProfile(freshData);
+      setPersonal({ fullName: freshData.fullName ?? "", headline: freshData.headline ?? "", bio: freshData.bio ?? "", phone: freshData.phone ?? "", dateOfBirth: dateInput(freshData.dateOfBirth), gender: freshData.gender ?? "", avatarUrl: freshData.avatarUrl ?? "", cityId: freshData.cityId ?? "" });
+      
+      if (freshData.avatarUrl) {
+        window.dispatchEvent(new CustomEvent("avatar-updated", { detail: freshData.avatarUrl }));
+      }
+    }
     catch (cause) { setProfileError(cause instanceof Error ? cause.message : "Không thể lưu hồ sơ."); }
     finally { setProfileSaving(false); }
   }
@@ -152,13 +186,25 @@ export function CandidateProfileClient() {
 
         <Section title="Thông tin cá nhân" description="Các thông tin cơ bản hiển thị trong hồ sơ ứng tuyển.">
           <form onSubmit={savePersonal} className="grid gap-4">
+            <div className="flex flex-col items-center mb-4">
+              <div className="[&_div[role='button']]:!rounded-full [&_div[role='button']]:overflow-hidden [&_span.font-medium]:hidden [&_button]:text-center [&_button]:mx-auto">
+                <CompanyImageUpload
+                  label=""
+                  variant="logo"
+                  file={avatarFile}
+                  onChange={setAvatarFile}
+                  currentUrl={String(personal.avatarUrl)}
+                />
+              </div>
+              <span className="text-sm font-medium mt-1 text-text-muted">Ảnh đại diện</span>
+            </div>
             <FormGrid>
+              <Input label="Họ và tên" value={String(personal.fullName)} onChange={(e) => setPersonalValue("fullName", e.target.value)} required />
               <Input label="Tiêu đề nghề nghiệp" value={String(personal.headline)} onChange={(e) => setPersonalValue("headline", e.target.value)} placeholder="Ví dụ: Sinh viên Kỹ thuật phần mềm" />
               <Input label="Số điện thoại" value={String(personal.phone)} onChange={(e) => setPersonalValue("phone", e.target.value)} placeholder="0912 345 678" />
               <Input label="Ngày sinh" type="date" value={String(personal.dateOfBirth)} onChange={(e) => setPersonalValue("dateOfBirth", e.target.value)} />
               <Select label="Giới tính" value={String(personal.gender)} onChange={(e) => setPersonalValue("gender", e.target.value)} options={[{ value: "", label: "Chưa chọn" }, { value: "MALE", label: "Nam" }, { value: "FEMALE", label: "Nữ" }, { value: "OTHER", label: "Khác" }]} />
               <Select label="Thành phố" value={String(personal.cityId)} onChange={(e) => setPersonalValue("cityId", e.target.value)} options={options("cities", "Chọn thành phố")} />
-              <Input label="Liên kết ảnh đại diện" type="url" value={String(personal.avatarUrl)} onChange={(e) => setPersonalValue("avatarUrl", e.target.value)} placeholder="https://…" />
             </FormGrid>
             <label className="grid gap-1.5 text-sm font-medium text-text-body">Giới thiệu bản thân<textarea className={textareaClass} value={String(personal.bio)} onChange={(e) => setPersonalValue("bio", e.target.value)} maxLength={2000} placeholder="Điểm mạnh, định hướng nghề nghiệp và mục tiêu thực tập…" /></label>
             {profileError ? <p className="text-sm text-red-600">{profileError}</p> : null}

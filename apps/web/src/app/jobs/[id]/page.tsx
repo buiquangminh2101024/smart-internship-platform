@@ -138,9 +138,14 @@ export default function PublicJobDetailPage({ params }: { params: Promise<{ id: 
                   <JobPostCompanyCard
                     job={job}
                     footer={
-                      <p className="text-sm text-text-muted">
-                        {job.viewCount} lượt xem tin này.
-                      </p>
+                      <div className="mt-4 flex items-center justify-between">
+                        <p className="text-sm text-text-muted">
+                          {job.viewCount} lượt xem tin này.
+                        </p>
+                        <Button as="a" href={`/companies/${job.company.id}`} variant="secondary" size="sm">
+                          Xem trang công ty
+                        </Button>
+                      </div>
                     }
                   />
                 </>

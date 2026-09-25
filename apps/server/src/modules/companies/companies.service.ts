@@ -41,6 +41,14 @@ export class CompaniesService {
     return { ...toCompanyDto(company), retractionCount };
   }
 
+  async getPublicDetail(id: string): Promise<CompanyDto> {
+    const company = await this.requireCompany(id);
+    if (!company.isVerified) {
+      throw new AppError(403, "Hồ sơ công ty này hiện chưa thể xem công khai");
+    }
+    return toCompanyDto(company);
+  }
+
   async verify(id: string): Promise<CompanyDto> {
     const company = await this.requireCompany(id);
     // Chặn gọi lại trên company đã xác minh — nếu không, mỗi lần bấm lại nút

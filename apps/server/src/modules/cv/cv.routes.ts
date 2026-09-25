@@ -67,6 +67,10 @@ export function cvRouter(container: AwilixContainer): Router {
     void controller().upload(req, res, next);
   });
 
+  router.post("/candidates/me/cvs/builder", ...candidateGuard, singleFileUpload("file", ALLOWED_CV_MIME_TYPES), (req, res, next) => {
+    void controller().saveBuilderCv(req, res, next);
+  });
+
   router.post("/candidates/me/cvs/:id/extract", ...candidateGuard, (req, res, next) => {
     void controller().extract(req, res, next);
   });
