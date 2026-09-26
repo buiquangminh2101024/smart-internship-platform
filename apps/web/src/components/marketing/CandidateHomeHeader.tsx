@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -10,8 +10,8 @@ import { Icon } from "@/components/ui/Icon";
 import { NotificationBell } from "@/components/layout/NotificationBell";
 
 const NAV_LINKS = [
-  { label: "Việc thực tập", href: "/jobs" },
-  { label: "Công ty", href: "/companies" },
+  { label: "Việc thực tập", href: "/jobs" },    { label: "Công ty", href: "/companies" },
+  
   { label: "Cẩm nang", href: "/" },
   { label: "Dành cho doanh nghiệp", href: "/employer" },
 ];

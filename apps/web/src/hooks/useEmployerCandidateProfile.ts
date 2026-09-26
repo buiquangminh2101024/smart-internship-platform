@@ -5,7 +5,7 @@ export function useEmployerCandidateProfile(candidateId: string) {
   return useQuery({
     queryKey: ["employer-candidate-profile", candidateId],
     queryFn: async () => {
-      return apiFetch<any>("employer", `/candidates/${candidateId}`);
+      return apiFetch<any>("employer", `/employer/candidates/${candidateId}`);
     },
     enabled: !!candidateId,
   });

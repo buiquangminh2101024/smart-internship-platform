@@ -35,7 +35,7 @@ export default function EmployerCandidateProfilePage() {
           </div>
           
           <div className="flex-1 space-y-2">
-            <h2 className="text-2xl font-bold">{profile.user?.email}</h2>
+            <h2 className="text-2xl font-bold">{profile.fullName || profile.user?.email}</h2>
             {profile.headline && <p className="text-lg text-text-body font-medium">{profile.headline}</p>}
             
             <div className="flex flex-wrap gap-4 text-sm text-text-muted mt-2">

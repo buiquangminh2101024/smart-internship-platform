@@ -10,3 +10,14 @@ export function usePublicCompany(companyId: string) {
     staleTime: Infinity,
   });
 }
+
+export function usePublicCompaniesList(searchQuery?: string) {
+  return useQuery({
+    queryKey: ["publicCompanies", searchQuery],
+    queryFn: () => {
+      const qs = searchQuery ? `?q=${encodeURIComponent(searchQuery)}` : "";
+      return publicFetch<any[]>(`/companies/public${qs}`);
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}

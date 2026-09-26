@@ -41,12 +41,46 @@ export class CompaniesService {
     return { ...toCompanyDto(company), retractionCount };
   }
 
+  async listPublic(q?: string) {
+    const companies = await this.prisma.company.findMany({
+      where: {
+        isVerified: true,
+        ...(q ? { name: { contains: q, mode: "insensitive" } } : {}),
+      },
+      include: {
+        city: true,
+        _count: {
+          select: {
+            jobPosts: { where: { status: "PUBLISHED" } },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return companies.map(c => ({
+      id: c.id,
+      name: c.name,
+      logoUrl: c.logoUrl,
+      city: c.city ? c.city.name : null,
+      jobCount: c._count.jobPosts,
+    }));
+  }
+
   async getPublicDetail(id: string): Promise<CompanyDto> {
     const company = await this.requireCompany(id);
     if (!company.isVerified) {
       throw new AppError(403, "Hồ sơ công ty này hiện chưa thể xem công khai");
     }
-    return toCompanyDto(company);
+    const dto = toCompanyDto(company);
+    return {
+      ...dto,
+      taxCode: "",
+      businessLicenseUrl: null,
+      verificationNote: null,
+      rejectedAt: null,
+      verificationMethod: null,
+    } as any;
   }
 
   async verify(id: string): Promise<CompanyDto> {

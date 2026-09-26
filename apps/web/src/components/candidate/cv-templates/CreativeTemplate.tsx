@@ -79,7 +79,7 @@ export function CreativeTemplate({ data, config }: { data: CvBuilderData; config
           {personal.avatarUrl ? (
             <Image src={personal.avatarUrl} style={styles.avatar} />
           ) : (
-            <View style={{ ...styles.avatar, backgroundColor: "#rgba(255,255,255,0.2)" }} />
+            <View style={{ ...styles.avatar, backgroundColor: "rgba(255,255,255,0.2)" }} />
           )}
         </View>
 

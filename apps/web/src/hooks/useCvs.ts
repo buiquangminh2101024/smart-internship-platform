@@ -30,6 +30,7 @@ type Resource = Record<string, unknown> & { id: string };
 export interface CandidateFullProfile extends CandidateProfileSnapshot {
   fullName: string | null;
   avatarUrl: string | null;
+  user?: { email: string } | null;
   educations: Array<Resource & {
     universityId: string | null; majorId: string | null; degree: string | null; startYear: number | null; endYear: number | null; isCurrent: boolean; description: string | null;
     university: CatalogItem | null; major: CatalogItem | null;

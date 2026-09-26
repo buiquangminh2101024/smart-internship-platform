@@ -41,7 +41,7 @@ export class CandidateController {
 
   getPublicProfile = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const profile = await this.candidateService.getPublicProfile(String(req.params.id));
+      const profile = await this.candidateService.getEmployerCandidateProfile(req.user!.id, String(req.params.id));
       const body: ApiResponse = { success: true, data: profile };
       res.json(body);
     } catch (error) {

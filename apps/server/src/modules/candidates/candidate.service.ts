@@ -36,12 +36,30 @@ export class CandidateService {
     return candidate;
   }
 
-  async getPublicProfile(candidateId: string) {
+  async getEmployerCandidateProfile(employerUserId: string, candidateId: string) {
+    const employer = await this.prisma.employer.findUnique({ where: { userId: employerUserId } });
+    if (!employer) throw new AppError(403, "Employer not found");
+
+    const application = await this.prisma.application.findFirst({
+      where: {
+        candidateId,
+        jobPost: { employerId: employer.id },
+      },
+    });
+    if (!application) {
+      throw new AppError(403, "You do not have access to this candidate's profile");
+    }
+
     const profile = await this.candidateRepository.findById(candidateId);
     if (!profile) {
       throw new AppError(404, "Candidate not found");
     }
-    return profile;
+
+    const { user, dateOfBirth, ...rest } = profile as any;
+    return {
+      ...rest,
+      user: { email: user.email },
+    };
   }
 
   async updateProfile(userId: string, input: Record<string, unknown>) {

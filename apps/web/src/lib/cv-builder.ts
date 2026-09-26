@@ -145,7 +145,7 @@ export function mapProfileToCvBuilderData(profile: CandidateFullProfile | null):
     personal: {
       fullName: profile.fullName || "",
       headline: profile.headline || "",
-      email: "", // User email is not directly in CandidateFullProfile, will be added if possible
+      email: profile.user?.email || "",
       phone: profile.phone || "",
       city: profile.city?.name || "",
       avatarUrl: profile.avatarUrl || "",

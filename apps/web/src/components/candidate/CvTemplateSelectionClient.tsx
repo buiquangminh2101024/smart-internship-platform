@@ -93,7 +93,7 @@ export function CvTemplateSelectionClient() {
         {CV_TEMPLATES.map((tpl) => (
           <Card key={tpl.id} className="flex flex-col overflow-hidden transition-shadow hover:shadow-md">
             <div className="aspect-[1/1.4] w-full bg-neutral-100 flex items-center justify-center border-b border-border-default relative group">
-              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3">
+              <div className="absolute inset-0 bg-black/50 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-3">
                 <Button variant="primary" icon="eye" onClick={() => setPreviewTemplate(tpl)}>
                   Xem trước
                 </Button>

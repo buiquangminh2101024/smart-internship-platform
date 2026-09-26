@@ -38,6 +38,17 @@ export class CompaniesController {
     }
   };
 
+  listPublic = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const q = req.query.q as string | undefined;
+      const result = await this.companiesService.listPublic(q);
+      const body: ApiResponse<any> = { success: true, data: result };
+      res.json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
+
   publicDetail = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const result = await this.companiesService.getPublicDetail(req.params.id as string);
