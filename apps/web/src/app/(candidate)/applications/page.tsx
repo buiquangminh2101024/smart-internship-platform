@@ -7,6 +7,8 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Icon } from "@/components/ui/Icon";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { useState } from "react";
 
 import { useRouter } from "next/navigation";
 import type { JobPostStatus } from "@sip/shared-types";
@@ -18,11 +20,25 @@ export default function ApplicationsPage() {
   const { data: applications, isLoading, isError } = useCandidateApplications();
   const cancelMutation = useCancelApplication();
   const router = useRouter();
+  
+  const [dialog, setDialog] = useState<{ isOpen: boolean; title: string; message: string; type: "success" | "error" | "info"; onConfirm?: () => void; isDestructive?: boolean; hideCancel?: boolean }>({ isOpen: false, title: "", message: "", type: "info" });
 
-  const handleCancel = async (id: string) => {
-    if (confirm("Bạn có chắc chắn muốn hủy đơn ứng tuyển này?")) {
-      await cancelMutation.mutateAsync(id);
-    }
+  const handleCancel = (id: string) => {
+    setDialog({
+      isOpen: true,
+      title: "Hủy đơn ứng tuyển",
+      message: "Bạn có chắc chắn muốn hủy đơn ứng tuyển này?",
+      type: "error",
+      isDestructive: true,
+      hideCancel: false,
+      onConfirm: async () => {
+        try {
+          await cancelMutation.mutateAsync(id);
+        } finally {
+          setDialog(prev => ({ ...prev, isOpen: false }));
+        }
+      }
+    });
   };
 
   const handleMessage = async (jobPostId: string) => {
@@ -33,8 +49,15 @@ export default function ApplicationsPage() {
         body: JSON.stringify({ jobPostId }),
       });
       router.push(`/messages?conversationId=${res.id}`);
-    } catch (err: any) {
-      alert(err.message || "Không thể tạo hội thoại");
+    } catch (err: unknown) {
+      setDialog({
+        isOpen: true,
+        title: "Lỗi",
+        message: err instanceof Error ? err.message : "Không thể tạo hội thoại",
+        type: "error",
+        isDestructive: true,
+        hideCancel: true
+      });
     }
   };
 
@@ -117,6 +140,22 @@ export default function ApplicationsPage() {
           })}
         </div>
       )}
+      
+      <ConfirmDialog
+        isOpen={dialog.isOpen}
+        title={dialog.title}
+        message={dialog.message}
+        isDestructive={dialog.isDestructive ?? false}
+        hideCancel={dialog.hideCancel ?? false}
+        onConfirm={() => {
+          if (dialog.onConfirm) {
+            dialog.onConfirm();
+          } else {
+            setDialog(prev => ({ ...prev, isOpen: false }));
+          }
+        }}
+        onCancel={() => setDialog(prev => ({ ...prev, isOpen: false }))}
+      />
     </main>
   );
 

@@ -30,8 +30,22 @@ export class CvController {
   upload = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const file = req.file;
-      const result = await this.cvService.uploadForCandidate(req.user!.id, file);
+      const isHidden = req.body.isHidden === "true";
+      const result = await this.cvService.uploadForCandidate(req.user!.id, file, isHidden);
       res.status(201).json({ success: true, data: result } satisfies ApiResponse);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  saveBuilderCv = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const file = req.file;
+      const cvId = req.body.cvId;
+      const templateId = req.body.templateId;
+      const builderData = JSON.parse(req.body.builderData || "{}");
+      const result = await this.cvService.saveBuilderCv(req.user!.id, cvId, templateId, builderData, file);
+      res.status(cvId ? 200 : 201).json({ success: true, data: result } satisfies ApiResponse);
     } catch (error) {
       next(error);
     }

@@ -1,14 +1,30 @@
 import type { PrismaClient } from "@prisma/client";
+import type { MediaStorage } from "../../shared/ports/MediaStorage";
 import { AppError } from "../../shared/errors/AppError";
 import type { CandidateRepository } from "./candidate.repository";
 
 export class CandidateService {
   private readonly candidateRepository: CandidateRepository;
   private readonly prisma: PrismaClient;
+  private readonly mediaStorage: MediaStorage;
 
-  constructor({ candidateRepository, prisma }: { candidateRepository: CandidateRepository; prisma: PrismaClient }) {
+  constructor({ candidateRepository, prisma, mediaStorage }: { candidateRepository: CandidateRepository; prisma: PrismaClient; mediaStorage: MediaStorage }) {
     this.candidateRepository = candidateRepository;
     this.prisma = prisma;
+    this.mediaStorage = mediaStorage;
+  }
+
+  async uploadAvatar(userId: string, file: Express.Multer.File | undefined) {
+    if (!file) throw new AppError(400, "A file is required");
+    const uploaded = await this.mediaStorage.upload(file.buffer, {
+      folder: "candidate-avatars",
+      filename: `${userId}-${Date.now()}`,
+      resourceType: "image",
+    });
+    return this.prisma.candidate.update({
+      where: { userId },
+      data: { avatarUrl: uploaded.url },
+    });
   }
 
   async getProfile(userId: string) {
@@ -20,10 +36,37 @@ export class CandidateService {
     return candidate;
   }
 
+  async getEmployerCandidateProfile(employerUserId: string, candidateId: string) {
+    const employer = await this.prisma.employer.findUnique({ where: { userId: employerUserId } });
+    if (!employer) throw new AppError(403, "Employer not found");
+
+    const application = await this.prisma.application.findFirst({
+      where: {
+        candidateId,
+        jobPost: { employerId: employer.id },
+      },
+    });
+    if (!application) {
+      throw new AppError(403, "You do not have access to this candidate's profile");
+    }
+
+    const profile = await this.candidateRepository.findById(candidateId);
+    if (!profile) {
+      throw new AppError(404, "Candidate not found");
+    }
+
+    const { user, dateOfBirth, ...rest } = profile as any;
+    return {
+      ...rest,
+      user: { email: user.email },
+    };
+  }
+
   async updateProfile(userId: string, input: Record<string, unknown>) {
     const candidate = await this.candidateRepository.ensureCandidate(userId);
 
     const safeData = {
+      ...(input.fullName !== undefined ? { fullName: String(input.fullName) } : {}),
       ...(input.headline !== undefined ? { headline: String(input.headline) } : {}),
       ...(input.bio !== undefined ? { bio: String(input.bio) } : {}),
       ...(input.phone !== undefined ? { phone: String(input.phone) } : {}),

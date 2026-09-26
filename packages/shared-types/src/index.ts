@@ -685,6 +685,7 @@ export interface ApplicationMatchSummary {
 
 export interface JobPostSearchQuery {
   q?: string;
+  companyId?: string;
   cityId?: string;
   industryId?: string;
   jobType?: JobPostType;
@@ -743,6 +744,9 @@ export interface CandidateCvRecord extends CvRecord {
   extractionStatus: CvExtractionStatus;
   extractedData: CvExtractionResult | null;
   extractedAt: string | null;
+  isBuilder?: boolean;
+  templateId?: string | null;
+  builderData?: any | null;
 }
 
 // ─── CV AI Extraction (docs/06-backend/cv-ai-extraction-phase1/PLAN.md) ───

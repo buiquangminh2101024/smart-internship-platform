@@ -24,6 +24,25 @@ export interface CandidateProfileSnapshot {
   city: { id: string; name: string } | null;
 }
 
+type CatalogItem = { id: string; name: string };
+type Resource = Record<string, unknown> & { id: string };
+
+export interface CandidateFullProfile extends CandidateProfileSnapshot {
+  fullName: string | null;
+  avatarUrl: string | null;
+  user?: { email: string } | null;
+  educations: Array<Resource & {
+    universityId: string | null; majorId: string | null; degree: string | null; startYear: number | null; endYear: number | null; isCurrent: boolean; description: string | null;
+    university: CatalogItem | null; major: CatalogItem | null;
+  }>;
+  workExperiences: Array<Resource & { company: string | null; position: string | null; startDate: string | null; endDate: string | null; isCurrent: boolean; description: string | null }>;
+  projects: Array<Resource & { name: string | null; url: string | null; startDate: string | null; endDate: string | null; isWorkingOn: boolean; description: string | null }>;
+  certificates: Array<Resource & { name: string | null; issuer: string | null; issueDate: string | null; credentialUrl: string | null; description: string | null }>;
+  awards: Array<Resource & { name: string | null; issuer: string | null; date: string | null; description: string | null }>;
+  skills: Array<Resource & { skill: CatalogItem & { status?: string }; yearsOfExperience: number }>;
+}
+
+
 // ─── Hooks ─────────────────────────────────────────────────────────────────
 
 /** Danh sách CV của candidate đang đăng nhập. */
@@ -42,6 +61,25 @@ export function useCvUpload() {
       const formData = new FormData();
       formData.append("file", file);
       return apiUpload<CandidateCvRecord>("candidate", "/candidates/me/cvs", formData);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+    },
+  });
+}
+
+/** Lưu CV từ builder. */
+export function useSaveBuilderCv() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ cvId, templateId, builderData, file }: { cvId?: string, templateId: string, builderData: any, file?: File }) => {
+      const formData = new FormData();
+      if (cvId) formData.append("cvId", cvId);
+      formData.append("templateId", templateId);
+      formData.append("builderData", JSON.stringify(builderData));
+      if (file) formData.append("file", file);
+      
+      return apiUpload<CandidateCvRecord>("candidate", "/candidates/me/cvs/builder", formData);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: QUERY_KEY });
@@ -74,6 +112,13 @@ export function useCandidateProfile() {
   return useQuery({
     queryKey: PROFILE_QUERY_KEY,
     queryFn: () => apiFetch<CandidateProfileSnapshot>("candidate", "/candidates/me"),
+  });
+}
+
+export function useCandidateFullProfile() {
+  return useQuery({
+    queryKey: [...PROFILE_QUERY_KEY, "full"],
+    queryFn: () => apiFetch<CandidateFullProfile>("candidate", "/candidates/me"),
   });
 }
 

@@ -199,6 +199,7 @@ export class JobPostRepository {
   async findPublishedForSearch(
     filter: {
       q?: string;
+      companyId?: string;
       cityId?: string;
       industryId?: string;
       jobType?: JobPostType;
@@ -238,6 +239,7 @@ export class JobPostRepository {
       where: {
         status: "PUBLISHED",
         AND: and,
+        ...(filter.companyId ? { companyId: filter.companyId } : {}),
         ...(filter.cityId ? { cityId: filter.cityId } : {}),
         ...(filter.industryId ? { industryId: filter.industryId } : {}),
         ...(filter.jobType ? { jobType: filter.jobType } : {}),
