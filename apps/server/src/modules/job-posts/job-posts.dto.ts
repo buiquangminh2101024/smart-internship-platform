@@ -60,6 +60,7 @@ export const moderationQueueQuerySchema = z.object({
 
 export const jobPostSearchQuerySchema = z.object({
   q: optionalText,
+  companyId: optionalText,
   cityId: optionalText,
   industryId: optionalText,
   jobType: z.enum(JOB_POST_TYPES).optional(),

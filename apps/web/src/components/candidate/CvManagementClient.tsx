@@ -75,6 +75,14 @@ interface CvCardProps {
 // Badge theo extractionStatus (docs/05-frontend/phases/cv-ai-extraction-phase1/PLAN.md
 // Quyết định #2). NOT_STARTED không có badge.
 function ExtractionBadge({ cv, isExtracting }: { cv: CandidateCvRecord; isExtracting: boolean }) {
+  if (cv.isBuilder) {
+    return (
+      <Badge tone="brand" icon="wand-2">
+        CV Builder
+      </Badge>
+    );
+  }
+
   if (isExtracting || cv.extractionStatus === "PROCESSING") {
     return (
       <Badge tone="info">
@@ -147,14 +155,23 @@ function CvCard({
         </div>
 
         <div className="flex shrink-0 flex-wrap justify-end gap-2">
-          <Button variant="secondary" size="sm" icon="sparkles" loading={busy} onClick={onExtract}>
-            {cv.extractedData ? "Phân tích lại" : "Phân tích CV"}
-          </Button>
-          {cv.extractedData ? (
-            <Button variant="ghost" size="sm" icon={isResultOpen ? "eye-off" : "eye"} onClick={onToggleResult}>
-              {isResultOpen ? "Ẩn kết quả" : "Xem kết quả"}
+          {cv.isBuilder && (
+            <Button variant="primary" size="sm" icon="edit-3" as="a" href={`/cv/editor?cvId=${cv.id}`}>
+              Chỉnh sửa
             </Button>
-          ) : null}
+          )}
+          {!cv.isBuilder && (
+            <>
+              <Button variant="secondary" size="sm" icon="sparkles" loading={busy} onClick={onExtract}>
+                {cv.extractedData ? "Phân tích lại" : "Phân tích CV"}
+              </Button>
+              {cv.extractedData ? (
+                <Button variant="ghost" size="sm" icon={isResultOpen ? "eye-off" : "eye"} onClick={onToggleResult}>
+                  {isResultOpen ? "Ẩn kết quả" : "Xem kết quả"}
+                </Button>
+              ) : null}
+            </>
+          )}
           {!cv.isDefault ? (
             <Button
               variant="ghost"
@@ -378,6 +395,11 @@ export function CvManagementClient() {
         <p className="mt-1 text-sm text-text-muted">
           Tải lên và quản lý CV của bạn. CV mặc định sẽ được dùng khi ứng tuyển.
         </p>
+        <div className="mt-4 flex gap-3">
+          <Button as="a" href="/cv/templates" icon="plus" variant="primary">
+            Tạo CV
+          </Button>
+        </div>
       </div>
 
       {/* Upload Zone */}

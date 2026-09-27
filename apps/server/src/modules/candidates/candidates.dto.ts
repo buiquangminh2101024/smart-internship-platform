@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const candidateProfileSchema = z.object({
+  fullName: z.string().trim().max(100).optional(),
   headline: z.string().trim().max(255).optional(),
   bio: z.string().trim().max(2000).optional(),
   phone: z.string().trim().min(9).max(15).optional(),

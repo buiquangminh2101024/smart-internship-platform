@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -10,8 +10,8 @@ import { Icon } from "@/components/ui/Icon";
 import { NotificationBell } from "@/components/layout/NotificationBell";
 
 const NAV_LINKS = [
-  { label: "Việc thực tập", href: "/jobs" },
-  { label: "Công ty", href: "/" },
+  { label: "Việc thực tập", href: "/jobs" },    { label: "Công ty", href: "/companies" },
+  
   { label: "Cẩm nang", href: "/" },
   { label: "Dành cho doanh nghiệp", href: "/employer" },
 ];
@@ -22,7 +22,6 @@ const ACCOUNT_LINKS = [
   { label: "Quản lý CV", href: "/cv", icon: "file-text" },
   { label: "Việc làm đã lưu", href: "/saved-jobs", icon: "bookmark" },
   { label: "Quản lý tìm việc", href: "/applications", icon: "briefcase-business" },
-  { label: "Tin nhắn", href: "/messages", icon: "messages-square" },
 ];
 
 export function CandidateHomeHeader() {
@@ -31,6 +30,8 @@ export function CandidateHomeHeader() {
   const hasHydrated = useCandidateAuthStore((state) => state.hasHydrated);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
     const closeOnOutsideClick = (event: MouseEvent) => {
@@ -41,11 +42,25 @@ export function CandidateHomeHeader() {
     };
     document.addEventListener("mousedown", closeOnOutsideClick);
     document.addEventListener("keydown", closeOnEscape);
+
+    const updateAvatar = (e: Event) => {
+      const customEvent = e as CustomEvent<string>;
+      setAvatarUrl(customEvent.detail);
+    };
+    window.addEventListener("avatar-updated", updateAvatar);
+
+    if (user) {
+      apiFetch<{ avatarUrl?: string }>("candidate", "/candidates/me")
+        .then((res) => { if (res.avatarUrl) setAvatarUrl(res.avatarUrl); })
+        .catch(() => {});
+    }
+
     return () => {
       document.removeEventListener("mousedown", closeOnOutsideClick);
       document.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("avatar-updated", updateAvatar);
     };
-  }, []);
+  }, [user]);
 
   async function handleLogout() {
     const refreshToken = useCandidateAuthStore.getState().refreshToken ?? undefined;
@@ -72,8 +87,15 @@ export function CandidateHomeHeader() {
         {!hasHydrated ? (
           <div className="ml-auto h-9 w-10" aria-hidden />
         ) : user ? (
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-3">
             <NotificationBell area="candidate" />
+            <Link
+              href="/messages"
+              aria-label="Tin nhắn"
+              className="relative inline-flex h-10 w-10 items-center justify-center rounded-full border border-border-default text-text-body transition-colors hover:border-pine-300 hover:bg-pine-50 hover:text-pine-700 focus:outline-none focus:ring-2 focus:ring-pine-200"
+            >
+              <Icon name="messages-square" size={18} />
+            </Link>
             <div ref={menuRef} className="relative">
               <button
                 type="button"
@@ -81,9 +103,14 @@ export function CandidateHomeHeader() {
                 aria-haspopup="menu"
                 aria-expanded={isAccountMenuOpen}
                 onClick={() => setIsAccountMenuOpen((open) => !open)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border-default text-text-body transition-colors hover:border-pine-300 hover:bg-pine-50 hover:text-pine-700 focus:outline-none focus:ring-2 focus:ring-pine-200"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border-default text-text-body transition-colors hover:border-pine-300 hover:bg-pine-50 hover:text-pine-700 focus:outline-none focus:ring-2 focus:ring-pine-200 overflow-hidden"
               >
-                <Icon name="user-round" size={19} />
+                {avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <Icon name="user-round" size={19} />
+                )}
               </button>
               {isAccountMenuOpen ? (
                 <div role="menu" className="absolute right-0 top-12 z-30 w-72 overflow-hidden rounded-xl border border-border-subtle bg-white py-2 shadow-lg">
