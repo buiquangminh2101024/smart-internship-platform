@@ -21,6 +21,7 @@ export class CandidateRepository {
   }
 
   findByUserId(userId: string): Promise<(Candidate & {
+    user: { email: string };
     educations: Education[];
     workExperiences: WorkExperience[];
     projects: Project[];
@@ -32,6 +33,9 @@ export class CandidateRepository {
     return this.prisma.candidate.findUnique({
       where: { userId },
       include: {
+        user: {
+          select: { email: true },
+        },
         city: true,
         educations: {
           orderBy: { createdAt: "desc" },

@@ -163,6 +163,7 @@ export class CvService {
     if (cvId) {
       const existing = await this.prisma.cv.findFirst({ where: { id: cvId, candidateId: candidate.id } });
       if (!existing) throw new AppError(404, "CV not found");
+      if (!existing.isBuilder) throw new AppError(400, "This CV was not created with the builder and cannot be edited here");
 
       return this.prisma.cv.update({
         where: { id: cvId },
