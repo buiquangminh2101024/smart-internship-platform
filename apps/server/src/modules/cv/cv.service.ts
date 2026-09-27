@@ -114,7 +114,7 @@ export class CvService {
 
     await this.prisma.$transaction(async (tx) => {
       const remaining = await tx.cv.findFirst({
-        where: { candidateId: candidate.id, id: { not: cvId } },
+        where: { candidateId: candidate.id, id: { not: cvId }, isHidden: false },
         orderBy: { uploadedAt: "desc" },
       });
 

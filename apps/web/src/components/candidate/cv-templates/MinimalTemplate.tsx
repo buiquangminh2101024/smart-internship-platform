@@ -77,7 +77,7 @@ export function MinimalTemplate({ data, config }: { data: CvBuilderData; config:
                     <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                       <Text style={commonStyles.itemTitle}>{exp.position}</Text>
                       <Text style={{ fontSize: 9 }}>
-                        {exp.startDate?.slice(0, 10)} - {exp.isCurrent ? "Present" : exp.endDate?.slice(0, 10)}
+                        {exp.startDate?.slice(0, 10)} - {exp.isCurrent ? "Hiện tại" : exp.endDate?.slice(0, 10)}
                       </Text>
                     </View>
                     <Text style={{ fontSize: 10, fontStyle: "italic", marginBottom: 4 }}>{exp.company}</Text>
@@ -98,7 +98,7 @@ export function MinimalTemplate({ data, config }: { data: CvBuilderData; config:
                     <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                       <Text style={commonStyles.itemTitle}>{edu.school}</Text>
                       <Text style={{ fontSize: 9 }}>
-                        {edu.startYear} - {edu.isCurrent ? "Present" : edu.endYear}
+                        {edu.startYear} - {edu.isCurrent ? "Hiện tại" : edu.endYear}
                       </Text>
                     </View>
                     <Text style={{ fontSize: 10 }}>{edu.degree ? `${edu.degree} in ` : ""}{edu.major}</Text>
@@ -118,7 +118,7 @@ export function MinimalTemplate({ data, config }: { data: CvBuilderData; config:
                     <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                       <Text style={commonStyles.itemTitle}>{proj.name}</Text>
                       <Text style={{ fontSize: 9 }}>
-                        {proj.startDate?.slice(0, 10)} - {proj.isWorkingOn ? "Present" : proj.endDate?.slice(0, 10)}
+                        {proj.startDate?.slice(0, 10)} - {proj.isWorkingOn ? "Hiện tại" : proj.endDate?.slice(0, 10)}
                       </Text>
                     </View>
                     <Text style={{ ...commonStyles.itemDescription, marginTop: 4 }}>{proj.description}</Text>

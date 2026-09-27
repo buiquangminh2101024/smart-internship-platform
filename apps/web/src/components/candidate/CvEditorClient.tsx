@@ -234,6 +234,7 @@ export function CvEditorClient() {
         isConfirming={isGenerating || saveMutation.isPending}
         onConfirm={handleSaveCv}
         onCancel={() => router.push("/cv")}
+        onDismiss={() => setShowExitConfirm(false)}
       />
     </div>
   );

@@ -147,6 +147,7 @@ export default function ApplicationsPage() {
         message={dialog.message}
         isDestructive={dialog.isDestructive ?? false}
         hideCancel={dialog.hideCancel ?? false}
+        isConfirming={cancelMutation.isPending}
         onConfirm={() => {
           if (dialog.onConfirm) {
             dialog.onConfirm();

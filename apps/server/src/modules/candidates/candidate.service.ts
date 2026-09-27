@@ -16,13 +16,14 @@ export class CandidateService {
 
   async uploadAvatar(userId: string, file: Express.Multer.File | undefined) {
     if (!file) throw new AppError(400, "A file is required");
+    const candidate = await this.candidateRepository.ensureCandidate(userId);
     const uploaded = await this.mediaStorage.upload(file.buffer, {
       folder: "candidate-avatars",
       filename: `${userId}-${Date.now()}`,
       resourceType: "image",
     });
     return this.prisma.candidate.update({
-      where: { userId },
+      where: { id: candidate.id },
       data: { avatarUrl: uploaded.url },
     });
   }
@@ -43,7 +44,7 @@ export class CandidateService {
     const application = await this.prisma.application.findFirst({
       where: {
         candidateId,
-        jobPost: { employerId: employer.id },
+        jobPost: { companyId: employer.companyId },
       },
     });
     if (!application) {

@@ -17,6 +17,8 @@ export interface ConfirmDialogProps {
   hideCancel?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Escape / click ra ngoài. Mặc định dùng onCancel. */
+  onDismiss?: () => void;
 }
 
 export function ConfirmDialog({
@@ -30,8 +32,10 @@ export function ConfirmDialog({
   hideCancel = false,
   onConfirm,
   onCancel,
+  onDismiss,
 }: ConfirmDialogProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
+  const dismiss = onDismiss ?? onCancel;
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -41,7 +45,7 @@ export function ConfirmDialog({
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape" && isOpen && !isConfirming) {
-        onCancel();
+        dismiss();
       }
     };
 
@@ -56,7 +60,7 @@ export function ConfirmDialog({
       document.body.style.overflow = "unset";
       document.removeEventListener("keydown", handleEscape);
     };
-  }, [isOpen, isConfirming, onCancel]);
+  }, [isOpen, isConfirming, dismiss]);
 
   if (!isOpen || !mounted) return null;
 
@@ -65,7 +69,7 @@ export function ConfirmDialog({
       <div
         ref={overlayRef}
         className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
-        onClick={() => !isConfirming && onCancel()}
+        onClick={() => !isConfirming && dismiss()}
         aria-hidden="true"
       />
       <Card

@@ -84,12 +84,14 @@ function CollectionSection({
   }
 
   const [confirmDialog, setConfirmDialog] = useState<{ isOpen: boolean; id: string }>({ isOpen: false, id: "" });
+  const [removing, setRemoving] = useState(false);
 
   async function performRemove(id: string) {
-    setError("");
+    if (removing) return;
+    setRemoving(true); setError("");
     try { await apiFetch("candidate", `${endpoint}/${id}`, { method: "DELETE" }); await refresh(); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Không thể xóa thông tin."); }
-    finally { setConfirmDialog({ isOpen: false, id: "" }); }
+    finally { setRemoving(false); setConfirmDialog({ isOpen: false, id: "" }); }
   }
 
   function remove(id: string) {
@@ -116,6 +118,7 @@ function CollectionSection({
         title="Xác nhận xóa"
         message="Xóa mục này khỏi hồ sơ?"
         isDestructive
+        isConfirming={removing}
         onConfirm={() => performRemove(confirmDialog.id)}
         onCancel={() => setConfirmDialog({ isOpen: false, id: "" })}
       />
