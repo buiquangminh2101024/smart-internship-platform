@@ -10,7 +10,7 @@ import { OpenRouterCvExtractor } from "../../infrastructure/openrouter-cv-extrac
 import { FallbackCvExtractor, type CvExtractorTier } from "../../infrastructure/fallback-cv-extractor";
 import type { Cradle } from "../../container";
 import { CvController } from "./cv.controller";
-import { ALLOWED_CV_MIME_TYPES, CvService } from "./cv.service";
+import { ALLOWED_BUILDER_IMAGE_MIME_TYPES, ALLOWED_CV_MIME_TYPES, CvService } from "./cv.service";
 import { CvExtractionPipelineService } from "./cv-extraction-pipeline.service";
 import { CvExtractionRateLimitService } from "./cv-extraction-rate-limit.service";
 
@@ -69,6 +69,10 @@ export function cvRouter(container: AwilixContainer): Router {
 
   router.post("/candidates/me/cvs/builder", ...candidateGuard, singleFileUpload("file", ALLOWED_CV_MIME_TYPES), (req, res, next) => {
     void controller().saveBuilderCv(req, res, next);
+  });
+
+  router.post("/candidates/me/cvs/builder/image", ...candidateGuard, singleFileUpload("file", ALLOWED_BUILDER_IMAGE_MIME_TYPES), (req, res, next) => {
+    void controller().uploadBuilderImage(req, res, next);
   });
 
   router.post("/candidates/me/cvs/:id/extract", ...candidateGuard, (req, res, next) => {

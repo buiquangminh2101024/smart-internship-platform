@@ -683,6 +683,53 @@ export interface ApplicationMatchSummary {
   semanticStatus: MatchSemanticStatus;
 }
 
+// ─── Việc làm phù hợp (B2, AD-14) ────────────────────────────────────────
+// docs/06-backend/candidate-insights/PLAN.md. Không LLM, không lưu — tính lại
+// mỗi lần gọi.
+
+export interface JobRecommendation {
+  jobPost: JobPost;
+  match: MatchResult;
+}
+
+/**
+ * INSUFFICIENT_PROFILE = hồ sơ chưa có kỹ năng nào (items luôn rỗng); OK với
+ * items rỗng = có hồ sơ nhưng không tin nào đạt ngưỡng tối thiểu.
+ */
+export type JobRecommendationStatus = "OK" | "INSUFFICIENT_PROFILE";
+
+export interface JobRecommendationList {
+  status: JobRecommendationStatus;
+  /** Tối đa 10, giảm dần theo điểm; có thể ít hơn — không phải lỗi. */
+  items: JobRecommendation[];
+}
+
+// ─── Phân tích hồ sơ (A1 + A4, AD-14) ───────────────────────────────────
+// docs/06-backend/candidate-insights/PLAN.md. Lưu persistent, chỉ tính lại khi
+// Candidate bấm "Phân tích hồ sơ".
+
+/**
+ * WRITING do LLM viết; SKILL_GAP/INDUSTRY_MISMATCH do code tạo từ kết quả
+ * "Việc làm phù hợp" — luôn kèm evidence.
+ */
+export type ProfileInsightSuggestionKind = "WRITING" | "SKILL_GAP" | "INDUSTRY_MISMATCH";
+
+export interface ProfileInsightSuggestion {
+  kind: ProfileInsightSuggestionKind;
+  text: string;
+  evidence?: string[];
+}
+
+export interface ProfileInsight {
+  /** 0..100 — kỹ năng 40, kinh nghiệm 25, học vấn 25, headline/bio 10. */
+  completenessScore: number;
+  strengths: string[];
+  suggestions: ProfileInsightSuggestion[];
+  /** Số tin phù hợp dùng để tạo SKILL_GAP/INDUSTRY_MISMATCH lúc phân tích. */
+  basedOnJobCount: number;
+  generatedAt: string;
+}
+
 export interface JobPostSearchQuery {
   q?: string;
   companyId?: string;

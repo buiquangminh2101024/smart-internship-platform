@@ -74,6 +74,32 @@ export class MatchEmbeddingService {
     }
   }
 
+  /**
+   * Cosine của một hồ sơ với nhiều tin (Việc làm phù hợp) — đối xứng với
+   * similarityForCandidates: chỉ embed tối đa `maxNewJobs` tin chưa có vector hợp
+   * lệ, phần vượt trả `null` và đầy dần ở các lần gọi sau.
+   * Mọi id trong `jobs` đều có mặt trong Map kết quả.
+   */
+  async similarityForJobs(
+    candidate: EmbeddingTarget,
+    jobs: EmbeddingTarget[],
+    maxNewJobs: number,
+  ): Promise<Map<string, number | null>> {
+    const result = new Map<string, number | null>(jobs.map((job) => [job.id, null]));
+    try {
+      const candidateReady = await this.ensureVectors("candidate", [candidate], 1);
+      if (!candidateReady.has(candidate.id)) return result;
+
+      const jobsReady = await this.ensureVectors("job", jobs, maxNewJobs);
+      const cosines = await this.repository.cosinesForCandidate(candidate.id, [...jobsReady]);
+      for (const [jobPostId, cosine] of cosines) result.set(jobPostId, cosine);
+      return result;
+    } catch (error) {
+      this.logger.error("Match embedding failed — falling back to rule-only score", { error });
+      return new Map(jobs.map((job) => [job.id, null]));
+    }
+  }
+
   /** Bảo đảm mỗi target có vector khớp hash hiện tại; trả về tập id đã sẵn sàng. */
   private async ensureVectors(kind: EmbeddingKind, targets: EmbeddingTarget[], maxNew: number): Promise<Set<string>> {
     const byId = new Map<string, EmbeddingTarget>();

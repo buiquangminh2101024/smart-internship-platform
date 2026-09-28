@@ -43,6 +43,18 @@ export const SEMANTIC_CALIBRATION: SemanticCalibration = { lo: 0.4442, hi: 0.727
 // rule-v1 + semanticStatus PENDING và đầy dần ở các lần tải sau. Tạm theo số đo bước 1–2.
 export const MAX_NEW_EMBEDDINGS_PER_REQUEST = 30;
 
+// "Việc làm phù hợp" (B2, AD-14 — docs/06-backend/candidate-insights/PLAN.md, D6/D8).
+/** Số tin tối đa trả về — top cố định, không phân trang (D8). */
+export const RECOMMENDATION_LIMIT = 10;
+/** Điểm (%) tối thiểu để một tin được tính là "phù hợp" — lọc theo từng tin (D6). */
+export const MIN_RECOMMENDATION_SCORE = 20;
+/** Giai đoạn A: chỉ xét tin đăng trong N ngày gần nhất. */
+export const RECOMMENDATION_RECENT_DAYS = 30;
+/** Giai đoạn A: số tin tối đa lấy từ SQL lọc thô. */
+export const RECOMMENDATION_POOL_SIZE = 50;
+/** Giai đoạn B: số tin điểm rule cao nhất được chấm lại bằng hybrid. */
+export const RECOMMENDATION_RERANK_SIZE = 20;
+
 /** Tỉ lệ số năm tối thiểu để kinh nghiệm được xếp PARTIAL thay vì BELOW. */
 export const EXPERIENCE_PARTIAL_RATIO = 0.5;
 

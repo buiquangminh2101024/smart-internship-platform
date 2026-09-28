@@ -32,6 +32,7 @@ import { cvRouter } from "./modules/cv/cv.routes";
 import { savedJobsRouter } from "./modules/saved-jobs/saved-jobs.routes";
 import { applicationsRouter } from "./modules/applications/applications.routes";
 import { jobMatchingRouter } from "./modules/job-matching/job-matching.routes";
+import { candidateInsightsRouter } from "./modules/candidate-insights/candidate-insights.routes";
 
 import { messagingRoutes } from "./modules/messaging/messaging.routes";
 
@@ -82,6 +83,8 @@ app.use("/api", savedJobsRouter(container));
 app.use("/api", applicationsRouter(container));
 // Sau skillsRouter: Job Matcher GĐ2 dùng skillEmbeddingService do router đó đăng ký.
 app.use("/api", jobMatchingRouter(container));
+// Sau jobMatchingRouter: dùng jobRecommendationService/candidateMatchProfileLoader do router đó đăng ký.
+app.use("/api", candidateInsightsRouter(container));
 
 app.use("/api/conversations", messagingRoutes(container));
 

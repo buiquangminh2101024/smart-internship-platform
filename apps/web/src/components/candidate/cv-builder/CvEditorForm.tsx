@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useUploadCvBuilderImage } from "@/hooks/useCvs";
 import { Icon } from "@/components/ui/Icon";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
@@ -31,9 +32,33 @@ export function CvEditorForm({ data, onChange, config, onConfigChange, activeTem
   const [activeSection, setActiveSection] = useState<string>("personal");
   const [templateToSwitch, setTemplateToSwitch] = useState<string | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [avatarError, setAvatarError] = useState("");
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const uploadImage = useUploadCvBuilderImage();
 
   const updateSection = (sectionKey: keyof CvBuilderData, value: any) => {
     onChange({ ...data, [sectionKey]: value });
+  };
+
+  const handleAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setAvatarError("");
+    if (!["image/jpeg", "image/png"].includes(file.type)) {
+      setAvatarError("Chỉ hỗ trợ ảnh JPG hoặc PNG.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setAvatarError("Ảnh phải nhỏ hơn 2MB.");
+      return;
+    }
+    try {
+      const { url } = await uploadImage.mutateAsync(file);
+      onChange({ ...data, personal: { ...data.personal, avatarUrl: url } });
+    } catch (err) {
+      setAvatarError(err instanceof Error ? err.message : "Tải ảnh thất bại.");
+    }
   };
 
   const moveSection = (index: number, direction: "up" | "down") => {
@@ -244,7 +269,31 @@ export function CvEditorForm({ data, onChange, config, onConfigChange, activeTem
                         <input className="w-full p-2.5 text-sm border border-border-default rounded-lg focus:outline-none focus:border-pine-500 focus:ring-1 focus:ring-pine-500" value={data.personal.email} onChange={(e) => updateSection("personal", { ...data.personal, email: e.target.value })} placeholder="Email" />
                         <input className="w-full p-2.5 text-sm border border-border-default rounded-lg focus:outline-none focus:border-pine-500 focus:ring-1 focus:ring-pine-500" value={data.personal.phone} onChange={(e) => updateSection("personal", { ...data.personal, phone: e.target.value })} placeholder="Số điện thoại" />
                         <input className="w-full p-2.5 text-sm border border-border-default rounded-lg focus:outline-none focus:border-pine-500 focus:ring-1 focus:ring-pine-500" value={data.personal.city} onChange={(e) => updateSection("personal", { ...data.personal, city: e.target.value })} placeholder="Thành phố/Địa chỉ" />
-                        <input className="w-full p-2.5 text-sm border border-border-default rounded-lg focus:outline-none focus:border-pine-500 focus:ring-1 focus:ring-pine-500" value={data.personal.avatarUrl || ""} onChange={(e) => updateSection("personal", { ...data.personal, avatarUrl: e.target.value })} placeholder="Đường dẫn ảnh đại diện (URL)" title="Nhập link ảnh (VD: https://i.imgur.com/...)" />
+                        <div className="flex items-center gap-3">
+                          <div className="w-14 h-14 shrink-0 rounded-full bg-neutral-100 border border-border-default overflow-hidden flex items-center justify-center">
+                            {data.personal.avatarUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={data.personal.avatarUrl} alt="Ảnh đại diện" className="w-full h-full object-cover" />
+                            ) : (
+                              <Icon name="user" size={22} className="text-text-muted" />
+                            )}
+                          </div>
+                          <div className="grid gap-1">
+                            <div className="flex gap-2">
+                              <Button type="button" variant="secondary" size="sm" icon="upload" loading={uploadImage.isPending} onClick={() => avatarInputRef.current?.click()}>
+                                Tải ảnh lên
+                              </Button>
+                              {data.personal.avatarUrl ? (
+                                <Button type="button" variant="ghost" size="sm" disabled={uploadImage.isPending} onClick={() => updateSection("personal", { ...data.personal, avatarUrl: "" })}>
+                                  Xoá
+                                </Button>
+                              ) : null}
+                            </div>
+                            <span className="text-xs text-text-muted">JPG hoặc PNG, tối đa 2MB</span>
+                            {avatarError ? <span className="text-xs text-red-600">{avatarError}</span> : null}
+                          </div>
+                          <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png" className="hidden" onChange={handleAvatarFile} />
+                        </div>
                       </div>
                     )}
                     

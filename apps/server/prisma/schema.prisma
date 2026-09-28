@@ -348,6 +348,7 @@ model Candidate {
   applications    Application[]
   conversations   Conversation[]
   matchEmbedding  CandidateEmbedding?
+  profileInsight  CandidateProfileInsight?
 
   @@map("candidates")
 }
@@ -730,6 +731,22 @@ model JobPostEmbedding {
   embeddedAt      DateTime                   @default(now())
 
   @@map("job_post_embeddings")
+}
+
+// Đầu ra LLM của "Phân tích hồ sơ" (AD-14, gộp A1+A4; KHÔNG bao gồm "Việc làm
+// phù hợp" — tính năng đó tách độc lập ở job-matching, không LLM, không lưu
+// persistent). topJobPostIds chỉ để debug/hiển thị "dựa trên N tin", không
+// phải cache của trang "Việc làm phù hợp".
+model CandidateProfileInsight {
+  candidateId       String    @id
+  candidate         Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  completenessScore Int
+  strengths         Json
+  suggestions       Json
+  topJobPostIds     Json
+  generatedAt       DateTime  @default(now())
+
+  @@map("candidate_profile_insights")
 }
 
 model JobPostModerationAction {

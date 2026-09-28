@@ -12,6 +12,7 @@ import { Select } from "@/components/ui/Select";
 import { SkillMultiSelect, type SelectedSkill } from "@/components/shared/SkillMultiSelect";
 import { CompanyImageUpload } from "@/components/employer/CompanyImageUpload";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { ProfileInsightCard } from "@/components/candidate/ProfileInsightCard";
 
 type CatalogItem = { id: string; name: string };
 type Values = Record<string, string | boolean>;
@@ -186,6 +187,8 @@ export function CandidateProfileClient() {
     <main className="min-h-screen bg-surface-page py-10">
       <div className="mx-auto grid max-w-4xl gap-6 px-6">
         <div><p className="text-sm font-semibold tracking-wider text-pine-600 uppercase">Hồ sơ ứng viên</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-text-strong">Hoàn thiện hồ sơ của bạn</h1><p className="mt-2 text-text-muted">Thông tin đầy đủ giúp nhà tuyển dụng hiểu rõ hơn về bạn.</p></div>
+
+        <ProfileInsightCard />
 
         <Section title="Thông tin cá nhân" description="Các thông tin cơ bản hiển thị trong hồ sơ ứng tuyển.">
           <form onSubmit={savePersonal} className="grid gap-4">

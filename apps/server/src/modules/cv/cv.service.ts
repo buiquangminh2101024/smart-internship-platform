@@ -4,6 +4,9 @@ import { AppError } from "../../shared/errors/AppError";
 import type { CvExtractionPipelineService } from "./cv-extraction-pipeline.service";
 
 const MAX_CV_FILE_SIZE = 5 * 1024 * 1024;
+const MAX_BUILDER_IMAGE_SIZE = 2 * 1024 * 1024;
+// @react-pdf/renderer chỉ render được JPG/PNG.
+export const ALLOWED_BUILDER_IMAGE_MIME_TYPES = ["image/jpeg", "image/png"];
 // Ảnh chụp CV được nhận thêm để phân tích bằng AI (cv-ai-extraction-phase1 Quyết định #1).
 export const ALLOWED_CV_MIME_TYPES = [
   "application/pdf",
@@ -135,6 +138,24 @@ export class CvService {
 
   private safeFileName(fileName: string): string {
     return fileName.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 120) || "cv";
+  }
+
+  async uploadBuilderImage(userId: string, file: Express.Multer.File | undefined) {
+    if (!file) throw new AppError(400, "An image file is required");
+    if (file.size > MAX_BUILDER_IMAGE_SIZE) {
+      throw new AppError(400, "Image size must be under 2MB");
+    }
+    if (!ALLOWED_BUILDER_IMAGE_MIME_TYPES.includes(file.mimetype)) {
+      throw new AppError(400, "Only JPG or PNG images are allowed");
+    }
+
+    const candidate = await this.ensureCandidate(userId);
+    const uploaded = await this.mediaStorage.upload(file.buffer, {
+      folder: "candidate-cv-images",
+      filename: `${candidate.id}-${Date.now()}`,
+      resourceType: "image",
+    });
+    return { url: uploaded.url };
   }
 
   async saveBuilderCv(userId: string, cvId: string | undefined, templateId: string, builderData: any, file: Express.Multer.File | undefined) {
