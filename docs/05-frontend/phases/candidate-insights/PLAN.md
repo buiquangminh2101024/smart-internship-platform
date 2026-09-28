@@ -5,7 +5,7 @@ Song song với `docs/06-backend/candidate-insights/PLAN.md` (schema, luồng ch
 1. Khu vực "Phân tích hồ sơ" ở `/candidate/profile` (LLM, có hạn mức) — giữ như thiết kế ban đầu.
 2. Trang mới **"Việc làm phù hợp"** (không LLM, không hạn mức, tính live) — mới thêm sau khi tách B2 ra độc lập.
 
-**Trạng thái (2026-09-28): FI-1/FI-2 ("Phân tích hồ sơ") và FI-3 ("Việc làm phù hợp") ĐÃ CODE, `tsc` + `next build` sạch. FI-4 (kiểm trên trình duyệt) — checklist ở cuối file, chủ dự án tự chạy.**
+**Trạng thái (2026-09-28): FI-1/FI-2 ("Phân tích hồ sơ") và FI-3 ("Việc làm phù hợp") ĐÃ CODE, `tsc` + `next build` sạch. FI-4 (kiểm trên trình duyệt, checklist ở cuối file) — chủ dự án đã kiểm, chạy đúng. ⇒ HOÀN TẤT.**
 
 ## Quyết định mới chốt khi lên kế hoạch
 

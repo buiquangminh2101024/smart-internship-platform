@@ -21,6 +21,21 @@ export interface NotificationPayloadMap {
   COMPANY_REJECTED: { companyId: string; companyName: string; reason?: string };
   COMPANY_LINK_REQUESTED: { companyId: string; companyName: string; employerEmail: string };
   JOB_POST_SUBMITTED: { jobPostId: string; jobPostTitle: string; companyName: string };
+  // B3, AD-15 — docs/06-backend/candidate-outreach/PLAN.md
+  CANDIDATE_OUTREACH_INVITATION_RECEIVED: {
+    invitationId: string;
+    jobPostId: string;
+    jobPostTitle: string;
+    companyName: string;
+    expiresAt: Date;
+  };
+  CANDIDATE_OUTREACH_INVITATION_RESPONDED: {
+    invitationId: string;
+    jobPostId: string;
+    jobPostTitle: string;
+    candidateName: string | null;
+    accepted: boolean;
+  };
 }
 
 // Khoá của map phải trùng khít enum Prisma: thêm giá trị vào enum mà quên khai

@@ -24,6 +24,7 @@ const CANDIDATE_ONLY_PREFIXES = [
   "/applications",
   "/saved-jobs",
   "/recommended-jobs",
+  "/job-invitations",
   "/messages",
   "/settings",
 ];

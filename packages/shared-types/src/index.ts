@@ -31,7 +31,11 @@ export type NotificationType =
   | "COMPANY_VERIFIED"
   | "COMPANY_REJECTED"
   | "COMPANY_LINK_REQUESTED"
-  | "JOB_POST_SUBMITTED";
+  | "JOB_POST_SUBMITTED"
+  | "CANDIDATE_OUTREACH_INVITATION_RECEIVED"
+  | "CANDIDATE_OUTREACH_INVITATION_RESPONDED";
+
+export type OutreachInvitationStatus = "PENDING" | "ACCEPTED" | "DECLINED" | "EXPIRED";
 
 // ─── Wrapper response chuẩn cho REST API ─────────────────────────────────
 
@@ -702,6 +706,73 @@ export interface JobRecommendationList {
   status: JobRecommendationStatus;
   /** Tối đa 10, giảm dần theo điểm; có thể ít hơn — không phải lỗi. */
   items: JobRecommendation[];
+}
+
+// ─── Tìm & mời ứng viên (B3, AD-15) ──────────────────────────────────────
+// docs/06-backend/candidate-outreach/PLAN.md. Không bao giờ có phone/email/
+// dateOfBirth — NTD liên hệ qua lời mời/hội thoại.
+
+/** Phần thẻ dùng chung cho "Gợi ý" và "Đã mời". */
+export interface OutreachCandidateCardDto {
+  candidateId: string;
+  fullName: string | null;
+  avatarUrl: string | null;
+  headline: string | null;
+  cityName: string | null;
+  /** 1 dòng học vấn đại diện: đang học trước, rồi năm kết thúc mới nhất. */
+  education: {
+    universityName: string | null;
+    majorName: string | null;
+    degree: string | null;
+  } | null;
+}
+
+/** Danh sách "Gợi ý" (D6) — tối đa 10, giảm dần theo điểm. */
+export interface CandidateSearchResultDto extends OutreachCandidateCardDto {
+  match: MatchResult;
+  /** Từng có lời mời cho tin này nhưng đã hết hạn — được mời lại. */
+  previouslyInvitedExpired: boolean;
+}
+
+/** Danh sách "Đã mời" (D6) — không chấm lại điểm. */
+export interface SentOutreachInvitationDto extends OutreachCandidateCardDto {
+  invitationId: string;
+  status: OutreachInvitationStatus;
+  createdAt: string;
+  expiresAt: string;
+  respondedAt: string | null;
+  /** D7 — điểm LÚC GỬI lời mời (không phải điểm hiện tại); null nếu lúc đó không chấm được. */
+  matchScore: number | null;
+  matchWeightsVersion: string | null;
+  canViewProfile: boolean;
+}
+
+/** Hộp lời mời của Candidate. */
+export interface CandidateOutreachInvitationDto {
+  invitationId: string;
+  status: OutreachInvitationStatus;
+  createdAt: string;
+  expiresAt: string;
+  respondedAt: string | null;
+  jobPost: { id: string; title: string; status: JobPostStatus };
+  company: { id: string; name: string; logoUrl: string | null };
+  /** Chỉ có khi ACCEPTED và hội thoại đã được tạo. */
+  conversationId: string | null;
+}
+
+export type OutreachInvitationAction = "ACCEPT" | "DECLINE";
+
+export interface RespondOutreachInvitationRequest {
+  action: OutreachInvitationAction;
+}
+
+export interface RespondOutreachInvitationResponse {
+  status: OutreachInvitationStatus;
+  conversationId: string | null;
+}
+
+export interface OutreachSettings {
+  isOpenToOutreach: boolean;
 }
 
 // ─── Phân tích hồ sơ (A1 + A4, AD-14) ───────────────────────────────────

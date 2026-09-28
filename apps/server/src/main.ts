@@ -33,6 +33,9 @@ import { savedJobsRouter } from "./modules/saved-jobs/saved-jobs.routes";
 import { applicationsRouter } from "./modules/applications/applications.routes";
 import { jobMatchingRouter } from "./modules/job-matching/job-matching.routes";
 import { candidateInsightsRouter } from "./modules/candidate-insights/candidate-insights.routes";
+import { candidateOutreachRouter } from "./modules/candidate-outreach/candidate-outreach.routes";
+import { startCandidateOutreachExpiryJob } from "./modules/candidate-outreach/candidate-outreach-expiry.job";
+import type { CandidateOutreachRepository } from "./modules/candidate-outreach/candidate-outreach.repository";
 
 import { messagingRoutes } from "./modules/messaging/messaging.routes";
 
@@ -85,6 +88,8 @@ app.use("/api", applicationsRouter(container));
 app.use("/api", jobMatchingRouter(container));
 // Sau jobMatchingRouter: dùng jobRecommendationService/candidateMatchProfileLoader do router đó đăng ký.
 app.use("/api", candidateInsightsRouter(container));
+// Sau jobMatchingRouter: dùng ruleJobMatcher/hybridJobMatcher/matchEmbeddingService/loader do router đó đăng ký.
+app.use("/api", candidateOutreachRouter(container));
 
 app.use("/api/conversations", messagingRoutes(container));
 
@@ -102,6 +107,11 @@ startSubscriptionExpiryJob(container.resolve<CompanySubscriptionRepository>("com
 startJobPostExpiryJob(
   container.resolve<JobPostRepository>("jobPostRepository"),
   container.resolve<SubscriptionsService>("subscriptionsService"),
+  logger,
+);
+// Hạ lời mời ứng tuyển quá hạn / của tin không còn PUBLISHED (B3, AD-15).
+startCandidateOutreachExpiryJob(
+  container.resolve<CandidateOutreachRepository>("candidateOutreachRepository"),
   logger,
 );
 // Transactional Outbox cho email notification — quét mỗi phút (AD-8).

@@ -13,6 +13,7 @@ import { SkillMultiSelect, type SelectedSkill } from "@/components/shared/SkillM
 import { CompanyImageUpload } from "@/components/employer/CompanyImageUpload";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ProfileInsightCard } from "@/components/candidate/ProfileInsightCard";
+import { OutreachSettingToggle } from "@/components/candidate/OutreachSettingToggle";
 
 type CatalogItem = { id: string; name: string };
 type Values = Record<string, string | boolean>;
@@ -21,6 +22,8 @@ type Profile = {
   gender?: "MALE" | "FEMALE" | "OTHER" | null; avatarUrl?: string | null; cityId?: string | null;
   city?: CatalogItem | null; educations: Resource[]; workExperiences: Resource[]; projects: Resource[];
   certificates: Resource[]; awards: Resource[];
+  // B3 — cờ "Cho phép nhà tuyển dụng tìm thấy", mặc định tắt.
+  isOpenToOutreach?: boolean;
   // `status` có từ khi ứng viên được tự gõ kỹ năng mới (Hướng B) — PENDING nghĩa
   // là kỹ năng đã gắn vào hồ sơ nhưng chưa được Admin duyệt vào danh mục chung.
   skills: Array<Resource & { skill: CatalogItem & { status?: CatalogEntryStatus }; yearsOfExperience: number }>;
@@ -189,6 +192,11 @@ export function CandidateProfileClient() {
         <div><p className="text-sm font-semibold tracking-wider text-pine-600 uppercase">Hồ sơ ứng viên</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-text-strong">Hoàn thiện hồ sơ của bạn</h1><p className="mt-2 text-text-muted">Thông tin đầy đủ giúp nhà tuyển dụng hiểu rõ hơn về bạn.</p></div>
 
         <ProfileInsightCard />
+
+        <OutreachSettingToggle
+          value={profile.isOpenToOutreach === true}
+          onChange={(isOpenToOutreach) => setProfile((current) => (current ? { ...current, isOpenToOutreach } : current))}
+        />
 
         <Section title="Thông tin cá nhân" description="Các thông tin cơ bản hiển thị trong hồ sơ ứng tuyển.">
           <form onSubmit={savePersonal} className="grid gap-4">

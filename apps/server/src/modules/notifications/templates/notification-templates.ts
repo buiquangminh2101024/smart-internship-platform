@@ -53,6 +53,11 @@ function emailHtml(heading: string, paragraphs: string[], action?: { label: stri
   ].join("");
 }
 
+/** dd/mm/yyyy theo giờ Việt Nam — hạn lời mời hiển thị cho người dùng. */
+function formatDate(date: Date): string {
+  return date.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+}
+
 function absolute(ctx: TemplateContext, path: string): string {
   return `${ctx.webBaseUrl.replace(/\/$/, "")}${path}`;
 }
@@ -183,6 +188,38 @@ const templates: { [T in NotificationType]: Renderer<T> } = {
     link: `/admin/jobs/${data.jobPostId}`,
     email: null,
   }),
+
+  // B3, AD-15. Hộp lời mời của Candidate nằm ở trang hồ sơ (frontend PLAN CO-3).
+  CANDIDATE_OUTREACH_INVITATION_RECEIVED: (data, ctx) => {
+    const title = "Bạn nhận được lời mời ứng tuyển";
+    const body = `${data.companyName} mời bạn ứng tuyển vị trí "${data.jobPostTitle}". Lời mời có hiệu lực đến ${formatDate(data.expiresAt)}.`;
+    const link = "/job-invitations";
+    return {
+      title,
+      body,
+      link,
+      email: {
+        subject: `[${data.companyName}] Lời mời ứng tuyển: ${data.jobPostTitle}`,
+        html: emailHtml(title, [body, "Chấp nhận lời mời để bắt đầu trò chuyện với nhà tuyển dụng."], {
+          label: "Xem lời mời",
+          url: absolute(ctx, link),
+        }),
+      },
+    };
+  },
+
+  // Cố ý không gửi email: NTD theo dõi phản hồi trên danh sách "Đã mời" của tin.
+  CANDIDATE_OUTREACH_INVITATION_RESPONDED: (data) => {
+    const name = data.candidateName ?? "Ứng viên";
+    return {
+      title: data.accepted ? "Ứng viên đã chấp nhận lời mời" : "Ứng viên đã từ chối lời mời",
+      body: data.accepted
+        ? `${name} đã chấp nhận lời mời cho vị trí "${data.jobPostTitle}". Bạn có thể nhắn tin với ứng viên.`
+        : `${name} đã từ chối lời mời cho vị trí "${data.jobPostTitle}".`,
+      link: `/employer/jobs/${data.jobPostId}/candidate-search`,
+      email: null,
+    };
+  },
 
   // Tin nhắn cố ý không có loại notification: không ghi DB mỗi tin, chỉ push
   // realtime qua RealtimeNotifier.pushMessageToUser (Phase 9 bổ sung).

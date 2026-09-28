@@ -47,8 +47,28 @@ export class CandidateService {
         jobPost: { companyId: employer.companyId },
       },
     });
+
+    // B3 (docs/06-backend/candidate-outreach/PLAN.md, "Quyền xem hồ sơ"): ngoài
+    // đường đã ứng tuyển, công ty còn xem được qua lời mời ACCEPTED (ẩn phone —
+    // email vốn đã lộ trong hội thoại) hoặc khi ứng viên bật isOpenToOutreach (ẩn cả hai).
+    let contact: "FULL" | "EMAIL_ONLY" | "HIDDEN" = "FULL";
     if (!application) {
-      throw new AppError(403, "You do not have access to this candidate's profile");
+      const accepted = await this.prisma.candidateOutreachInvitation.findFirst({
+        where: { candidateId, companyId: employer.companyId, status: "ACCEPTED" },
+        select: { id: true },
+      });
+      if (accepted) {
+        contact = "EMAIL_ONLY";
+      } else {
+        const candidate = await this.prisma.candidate.findUnique({
+          where: { id: candidateId },
+          select: { isOpenToOutreach: true },
+        });
+        if (!candidate?.isOpenToOutreach) {
+          throw new AppError(403, "You do not have access to this candidate's profile");
+        }
+        contact = "HIDDEN";
+      }
     }
 
     const profile = await this.candidateRepository.findById(candidateId);
@@ -59,7 +79,8 @@ export class CandidateService {
     const { user, dateOfBirth, ...rest } = profile as any;
     return {
       ...rest,
-      user: { email: user.email },
+      phone: contact === "FULL" ? rest.phone : null,
+      user: { email: contact === "HIDDEN" ? null : user.email },
     };
   }
 
