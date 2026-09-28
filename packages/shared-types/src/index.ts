@@ -31,7 +31,11 @@ export type NotificationType =
   | "COMPANY_VERIFIED"
   | "COMPANY_REJECTED"
   | "COMPANY_LINK_REQUESTED"
-  | "JOB_POST_SUBMITTED";
+  | "JOB_POST_SUBMITTED"
+  | "CANDIDATE_OUTREACH_INVITATION_RECEIVED"
+  | "CANDIDATE_OUTREACH_INVITATION_RESPONDED";
+
+export type OutreachInvitationStatus = "PENDING" | "ACCEPTED" | "DECLINED" | "EXPIRED";
 
 // ─── Wrapper response chuẩn cho REST API ─────────────────────────────────
 
@@ -681,6 +685,120 @@ export interface ApplicationMatchSummary {
   confidence: MatchConfidence;
   status: MatchStatus;
   semanticStatus: MatchSemanticStatus;
+}
+
+// ─── Việc làm phù hợp (B2, AD-14) ────────────────────────────────────────
+// docs/06-backend/candidate-insights/PLAN.md. Không LLM, không lưu — tính lại
+// mỗi lần gọi.
+
+export interface JobRecommendation {
+  jobPost: JobPost;
+  match: MatchResult;
+}
+
+/**
+ * INSUFFICIENT_PROFILE = hồ sơ chưa có kỹ năng nào (items luôn rỗng); OK với
+ * items rỗng = có hồ sơ nhưng không tin nào đạt ngưỡng tối thiểu.
+ */
+export type JobRecommendationStatus = "OK" | "INSUFFICIENT_PROFILE";
+
+export interface JobRecommendationList {
+  status: JobRecommendationStatus;
+  /** Tối đa 10, giảm dần theo điểm; có thể ít hơn — không phải lỗi. */
+  items: JobRecommendation[];
+}
+
+// ─── Tìm & mời ứng viên (B3, AD-15) ──────────────────────────────────────
+// docs/06-backend/candidate-outreach/PLAN.md. Không bao giờ có phone/email/
+// dateOfBirth — NTD liên hệ qua lời mời/hội thoại.
+
+/** Phần thẻ dùng chung cho "Gợi ý" và "Đã mời". */
+export interface OutreachCandidateCardDto {
+  candidateId: string;
+  fullName: string | null;
+  avatarUrl: string | null;
+  headline: string | null;
+  cityName: string | null;
+  /** 1 dòng học vấn đại diện: đang học trước, rồi năm kết thúc mới nhất. */
+  education: {
+    universityName: string | null;
+    majorName: string | null;
+    degree: string | null;
+  } | null;
+}
+
+/** Danh sách "Gợi ý" (D6) — tối đa 10, giảm dần theo điểm. */
+export interface CandidateSearchResultDto extends OutreachCandidateCardDto {
+  match: MatchResult;
+  /** Từng có lời mời cho tin này nhưng đã hết hạn — được mời lại. */
+  previouslyInvitedExpired: boolean;
+}
+
+/** Danh sách "Đã mời" (D6) — không chấm lại điểm. */
+export interface SentOutreachInvitationDto extends OutreachCandidateCardDto {
+  invitationId: string;
+  status: OutreachInvitationStatus;
+  createdAt: string;
+  expiresAt: string;
+  respondedAt: string | null;
+  /** D7 — điểm LÚC GỬI lời mời (không phải điểm hiện tại); null nếu lúc đó không chấm được. */
+  matchScore: number | null;
+  matchWeightsVersion: string | null;
+  canViewProfile: boolean;
+}
+
+/** Hộp lời mời của Candidate. */
+export interface CandidateOutreachInvitationDto {
+  invitationId: string;
+  status: OutreachInvitationStatus;
+  createdAt: string;
+  expiresAt: string;
+  respondedAt: string | null;
+  jobPost: { id: string; title: string; status: JobPostStatus };
+  company: { id: string; name: string; logoUrl: string | null };
+  /** Chỉ có khi ACCEPTED và hội thoại đã được tạo. */
+  conversationId: string | null;
+}
+
+export type OutreachInvitationAction = "ACCEPT" | "DECLINE";
+
+export interface RespondOutreachInvitationRequest {
+  action: OutreachInvitationAction;
+}
+
+export interface RespondOutreachInvitationResponse {
+  status: OutreachInvitationStatus;
+  conversationId: string | null;
+}
+
+export interface OutreachSettings {
+  isOpenToOutreach: boolean;
+}
+
+// ─── Phân tích hồ sơ (A1 + A4, AD-14) ───────────────────────────────────
+// docs/06-backend/candidate-insights/PLAN.md. Lưu persistent, chỉ tính lại khi
+// Candidate bấm "Phân tích hồ sơ".
+
+/**
+ * WRITING do LLM viết; SKILL_GAP/INDUSTRY_MISMATCH do code tạo từ kết quả
+ * "Việc làm phù hợp" — luôn kèm evidence.
+ */
+export type ProfileInsightSuggestionKind = "WRITING" | "SKILL_GAP" | "INDUSTRY_MISMATCH";
+
+export interface ProfileInsightSuggestion {
+  kind: ProfileInsightSuggestionKind;
+  text: string;
+  evidence?: string[];
+}
+
+export interface ProfileInsight {
+  /** 0..100 — kỹ năng 40, kinh nghiệm 25, học vấn 25, headline/bio 10. */
+  completenessScore: number;
+  strengths: string[];
+  suggestions: ProfileInsightSuggestion[];
+  /** Số tin phù hợp dùng để tạo SKILL_GAP/INDUSTRY_MISMATCH lúc phân tích. */
+  basedOnJobCount: number;
+  generatedAt: string;
 }
 
 export interface JobPostSearchQuery {

@@ -68,6 +68,16 @@ enum NotificationType {
   COMPANY_REJECTED
   COMPANY_LINK_REQUESTED // AD-12 — employer nộp/nộp lại hồ sơ công ty cần Admin xác minh thủ công
   JOB_POST_SUBMITTED // AD-12 — employer gửi tin tuyển dụng chờ duyệt
+  CANDIDATE_OUTREACH_INVITATION_RECEIVED // AD-15 — candidate nhận lời mời từ employer
+  CANDIDATE_OUTREACH_INVITATION_RESPONDED // AD-15 — employer thấy candidate accept/decline
+}
+
+// AD-15 — Tìm & mời ứng viên chưa ứng tuyển (B3).
+enum OutreachInvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
 }
 
 enum OutboxStatus {
@@ -348,6 +358,10 @@ model Candidate {
   applications    Application[]
   conversations   Conversation[]
   matchEmbedding  CandidateEmbedding?
+  profileInsight  CandidateProfileInsight?
+  // AD-15 — bật = cho phép Employer tìm thấy và xem hồ sơ (không lộ phone/email).
+  isOpenToOutreach    Boolean                        @default(false)
+  outreachInvitations CandidateOutreachInvitation[]
 
   @@map("candidates")
 }
@@ -481,6 +495,7 @@ model Company {
   employers            Employer[]
   jobPosts             JobPost[]
   companySubscriptions CompanySubscription[]
+  outreachInvitations  CandidateOutreachInvitation[]
 
   @@map("companies")
 }
@@ -497,8 +512,9 @@ model Employer {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  conversations Conversation[]
-  jobPosts      JobPost[]
+  conversations       Conversation[]
+  jobPosts            JobPost[]
+  outreachInvitations CandidateOutreachInvitation[]
 
   @@map("employers")
 }
@@ -525,6 +541,9 @@ model SubscriptionPlan {
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  // AD-15 — null = dùng ngưỡng mặc định trong code (DEFAULT_OUTREACH_DAILY_QUOTA),
+  // KHÔNG phải "không giới hạn".
+  outreachInvitationDailyQuota Int?
 
   companySubscriptions CompanySubscription[]
 
@@ -651,13 +670,14 @@ model JobPost {
   createdAt               DateTime      @default(now())
   updatedAt               DateTime      @updatedAt
 
-  moderationActions JobPostModerationAction[]
-  applications      Application[]
-  savedBy           SavedJob[]
-  conversations     Conversation[]
-  skills            JobPostSkill[]
-  majors            JobPostMajor[]
-  matchEmbedding    JobPostEmbedding?
+  moderationActions   JobPostModerationAction[]
+  applications        Application[]
+  savedBy             SavedJob[]
+  conversations       Conversation[]
+  skills              JobPostSkill[]
+  majors              JobPostMajor[]
+  matchEmbedding      JobPostEmbedding?
+  outreachInvitations CandidateOutreachInvitation[]
 
   @@map("job_posts")
 }
@@ -730,6 +750,51 @@ model JobPostEmbedding {
   embeddedAt      DateTime                   @default(now())
 
   @@map("job_post_embeddings")
+}
+
+// Đầu ra LLM của "Phân tích hồ sơ" (AD-14, gộp A1+A4; KHÔNG bao gồm "Việc làm
+// phù hợp" — tính năng đó tách độc lập ở job-matching, không LLM, không lưu
+// persistent). topJobPostIds chỉ để debug/hiển thị "dựa trên N tin", không
+// phải cache của trang "Việc làm phù hợp".
+model CandidateProfileInsight {
+  candidateId       String    @id
+  candidate         Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  completenessScore Int
+  strengths         Json
+  suggestions       Json
+  topJobPostIds     Json
+  generatedAt       DateTime  @default(now())
+
+  @@map("candidate_profile_insights")
+}
+
+// AD-15 — Tìm & mời ứng viên chưa ứng tuyển (B3). companyId dùng để tính hạn
+// mức gửi lời mời theo Subscription (D4 — chung cho cả công ty, không theo
+// từng Employer). employerId chỉ để biết ai đã gửi, không dùng để tính quota.
+model CandidateOutreachInvitation {
+  id          String                   @id @default(cuid())
+  companyId   String
+  company     Company                  @relation(fields: [companyId], references: [id])
+  employerId  String
+  employer    Employer                 @relation(fields: [employerId], references: [id])
+  jobPostId   String
+  jobPost     JobPost                  @relation(fields: [jobPostId], references: [id])
+  candidateId String
+  candidate   Candidate                @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  status      OutreachInvitationStatus @default(PENDING)
+  createdAt   DateTime                 @default(now())
+  expiresAt   DateTime
+  respondedAt DateTime?
+  // D7 — ảnh chụp điểm lúc gửi lời mời (server tự chấm lại riêng ứng viên này),
+  // KHÔNG phải điểm hiện tại. null khi lúc đó không chấm được / status ≠ SCORED.
+  matchScore          Int?
+  matchWeightsVersion String?
+
+  @@index([candidateId, jobPostId, status])
+  @@index([companyId, createdAt])
+  // D6 — danh sách "Đã mời" theo từng tin, mới nhất trước.
+  @@index([jobPostId, createdAt])
+  @@map("candidate_outreach_invitations")
 }
 
 model JobPostModerationAction {

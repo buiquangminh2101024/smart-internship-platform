@@ -87,6 +87,16 @@ export function useSaveBuilderCv() {
   });
 }
 
+export function useUploadCvBuilderImage() {
+  return useMutation({
+    mutationFn: (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return apiUpload<{ url: string }>("candidate", "/candidates/me/cvs/builder/image", formData);
+    },
+  });
+}
+
 /**
  * Phân tích CV bằng AI (POST /candidates/me/cvs/:id/extract). Backend chạy
  * đồng bộ, có thể mất vài chục giây — axios không đặt timeout nên không cần

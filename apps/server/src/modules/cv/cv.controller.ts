@@ -51,6 +51,15 @@ export class CvController {
     }
   };
 
+  uploadBuilderImage = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await this.cvService.uploadBuilderImage(req.user!.id, req.file);
+      res.status(201).json({ success: true, data: result } satisfies ApiResponse);
+    } catch (error) {
+      next(error);
+    }
+  };
+
   extract = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const item = await this.cvService.extractForCandidate(req.user!.id, String(req.params.id));

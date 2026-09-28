@@ -276,6 +276,18 @@ function EmployerJobDetail({ params }: { params: Promise<{ id: string }> }) {
               <Button as="a" href={`/employer/jobs/${job.id}/applications`} variant="secondary" className="w-full">
                 Xem danh sách
               </Button>
+              {/* B3 — tin nháp/chờ duyệt chưa thể có lời mời nào. */}
+              {job.status !== "DRAFT" && job.status !== "PENDING" ? (
+                <Button
+                  as="a"
+                  href={`/employer/jobs/${job.id}/candidate-search`}
+                  variant="ghost"
+                  icon="user-search"
+                  className="w-full"
+                >
+                  Tìm ứng viên phù hợp
+                </Button>
+              ) : null}
             </Card>
 
             <Card padding="md" className="grid gap-2">

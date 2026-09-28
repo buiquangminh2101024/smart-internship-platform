@@ -70,6 +70,18 @@ export class MatchEmbeddingRepository {
     `);
     return new Map(rows.map((row) => [row.id, Number(row.cosine)]));
   }
+
+  /** Cosine của một hồ sơ với nhiều tin (Việc làm phù hợp) — đối xứng với cosinesForJob. */
+  async cosinesForCandidate(candidateId: string, jobPostIds: string[]): Promise<Map<string, number>> {
+    if (jobPostIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; cosine: number }>>(Prisma.sql`
+      SELECT j."jobPostId" AS id, 1 - (j."embedding" <=> c."embedding") AS cosine
+      FROM job_post_embeddings j
+      JOIN candidate_embeddings c ON c."candidateId" = ${candidateId}
+      WHERE j."jobPostId" IN (${Prisma.join(jobPostIds)})
+    `);
+    return new Map(rows.map((row) => [row.id, Number(row.cosine)]));
+  }
 }
 
 function identifier(name: string): Prisma.Sql {

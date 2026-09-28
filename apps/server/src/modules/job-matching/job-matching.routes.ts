@@ -8,6 +8,8 @@ import { JobMatchProfileLoader } from "./job-match-profile.loader";
 import { HYBRID_WEIGHTS_V2, RULE_WEIGHTS_V1 } from "./job-matching.config";
 import { JobMatchingController } from "./job-matching.controller";
 import { JobMatchingService } from "./job-matching.service";
+import { JobRecommendationRepository } from "./job-recommendation.repository";
+import { JobRecommendationService } from "./job-recommendation.service";
 import { MatchEmbeddingRepository } from "./match-embedding.repository";
 import { MatchEmbeddingService } from "./match-embedding.service";
 import { ScoringJobMatcher } from "./scoring-job-matcher";
@@ -24,6 +26,9 @@ export function jobMatchingRouter(container: AwilixContainer): Router {
     candidateMatchProfileLoader: asClass(CandidateMatchProfileLoader).singleton(),
     jobMatchProfileLoader: asClass(JobMatchProfileLoader).singleton(),
     jobMatchingService: asClass(JobMatchingService).singleton(),
+    // "Việc làm phù hợp" (AD-14) — candidate-insights cũng resolve jobRecommendationService.
+    jobRecommendationRepository: asClass(JobRecommendationRepository).singleton(),
+    jobRecommendationService: asClass(JobRecommendationService).singleton(),
     jobMatchingController: asClass(JobMatchingController).singleton(),
   });
 
@@ -35,6 +40,10 @@ export function jobMatchingRouter(container: AwilixContainer): Router {
   // --- Candidate ---
   router.get("/candidate/job-posts/:id/match", ...candidateGuard, (req, res, next) => {
     void resolveController().matchForCandidate(req, res, next);
+  });
+
+  router.get("/candidate/job-recommendations", ...candidateGuard, (req, res, next) => {
+    void resolveController().listJobRecommendations(req, res, next);
   });
 
   // --- Employer ---

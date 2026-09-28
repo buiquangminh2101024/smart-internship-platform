@@ -18,7 +18,16 @@ const EMPLOYER_STAGE_COOKIE = "sip_employer_stage";
 const EMPLOYER_ONBOARDING_PATH = "/employer/hoan-tat-thu-tuc";
 const EMPLOYER_PROFILE_PATH = "/employer/profile";
 
-const CANDIDATE_ONLY_PREFIXES = ["/profile", "/cv", "/applications", "/saved-jobs", "/messages", "/settings"];
+const CANDIDATE_ONLY_PREFIXES = [
+  "/profile",
+  "/cv",
+  "/applications",
+  "/saved-jobs",
+  "/recommended-jobs",
+  "/job-invitations",
+  "/messages",
+  "/settings",
+];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;

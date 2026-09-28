@@ -33,7 +33,7 @@ Thumbs.db
 # Internal project docs (private)
 agents/
 codex/
-claude/
+.claude/
 gemini/
 docs/todo
 output/

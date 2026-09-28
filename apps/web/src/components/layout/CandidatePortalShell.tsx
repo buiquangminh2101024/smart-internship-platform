@@ -15,8 +15,10 @@ import { SiteFooter } from "@/components/marketing/SiteFooter";
 const NAV_ITEMS: SideNavItem[] = [
   { label: "Hồ sơ ứng viên", icon: "user-round", href: "/profile" },
   { label: "Quản lý CV", icon: "file-text", href: "/cv" },
+  { label: "Việc làm phù hợp", icon: "sparkles", href: "/recommended-jobs" },
   { label: "Việc làm đã lưu", icon: "bookmark", href: "/saved-jobs" },
   { label: "Ứng tuyển của tôi", href: "/applications", icon: "briefcase-business" },
+  { label: "Lời mời ứng tuyển", icon: "mail", href: "/job-invitations" },
   { label: "Cài đặt", icon: "settings", href: "/settings" },
 ];
 
