@@ -67,6 +67,9 @@ apps/server/src/
 │   ├── saved-jobs/
 │   ├── messaging/        # Conversation + Message (gộp, không tách)
 │   ├── notifications/
+│   ├── audit-log/        # AuditLogService + đọc theo trang (AD-16)
+│   ├── dashboard/        # Chỉ đọc: tổng hợp cho /employer/dashboard, /admin/dashboard (AD-16)
+│   ├── interviews/       # Lịch phỏng vấn: đặt/đổi/huỷ, lên lịch hàng loạt, cron nhắc lịch (AD-16)
 │   ├── catalog/          # Major, University, Industry, City, CompanyType (gộp)
 │   └── ai/                # ports/ + adapters/ — boundary only cho tới Phase 10
 ├── socket/                # Socket.IO gateway, chạy chung process Express
@@ -90,6 +93,8 @@ Mỗi module domain là một thư mục độc lập trong `modules/`, tự ch�
 - **`companies`** và **`employers`** giữ tách biệt — vòng đời khác nhau: `Company.verify()/unverify()` là quy trình do Admin gate độc lập với từng Employer user, và một Company có thể có nhiều Employer (`isCompanyAdmin`).
 - **`auth`** và **`users`** giữ tách biệt về tầng service dù cùng thao tác trên bảng `User` — `auth` lo xác thực/token, `users` lo hồ sơ/quản trị tài khoản.
 - **Không có module `admin` riêng** — quyền admin là các endpoint được gate bằng Role trên module có sẵn (`users`, `companies`, `catalog`), vì không có entity `Admin` riêng trong domain model. Việc **tạo** tài khoản Admin cũng nằm ngoài mọi module nghiệp vụ/route API — xử lý bằng script độc lập `apps/server/scripts/create-admin.ts` (xem mục 4 và `INITIAL_ARCHITECTURE_PLAN.md` mục 12b).
+- **`dashboard`** (AD-16) là module **chỉ đọc** phục vụ hai trang tổng quan (`/employer/dashboard`, `/admin/dashboard`): truy vấn tổng hợp và gọi lại service của module chủ. Không sở hữu tài nguyên, không ghi dữ liệu, không có API thao tác — nên không vi phạm quy tắc "không có module `admin` riêng" ở trên.
+- **`audit-log`** (AD-16) là dịch vụ dùng chéo ghi nhật ký hoạt động (`AuditLogService.record`) và đọc theo trang cho Admin; các module khác gọi để ghi, giống cách dùng `notificationsService`.
 
 ## 6. Shared code strategy
 

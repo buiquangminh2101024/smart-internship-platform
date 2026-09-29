@@ -36,10 +36,21 @@ export class ApplicationsRepository {
     this.prisma = prisma;
   }
 
-  async create(data: { jobPostId: string; candidateId: string; cvId: string; coverLetter?: string; status: ApplicationStatus }) {
-    return this.prisma.application.create({
+  async create(
+    data: { jobPostId: string; candidateId: string; cvId: string; coverLetter?: string; status: ApplicationStatus },
+    db: Db = this.prisma,
+  ) {
+    return db.application.create({
       data,
     });
+  }
+
+  /** AD-16 — mỗi lần đổi trạng thái ghi một dòng; `fromStatus = null` là dòng khởi tạo. */
+  async createStatusHistory(
+    data: { applicationId: string; fromStatus: ApplicationStatus | null; toStatus: ApplicationStatus; actorId: string | null },
+    db: Db = this.prisma,
+  ) {
+    return db.applicationStatusHistory.create({ data });
   }
 
   async findByJobAndCandidate(jobPostId: string, candidateId: string) {

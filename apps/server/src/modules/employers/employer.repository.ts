@@ -35,4 +35,10 @@ export class EmployerRepository {
   findManyByCompanyId(companyId: string, db: Db = this.prisma): Promise<Pick<Employer, "id" | "userId">[]> {
     return db.employer.findMany({ where: { companyId }, select: { id: true, userId: true } });
   }
+
+  // AD-16: thông báo gói sắp hết hạn chỉ gửi company admin — người duy nhất
+  // được mua/gia hạn gói (subscriptions.service.ts#checkout).
+  findCompanyAdminsByCompanyId(companyId: string, db: Db = this.prisma): Promise<Pick<Employer, "id" | "userId">[]> {
+    return db.employer.findMany({ where: { companyId, isCompanyAdmin: true }, select: { id: true, userId: true } });
+  }
 }

@@ -1,9 +1,13 @@
 import { randomBytes } from "node:crypto";
-import type { PaymentMethod, PaymentProvider, PaymentStatus, TransactionStatus } from "@prisma/client";
+import type { PaymentMethod, PaymentProvider, PaymentStatus, PrismaClient, TransactionStatus } from "@prisma/client";
 import { AppError } from "../../shared/errors/AppError";
 import type { Logger } from "../../shared/logger";
 import type { PaymentGatewayAdapter, RawIpnPayload } from "../../shared/ports/PaymentGatewayAdapter";
+import type { AuditLogService } from "../audit-log/audit-log.service";
+import type { CompanyRepository } from "../companies/company.repository";
+import type { NotificationsService } from "../notifications/notifications.service";
 import type { CompanySubscriptionRepository } from "../subscriptions/company-subscription.repository";
+import type { UserRepository } from "../users/user.repository";
 import type { PaymentCallbackLogRepository } from "./payment-callback-log.repository";
 import type { PaymentMethodRepository } from "./payment-method.repository";
 import type { PaymentRepository } from "./payment.repository";
@@ -29,6 +33,11 @@ export class PaymentsService {
   private readonly paymentGatewayAdapters: Record<PaymentProvider, PaymentGatewayAdapter>;
   private readonly logger: Logger;
   private readonly paymentsConfig: PaymentsConfig;
+  private readonly prisma: PrismaClient;
+  private readonly companyRepository: CompanyRepository;
+  private readonly userRepository: UserRepository;
+  private readonly notificationsService: NotificationsService;
+  private readonly auditLogService: AuditLogService;
 
   constructor({
     paymentRepository,
@@ -39,6 +48,11 @@ export class PaymentsService {
     paymentGatewayAdapters,
     logger,
     config,
+    prisma,
+    companyRepository,
+    userRepository,
+    notificationsService,
+    auditLogService,
   }: {
     paymentRepository: PaymentRepository;
     transactionRepository: TransactionRepository;
@@ -48,6 +62,11 @@ export class PaymentsService {
     paymentGatewayAdapters: Record<PaymentProvider, PaymentGatewayAdapter>;
     logger: Logger;
     config: PaymentsConfig;
+    prisma: PrismaClient;
+    companyRepository: CompanyRepository;
+    userRepository: UserRepository;
+    notificationsService: NotificationsService;
+    auditLogService: AuditLogService;
   }) {
     this.paymentRepository = paymentRepository;
     this.transactionRepository = transactionRepository;
@@ -57,6 +76,11 @@ export class PaymentsService {
     this.paymentGatewayAdapters = paymentGatewayAdapters;
     this.logger = logger;
     this.paymentsConfig = config;
+    this.prisma = prisma;
+    this.companyRepository = companyRepository;
+    this.userRepository = userRepository;
+    this.notificationsService = notificationsService;
+    this.auditLogService = auditLogService;
   }
 
   /**
@@ -120,6 +144,7 @@ export class PaymentsService {
     await this.transactionRepository.create({ paymentId, paymentMethodId, orderCode, status: "SUCCESS" });
     await this.paymentRepository.updateStatus(paymentId, "COMPLETED");
     await this.activateSubscriptionForPayment(paymentId);
+    await this.recordCompletedPayment(paymentId);
 
     const returnUrl = provider === "VNPAY" ? this.paymentsConfig.VNPAY_RETURN_URL : this.paymentsConfig.MOMO_RETURN_URL;
     return { paymentUrl: `${returnUrl}?orderCode=${encodeURIComponent(orderCode)}`, orderCode };
@@ -162,6 +187,7 @@ export class PaymentsService {
 
     if (result.success) {
       await this.activateSubscriptionForPayment(transaction.paymentId);
+      await this.recordCompletedPayment(transaction.paymentId);
     }
 
     return adapter.buildIpnAckResponse("SUCCESS");
@@ -219,6 +245,48 @@ export class PaymentsService {
     const startDate = new Date();
     const endDate = new Date(startDate.getTime() + companySubscription.plan.durationDays * 24 * 60 * 60 * 1000);
     await this.companySubscriptionRepository.activate(companySubscription.id, { startDate, endDate });
+  }
+
+  /**
+   * AD-16 — nhật ký + thông báo PAYMENT_COMPLETED cho Admin (chỉ trong app, D8).
+   * Chạy sau khi Payment đã COMPLETED và gói đã kích hoạt (luồng thanh toán vốn
+   * không nằm trong transaction), nên lỗi ở đây chỉ được log: không được làm
+   * hỏng phản hồi IPN của một giao dịch đã thành công.
+   */
+  private async recordCompletedPayment(paymentId: string): Promise<void> {
+    try {
+      const payment = await this.paymentRepository.findById(paymentId);
+      if (!payment) return;
+      const subscription = await this.companySubscriptionRepository.findById(payment.companySubscriptionId);
+      if (!subscription) return;
+      const company = await this.companyRepository.findById(subscription.companyId);
+      const companyName = company?.name ?? "Một công ty";
+      const planName = subscription.plan.name;
+
+      await this.prisma.$transaction(async (tx) => {
+        await this.auditLogService.record(
+          {
+            actorId: null,
+            actorRole: null,
+            action: "PAYMENT_COMPLETED",
+            entityType: "Subscription",
+            entityId: subscription.id,
+            summary: `${companyName} thanh toán gói "${planName}" (${payment.amount.toLocaleString("vi-VN")}đ)`,
+            metadata: { paymentId, amount: payment.amount },
+          },
+          tx,
+        );
+        const adminIds = await this.userRepository.findAdminIds(tx);
+        await this.notificationsService.notifyMany(
+          "PAYMENT_COMPLETED",
+          adminIds,
+          { paymentId, companyName, planName, amount: payment.amount },
+          tx,
+        );
+      });
+    } catch (error) {
+      this.logger.error("Không ghi được nhật ký/thông báo cho thanh toán thành công", { error, paymentId });
+    }
   }
 
   private async logCallback(provider: PaymentProvider, raw: RawIpnPayload): Promise<void> {

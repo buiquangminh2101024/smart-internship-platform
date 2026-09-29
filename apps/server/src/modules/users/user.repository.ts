@@ -29,6 +29,13 @@ export class UserRepository {
     return rows.map((row) => row.id);
   }
 
+  /** AD-16 — email theo userId, để hiển thị người thực hiện trong nhật ký hoạt động. */
+  async findEmailsByIds(ids: string[]): Promise<Map<string, string>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, email: true } });
+    return new Map(rows.map((row) => [row.id, row.email]));
+  }
+
   createWithPassword(params: {
     email: string;
     passwordHash: string;

@@ -33,7 +33,20 @@ export type NotificationType =
   | "COMPANY_LINK_REQUESTED"
   | "JOB_POST_SUBMITTED"
   | "CANDIDATE_OUTREACH_INVITATION_RECEIVED"
-  | "CANDIDATE_OUTREACH_INVITATION_RESPONDED";
+  | "CANDIDATE_OUTREACH_INVITATION_RESPONDED"
+  | "APPLICATION_RECEIVED"
+  | "JOB_POST_EXPIRING"
+  | "SUBSCRIPTION_EXPIRING"
+  | "CATALOG_ENTRY_SUGGESTED"
+  | "PAYMENT_COMPLETED"
+  | "INTERVIEW_SCHEDULED"
+  | "INTERVIEW_RESCHEDULED"
+  | "INTERVIEW_CANCELLED"
+  | "INTERVIEW_REMINDER";
+
+export type InterviewMode = "ONLINE" | "ONSITE";
+
+export type InterviewStatus = "SCHEDULED" | "CANCELLED";
 
 export type OutreachInvitationStatus = "PENDING" | "ACCEPTED" | "DECLINED" | "EXPIRED";
 
@@ -1148,4 +1161,310 @@ export interface Notification {
 
 export interface UnreadCountResponse {
   count: number;
+}
+
+/**
+ * Nhóm của trung tâm thông báo (AD-16). Mỗi loại thông báo thuộc đúng một nhóm;
+ * mỗi vai trò chỉ thấy một số nhóm (ánh xạ ở server: notification-groups.ts).
+ */
+export type NotificationGroup =
+  | "APPLICATIONS"
+  | "JOB_POSTS"
+  | "COMPANY"
+  | "INVITATIONS"
+  | "INTERVIEWS"
+  | "SUBSCRIPTION"
+  | "CATALOG"
+  | "PAYMENTS";
+
+/** GET /notifications/unread-count/by-group — `groups` chỉ gồm các nhóm của vai trò hiện tại, nhóm trống = 0. */
+export interface UnreadCountByGroupResponse {
+  total: number;
+  groups: Partial<Record<NotificationGroup, number>>;
+}
+
+// ─── Dashboard Employer & Admin (AD-16) ──────────────────────────────────
+// docs/06-backend/dashboard-employer-admin/PLAN.md. Mọi mốc "ngày" theo giờ
+// Việt Nam (Asia/Ho_Chi_Minh); "7 ngày" = hôm nay và 6 ngày trước đó.
+
+/** Nút 7/30/90 ngày — chỉ đổi chuỗi theo ngày và phễu (D10). */
+export type DashboardRange = 7 | 30 | 90;
+
+/** Một điểm của chuỗi theo ngày; server điền đủ ngày trống bằng 0. `date` dạng YYYY-MM-DD. */
+export interface DailyPoint {
+  date: string;
+  value: number;
+}
+
+/** Kỳ này so với kỳ liền trước cùng độ dài. */
+export interface PeriodComparison {
+  current: number;
+  previous: number;
+}
+
+/** Phân bố thời gian chờ của một hàng chờ (Dưới 24 giờ / 1 – 2 ngày / Trên 2 ngày). */
+export interface WaitBuckets {
+  under24h: number;
+  oneToTwoDays: number;
+  over2Days: number;
+}
+
+/**
+ * Hạn mức lời mời ứng viên hôm nay của công ty (AD-15). BLOCKED = không có gói
+ * còn hiệu lực. Bộ đếm làm mới lúc 7h sáng giờ Việt Nam.
+ */
+export type OutreachDailyQuotaStatus =
+  | { mode: "BLOCKED" }
+  | { mode: "TRIAL" | "SUBSCRIBED"; dailyQuota: number; usedToday: number; remainingToday: number };
+
+/** GET /employer/dashboard/overview — số liệu của cả công ty, trừ `messages` (của riêng employer). */
+export interface EmployerDashboardOverview {
+  company: { id: string; name: string; verificationStatus: CompanyVerificationStatus };
+  jobs: JobPostStats & {
+    /** Tin PUBLISHED có expiresAt trong 7 ngày tới (còn lại của `published` là còn hạn > 7 ngày). */
+    expiringIn7Days: number;
+    /** Tin PUBLISHED có nhiều hồ sơ nhất (không tính hồ sơ đã huỷ). */
+    topJob: { id: string; title: string; applicationCount: number } | null;
+  };
+  applications: {
+    /** Hồ sơ mới trong 7 ngày so với 7 ngày trước đó. */
+    newLast7Days: PeriodComparison;
+    pendingCount: number;
+    pendingWait: WaitBuckets;
+    /** Mốc bắt đầu chờ của hồ sơ PENDING lâu nhất (ISO), null nếu không có. */
+    oldestPendingSince: string | null;
+  };
+  messages: {
+    unreadConversations: number;
+    /** Tối đa 3 hội thoại chưa đọc, tin mới nhất trước. */
+    recent: Array<{ conversationId: string; candidateName: string; lastMessageAt: string }>;
+  };
+  outreach: {
+    quota: OutreachDailyQuotaStatus;
+    /** Lời mời gửi trong 30 ngày qua; tỉ lệ chấp nhận = accepted / sent. */
+    last30Days: { sent: number; accepted: number; declined: number };
+  };
+  /** Lịch SCHEDULED của hồ sơ đang INTERVIEWING, cả công ty. */
+  interviews: {
+    /** 7 ngày kể từ hôm nay (giờ Việt Nam), đủ 7 điểm — dùng cho DayColumns. */
+    next7Days: DailyPoint[];
+    /** Số buổi chưa diễn ra trong 7 ngày tới (ô "phỏng vấn sắp tới" của banner). */
+    upcomingCount: number;
+    /** Buổi chưa diễn ra gần nhất (không giới hạn 7 ngày). */
+    next: { interviewId: string; scheduledAt: string; candidateName: string | null; jobPostTitle: string } | null;
+  };
+}
+
+export interface DashboardPendingApplication {
+  applicationId: string;
+  candidateName: string | null;
+  candidateAvatarUrl: string | null;
+  jobPostId: string;
+  jobPostTitle: string;
+  /** Mốc bắt đầu chờ: lúc ứng tuyển, hoặc lúc ứng tuyển lại. */
+  waitingSince: string;
+}
+
+export interface DashboardAttentionJob {
+  jobPostId: string;
+  title: string;
+  /** EXPIRING: PUBLISHED hết hạn trong 7 ngày. REJECTED: bị Admin từ chối, đang là nháp. */
+  kind: "EXPIRING" | "REJECTED";
+  expiresAt: string | null;
+  rejectedReason: string | null;
+  rejectedAt: string | null;
+}
+
+/** GET /employer/dashboard/tasks — mỗi nhóm tối đa 5 mục kèm tổng. */
+export interface EmployerDashboardTasks {
+  /** Chờ lâu nhất trước. */
+  pendingApplications: { total: number; wait: WaitBuckets; items: DashboardPendingApplication[] };
+  /** Sắp hết hạn trước (gần hạn nhất trước), rồi tới tin bị từ chối (mới nhất trước). */
+  attentionJobs: { total: number; items: DashboardAttentionJob[] };
+  /** Hồ sơ chờ đặt lịch phỏng vấn, chờ lâu nhất trước. */
+  awaitingSchedule: { total: number; items: AwaitingScheduleApplication[] };
+  /** `total` = số buổi chưa diễn ra trong 7 ngày tới; `items` = 5 buổi gần nhất trong khoảng đó. */
+  upcomingInterviews: { total: number; items: EmployerInterview[] };
+}
+
+/** Các bước phễu trên đường chính (AD-16 mục 6). */
+export type FunnelStep = "APPLIED" | "REVIEWING" | "SHORTLISTED" | "INTERVIEWING" | "ACCEPTED";
+
+/** GET /employer/dashboard/analytics?range= */
+export interface EmployerDashboardAnalytics {
+  range: DashboardRange;
+  applicationsDaily: DailyPoint[];
+  viewsDaily: DailyPoint[];
+  /**
+   * Hồ sơ nộp trong kỳ (không tính hồ sơ đã huỷ), đếm "đã đạt bước". Hồ sơ cũ
+   * bị từ chối trước khi có lịch sử chỉ tính ở APPLIED — `legacyRejected` là số đó.
+   */
+  funnel: { steps: Array<{ step: FunnelStep; count: number }>; legacyRejected: number };
+  /** Từ lúc hồ sơ vào PENDING tới lần employer xem xét/từ chối đầu tiên, trong kỳ. */
+  firstResponse: { averageHours: number | null; sampleSize: number };
+}
+
+/** GET /admin/dashboard/overview */
+export interface AdminDashboardOverview {
+  queues: {
+    companies: { total: number; wait: WaitBuckets };
+    jobPosts: { total: number; wait: WaitBuckets };
+    catalog: { total: number; skills: number; universities: number; majors: number; wait: WaitBuckets };
+  };
+  /** Tài khoản Ứng viên + Nhà tuyển dụng mới, 7 ngày so với 7 ngày trước. */
+  users: { newLast7Days: PeriodComparison };
+  /** VND, theo thời điểm hoàn tất thanh toán (D11): tháng này so với tháng trước. */
+  revenue: { thisMonth: PeriodComparison };
+  subscriptions: {
+    active: number;
+    expiringIn7Days: number;
+    byPlan: Array<{ planId: string; planName: string; count: number }>;
+  };
+}
+
+export type CatalogEntryKind = "SKILL" | "UNIVERSITY" | "MAJOR";
+
+/** GET /admin/dashboard/tasks — mỗi hàng chờ tối đa 5 mục (chờ lâu nhất trước) kèm tổng. */
+export interface AdminDashboardTasks {
+  jobPosts: {
+    total: number;
+    items: Array<{ jobPostId: string; title: string; companyName: string; submittedAt: string }>;
+  };
+  companies: {
+    total: number;
+    items: Array<{
+      companyId: string;
+      name: string;
+      taxCode: string | null;
+      businessLicenseUrl: string | null;
+      submittedAt: string;
+    }>;
+  };
+  catalog: {
+    total: number;
+    items: Array<{ id: string; kind: CatalogEntryKind; name: string; createdAt: string }>;
+  };
+}
+
+/** GET /admin/dashboard/analytics?range= */
+export interface AdminDashboardAnalytics {
+  range: DashboardRange;
+  /** Tài khoản Ứng viên + Nhà tuyển dụng mới theo ngày. */
+  newUsersDaily: DailyPoint[];
+  /** Tháng hiện tại, bốn khối ngày 1–7, 8–14, 15–21, 22–hết tháng; không đổi theo `range`. */
+  revenueWeekly: { month: string; weeks: Array<{ fromDay: number; toDay: number; amount: number }> };
+  /** Số tài khoản hiện tại theo vai trò; không đổi theo `range`. */
+  usersByRole: Record<Role, number>;
+}
+
+// ─── Lịch phỏng vấn (AD-16 M2, D12) ──────────────────────────────────────
+// docs/06-backend/dashboard-employer-admin/PLAN.md mục "Giai đoạn 5 — Interview".
+// Mọi mốc giờ là ISO; giao diện hiển thị theo giờ Việt Nam.
+
+/** Hồ sơ chờ đặt lịch: SHORTLISTED, hoặc INTERVIEWING chưa có lịch SCHEDULED nào. */
+export interface AwaitingScheduleApplication {
+  applicationId: string;
+  status: "SHORTLISTED" | "INTERVIEWING";
+  candidateName: string | null;
+  candidateAvatarUrl: string | null;
+  jobPostId: string;
+  jobPostTitle: string;
+  /** Lúc hồ sơ vào trạng thái hiện tại. */
+  waitingSince: string;
+}
+
+export interface EmployerInterview {
+  id: string;
+  applicationId: string;
+  candidateName: string | null;
+  candidateAvatarUrl: string | null;
+  jobPostId: string;
+  jobPostTitle: string;
+  scheduledAt: string;
+  durationMinutes: number;
+  mode: InterviewMode;
+  location: string | null;
+  /** Ghi chú gửi ứng viên. */
+  note: string | null;
+  status: InterviewStatus;
+  cancelReason: string | null;
+  /** userId của employer đặt lịch — giao diện dùng để cảnh báo trùng giờ với lịch của chính mình. */
+  createdById: string;
+  createdAt: string;
+}
+
+export interface CandidateInterview {
+  id: string;
+  applicationId: string;
+  jobPostId: string;
+  jobPostTitle: string;
+  companyName: string;
+  companyLogoUrl: string | null;
+  scheduledAt: string;
+  durationMinutes: number;
+  mode: InterviewMode;
+  location: string | null;
+  note: string | null;
+  status: InterviewStatus;
+  cancelReason: string | null;
+}
+
+/** POST /employer/applications/:id/interviews */
+export interface ScheduleInterviewRequest {
+  scheduledAt: string;
+  /** 15–240, mặc định 45. */
+  durationMinutes?: number;
+  mode: InterviewMode;
+  /** Liên kết họp hoặc địa chỉ. */
+  location: string;
+  note?: string | null;
+}
+
+/** PATCH /employer/interviews/:id — gửi ít nhất một trường. */
+export type RescheduleInterviewRequest = Partial<ScheduleInterviewRequest>;
+
+/** POST /employer/interviews/:id/cancel */
+export interface CancelInterviewRequest {
+  reason: string;
+}
+
+/** SEQUENTIAL: chia khung giờ liên tiếp theo thứ tự `applicationIds`. GROUP: cùng một giờ. */
+export type InterviewBatchArrangement = "SEQUENTIAL" | "GROUP";
+
+/** POST /employer/interviews/batch — tối đa 20 hồ sơ, tất cả hoặc không (D12). */
+export interface BatchScheduleInterviewsRequest {
+  applicationIds: string[];
+  arrangement: InterviewBatchArrangement;
+  startAt: string;
+  durationMinutes?: number;
+  /** Chỉ dùng với SEQUENTIAL, 0–120, mặc định 0. */
+  gapMinutes?: number;
+  mode: InterviewMode;
+  location: string;
+  note?: string | null;
+}
+
+export type BatchScheduleFailureReason = "NOT_FOUND" | "INVALID_STATUS" | "ALREADY_SCHEDULED";
+
+/** Nằm trong `data` của phản hồi 409 khi lô có hồ sơ không hợp lệ (không lịch nào được tạo). */
+export interface BatchScheduleInterviewsFailure {
+  failures: Array<{ applicationId: string; reason: BatchScheduleFailureReason }>;
+}
+
+/** Phản hồi 201: lịch vừa tạo, đúng thứ tự `applicationIds`. */
+export interface BatchScheduleInterviewsResponse {
+  items: EmployerInterview[];
+}
+
+/** GET /admin/activity — một dòng nhật ký (AuditLog). */
+export interface AuditActivityItem {
+  id: string;
+  actorId: string | null;
+  actorRole: Role | null;
+  actorEmail: string | null;
+  action: string;
+  entityType: string;
+  entityId: string;
+  summary: string;
+  createdAt: string;
 }

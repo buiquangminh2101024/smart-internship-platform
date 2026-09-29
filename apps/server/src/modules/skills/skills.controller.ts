@@ -35,7 +35,7 @@ export class SkillsController {
 
   approve = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const data = await this.skillsService.approve(String(req.params.id));
+      const data = await this.skillsService.approve(req.user!.id, String(req.params.id));
       const body: ApiResponse<AdminSkillDto> = { success: true, data };
       res.json(body);
     } catch (error) {
@@ -45,7 +45,7 @@ export class SkillsController {
 
   reject = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      await this.skillsService.reject(String(req.params.id));
+      await this.skillsService.reject(req.user!.id, String(req.params.id));
       // Trả envelope rỗng thay vì 204: apiFetch phía web coi response không có
       // body là lỗi (parseBody trong lib/api-client.ts), và cả repo đều dùng
       // envelope { success, data } — không có ngoại lệ 204 nào khác.
@@ -57,7 +57,7 @@ export class SkillsController {
 
   merge = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      await this.skillsService.merge(String(req.params.id), String(req.body.targetSkillId));
+      await this.skillsService.merge(req.user!.id, String(req.params.id), String(req.body.targetSkillId));
       res.json({ success: true } satisfies ApiResponse);
     } catch (error) {
       next(error);

@@ -18,6 +18,7 @@ import type {
   UpdateJobPostRequest,
 } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
+import type { AuditLogService } from "../audit-log/audit-log.service";
 import type { CompanyRepository } from "../companies/company.repository";
 import type { EmployerRepository } from "../employers/employer.repository";
 import type { NotificationPayloadMap } from "../notifications/notification.types";
@@ -43,6 +44,7 @@ export class JobPostsService {
   private readonly subscriptionsService: SubscriptionsService;
   private readonly notificationsService: NotificationsService;
   private readonly userRepository: UserRepository;
+  private readonly auditLogService: AuditLogService;
 
   constructor({
     prisma,
@@ -52,6 +54,7 @@ export class JobPostsService {
     subscriptionsService,
     notificationsService,
     userRepository,
+    auditLogService,
   }: {
     prisma: PrismaClient;
     jobPostRepository: JobPostRepository;
@@ -60,6 +63,7 @@ export class JobPostsService {
     subscriptionsService: SubscriptionsService;
     notificationsService: NotificationsService;
     userRepository: UserRepository;
+    auditLogService: AuditLogService;
   }) {
     this.prisma = prisma;
     this.jobPostRepository = jobPostRepository;
@@ -68,6 +72,7 @@ export class JobPostsService {
     this.subscriptionsService = subscriptionsService;
     this.notificationsService = notificationsService;
     this.userRepository = userRepository;
+    this.auditLogService = auditLogService;
   }
 
   // ─── Public (Guest) ──────────────────────────────────────────────────────
@@ -209,9 +214,31 @@ export class JobPostsService {
           { jobPostId: id, jobPostTitle: jobPost.title, companyName: company.name },
           tx,
         );
+        await this.auditLogService.record(
+          {
+            actorId: userId,
+            actorRole: "EMPLOYER",
+            action: "JOB_POST_SUBMITTED",
+            entityType: "JobPost",
+            entityId: id,
+            summary: `${company.name} gửi duyệt tin "${jobPost.title}"`,
+          },
+          tx,
+        );
         return pending;
       }
       await this.jobPostRepository.createModerationAction({ jobPostId: id, action: "APPROVED", actorId: null }, tx);
+      await this.auditLogService.record(
+        {
+          actorId: userId,
+          actorRole: "EMPLOYER",
+          action: "JOB_POST_AUTO_PUBLISHED",
+          entityType: "JobPost",
+          entityId: id,
+          summary: `${company.name} đăng tin "${jobPost.title}" (công ty không cần duyệt tin)`,
+        },
+        tx,
+      );
       return this.jobPostRepository.update(id, { status: "PUBLISHED", publishedAt: new Date() }, tx);
     });
 
@@ -258,6 +285,17 @@ export class JobPostsService {
       await this.jobPostRepository.createModerationAction({ jobPostId: id, action: "APPROVED", actorId }, tx);
       const result = await this.jobPostRepository.update(id, { status: "PUBLISHED", publishedAt: new Date() }, tx);
       await this.notifyCompanyEmployers(jobPost.companyId, "JOB_POST_APPROVED", { jobPostId: id, jobPostTitle: jobPost.title }, tx);
+      await this.auditLogService.record(
+        {
+          actorId,
+          actorRole: "ADMIN",
+          action: "JOB_POST_APPROVED",
+          entityType: "JobPost",
+          entityId: id,
+          summary: `Duyệt tin "${jobPost.title}" của ${jobPost.company.name}`,
+        },
+        tx,
+      );
       return result;
     });
     return toJobPostDto(updated);
@@ -277,6 +315,18 @@ export class JobPostsService {
         jobPost.companyId,
         "JOB_POST_REJECTED",
         { jobPostId: id, jobPostTitle: jobPost.title, reason },
+        tx,
+      );
+      await this.auditLogService.record(
+        {
+          actorId,
+          actorRole: "ADMIN",
+          action: "JOB_POST_REJECTED",
+          entityType: "JobPost",
+          entityId: id,
+          summary: `Từ chối tin "${jobPost.title}" của ${jobPost.company.name}`,
+          metadata: { reason },
+        },
         tx,
       );
       return result;
@@ -302,6 +352,18 @@ export class JobPostsService {
         jobPost.companyId,
         "JOB_POST_TAKEN_DOWN",
         { jobPostId: id, jobPostTitle: jobPost.title, reason },
+        tx,
+      );
+      await this.auditLogService.record(
+        {
+          actorId,
+          actorRole: "ADMIN",
+          action: "JOB_POST_RETRACTED",
+          entityType: "JobPost",
+          entityId: id,
+          summary: `Gỡ tin "${jobPost.title}" của ${jobPost.company.name}`,
+          metadata: { reason },
+        },
         tx,
       );
       return result;

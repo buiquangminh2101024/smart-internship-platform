@@ -263,8 +263,21 @@ export class JobPostRepository {
     return db.jobPostModerationAction.create({ data });
   }
 
-  incrementViewCount(id: string): Promise<JobPost> {
-    return this.prisma.jobPost.update({ where: { id }, data: { viewCount: { increment: 1 } } });
+  /**
+   * Tăng tổng `viewCount` và lượt xem của ngày hôm nay (giờ Việt Nam) trong
+   * `job_post_daily_stats` (AD-16) cùng một transaction. Upsert viết bằng SQL
+   * thuần để tăng nguyên tử qua ON CONFLICT; id sinh ở DB vì cột không có default.
+   */
+  async incrementViewCount(id: string): Promise<JobPost> {
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.jobPost.update({ where: { id }, data: { viewCount: { increment: 1 } } }),
+      this.prisma.$executeRaw`
+        INSERT INTO "job_post_daily_stats" ("id", "jobPostId", "date", "views")
+        VALUES (gen_random_uuid()::text, ${id}, (now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date, 1)
+        ON CONFLICT ("jobPostId", "date") DO UPDATE SET "views" = "job_post_daily_stats"."views" + 1
+      `,
+    ]);
+    return updated;
   }
 
   // ─── dùng cho cron job-post-expiry.job.ts ────────────────────────────────
@@ -283,6 +296,16 @@ export class JobPostRepository {
     return this.prisma.company.findMany({
       where: { jobPosts: { some: { status: "PUBLISHED" } } },
       select: { id: true, verifiedAt: true },
+    });
+  }
+
+  /** Cho cron job-post-expiring-notice.job.ts: tin PUBLISHED còn hạn nhưng hết trước `until`. */
+  findPublishedExpiringBefore(
+    until: Date,
+  ): Promise<{ id: string; title: string; companyId: string; expiresAt: Date | null }[]> {
+    return this.prisma.jobPost.findMany({
+      where: { status: "PUBLISHED", expiresAt: { gt: new Date(), lte: until } },
+      select: { id: true, title: true, companyId: true, expiresAt: true },
     });
   }
 

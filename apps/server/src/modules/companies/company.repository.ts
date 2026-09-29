@@ -24,6 +24,7 @@ export interface CompanyWriteData {
   bannerUrl?: string | null;
   verificationNote?: string | null;
   rejectedAt?: Date | null;
+  verificationSubmittedAt?: Date | null;
   isVerified?: boolean;
   verifiedAt?: Date | null;
   requiresApproval?: boolean;

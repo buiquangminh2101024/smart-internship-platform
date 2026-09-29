@@ -60,6 +60,20 @@ Database: PostgreSQL (Neon.tech, managed), truy cập qua Prisma Client. Đã á
 - **`Notification`** — thuộc 1 `User`, `type: NotificationType`, có `link`/`isRead`/`readAt`. `title`/`body`/`link` là **bản snapshot đã render** tại thời điểm tạo (không lưu payload thô) nên nội dung thông báo cũ không đổi khi dữ liệu nguồn thay đổi về sau. Index `(userId, isRead)` phục vụ `GET /notifications` và `/notifications/unread-count`.
 - **`OutboxEvent`** (Phase 10, xem AD-8) — hàng đợi email nằm trong chính DB, ghi cùng transaction với `Notification` và thay đổi nghiệp vụ. Cột: `eventType` (String, hiện chỉ `"NOTIFICATION_EMAIL"` — để String thay vì enum để tái dùng cho loại event khác mà không cần migration), `aggregateType`/`aggregateId` (truy vết ngược về bản ghi gốc), `payload: Json` (`{to, subject, html, notificationType}` đã render sẵn), `status: OutboxStatus` (`PENDING`/`PROCESSING`/`COMPLETED`/`FAILED`), `attempts`, `availableAt` (mốc được phép thử lại — backoff), `processedAt`, `lastError`. Index `(status, availableAt)` cho worker `node-cron` quét mỗi phút.
 
+### Dashboard Employer & Admin (AD-16, migration `20260929000000_add_dashboard_analytics_tables`)
+
+- **`ApplicationStatusHistory`** (`application_status_history`) — mỗi lần `Application` đổi trạng thái: `fromStatus` (null = dòng khởi tạo/backfill), `toStatus`, `actorId` (null = hệ thống), `createdAt`. Cascade theo `Application`. Index `(applicationId, createdAt)`, `(toStatus, createdAt)`. Hồ sơ có trước migration được backfill đúng một dòng `fromStatus = NULL`.
+- **`JobPostDailyStat`** (`job_post_daily_stats`) — lượt xem theo ngày (`date` kiểu `DATE`, giờ Việt Nam) của từng tin; unique `(jobPostId, date)`. `JobPost.viewCount` vẫn là tổng.
+- **`AuditLog`** (`audit_logs`) — nhật ký hoạt động xuyên mọi đối tượng cho Admin: `actorId`/`actorRole` (null = hệ thống), `action`, `entityType`/`entityId`, `summary` (câu tiếng Việt đã render lúc ghi), `metadata: Json?`. Không thay `JobPostModerationAction`.
+- **`Notification.dedupeKey`** — unique, nullable; chống lặp thông báo do cron quét định kỳ. Thêm index `(userId, createdAt)`, `(userId, type, isRead)`.
+- Index thống kê mới: `applications(jobPostId, status)`, `applications(status, createdAt)`, `job_posts(companyId, status)`, `job_posts(status, createdAt)`.
+
+### Lịch phỏng vấn (AD-16 M2, migration `20260929120000_add_interviews`)
+
+- **`Interview`** (`interviews`) — một buổi phỏng vấn của một `Application` (cascade): `scheduledAt`, `durationMinutes` (mặc định 45), `mode: InterviewMode (ONLINE | ONSITE)`, `location` (liên kết họp hoặc địa chỉ), `note` (ghi chú gửi ứng viên), `status: InterviewStatus (SCHEDULED | CANCELLED)`, `cancelReason`, `createdById` (userId employer đặt lịch). "Đã diễn ra" suy ra từ `scheduledAt`, không lưu. Lên lịch hàng loạt vẫn tạo mỗi ứng viên một dòng. Index `(applicationId)`, `(status, scheduledAt)`.
+- `NotificationType` thêm `INTERVIEW_SCHEDULED`, `INTERVIEW_RESCHEDULED`, `INTERVIEW_CANCELLED`, `INTERVIEW_REMINDER`.
+- **`Company.verificationSubmittedAt`** (D13) — lần nộp/nộp lại hồ sơ xác minh gần nhất, mốc chờ của hàng đợi xác minh; migration backfill cho công ty `PENDING`.
+
 ## Quy ước chung
 
 - Khoá chính: `String @id @default(cuid())` cho mọi entity.

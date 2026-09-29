@@ -61,7 +61,7 @@ export class CompaniesController {
 
   verify = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const result = await this.companiesService.verify(req.params.id as string);
+      const result = await this.companiesService.verify(req.user!.id, req.params.id as string);
       const body: ApiResponse<Company> = { success: true, data: result };
       res.json(body);
     } catch (error) {
@@ -72,7 +72,7 @@ export class CompaniesController {
   reject = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { reason } = req.body as RejectCompanyRequest;
-      const result = await this.companiesService.reject(req.params.id as string, reason);
+      const result = await this.companiesService.reject(req.user!.id, req.params.id as string, reason);
       const body: ApiResponse<Company> = { success: true, data: result };
       res.json(body);
     } catch (error) {
@@ -83,7 +83,7 @@ export class CompaniesController {
   setRequiresApproval = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { requiresApproval } = req.body as SetRequiresApprovalRequest;
-      const result = await this.companiesService.setRequiresApproval(req.params.id as string, requiresApproval);
+      const result = await this.companiesService.setRequiresApproval(req.user!.id, req.params.id as string, requiresApproval);
       const body: ApiResponse<Company> = { success: true, data: result };
       res.json(body);
     } catch (error) {

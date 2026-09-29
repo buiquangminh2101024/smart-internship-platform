@@ -37,6 +37,11 @@ export function notificationsRouter(container: AwilixContainer): Router {
     void resolveController().unreadCount(req, res, next);
   });
 
+  // AD-16 — số chưa đọc theo nhóm của trung tâm thông báo trên dashboard.
+  router.get("/notifications/unread-count/by-group", ...guard, (req, res, next) => {
+    void resolveController().unreadCountByGroup(req, res, next);
+  });
+
   router.patch("/notifications/read-all", ...guard, (req, res, next) => {
     void resolveController().markAllRead(req, res, next);
   });

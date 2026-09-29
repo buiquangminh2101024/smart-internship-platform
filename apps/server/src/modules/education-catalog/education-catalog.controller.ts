@@ -54,7 +54,7 @@ export class EducationCatalogController {
     (domain: EducationCatalogDomain): Handler =>
     async (req, res, next) => {
       try {
-        const data = await this.educationCatalogService.approve(domain, String(req.params.id));
+        const data = await this.educationCatalogService.approve(req.user!.id, domain, String(req.params.id));
         const body: ApiResponse<AdminEducationCatalogEntryDto> = { success: true, data };
         res.json(body);
       } catch (error) {
@@ -67,6 +67,7 @@ export class EducationCatalogController {
     async (req, res, next) => {
       try {
         const data = await this.educationCatalogService.renameApprove(
+          req.user!.id,
           domain,
           String(req.params.id),
           String(req.body.correctedName),
@@ -82,7 +83,7 @@ export class EducationCatalogController {
     (domain: EducationCatalogDomain): Handler =>
     async (req, res, next) => {
       try {
-        await this.educationCatalogService.reject(domain, String(req.params.id));
+        await this.educationCatalogService.reject(req.user!.id, domain, String(req.params.id));
         // Envelope rỗng thay vì 204 — cùng lý do với skills.controller.ts.
         res.json({ success: true } satisfies ApiResponse);
       } catch (error) {
@@ -94,7 +95,7 @@ export class EducationCatalogController {
     (domain: EducationCatalogDomain): Handler =>
     async (req, res, next) => {
       try {
-        await this.educationCatalogService.merge(domain, String(req.params.id), String(req.body.targetId));
+        await this.educationCatalogService.merge(req.user!.id, domain, String(req.params.id), String(req.body.targetId));
         res.json({ success: true } satisfies ApiResponse);
       } catch (error) {
         next(error);

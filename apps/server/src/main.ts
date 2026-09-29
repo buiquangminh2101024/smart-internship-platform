@@ -42,7 +42,16 @@ import { messagingRoutes } from "./modules/messaging/messaging.routes";
 import { notificationsRouter } from "./modules/notifications/notifications.routes";
 import { startOutboxJob } from "./modules/notifications/outbox/outbox.job";
 import type { OutboxRepository } from "./modules/notifications/outbox/outbox.repository";
+import type { NotificationsService } from "./modules/notifications/notifications.service";
 import type { EmailSender } from "./shared/ports/EmailSender";
+import { auditLogRouter } from "./modules/audit-log/audit-log.routes";
+import { dashboardRouter } from "./modules/dashboard/dashboard.routes";
+import { startJobPostExpiringNoticeJob } from "./modules/job-posts/job-post-expiring-notice.job";
+import { startSubscriptionExpiringNoticeJob } from "./modules/subscriptions/subscription-expiring-notice.job";
+import type { EmployerRepository } from "./modules/employers/employer.repository";
+import { interviewsRouter } from "./modules/interviews/interviews.routes";
+import { startInterviewReminderJob } from "./modules/interviews/interview-reminder.job";
+import type { InterviewsRepository } from "./modules/interviews/interviews.repository";
 
 import { errorHandler } from "./shared/middleware/errorHandler";
 import { logger } from "./shared/logger";
@@ -84,6 +93,9 @@ app.use("/api", educationCatalogRouter(container));
 app.use("/api", cvRouter(container));
 app.use("/api", savedJobsRouter(container));
 app.use("/api", applicationsRouter(container));
+// Lịch phỏng vấn (AD-16 M2). Đăng ký interviewsRepository/interviewsService mà
+// applicationsService và dashboard dùng — cả hai resolve lúc có request.
+app.use("/api", interviewsRouter(container));
 // Sau skillsRouter: Job Matcher GĐ2 dùng skillEmbeddingService do router đó đăng ký.
 app.use("/api", jobMatchingRouter(container));
 // Sau jobMatchingRouter: dùng jobRecommendationService/candidateMatchProfileLoader do router đó đăng ký.
@@ -96,6 +108,11 @@ app.use("/api/conversations", messagingRoutes(container));
 // Mount trước khi start outbox job bên dưới: notificationsRouter là nơi đăng ký
 // notificationsService/outboxRepository vào container.
 app.use("/api", notificationsRouter(container));
+// auditLogService dùng chéo (AD-16) + GET /admin/activity — resolve lúc có
+// request nên thứ tự mount không ảnh hưởng các module gọi nó.
+app.use("/api", auditLogRouter(container));
+// Chỉ đọc (AD-16); các service nó gọi resolve lúc có request.
+app.use("/api", dashboardRouter(container));
 
 app.use(errorHandler);
 
@@ -114,6 +131,26 @@ startCandidateOutreachExpiryJob(
   container.resolve<CandidateOutreachRepository>("candidateOutreachRepository"),
   logger,
 );
+// Báo tin sắp hết hạn (3 ngày) và gói sắp hết hạn (7 ngày) — 08:00 giờ Việt
+// Nam hằng ngày, mỗi đối tượng chỉ báo một lần nhờ Notification.dedupeKey (AD-16).
+startJobPostExpiringNoticeJob({
+  jobPostRepository: container.resolve<JobPostRepository>("jobPostRepository"),
+  employerRepository: container.resolve<EmployerRepository>("employerRepository"),
+  notificationsService: container.resolve<NotificationsService>("notificationsService"),
+  logger,
+});
+startSubscriptionExpiringNoticeJob({
+  companySubscriptionRepository: container.resolve<CompanySubscriptionRepository>("companySubscriptionRepository"),
+  employerRepository: container.resolve<EmployerRepository>("employerRepository"),
+  notificationsService: container.resolve<NotificationsService>("notificationsService"),
+  logger,
+});
+// Nhắc lịch phỏng vấn ngày mai — 08:00 giờ Việt Nam (AD-16 D9).
+startInterviewReminderJob({
+  interviewsRepository: container.resolve<InterviewsRepository>("interviewsRepository"),
+  notificationsService: container.resolve<NotificationsService>("notificationsService"),
+  logger,
+});
 // Transactional Outbox cho email notification — quét mỗi phút (AD-8).
 startOutboxJob(
   container.resolve<OutboxRepository>("outboxRepository"),
