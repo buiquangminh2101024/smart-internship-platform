@@ -1,6 +1,8 @@
 "use client";
 
 import { useCandidateApplications, useCancelApplication } from "@/hooks/useApplications";
+import { useCandidateInterviews } from "@/hooks/useInterviews";
+import { CandidateInterviewBlock } from "@/components/interviews/CandidateInterviewBlock";
 import { CandidateHomeHeader } from "@/components/marketing/CandidateHomeHeader";
 import { SiteFooter } from "@/components/marketing/SiteFooter";
 import { Card } from "@/components/ui/Card";
@@ -11,7 +13,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { useState } from "react";
 
 import { useRouter } from "next/navigation";
-import type { JobPostStatus } from "@sip/shared-types";
+import type { CandidateInterview, JobPostStatus } from "@sip/shared-types";
 import { JOB_STATUS_LABEL } from "@/lib/job-post-display";
 
 const INACTIVE_JOB_STATUSES: ReadonlySet<JobPostStatus> = new Set(["CLOSED", "EXPIRED", "TAKEN_DOWN"]);
@@ -20,6 +22,14 @@ export default function ApplicationsPage() {
   const { data: applications, isLoading, isError } = useCandidateApplications();
   const cancelMutation = useCancelApplication();
   const router = useRouter();
+  // Lịch phỏng vấn (FE-5), gom theo hồ sơ. Lỗi tải lịch không chặn danh sách hồ sơ.
+  const { data: interviews } = useCandidateInterviews();
+  const interviewsByApplication = new Map<string, CandidateInterview[]>();
+  for (const interview of interviews ?? []) {
+    const list = interviewsByApplication.get(interview.applicationId) ?? [];
+    list.push(interview);
+    interviewsByApplication.set(interview.applicationId, list);
+  }
   
   const [dialog, setDialog] = useState<{ isOpen: boolean; title: string; message: string; type: "success" | "error" | "info"; onConfirm?: () => void; isDestructive?: boolean; hideCancel?: boolean }>({ isOpen: false, title: "", message: "", type: "info" });
 
@@ -96,45 +106,51 @@ export default function ApplicationsPage() {
             const jobInactive = INACTIVE_JOB_STATUSES.has(app.jobPost.status);
             const showJobStatus = jobInactive && (app.status === "PENDING" || app.status === "REVIEWING");
             return (
-              <Card key={app.id} padding="md" className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-                <div>
-                  <h3 className="font-semibold text-lg text-text-strong">{app.jobPost.title}</h3>
-                  <p className="text-sm text-text-body mt-1">
-                    <Icon name="building-2" size={14} className="inline-block mr-1 text-text-muted" />
-                    {app.jobPost.company.name}
-                  </p>
-                  <p className="text-xs text-text-muted mt-2">Nộp lúc: {new Date(app.createdAt).toLocaleDateString()}</p>
-                </div>
-                <div className="flex flex-col items-end gap-3 shrink-0">
-                  <div className="flex flex-wrap justify-end gap-2">
-                    {showJobStatus ? (
-                      <Badge tone={JOB_STATUS_LABEL[app.jobPost.status].tone}>
-                        Tin {JOB_STATUS_LABEL[app.jobPost.status].label.toLowerCase()}
-                      </Badge>
-                    ) : null}
-                    <Badge tone={
-                      app.status === "ACCEPTED" ? "success" :
-                        app.status === "REJECTED" || app.status === "CANCELLED" ? "danger" :
-                          app.status === "PENDING" ? "warning" : "info"
-                    }>{app.status}</Badge>
+              <Card key={app.id} padding="md" className="flex flex-col gap-4">
+                <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+                  <div>
+                    <h3 className="font-semibold text-lg text-text-strong">{app.jobPost.title}</h3>
+                    <p className="text-sm text-text-body mt-1">
+                      <Icon name="building-2" size={14} className="inline-block mr-1 text-text-muted" />
+                      {app.jobPost.company.name}
+                    </p>
+                    <p className="text-xs text-text-muted mt-2">Nộp lúc: {new Date(app.createdAt).toLocaleDateString()}</p>
                   </div>
+                  <div className="flex flex-col items-end gap-3 shrink-0">
+                    <div className="flex flex-wrap justify-end gap-2">
+                      {showJobStatus ? (
+                        <Badge tone={JOB_STATUS_LABEL[app.jobPost.status].tone}>
+                          Tin {JOB_STATUS_LABEL[app.jobPost.status].label.toLowerCase()}
+                        </Badge>
+                      ) : null}
+                      <Badge tone={
+                        app.status === "ACCEPTED" ? "success" :
+                          app.status === "REJECTED" || app.status === "CANCELLED" ? "danger" :
+                            app.status === "PENDING" ? "warning" : "info"
+                      }>{app.status}</Badge>
+                    </div>
 
-                  <div className="flex gap-2">
-                    {!jobInactive ? (
-                      <Button variant="secondary" icon="messages-square" size="sm" onClick={() => void handleMessage(app.jobPostId)}>
-                        Nhắn tin
+                    <div className="flex gap-2">
+                      {!jobInactive ? (
+                        <Button variant="secondary" icon="messages-square" size="sm" onClick={() => void handleMessage(app.jobPostId)}>
+                          Nhắn tin
+                        </Button>
+                      ) : null}
+                      {(app.status === "PENDING" || app.status === "REVIEWING") && (
+                        <Button variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50" size="sm" onClick={() => void handleCancel(app.id)}>
+                          Hủy đơn
+                        </Button>
+                      )}
+                      <Button as="a" href={"/jobs/" + app.jobPostId} variant="secondary" size="sm">
+                        Xem tin
                       </Button>
-                    ) : null}
-                    {(app.status === "PENDING" || app.status === "REVIEWING") && (
-                      <Button variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50" size="sm" onClick={() => void handleCancel(app.id)}>
-                        Hủy đơn
-                      </Button>
-                    )}
-                    <Button as="a" href={"/jobs/" + app.jobPostId} variant="secondary" size="sm">
-                      Xem tin
-                    </Button>
+                    </div>
                   </div>
                 </div>
+                <CandidateInterviewBlock
+                  interviews={interviewsByApplication.get(app.id) ?? []}
+                  applicationStatus={app.status}
+                />
               </Card>
             );
           })}

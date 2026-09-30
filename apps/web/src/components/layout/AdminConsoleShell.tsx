@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { apiFetch } from "@/lib/api-client";
+import { useAdminDashboardOverview } from "@/hooks/useAdminDashboard";
 import { useAdminAuthStore, useCurrentUser } from "@/stores/auth-store";
 import { Icon } from "@/components/ui/Icon";
 import { SideNav, type SideNavItem } from "./SideNav";
@@ -10,11 +11,11 @@ import { PortalTopbar, buildCrumbs } from "./PortalTopbar";
 import { SocketProvider } from "@/components/realtime/SocketProvider";
 
 // Bố cục theo ảnh mẫu `Screenshot 2026-09-12 134326.png` (panel 1 & 2): header
-// "Admin Panel / System Control" + 5 mục. "Tổng quan" tạm trỏ về hàng đợi
-// kiểm duyệt vì `/admin` đang là trang đăng nhập bí mật (AD-1) nên console
-// không thể có trang tổng quan ở đúng đường dẫn đó. "Người dùng" và "Báo cáo"
-// chưa có module nên để disable.
+// "Admin Panel / System Control" + các mục. "Tổng quan" là dashboard AD-16 ở
+// `/admin/dashboard` vì `/admin` là trang đăng nhập bí mật (AD-1). "Người dùng"
+// và "Báo cáo" chưa có module nên để disable.
 const NAV_ITEMS: SideNavItem[] = [
+  { label: "Tổng quan", icon: "layout-dashboard", href: "/admin/dashboard" },
   { label: "Tin tuyển dụng", icon: "clipboard-check", href: "/admin/jobs", matchNested: true },
   { label: "Nhà tuyển dụng", icon: "building-2", href: "/admin/companies", matchNested: true },
   { label: "Kỹ năng", icon: "sparkles", href: "/admin/skills", matchNested: true },
@@ -25,6 +26,7 @@ const NAV_ITEMS: SideNavItem[] = [
 ];
 
 const CRUMB_LABELS: Record<string, string> = {
+  dashboard: "Tổng quan",
   jobs: "Kiểm duyệt tin",
   companies: "Nhà tuyển dụng",
   skills: "Kỹ năng",
@@ -42,6 +44,28 @@ export function AdminConsoleShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const user = useCurrentUser("admin");
+  // Số chờ duyệt trên bốn mục kiểm duyệt (marigold). Cùng queryKey với trang
+  // Tổng quan nên không gọi API hai lần; sau mỗi thao tác duyệt trên dashboard
+  // số này tải lại cùng thẻ hàng chờ.
+  const { data: overview } = useAdminDashboardOverview();
+  const queues = overview?.queues;
+  const pendingByHref: Record<string, { count: number; label: string }> = queues
+    ? {
+        "/admin/jobs": { count: queues.jobPosts.total, label: "tin chờ duyệt" },
+        "/admin/companies": { count: queues.companies.total, label: "công ty chờ xác minh" },
+        "/admin/skills": { count: queues.catalog.skills, label: "kỹ năng chờ duyệt" },
+        "/admin/education-catalog": {
+          count: queues.catalog.universities + queues.catalog.majors,
+          label: "trường, ngành chờ duyệt",
+        },
+      }
+    : {};
+  const navItems = NAV_ITEMS.map((item) => {
+    const pending = item.href ? pendingByHref[item.href] : undefined;
+    return pending
+      ? { ...item, badge: pending.count, badgeTone: "attention" as const, badgeLabel: `${pending.count} ${pending.label}` }
+      : item;
+  });
 
   async function handleLogout() {
     const refreshToken = useAdminAuthStore.getState().refreshToken ?? undefined;
@@ -61,7 +85,7 @@ export function AdminConsoleShell({ children }: { children: ReactNode }) {
         <PortalTopbar
           area="admin"
           roleLabel="Quản trị"
-          homeHref="/admin/jobs"
+          homeHref="/admin/dashboard"
           crumbs={buildCrumbs(pathname, { label: "Admin Panel", href: "/admin" }, CRUMB_LABELS)}
           userEmail={user?.email}
           onLogout={handleLogout}
@@ -69,7 +93,7 @@ export function AdminConsoleShell({ children }: { children: ReactNode }) {
 
         <div className="flex flex-1 items-stretch">
           <SideNav
-            items={NAV_ITEMS}
+            items={navItems}
             header={
               <div className="flex items-center gap-2">
                 <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500 text-white">

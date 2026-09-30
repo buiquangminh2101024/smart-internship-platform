@@ -3,7 +3,7 @@
 Song song: `docs/05-frontend/phases/dashboard-employer-admin/PLAN.md` (giao diện bản C).
 Các lựa chọn đã được chủ dự án đồng ý (2026-09-29): `docs/temp/DASHBOARD_EMPLOYER_ADMIN_DECISIONS.md` (không commit).
 
-**Trạng thái: ĐÃ ĐƯỢC CHỦ DỰ ÁN DUYỆT (2026-09-29), chấp nhận toàn bộ đề xuất D7–D11. ĐANG TRIỂN KHAI: bước 0 xong (AD-16, `PROJECT_STRUCTURE.md` §4–§5); bước 1 xong, migration `20260929000000_add_dashboard_analytics_tables` đã được chủ dự án áp lên Neon (2026-09-29); bước 2, 3 và 4 xong, kiểm chứng trên PostgreSQL tạm. Bước 5 (Interview, gồm D12–D13 được chủ dự án đồng ý 2026-09-29) xong phần code, kiểm chứng trên PostgreSQL tạm; migration `20260929120000_add_interviews` **chưa áp lên Neon**, chờ chủ dự án đồng ý.**
+**Trạng thái: ĐÃ ĐƯỢC CHỦ DỰ ÁN DUYỆT (2026-09-29), chấp nhận toàn bộ đề xuất D7–D11. ĐANG TRIỂN KHAI: bước 0 xong (AD-16, `PROJECT_STRUCTURE.md` §4–§5); bước 1 xong, migration `20260929000000_add_dashboard_analytics_tables` đã được chủ dự án áp lên Neon (2026-09-29); bước 2, 3 và 4 xong, kiểm chứng trên PostgreSQL tạm. Bước 5 (Interview, gồm D12–D13 được chủ dự án đồng ý 2026-09-29) xong phần code, kiểm chứng trên PostgreSQL tạm; migration `20260929120000_add_interviews` **chưa áp lên Neon**, chờ chủ dự án đồng ý. Bước 6 (bổ sung dữ liệu cho dashboard Admin bản D, D14) được chủ dự án duyệt 2026-09-30 và **xong phần code** (không migration).**
 
 ## Mục tiêu
 
@@ -26,6 +26,7 @@ Cung cấp dữ liệu cho hai dashboard (`/employer/dashboard`, `/admin/dashboa
 | D11 | (2026-09-29) Doanh thu tính `SUM(amount)` của `Payment` có `status = COMPLETED`, nhóm theo `updatedAt` (giờ Việt Nam). **Không thêm** cột `paidAt` (F6). |
 | D12 | (2026-09-29) **Lên lịch phỏng vấn hàng loạt**: chọn nhiều hồ sơ rồi đặt lịch một lần, hai kiểu "chia khung giờ liên tiếp" và "cùng một giờ" (phỏng vấn nhóm). **Tất cả hoặc không**: một hồ sơ không hợp lệ thì không tạo lịch nào và trả danh sách lỗi theo từng hồ sơ. Tối đa **20** hồ sơ mỗi lần. Trùng giờ với lịch khác của người đặt chỉ **cảnh báo** (giao diện tự tính), không chặn. Mỗi ứng viên vẫn là một dòng `Interview` riêng. |
 | D13 | (2026-09-29) Thêm cột `Company.verificationSubmittedAt` (gộp vào M2) làm mốc chờ của công ty chờ xác minh, thay cho `updatedAt` vốn bị đổi khi đổi logo/banner hoặc Admin bật/tắt `requiresApproval` (F12). |
+| D14 | (2026-09-30) Dashboard Admin chuyển sang **bản D** ("bàn duyệt", xem plan frontend). Backend bổ sung sáu điểm dữ liệu ở mục "Bước 6 — Dữ liệu cho dashboard Admin bản D". **Không migration.** Người làm trong "Hoạt động gần đây" hiện bằng **email** (tài khoản Admin không có trường tên, không thêm). |
 
 ## Phát hiện khi đọc code (thay đổi phạm vi so với bản nháp)
 
@@ -167,7 +168,7 @@ Mọi mốc thời gian nhóm theo ngày dùng `Asia/Ho_Chi_Minh`; chuỗi theo 
 | GET | `/admin/dashboard/overview` | ADMIN | Hàng chờ (công ty, tin, danh mục) kèm phân bố thời gian chờ, người dùng mới 7 ngày so với 7 ngày trước, doanh thu tháng này/tháng trước, gói đang hoạt động (theo gói, số gói hết hạn ≤ 7 ngày). |
 | GET | `/admin/dashboard/tasks` | ADMIN | Top 3–5 mỗi hàng chờ (tin, công ty, danh mục) kèm tổng. |
 | GET | `/admin/dashboard/analytics?range=` | ADMIN | Người dùng mới theo ngày, doanh thu theo tuần của tháng hiện tại (khối 1–7, 8–14, 15–21, 22–hết), người dùng theo vai trò. |
-| GET | `/admin/activity?cursor=` | ADMIN | Danh sách `AuditLog` mới nhất, phân trang cursor. |
+| GET | `/admin/activity?cursor=&actor=` | ADMIN | Danh sách `AuditLog` mới nhất, phân trang cursor. `actor=admin` chỉ lấy thao tác của Admin (bước 6). |
 | GET | `/notifications?group=` | mọi actor | Thêm tham số `group` cho endpoint có sẵn. |
 | GET | `/notifications/unread-count/by-group` | mọi actor | `{ total, groups: { [group]: number } }`. |
 
@@ -202,6 +203,32 @@ Kiểu trả về đặt trong `packages/shared-types` (tên dự kiến: `Emplo
 - **D11 đã kiểm lại (F6):** `Payment` đã `COMPLETED` không bị cập nhật lại. IPN trùng bị chặn nhờ `providerTransactionId`, còn `reportClientCancellation` chỉ đổi `PENDING`. Vì vậy giữ nguyên cách nhóm theo `updatedAt`.
 - **`GET /admin/activity`** do module `audit-log` phục vụ, nhận tham số `limit` (1–50, mặc định 20). Mỗi dòng kèm `actorEmail`, lấy qua `UserRepository.findEmailsByIds`.
 - **Phần Interview** (hồ sơ chờ đặt lịch, lịch phỏng vấn sắp tới, KPI 4, ô "phỏng vấn sắp tới" của banner) được thêm ở bước 5, xem mục bên dưới.
+- **Bổ sung cho dashboard Employer (2026-09-30, đã làm):** `DashboardPendingApplication.universityName`, `DashboardAttentionJob.applicationCount`, `EmployerDashboardOverview.messages.unreadCandidates`. Chi tiết ở plan frontend, ghi chú FE-2.
+
+### Bước 6 — Dữ liệu cho dashboard Admin bản D (D14)
+
+Sáu điểm, đều là đổi hợp đồng API hoặc template, **không migration**. Số thứ tự khớp nhãn 1 – 6 trong mock `docs/temp/ui-compare/admin-d-ban-duyet.html` (nút "Chỗ cần bổ sung API").
+
+| # | Chỗ hiển thị trong bản D | Thay đổi | Nguồn dữ liệu |
+|---|---|---|---|
+| 1 | Dòng tóm tắt "Hàng chờ" và ô "Chờ lâu nhất" của ba thẻ hàng chờ | `AdminDashboardOverview.queues.{companies,jobPosts,catalog}.oldestSince: string \| null` (ISO) | `MIN(mốc chờ)` thêm vào ba câu SQL tóm tắt có sẵn (`companyQueueSummary`, `jobPostQueueSummary`, `catalogQueueSummary`), cùng mốc chờ đã quy ước ở trên. |
+| 2 | Thanh chia nhóm của thẻ "Tin chờ duyệt": Dưới 6 giờ / 6 – 24 giờ / Trên 24 giờ | `queues.jobPosts.wait` đổi sang kiểu mới `JobPostWaitBuckets { under6h, sixTo24h, over24h }`. Công ty và danh mục giữ `WaitBuckets` (Dưới 24 giờ / 1 – 2 ngày / Trên 2 ngày). | Thêm hàm cột nhóm thứ hai bên cạnh `waitBucketColumns`. Lý do: tin được duyệt trong ngày, nhóm "Dưới 24 giờ" chứa gần như toàn bộ nên không cho thông tin. |
+| 3 | Dòng phụ của hàng danh mục: "Đề xuất bởi Lạc Việt Tech (Nhà tuyển dụng)" | `AdminDashboardTasks.catalog.items[].suggestedBy: { name: string \| null; role: Role } \| null` | `createdByUserId` của `skills` / `universities` / `majors` (đã có). Tên: ứng viên lấy `Candidate.fullName`; nhà tuyển dụng lấy tên công ty của `Employer`; Admin để `name = null` (giao diện ghi "Quản trị viên"). `null` khi không có người tạo. |
+| 4 | "Hoạt động gần đây": nút lọc "Quản trị viên / Tất cả" và khung lý do | `GET /admin/activity` nhận thêm `actor=admin\|all` (mặc định `all` để trang khác không đổi hành vi; dashboard gửi `admin`). `AuditActivityItem.reason: string \| null` | Lọc `actorRole = 'ADMIN'`. `reason` đọc từ `metadata.reason` (đã ghi sẵn cho từ chối tin, gỡ tin, từ chối công ty); dạng khác trả `null`. Không đổi `summary` đã lưu. |
+| 5 | Nút "Xem công ty" của thông báo thanh toán | Payload `PAYMENT_COMPLETED` thêm `companyId`; `link` đổi từ `/admin/dashboard` sang `/admin/companies/{companyId}` | `PaymentsService.recordCompletedPayment` đã biết công ty. Chưa có trang giao dịch cho Admin nên không trỏ tới giao dịch. |
+| 6 | Nội dung thông báo danh mục: "Lạc Việt Tech đề xuất kỹ năng “Figma Prototyping”." | Payload `CATALOG_ENTRY_SUGGESTED` thêm `suggestedByName: string \| null`; template dùng tên đó, không có thì giữ "Một người dùng" | `CatalogSuggestionNotifier.notifyAdmins` nhận thêm `userId` (hai nơi gọi đều có sẵn), tra tên theo cùng quy tắc ở mục 3. |
+
+Lưu ý:
+- Thông báo là bản chụp lúc tạo, nên mục 5 và 6 chỉ áp dụng cho thông báo mới; thông báo cũ trong DB giữ nội dung và liên kết cũ.
+- Câu chữ các loại thông báo khác **giữ nguyên** (không sửa cho giống mock bản C).
+- Kiểm chứng: `tsc` server và web; test đơn vị cho `AdminDashboardService` (bản giả repository, như `employer-dashboard-service.test.ts`) và cho `AuditLogService.listActivity` (lọc + `reason`); chạy SQL chỉ đọc trên DB thật để so số `oldestSince` và nhóm thời gian chờ với đếm trực tiếp.
+
+Cách làm khi triển khai (2026-09-30):
+
+- Tham số là chữ thường `actor=admin|all` (kiểu `ActivityActorFilter`). Người đề xuất có kiểu `CatalogSuggester`.
+- Mục 3 và 6 dùng chung `UserRepository.findCatalogSuggesters(ids)`, nên quy tắc đặt tên chỉ nằm một chỗ. Họ tên rỗng được coi là `null`.
+- Hàng chờ danh mục chỉ lấy thêm `createdByUserId` bằng SQL. Tên được tra một lần cho mọi người đề xuất khác nhau trong 5 mục.
+- Test: `tests/unit/admin-dashboard-service.test.ts` và `tests/unit/audit-log-activity.test.ts`.
 
 ### Giai đoạn 5 — Interview (chi tiết, chốt 2026-09-29)
 
@@ -296,6 +323,7 @@ Cách ghi khi triển khai (bước 2): tin, công ty, hồ sơ ứng tuyển gh
 | 3 ✅ | **Thông báo**: nhóm, tham số `group`, đếm theo nhóm, loại mới + template, `dedupeKey`, hai cron. | `tsc` sạch (AssertSameKeys); chạy cron thử hai lần chỉ sinh một thông báo. |
 | 4 ✅ | **Module dashboard**: repository (SQL tổng hợp), hai service, controller, routes, kiểu trong `shared-types`, `CandidateOutreachService.getDailyQuotaStatus`. | Ba endpoint mỗi bên trả đúng số trên dữ liệu seed; kiểm tra tay bằng script so khớp với đếm trực tiếp. |
 | 5 ✅ | **Interview (M2)**: migration (kèm `Company.verificationSubmittedAt`, D13), module `interviews`, thông báo `INTERVIEW_*` + email, mở rộng `tasks`/`overview`. Thứ tự: đặt/đổi/huỷ từng hồ sơ → lên lịch hàng loạt (D12) → cron nhắc lịch `INTERVIEW_REMINDER` (D9). Hai phần sau cắt được mà không ảnh hưởng phần trước. Cả bước tách được, có thể dời sang sau. | Đặt/đổi/huỷ lịch chạy đúng; hồ sơ tự sang `INTERVIEWING`; ứng viên nhận thông báo; lô có một hồ sơ lỗi thì không tạo lịch nào; cron nhắc lịch chạy hai lần chỉ sinh một thông báo mỗi người. |
+| 6 ✅ | **Dữ liệu cho dashboard Admin bản D (D14)**: sáu điểm ở mục "Bước 6" (mốc chờ lâu nhất, nhóm thời gian chờ của tin, người đề xuất danh mục, lọc hoạt động + lý do, liên kết thông báo thanh toán, tên người đề xuất trong thông báo danh mục). Làm trước FE-4. | `tsc` sạch; test đơn vị mới pass; SQL chỉ đọc trên DB thật khớp đếm trực tiếp; `/admin/activity` không truyền `actor` vẫn trả như cũ. |
 
 Repo chưa có test runner (`npm test` đang là placeholder). Kiểm chứng bằng `tsc`, script đối chiếu số liệu (viết trong `apps/server/scripts/`, chạy thủ công), và thử luồng trên trình duyệt. Thêm test runner là thay đổi dependency, phải hỏi riêng nếu muốn.
 

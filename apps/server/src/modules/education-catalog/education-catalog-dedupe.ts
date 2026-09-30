@@ -103,7 +103,7 @@ export async function suggestCatalogEntry(
   }
 
   await catalogRateLimitService.recordCreation(domain, userId);
-  await deps.catalogSuggestionNotifier.notifyAdmins(domain, created);
+  await deps.catalogSuggestionNotifier.notifyAdmins(domain, created, userId);
   return { id: created.id, name: created.name, status: "PENDING", matchType: "PENDING_REVIEW" };
 }
 

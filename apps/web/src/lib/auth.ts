@@ -39,7 +39,7 @@ export function redirectPathForRole(role: Role): string {
 const EMPLOYER_STAGE_PATH: Record<EmployerStageCookieValue, string> = {
   onboarding: "/employer/hoan-tat-thu-tuc",
   pending: "/employer/profile",
-  active: "/employer",
+  active: "/employer/dashboard",
 };
 
 /**

@@ -20,10 +20,15 @@ export function Field({ label, hint, error, required, htmlFor, children, classNa
         </label>
       ) : null}
       {children}
+      {/* id `${htmlFor}-msg`: ô nhập trỏ `aria-describedby` vào đây để trình đọc màn hình đọc lỗi/gợi ý. */}
       {error ? (
-        <span className="text-sm text-red-600">{error}</span>
+        <span id={htmlFor ? `${htmlFor}-msg` : undefined} className="text-sm text-red-600">
+          {error}
+        </span>
       ) : hint ? (
-        <span className="text-sm text-text-muted">{hint}</span>
+        <span id={htmlFor ? `${htmlFor}-msg` : undefined} className="text-sm text-text-muted">
+          {hint}
+        </span>
       ) : null}
     </div>
   );

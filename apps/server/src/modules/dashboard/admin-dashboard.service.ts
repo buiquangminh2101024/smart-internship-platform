@@ -4,18 +4,25 @@ import type {
   AdminDashboardTasks,
   DashboardRange,
 } from "@sip/shared-types";
-import type { DashboardRepository } from "./dashboard.repository";
+import type { UserRepository } from "../users/user.repository";
+import type { DashboardRepository, QueueSummaryRow } from "./dashboard.repository";
 
 /** Mỗi hàng chờ hiện tối đa bấy nhiêu mục, còn lại là "Xem tất cả". */
 const TASK_LIMIT = 5;
 const SUBSCRIPTION_EXPIRING_DAYS = 7;
 
+function withIsoOldest<Q extends QueueSummaryRow<unknown>>(queue: Q): Omit<Q, "oldestSince"> & { oldestSince: string | null } {
+  return { ...queue, oldestSince: queue.oldestSince?.toISOString() ?? null };
+}
+
 /** Dashboard Admin (AD-16) — chỉ đọc, số liệu toàn hệ thống. */
 export class AdminDashboardService {
   private readonly dashboardRepository: DashboardRepository;
+  private readonly userRepository: UserRepository;
 
-  constructor({ dashboardRepository }: { dashboardRepository: DashboardRepository }) {
+  constructor({ dashboardRepository, userRepository }: { dashboardRepository: DashboardRepository; userRepository: UserRepository }) {
     this.dashboardRepository = dashboardRepository;
+    this.userRepository = userRepository;
   }
 
   async overview(): Promise<AdminDashboardOverview> {
@@ -28,7 +35,11 @@ export class AdminDashboardService {
       this.dashboardRepository.activeSubscriptions(SUBSCRIPTION_EXPIRING_DAYS),
     ]);
     return {
-      queues: { companies, jobPosts, catalog },
+      queues: {
+        companies: withIsoOldest(companies),
+        jobPosts: withIsoOldest(jobPosts),
+        catalog: withIsoOldest(catalog),
+      },
       users: { newLast7Days: newUsers },
       revenue: { thisMonth: revenue },
       subscriptions: {
@@ -48,6 +59,8 @@ export class AdminDashboardService {
       this.dashboardRepository.listPendingCompanies(TASK_LIMIT),
       this.dashboardRepository.listPendingCatalogEntries(TASK_LIMIT),
     ]);
+    const suggesterIds = [...new Set(catalog.flatMap((entry) => (entry.createdByUserId ? [entry.createdByUserId] : [])))];
+    const suggesters = await this.userRepository.findCatalogSuggesters(suggesterIds);
     return {
       jobPosts: {
         total: jobPostQueue.total,
@@ -59,7 +72,11 @@ export class AdminDashboardService {
       },
       catalog: {
         total: catalogQueue.total,
-        items: catalog.map((entry) => ({ ...entry, createdAt: entry.createdAt.toISOString() })),
+        items: catalog.map(({ createdByUserId, ...entry }) => ({
+          ...entry,
+          createdAt: entry.createdAt.toISOString(),
+          suggestedBy: createdByUserId ? (suggesters.get(createdByUserId) ?? null) : null,
+        })),
       },
     };
   }

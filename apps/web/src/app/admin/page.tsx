@@ -49,7 +49,7 @@ export default function AdminLoginPage() {
       }
 
       useAdminAuthStore.getState().setSession(tokens, loggedInUser);
-      router.push("/admin");
+      router.push("/admin/dashboard");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Sai email hoặc mật khẩu");
     } finally {
@@ -63,7 +63,10 @@ export default function AdminLoginPage() {
         <div className="grid w-full max-w-sm gap-4 rounded-2xl border border-white/10 bg-white p-8 text-center shadow-lg">
           <h1 className="text-xl font-semibold text-text-strong">Đã đăng nhập</h1>
           <p className="text-sm text-text-muted">Bạn đang đăng nhập với tư cách Admin ({user.email}).</p>
-          <Button as="a" href="/admin/companies">
+          <Button as="a" href="/admin/dashboard">
+            Tổng quan
+          </Button>
+          <Button as="a" href="/admin/companies" variant="secondary">
             Quản lý công ty
           </Button>
           <Button as="a" href="/admin/jobs" variant="secondary">

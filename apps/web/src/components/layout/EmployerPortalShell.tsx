@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { apiFetch } from "@/lib/api-client";
 import { useEmployerMe } from "@/hooks/useEmployerMe";
+import { useEmployerDashboardOverview } from "@/hooks/useEmployerDashboard";
 import { useCurrentUser, useEmployerAuthStore } from "@/stores/auth-store";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -12,11 +13,11 @@ import { SideNav, type SideNavItem } from "./SideNav";
 import { PortalTopbar, buildCrumbs } from "./PortalTopbar";
 import { SocketProvider } from "@/components/realtime/SocketProvider";
 
-// Bố cục theo ảnh mẫu `Screenshot 2026-09-12 134041.png` (panel 1 & 2): 4 mục
-// điều hướng + nút "Đăng tin mới" ghim đáy sidebar. "Dashboard" tạm trỏ về
-// danh sách tin (chưa có trang tổng quan riêng); "Ứng viên" thuộc Phase 8 nên
-// để disable thay vì link chết.
+// Bố cục theo ảnh mẫu `Screenshot 2026-09-12 134041.png` (panel 1 & 2): các mục
+// điều hướng + nút "Đăng tin mới" ghim đáy sidebar. "Tổng quan" là dashboard
+// AD-16 — số hồ sơ chờ xử lý hiện ngay trên mục này.
 const NAV_ITEMS: SideNavItem[] = [
+  { label: "Tổng quan", icon: "layout-dashboard", href: "/employer/dashboard" },
   { label: "Tin tuyển dụng", icon: "briefcase", href: "/employer/jobs", matchNested: true },
   { label: "Tin nhắn", icon: "messages-square", href: "/employer/messages", matchNested: true },
   { label: "Hồ sơ công ty", icon: "building-2", href: "/employer/profile" },
@@ -25,6 +26,7 @@ const NAV_ITEMS: SideNavItem[] = [
 ];
 
 const CRUMB_LABELS: Record<string, string> = {
+  dashboard: "Tổng quan",
   jobs: "Tin tuyển dụng",
   new: "Đăng tin mới",
   applications: "Ứng viên",
@@ -46,6 +48,15 @@ export function EmployerPortalShell({ children }: { children: ReactNode }) {
   const user = useCurrentUser("employer");
   const { data: me } = useEmployerMe();
   const company = me?.company;
+  // Cùng queryKey với trang Tổng quan nên không gọi API hai lần; chỉ gọi khi
+  // công ty đã xác minh (trước đó portal chỉ mở trang hồ sơ công ty).
+  const { data: overview } = useEmployerDashboardOverview(me?.stage === "ACTIVE");
+  const pendingCount = overview?.applications.pendingCount ?? 0;
+  const navItems = NAV_ITEMS.map((item) =>
+    item.href === "/employer/dashboard"
+      ? { ...item, badge: pendingCount, badgeLabel: `${pendingCount} hồ sơ chờ xử lý` }
+      : item,
+  );
 
   async function handleLogout() {
     const refreshToken = useEmployerAuthStore.getState().refreshToken ?? undefined;
@@ -65,7 +76,7 @@ export function EmployerPortalShell({ children }: { children: ReactNode }) {
         <PortalTopbar
           area="employer"
           roleLabel="Doanh nghiệp"
-          homeHref="/employer/jobs"
+          homeHref="/employer/dashboard"
           crumbs={buildCrumbs(pathname, { label: "Employer Portal", href: "/employer" }, CRUMB_LABELS)}
           userEmail={user?.email}
           accountHref="/employer/profile"
@@ -74,7 +85,7 @@ export function EmployerPortalShell({ children }: { children: ReactNode }) {
 
         <div className="flex flex-1 items-stretch">
           <SideNav
-            items={NAV_ITEMS}
+            items={navItems}
             header={
               <div className="grid gap-1">
                 <span className="flex items-center gap-2 text-sm font-semibold text-text-strong">

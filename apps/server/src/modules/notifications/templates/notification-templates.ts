@@ -283,17 +283,17 @@ const templates: { [T in NotificationType]: Renderer<T> } = {
     const label = data.entryType === "SKILL" ? "kỹ năng" : data.entryType === "UNIVERSITY" ? "trường" : "ngành";
     return {
       title: "Có mục danh mục chờ duyệt",
-      body: `Một người dùng vừa đề xuất ${label} "${data.entryName}".`,
+      body: `${data.suggestedByName ?? "Một người dùng"} vừa đề xuất ${label} "${data.entryName}".`,
       link: data.entryType === "SKILL" ? "/admin/skills" : "/admin/education-catalog",
       email: null,
     };
   },
 
-  // Cho Admin, chỉ trong app.
+  // Cho Admin, chỉ trong app. Chưa có trang giao dịch cho Admin nên trỏ tới trang công ty (D14).
   PAYMENT_COMPLETED: (data) => ({
     title: "Có thanh toán thành công",
     body: `${data.companyName} đã thanh toán gói "${data.planName}" (${data.amount.toLocaleString("vi-VN")}đ).`,
-    link: "/admin/dashboard",
+    link: `/admin/companies/${data.companyId}`,
     email: null,
   }),
 

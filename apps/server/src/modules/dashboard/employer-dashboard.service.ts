@@ -63,6 +63,7 @@ export class EmployerDashboardService {
       topJob,
       applications,
       unread,
+      unreadCandidates,
       recentConversations,
       quota,
       outreach,
@@ -75,6 +76,7 @@ export class EmployerDashboardService {
       this.dashboardRepository.findTopPublishedJob(companyId),
       this.dashboardRepository.applicationSummary(companyId),
       this.messagingService.getUnreadSummary(userId, "EMPLOYER"),
+      this.dashboardRepository.countUnreadCandidates(employer.id, userId),
       this.dashboardRepository.listUnreadConversations(employer.id, userId, RECENT_CONVERSATION_LIMIT),
       this.candidateOutreachService.getDailyQuotaStatus(employer),
       this.dashboardRepository.outreachLast30Days(companyId),
@@ -98,6 +100,7 @@ export class EmployerDashboardService {
       },
       messages: {
         unreadConversations: unread.count,
+        unreadCandidates,
         recent: recentConversations.map((conversation) => ({
           conversationId: conversation.conversationId,
           candidateName: conversation.candidateName,
@@ -139,6 +142,7 @@ export class EmployerDashboardService {
         expiresAt: job.expiresAt.toISOString(),
         rejectedReason: null,
         rejectedAt: null,
+        applicationCount: job.applicationCount,
       })),
       ...rejected.items.map((job): DashboardAttentionJob => ({
         jobPostId: job.jobPostId,
@@ -147,6 +151,7 @@ export class EmployerDashboardService {
         expiresAt: null,
         rejectedReason: job.rejectedReason,
         rejectedAt: job.rejectedAt.toISOString(),
+        applicationCount: job.applicationCount,
       })),
     ];
 
@@ -158,6 +163,7 @@ export class EmployerDashboardService {
           applicationId: application.applicationId,
           candidateName: application.candidateName,
           candidateAvatarUrl: application.candidateAvatarUrl,
+          universityName: application.universityName,
           jobPostId: application.jobPostId,
           jobPostTitle: application.jobPostTitle,
           waitingSince: application.waitingSince.toISOString(),

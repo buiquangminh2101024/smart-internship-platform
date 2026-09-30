@@ -4,6 +4,7 @@ import type {
   DailyPoint,
   DashboardRange,
   FunnelStep,
+  JobPostWaitBuckets,
   PeriodComparison,
   WaitBuckets,
 } from "@sip/shared-types";
@@ -50,6 +51,15 @@ function toWaitBuckets(row: WaitBuckets | undefined): WaitBuckets {
   };
 }
 
+/** Ba cột under6h / sixTo24h / over24h — nhóm theo giờ cho hàng chờ tin (D14). */
+function jobPostWaitBucketColumns(since: Prisma.Sql): Prisma.Sql {
+  return Prisma.sql`
+    COUNT(*) FILTER (WHERE ${since} > ${NOW_UTC} - interval '6 hours')::int AS "under6h",
+    COUNT(*) FILTER (WHERE ${since} <= ${NOW_UTC} - interval '6 hours'
+                       AND ${since} > ${NOW_UTC} - interval '24 hours')::int AS "sixTo24h",
+    COUNT(*) FILTER (WHERE ${since} <= ${NOW_UTC} - interval '24 hours')::int AS "over24h"`;
+}
+
 /** Mốc chờ duyệt của tin PENDING: lần gửi duyệt gần nhất, không có thì updatedAt. */
 const JOB_POST_SUBMITTED_AT = Prisma.sql`COALESCE(
   (SELECT MAX(ma."createdAt") FROM job_post_moderation_actions ma
@@ -58,6 +68,22 @@ const JOB_POST_SUBMITTED_AT = Prisma.sql`COALESCE(
 
 /** Mốc chờ xác minh của công ty PENDING (D13); updatedAt chỉ là dự phòng cho dòng thiếu dữ liệu. */
 const COMPANY_SUBMITTED_AT = Prisma.sql`COALESCE(c."verificationSubmittedAt", c."updatedAt")`;
+
+/**
+ * Tên trường của học vấn đại diện cho ứng viên `c`: isCurrent trước, rồi endYear
+ * lớn nhất, rồi dòng tạo mới nhất — cùng thứ tự với thẻ tìm ứng viên (outreach).
+ */
+const REPRESENTATIVE_UNIVERSITY = Prisma.sql`(
+  SELECT u."name" FROM educations e
+  LEFT JOIN universities u ON u."id" = e."universityId"
+  WHERE e."candidateId" = c."id"
+  ORDER BY e."isCurrent" DESC, e."endYear" DESC NULLS LAST, e."createdAt" DESC
+  LIMIT 1)`;
+
+/** Số hồ sơ của tin `j`, không tính hồ sơ đã huỷ (giống findTopPublishedJob). */
+const JOB_APPLICATION_COUNT = Prisma.sql`(
+  SELECT COUNT(*)::int FROM applications a
+  WHERE a."jobPostId" = j."id" AND a."status" <> 'CANCELLED')`;
 
 /** Hạng trên đường chính của phễu; REJECTED/CANCELLED không nằm trên đường chính ⇒ 0. */
 function funnelRank(status: Prisma.Sql): Prisma.Sql {
@@ -81,6 +107,8 @@ export interface PendingApplicationRow {
   applicationId: string;
   candidateName: string | null;
   candidateAvatarUrl: string | null;
+  /** Trường của học vấn đại diện (xem REPRESENTATIVE_UNIVERSITY), null nếu chưa khai. */
+  universityName: string | null;
   jobPostId: string;
   jobPostTitle: string;
   waitingSince: Date;
@@ -90,6 +118,7 @@ export interface ExpiringJobRow {
   jobPostId: string;
   title: string;
   expiresAt: Date;
+  applicationCount: number;
 }
 
 export interface RejectedJobRow {
@@ -97,6 +126,7 @@ export interface RejectedJobRow {
   title: string;
   rejectedReason: string | null;
   rejectedAt: Date;
+  applicationCount: number;
 }
 
 export interface Page<T> {
@@ -104,15 +134,25 @@ export interface Page<T> {
   items: T[];
 }
 
-export interface QueueSummaryRow {
+export interface QueueSummaryRow<W = WaitBuckets> {
   total: number;
-  wait: WaitBuckets;
+  wait: W;
+  /** Mốc bắt đầu chờ của mục chờ lâu nhất, null nếu hàng chờ trống. */
+  oldestSince: Date | null;
 }
 
 export interface CatalogQueueRow extends QueueSummaryRow {
   skills: number;
   universities: number;
   majors: number;
+}
+
+export interface PendingCatalogEntryRow {
+  id: string;
+  kind: CatalogEntryKind;
+  name: string;
+  createdAt: Date;
+  createdByUserId: string | null;
 }
 
 type WithTotal<T> = T & { total: number };
@@ -162,6 +202,7 @@ export class DashboardRepository {
   listPendingApplications(companyId: string, limit: number): Promise<PendingApplicationRow[]> {
     return this.prisma.$queryRaw<PendingApplicationRow[]>(Prisma.sql`
       SELECT a."id" AS "applicationId", c."fullName" AS "candidateName", c."avatarUrl" AS "candidateAvatarUrl",
+             ${REPRESENTATIVE_UNIVERSITY} AS "universityName",
              j."id" AS "jobPostId", j."title" AS "jobPostTitle",
              COALESCE(a."reappliedAt", a."createdAt") AS "waitingSince"
       FROM applications a
@@ -186,7 +227,8 @@ export class DashboardRepository {
   /** Tin PUBLISHED hết hạn trong `days` ngày tới, gần hạn nhất trước. */
   async listExpiringJobs(companyId: string, days: number, limit: number): Promise<Page<ExpiringJobRow>> {
     const rows = await this.prisma.$queryRaw<WithTotal<ExpiringJobRow>[]>(Prisma.sql`
-      SELECT j."id" AS "jobPostId", j."title", j."expiresAt", COUNT(*) OVER ()::int AS "total"
+      SELECT j."id" AS "jobPostId", j."title", j."expiresAt",
+             ${JOB_APPLICATION_COUNT} AS "applicationCount", COUNT(*) OVER ()::int AS "total"
       FROM job_posts j
       WHERE j."companyId" = ${companyId} AND j."status" = 'PUBLISHED'
         AND j."expiresAt" > ${NOW_UTC} AND j."expiresAt" <= ${NOW_UTC} + make_interval(days => ${days}::int)
@@ -200,7 +242,7 @@ export class DashboardRepository {
   async listRejectedJobs(companyId: string, limit: number): Promise<Page<RejectedJobRow>> {
     const rows = await this.prisma.$queryRaw<WithTotal<RejectedJobRow>[]>(Prisma.sql`
       SELECT j."id" AS "jobPostId", j."title", last."reason" AS "rejectedReason", last."createdAt" AS "rejectedAt",
-             COUNT(*) OVER ()::int AS "total"
+             ${JOB_APPLICATION_COUNT} AS "applicationCount", COUNT(*) OVER ()::int AS "total"
       FROM job_posts j
       JOIN LATERAL (
         SELECT ma."action", ma."reason", ma."createdAt" FROM job_post_moderation_actions ma
@@ -252,6 +294,24 @@ export class DashboardRepository {
       ORDER BY "lastMessageAt" DESC
       LIMIT ${limit}
     `);
+  }
+
+  /**
+   * Số ứng viên khác nhau có tin chưa đọc — một ứng viên có thể có nhiều hội
+   * thoại (mỗi tin tuyển dụng một hội thoại), nên khác số hội thoại chưa đọc.
+   */
+  async countUnreadCandidates(employerId: string, userId: string): Promise<number> {
+    const [row] = await this.prisma.$queryRaw<Array<{ count: number }>>(Prisma.sql`
+      SELECT COUNT(DISTINCT c."candidateId")::int AS "count"
+      FROM conversations c
+      WHERE c."employerId" = ${employerId} AND c."employerDeletedAt" IS NULL
+        AND EXISTS (
+          SELECT 1 FROM messages m
+          WHERE m."conversationId" = c."id" AND m."senderId" <> ${userId}
+            AND (c."employerLastReadAt" IS NULL OR m."createdAt" > c."employerLastReadAt")
+        )
+    `);
+    return row?.count ?? 0;
   }
 
   async outreachLast30Days(companyId: string): Promise<{ sent: number; accepted: number; declined: number }> {
@@ -384,36 +444,41 @@ export class DashboardRepository {
 
   // ─── Admin (toàn hệ thống) ────────────────────────────────────────────────
 
-  /** Công ty PENDING — mốc chờ là lần cập nhật cuối (nộp/nộp lại hồ sơ xác minh). */
+  /** Công ty PENDING — mốc chờ là lần nộp/nộp lại hồ sơ xác minh (D13). */
   async companyQueueSummary(): Promise<QueueSummaryRow> {
-    const [row] = await this.prisma.$queryRaw<Array<WaitBuckets & { total: number }>>(Prisma.sql`
-      SELECT COUNT(*)::int AS "total", ${waitBucketColumns(COMPANY_SUBMITTED_AT)}
+    const [row] = await this.prisma.$queryRaw<Array<WaitBuckets & { total: number; oldestSince: Date | null }>>(Prisma.sql`
+      SELECT COUNT(*)::int AS "total", MIN(${COMPANY_SUBMITTED_AT}) AS "oldestSince", ${waitBucketColumns(COMPANY_SUBMITTED_AT)}
       FROM companies c
       WHERE c."verificationStatus" = 'PENDING'
     `);
-    return { total: row?.total ?? 0, wait: toWaitBuckets(row) };
+    return { total: row?.total ?? 0, wait: toWaitBuckets(row), oldestSince: row?.oldestSince ?? null };
   }
 
-  async jobPostQueueSummary(): Promise<QueueSummaryRow> {
-    const [row] = await this.prisma.$queryRaw<Array<WaitBuckets & { total: number }>>(Prisma.sql`
+  async jobPostQueueSummary(): Promise<QueueSummaryRow<JobPostWaitBuckets>> {
+    const [row] = await this.prisma.$queryRaw<Array<JobPostWaitBuckets & { total: number; oldestSince: Date | null }>>(Prisma.sql`
       WITH queue AS (
         SELECT ${JOB_POST_SUBMITTED_AT} AS "since" FROM job_posts j WHERE j."status" = 'PENDING'
       )
-      SELECT COUNT(*)::int AS "total", ${waitBucketColumns(Prisma.sql`"since"`)}
+      SELECT COUNT(*)::int AS "total", MIN("since") AS "oldestSince", ${jobPostWaitBucketColumns(Prisma.sql`"since"`)}
       FROM queue
     `);
-    return { total: row?.total ?? 0, wait: toWaitBuckets(row) };
+    return {
+      total: row?.total ?? 0,
+      wait: { under6h: row?.under6h ?? 0, sixTo24h: row?.sixTo24h ?? 0, over24h: row?.over24h ?? 0 },
+      oldestSince: row?.oldestSince ?? null,
+    };
   }
 
   async catalogQueueSummary(): Promise<CatalogQueueRow> {
     const [row] = await this.prisma.$queryRaw<
-      Array<WaitBuckets & { total: number; skills: number; universities: number; majors: number }>
+      Array<WaitBuckets & { total: number; skills: number; universities: number; majors: number; oldestSince: Date | null }>
     >(Prisma.sql`
       WITH queue AS (${this.pendingCatalogEntries()})
       SELECT COUNT(*)::int AS "total",
              COUNT(*) FILTER (WHERE "kind" = 'SKILL')::int AS "skills",
              COUNT(*) FILTER (WHERE "kind" = 'UNIVERSITY')::int AS "universities",
              COUNT(*) FILTER (WHERE "kind" = 'MAJOR')::int AS "majors",
+             MIN("createdAt") AS "oldestSince",
              ${waitBucketColumns(Prisma.sql`"createdAt"`)}
       FROM queue
     `);
@@ -423,6 +488,7 @@ export class DashboardRepository {
       universities: row?.universities ?? 0,
       majors: row?.majors ?? 0,
       wait: toWaitBuckets(row),
+      oldestSince: row?.oldestSince ?? null,
     };
   }
 
@@ -451,9 +517,9 @@ export class DashboardRepository {
     `);
   }
 
-  listPendingCatalogEntries(limit: number): Promise<Array<{ id: string; kind: CatalogEntryKind; name: string; createdAt: Date }>> {
+  listPendingCatalogEntries(limit: number): Promise<PendingCatalogEntryRow[]> {
     return this.prisma.$queryRaw(Prisma.sql`
-      SELECT "id", "kind", "name", "createdAt" FROM (${this.pendingCatalogEntries()}) queue
+      SELECT "id", "kind", "name", "createdAt", "createdByUserId" FROM (${this.pendingCatalogEntries()}) queue
       ORDER BY "createdAt" ASC, "id"
       LIMIT ${limit}
     `);
@@ -554,11 +620,14 @@ export class DashboardRepository {
   /** Kỹ năng, trường, ngành đang PENDING gộp chung một hàng chờ. */
   private pendingCatalogEntries(): Prisma.Sql {
     return Prisma.sql`
-      SELECT s."id", 'SKILL' AS "kind", s."name", s."createdAt" FROM skills s WHERE s."status" = 'PENDING'
+      SELECT s."id", 'SKILL' AS "kind", s."name", s."createdAt", s."createdByUserId"
+      FROM skills s WHERE s."status" = 'PENDING'
       UNION ALL
-      SELECT un."id", 'UNIVERSITY' AS "kind", un."name", un."createdAt" FROM universities un WHERE un."status" = 'PENDING'
+      SELECT un."id", 'UNIVERSITY' AS "kind", un."name", un."createdAt", un."createdByUserId"
+      FROM universities un WHERE un."status" = 'PENDING'
       UNION ALL
-      SELECT m."id", 'MAJOR' AS "kind", m."name", m."createdAt" FROM majors m WHERE m."status" = 'PENDING'`;
+      SELECT m."id", 'MAJOR' AS "kind", m."name", m."createdAt", m."createdByUserId"
+      FROM majors m WHERE m."status" = 'PENDING'`;
   }
 
   /**

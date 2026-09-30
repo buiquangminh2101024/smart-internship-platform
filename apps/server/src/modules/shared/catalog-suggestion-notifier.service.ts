@@ -33,13 +33,18 @@ export class CatalogSuggestionNotifier {
     this.logger = logger;
   }
 
-  async notifyAdmins(domain: CatalogDomain, entry: { id: string; name: string }): Promise<void> {
+  /** `userId`: người đề xuất — tên hiển thị theo cùng quy tắc với hàng chờ danh mục của dashboard (D14). */
+  async notifyAdmins(domain: CatalogDomain, entry: { id: string; name: string }, userId: string): Promise<void> {
     try {
-      const adminIds = await this.userRepository.findAdminIds();
+      const [adminIds, suggesters] = await Promise.all([
+        this.userRepository.findAdminIds(),
+        this.userRepository.findCatalogSuggesters([userId]),
+      ]);
       await this.notificationsService.notifyMany("CATALOG_ENTRY_SUGGESTED", adminIds, {
         entryType: ENTRY_TYPES[domain],
         entryId: entry.id,
         entryName: entry.name,
+        suggestedByName: suggesters.get(userId)?.name ?? null,
       });
     } catch (error) {
       this.logger.error("Không gửi được thông báo đề xuất danh mục cho Admin", { error, domain, entryId: entry.id });

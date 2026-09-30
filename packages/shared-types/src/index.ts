@@ -1210,6 +1210,16 @@ export interface WaitBuckets {
 }
 
 /**
+ * Phân bố thời gian chờ của hàng chờ tin tuyển dụng (Dưới 6 giờ / 6 – 24 giờ /
+ * Trên 24 giờ) — tin thường được duyệt trong ngày nên nhóm theo giờ (D14).
+ */
+export interface JobPostWaitBuckets {
+  under6h: number;
+  sixTo24h: number;
+  over24h: number;
+}
+
+/**
  * Hạn mức lời mời ứng viên hôm nay của công ty (AD-15). BLOCKED = không có gói
  * còn hiệu lực. Bộ đếm làm mới lúc 7h sáng giờ Việt Nam.
  */
@@ -1236,6 +1246,8 @@ export interface EmployerDashboardOverview {
   };
   messages: {
     unreadConversations: number;
+    /** Số ứng viên khác nhau trong các hội thoại chưa đọc (một ứng viên có thể có nhiều hội thoại). */
+    unreadCandidates: number;
     /** Tối đa 3 hội thoại chưa đọc, tin mới nhất trước. */
     recent: Array<{ conversationId: string; candidateName: string; lastMessageAt: string }>;
   };
@@ -1259,6 +1271,8 @@ export interface DashboardPendingApplication {
   applicationId: string;
   candidateName: string | null;
   candidateAvatarUrl: string | null;
+  /** Trường của học vấn đại diện (đang học trước, rồi năm kết thúc gần nhất); null nếu chưa khai. */
+  universityName: string | null;
   jobPostId: string;
   jobPostTitle: string;
   /** Mốc bắt đầu chờ: lúc ứng tuyển, hoặc lúc ứng tuyển lại. */
@@ -1273,6 +1287,8 @@ export interface DashboardAttentionJob {
   expiresAt: string | null;
   rejectedReason: string | null;
   rejectedAt: string | null;
+  /** Số hồ sơ của tin, không tính hồ sơ đã huỷ. */
+  applicationCount: number;
 }
 
 /** GET /employer/dashboard/tasks — mỗi nhóm tối đa 5 mục kèm tổng. */
@@ -1304,12 +1320,19 @@ export interface EmployerDashboardAnalytics {
   firstResponse: { averageHours: number | null; sampleSize: number };
 }
 
-/** GET /admin/dashboard/overview */
+/** GET /admin/dashboard/overview — `oldestSince`: mốc bắt đầu chờ của mục chờ lâu nhất (ISO), null nếu hàng chờ trống. */
 export interface AdminDashboardOverview {
   queues: {
-    companies: { total: number; wait: WaitBuckets };
-    jobPosts: { total: number; wait: WaitBuckets };
-    catalog: { total: number; skills: number; universities: number; majors: number; wait: WaitBuckets };
+    companies: { total: number; wait: WaitBuckets; oldestSince: string | null };
+    jobPosts: { total: number; wait: JobPostWaitBuckets; oldestSince: string | null };
+    catalog: {
+      total: number;
+      skills: number;
+      universities: number;
+      majors: number;
+      wait: WaitBuckets;
+      oldestSince: string | null;
+    };
   };
   /** Tài khoản Ứng viên + Nhà tuyển dụng mới, 7 ngày so với 7 ngày trước. */
   users: { newLast7Days: PeriodComparison };
@@ -1323,6 +1346,15 @@ export interface AdminDashboardOverview {
 }
 
 export type CatalogEntryKind = "SKILL" | "UNIVERSITY" | "MAJOR";
+
+/**
+ * Người đề xuất một mục danh mục. `name`: họ tên ứng viên, tên công ty của nhà
+ * tuyển dụng; null với Admin hoặc khi chưa khai tên (giao diện ghi theo vai trò).
+ */
+export interface CatalogSuggester {
+  name: string | null;
+  role: Role;
+}
 
 /** GET /admin/dashboard/tasks — mỗi hàng chờ tối đa 5 mục (chờ lâu nhất trước) kèm tổng. */
 export interface AdminDashboardTasks {
@@ -1342,7 +1374,8 @@ export interface AdminDashboardTasks {
   };
   catalog: {
     total: number;
-    items: Array<{ id: string; kind: CatalogEntryKind; name: string; createdAt: string }>;
+    /** `suggestedBy` null khi mục không có người tạo (vd. dữ liệu seed). */
+    items: Array<{ id: string; kind: CatalogEntryKind; name: string; createdAt: string; suggestedBy: CatalogSuggester | null }>;
   };
 }
 
@@ -1456,6 +1489,9 @@ export interface BatchScheduleInterviewsResponse {
   items: EmployerInterview[];
 }
 
+/** GET /admin/activity?actor= — `admin` chỉ lấy thao tác của Admin, `all` (mặc định) lấy mọi dòng. */
+export type ActivityActorFilter = "admin" | "all";
+
 /** GET /admin/activity — một dòng nhật ký (AuditLog). */
 export interface AuditActivityItem {
   id: string;
@@ -1466,5 +1502,7 @@ export interface AuditActivityItem {
   entityType: string;
   entityId: string;
   summary: string;
+  /** Lý do Admin nhập khi từ chối/gỡ tin hoặc từ chối công ty; null với thao tác khác. */
+  reason: string | null;
   createdAt: string;
 }

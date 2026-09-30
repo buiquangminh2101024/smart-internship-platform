@@ -93,7 +93,7 @@ export class SkillDedupeService {
 
     await this.storeEmbedding(created.id, name);
     await this.catalogRateLimitService.recordCreation("skill", userId);
-    await this.catalogSuggestionNotifier.notifyAdmins("skill", created);
+    await this.catalogSuggestionNotifier.notifyAdmins("skill", created, userId);
 
     return { skillId: created.id, name: created.name, status: "PENDING", matchType: "PENDING_REVIEW" };
   }

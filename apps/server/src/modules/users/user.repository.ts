@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient, User } from "@prisma/client";
+import type { CatalogSuggester } from "@sip/shared-types";
 
 // Dùng chung giữa module `auth` (xác thực/token) và `users` (hồ sơ/quản trị
 // tài khoản) — xem PROJECT_STRUCTURE.md §5 lý do 2 module tách tầng service
@@ -34,6 +35,30 @@ export class UserRepository {
     if (ids.length === 0) return new Map();
     const rows = await this.prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, email: true } });
     return new Map(rows.map((row) => [row.id, row.email]));
+  }
+
+  /**
+   * AD-16 (D14) — tên hiển thị của người đề xuất mục danh mục: ứng viên lấy họ
+   * tên, nhà tuyển dụng lấy tên công ty, Admin để null. Dùng chung cho hàng chờ
+   * danh mục trên dashboard và thông báo CATALOG_ENTRY_SUGGESTED.
+   */
+  async findCatalogSuggesters(ids: string[]): Promise<Map<string, CatalogSuggester>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.prisma.user.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        role: true,
+        candidate: { select: { fullName: true } },
+        employer: { select: { company: { select: { name: true } } } },
+      },
+    });
+    return new Map(
+      rows.map((row) => {
+        const name = row.role === "CANDIDATE" ? row.candidate?.fullName : row.role === "EMPLOYER" ? row.employer?.company.name : null;
+        return [row.id, { role: row.role, name: name?.trim() || null }];
+      }),
+    );
   }
 
   createWithPassword(params: {

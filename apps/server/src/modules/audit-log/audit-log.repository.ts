@@ -24,13 +24,17 @@ export class AuditLogRepository {
     return db.auditLog.create({ data });
   }
 
-  /** Mới nhất trước, phân trang cursor theo id (cùng khuôn NotificationsRepository.listForUser). */
-  async listLatest(options: { cursor?: string | undefined; limit: number }): Promise<{
+  /**
+   * Mới nhất trước, phân trang cursor theo id (cùng khuôn NotificationsRepository.listForUser).
+   * `actorRole` có giá trị thì chỉ lấy dòng của vai trò đó.
+   */
+  async listLatest(options: { cursor?: string | undefined; limit: number; actorRole?: Role | undefined }): Promise<{
     items: AuditLog[];
     nextCursor?: string;
     hasMore: boolean;
   }> {
     const rows = await this.prisma.auditLog.findMany({
+      ...(options.actorRole ? { where: { actorRole: options.actorRole } } : {}),
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: options.limit + 1,
       ...(options.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}),

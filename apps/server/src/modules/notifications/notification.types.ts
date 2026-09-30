@@ -62,8 +62,10 @@ export interface NotificationPayloadMap {
     entryType: "SKILL" | "UNIVERSITY" | "MAJOR";
     entryId: string;
     entryName: string;
+    /** D14 — họ tên ứng viên / tên công ty của người đề xuất; null thì ghi "Một người dùng". */
+    suggestedByName: string | null;
   };
-  PAYMENT_COMPLETED: { paymentId: string; companyName: string; planName: string; amount: number };
+  PAYMENT_COMPLETED: { paymentId: string; companyId: string; companyName: string; planName: string; amount: number };
   // AD-16 M2 — lịch phỏng vấn. Ba loại đầu chỉ gửi ứng viên (có email).
   INTERVIEW_SCHEDULED: InterviewDetails;
   INTERVIEW_RESCHEDULED: InterviewDetails & { previousScheduledAt: Date };

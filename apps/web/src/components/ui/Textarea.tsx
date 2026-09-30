@@ -21,6 +21,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
       id={textareaId}
       rows={rows}
       aria-invalid={!!error}
+      aria-describedby={error || hint ? `${textareaId}-msg` : undefined}
       className={[
         "w-full rounded-lg border bg-white px-3 py-2 text-[15px] outline-none transition-colors",
         "placeholder:text-text-subtle focus:border-brand-500 focus:ring-2 focus:ring-brand-100",

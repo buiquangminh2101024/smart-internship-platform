@@ -280,7 +280,7 @@ export class PaymentsService {
         await this.notificationsService.notifyMany(
           "PAYMENT_COMPLETED",
           adminIds,
-          { paymentId, companyName, planName, amount: payment.amount },
+          { paymentId, companyId: subscription.companyId, companyName, planName, amount: payment.amount },
           tx,
         );
       });
