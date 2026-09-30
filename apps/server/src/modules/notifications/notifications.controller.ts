@@ -29,6 +29,15 @@ export class NotificationsController {
     }
   };
 
+  unreadCountByGroup = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await this.notificationsService.unreadCountByGroup(req.user!.id, req.user!.role);
+      res.json({ success: true, data: result } satisfies ApiResponse);
+    } catch (error) {
+      next(error);
+    }
+  };
+
   markRead = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const result = await this.notificationsService.markRead(req.user!.id, String(req.params.id));

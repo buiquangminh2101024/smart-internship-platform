@@ -38,6 +38,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
         ref={ref}
         id={inputId}
         aria-invalid={!!error}
+        aria-describedby={error || hint ? `${inputId}-msg` : undefined}
         // Trình quản lý mật khẩu (LastPass, Dashlane...) tự chèn attribute như
         // fdprocessedid vào input ngay trước khi React hydrate, gây cảnh báo
         // mismatch giả — không phải lỗi thật, chỉ tắt cảnh báo ở node này.

@@ -1,7 +1,9 @@
 import { z } from "zod";
+import { NOTIFICATION_GROUPS } from "./notification-groups";
 
 export const notificationListQuerySchema = z.object({
   cursor: z.string().optional(),
+  group: z.enum(NOTIFICATION_GROUPS).optional(),
   // Cố tình KHÔNG dùng z.coerce.boolean(): Boolean("false") === true (chuỗi
   // không rỗng luôn truthy) nên "unreadOnly=false" sẽ bị hiểu ngược — cùng lý do
   // đã ghi cho các cờ boolean trong shared/config/env.ts.

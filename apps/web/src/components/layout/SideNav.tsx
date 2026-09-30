@@ -17,6 +17,12 @@ export interface SideNavItem {
    * Mặc định chỉ khớp chính xác `href`.
    */
   matchNested?: boolean;
+  /** Số việc đang chờ ở mục này; 0 hoặc bỏ trống thì không hiện. */
+  badge?: number;
+  /** `attention` = marigold (việc chờ người xử lý, dùng ở Admin); mặc định theo màu khu vực. */
+  badgeTone?: "brand" | "attention";
+  /** Nhãn đọc cho trình đọc màn hình, vd. "19 hồ sơ chờ xử lý". Mặc định chỉ đọc số. */
+  badgeLabel?: string;
 }
 
 export interface SideNavProps {
@@ -57,6 +63,19 @@ export function SideNav({ items, header, footer }: SideNavProps) {
               className={isActive(item) ? "text-brand-600" : "text-text-muted"}
             />
             <span className="flex-1">{item.label}</span>
+            {item.badge ? (
+              <>
+                <span
+                  aria-hidden
+                  className={`min-w-6 rounded-full px-1.5 py-0.5 text-center font-mono text-xs font-semibold tabular-nums ${
+                    item.badgeTone === "attention" ? "bg-marigold-100 text-marigold-800" : "bg-brand-100 text-brand-800"
+                  }`}
+                >
+                  {item.badge > 99 ? "99+" : item.badge}
+                </span>
+                <span className="sr-only">, {item.badgeLabel ?? item.badge}</span>
+              </>
+            ) : null}
             {item.soon ? (
               <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[11px] font-medium text-text-subtle">
                 Sắp có
@@ -85,7 +104,7 @@ export function SideNav({ items, header, footer }: SideNavProps) {
             aria-current={isActive(item) ? "page" : undefined}
             className={`flex min-h-[38px] items-center gap-3 rounded-lg px-2 text-sm transition-colors ${
               isActive(item)
-                ? "bg-brand-50 font-medium text-brand-700"
+                ? "bg-brand-50 font-medium text-brand-700 shadow-[inset_3px_0_0_var(--color-brand-600)]"
                 : "text-text-body hover:bg-surface-hover hover:text-text-strong"
             }`}
           >

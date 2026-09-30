@@ -10,6 +10,8 @@ export interface NotificationWriteData {
   title: string;
   body: string | null;
   link: string | null;
+  /** AD-16 — khoá chống lặp cho thông báo do cron tạo; null với thông báo thường. */
+  dedupeKey?: string | null;
 }
 
 export class NotificationsRepository {
@@ -23,12 +25,21 @@ export class NotificationsRepository {
     return db.notification.create({ data });
   }
 
+  async existsByDedupeKey(dedupeKey: string): Promise<boolean> {
+    const row = await this.prisma.notification.findUnique({ where: { dedupeKey }, select: { id: true } });
+    return row !== null;
+  }
+
   async listForUser(
     userId: string,
-    options: { unreadOnly: boolean; cursor?: string },
+    options: { unreadOnly: boolean; cursor?: string; types?: NotificationType[] },
   ): Promise<{ items: Notification[]; nextCursor?: string; hasMore: boolean }> {
     const rows = await this.prisma.notification.findMany({
-      where: { userId, ...(options.unreadOnly ? { isRead: false } : {}) },
+      where: {
+        userId,
+        ...(options.unreadOnly ? { isRead: false } : {}),
+        ...(options.types ? { type: { in: options.types } } : {}),
+      },
       orderBy: { createdAt: "desc" },
       take: PAGE_SIZE + 1,
       ...(options.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}),
@@ -42,6 +53,16 @@ export class NotificationsRepository {
 
   countUnread(userId: string): Promise<number> {
     return this.prisma.notification.count({ where: { userId, isRead: false } });
+  }
+
+  /** Số chưa đọc theo từng loại — một truy vấn, dùng index (userId, type, isRead). */
+  async countUnreadByType(userId: string): Promise<Array<{ type: NotificationType; count: number }>> {
+    const rows = await this.prisma.notification.groupBy({
+      by: ["type"],
+      where: { userId, isRead: false },
+      _count: { _all: true },
+    });
+    return rows.map((row) => ({ type: row.type, count: row._count._all }));
   }
 
   /**

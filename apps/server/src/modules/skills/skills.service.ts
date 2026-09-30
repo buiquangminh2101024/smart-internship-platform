@@ -1,22 +1,27 @@
-import type { CatalogEntryStatus } from "@prisma/client";
+import type { CatalogEntryStatus, Prisma, Skill } from "@prisma/client";
 import type { AdminSkillDto, PaginatedResponse, SuggestSkillResponse } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
+import type { AuditLogService } from "../audit-log/audit-log.service";
 import type { SkillDedupeService } from "./skill-dedupe.service";
 import type { AdminSkillRow, SkillsRepository } from "./skills.repository";
 
 export class SkillsService {
   private readonly skillsRepository: SkillsRepository;
   private readonly skillDedupeService: SkillDedupeService;
+  private readonly auditLogService: AuditLogService;
 
   constructor({
     skillsRepository,
     skillDedupeService,
+    auditLogService,
   }: {
     skillsRepository: SkillsRepository;
     skillDedupeService: SkillDedupeService;
+    auditLogService: AuditLogService;
   }) {
     this.skillsRepository = skillsRepository;
     this.skillDedupeService = skillDedupeService;
+    this.auditLogService = auditLogService;
   }
 
   // ─── Candidate / Employer ────────────────────────────────────────────────
@@ -39,9 +44,13 @@ export class SkillsService {
     };
   }
 
-  async approve(id: string): Promise<AdminSkillDto> {
-    await this.requirePending(id);
+  // Nhật ký ghi SAU khi repository commit (không truyền tx): reject/merge tự mở
+  // transaction riêng, AuditLogService chỉ log lỗi ở nhánh này (AD-16).
+
+  async approve(actorId: string, id: string): Promise<AdminSkillDto> {
+    const skill = await this.requirePending(id);
     await this.skillsRepository.approve(id);
+    await this.recordAudit(actorId, "CATALOG_ENTRY_APPROVED", id, `Duyệt kỹ năng "${skill.name}"`);
 
     const row = await this.skillsRepository.findAdminRow(id);
     if (!row) {
@@ -50,13 +59,14 @@ export class SkillsService {
     return toAdminSkillDto(row);
   }
 
-  async reject(id: string): Promise<void> {
-    await this.requirePending(id);
+  async reject(actorId: string, id: string): Promise<void> {
+    const skill = await this.requirePending(id);
     await this.skillsRepository.reject(id);
+    await this.recordAudit(actorId, "CATALOG_ENTRY_REJECTED", id, `Từ chối kỹ năng "${skill.name}"`);
   }
 
-  async merge(id: string, targetSkillId: string): Promise<void> {
-    await this.requirePending(id);
+  async merge(actorId: string, id: string, targetSkillId: string): Promise<void> {
+    const skill = await this.requirePending(id);
     if (id === targetSkillId) {
       throw new AppError(400, "Cannot merge a skill into itself");
     }
@@ -72,9 +82,30 @@ export class SkillsService {
     }
 
     await this.skillsRepository.merge(id, targetSkillId, "ADMIN_MERGE");
+    await this.recordAudit(actorId, "CATALOG_ENTRY_MERGED", id, `Gộp kỹ năng "${skill.name}" vào "${target.name}"`, {
+      targetId: targetSkillId,
+    });
   }
 
-  private async requirePending(id: string): Promise<void> {
+  private recordAudit(
+    actorId: string,
+    action: "CATALOG_ENTRY_APPROVED" | "CATALOG_ENTRY_REJECTED" | "CATALOG_ENTRY_MERGED",
+    entityId: string,
+    summary: string,
+    metadata?: Prisma.InputJsonValue,
+  ): Promise<void> {
+    return this.auditLogService.record({
+      actorId,
+      actorRole: "ADMIN",
+      action,
+      entityType: "Skill",
+      entityId,
+      summary,
+      ...(metadata ? { metadata } : {}),
+    });
+  }
+
+  private async requirePending(id: string): Promise<Skill> {
     const skill = await this.skillsRepository.findById(id);
     if (!skill) {
       throw new AppError(404, "Skill not found");
@@ -82,6 +113,7 @@ export class SkillsService {
     if (skill.status !== "PENDING") {
       throw new AppError(409, "Only a pending skill can be moderated");
     }
+    return skill;
   }
 }
 

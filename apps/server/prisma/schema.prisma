@@ -70,6 +70,26 @@ enum NotificationType {
   JOB_POST_SUBMITTED // AD-12 — employer gửi tin tuyển dụng chờ duyệt
   CANDIDATE_OUTREACH_INVITATION_RECEIVED // AD-15 — candidate nhận lời mời từ employer
   CANDIDATE_OUTREACH_INVITATION_RESPONDED // AD-15 — employer thấy candidate accept/decline
+  APPLICATION_RECEIVED // AD-16 — employer có hồ sơ ứng tuyển mới
+  JOB_POST_EXPIRING // AD-16 — tin PUBLISHED sắp hết hạn (cron hằng ngày)
+  SUBSCRIPTION_EXPIRING // AD-16 — gói dịch vụ sắp hết hạn (cron hằng ngày)
+  CATALOG_ENTRY_SUGGESTED // AD-16 — Admin: có kỹ năng/trường/ngành mới chờ duyệt
+  PAYMENT_COMPLETED // AD-16 — Admin: có thanh toán thành công
+  INTERVIEW_SCHEDULED // AD-16 M2 — ứng viên: có lịch phỏng vấn mới
+  INTERVIEW_RESCHEDULED // AD-16 M2 — ứng viên: lịch phỏng vấn bị đổi
+  INTERVIEW_CANCELLED // AD-16 M2 — ứng viên: lịch phỏng vấn bị huỷ
+  INTERVIEW_REMINDER // AD-16 M2 — ứng viên + employer đặt lịch: nhắc trước một ngày (cron)
+}
+
+// AD-16 M2 — lịch phỏng vấn. "Đã diễn ra" suy ra từ scheduledAt, không lưu COMPLETED.
+enum InterviewMode {
+  ONLINE
+  ONSITE
+}
+
+enum InterviewStatus {
+  SCHEDULED
+  CANCELLED
 }
 
 // AD-15 — Tìm & mời ứng viên chưa ứng tuyển (B3).
@@ -491,6 +511,9 @@ model Company {
   businessLicenseUrl String?
   verificationNote   String?
   rejectedAt         DateTime?
+  // AD-16 D13 — lần nộp/nộp lại hồ sơ xác minh gần nhất; mốc chờ của hàng đợi
+  // Admin (updatedAt đổi cả khi đổi logo/banner hay bật/tắt requiresApproval).
+  verificationSubmittedAt DateTime?
 
   employers            Employer[]
   jobPosts             JobPost[]
@@ -678,7 +701,10 @@ model JobPost {
   majors              JobPostMajor[]
   matchEmbedding      JobPostEmbedding?
   outreachInvitations CandidateOutreachInvitation[]
+  dailyStats          JobPostDailyStat[]
 
+  @@index([companyId, status])
+  @@index([status, createdAt])
   @@map("job_posts")
 }
 
@@ -875,8 +901,82 @@ model Application {
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 
+  statusHistory ApplicationStatusHistory[]
+  interviews    Interview[]
+
   @@unique([jobPostId, candidateId])
+  @@index([jobPostId, status])
+  @@index([status, createdAt])
   @@map("applications")
+}
+
+/// AD-16 — Lịch sử đổi trạng thái hồ sơ, dùng cho phễu tuyển dụng và thời gian xử lý.
+/// Ghi từ khi có bảng; hồ sơ cũ được backfill đúng một dòng (fromStatus = null).
+model ApplicationStatusHistory {
+  id            String             @id @default(cuid())
+  applicationId String
+  application   Application        @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  fromStatus    ApplicationStatus? // null = dòng khởi tạo (kể cả dòng backfill)
+  toStatus      ApplicationStatus
+  actorId       String? // userId thực hiện; null = hệ thống / backfill
+  createdAt     DateTime           @default(now())
+
+  @@index([applicationId, createdAt])
+  @@index([toStatus, createdAt])
+  @@map("application_status_history")
+}
+
+/// AD-16 M2 — Lịch phỏng vấn của một hồ sơ. Mỗi ứng viên một dòng, kể cả khi
+/// lên lịch hàng loạt (D12). createdById = userId của employer đặt lịch.
+model Interview {
+  id              String          @id @default(cuid())
+  applicationId   String
+  application     Application     @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  scheduledAt     DateTime
+  durationMinutes Int             @default(45)
+  mode            InterviewMode
+  location        String? // liên kết họp online hoặc địa chỉ
+  note            String? // ghi chú gửi ứng viên
+  status          InterviewStatus @default(SCHEDULED)
+  cancelReason    String?
+  createdById     String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([applicationId])
+  @@index([status, scheduledAt])
+  @@map("interviews")
+}
+
+/// AD-16 — Lượt xem tin theo ngày (ngày theo Asia/Ho_Chi_Minh); `JobPost.viewCount` chỉ là tổng.
+model JobPostDailyStat {
+  id        String   @id @default(cuid())
+  jobPostId String
+  jobPost   JobPost  @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  date      DateTime @db.Date
+  views     Int      @default(0)
+
+  @@unique([jobPostId, date])
+  @@index([date])
+  @@map("job_post_daily_stats")
+}
+
+/// AD-16 — Nhật ký hoạt động xuyên mọi đối tượng cho Admin. `summary` là câu tiếng Việt
+/// đã render lúc ghi (snapshot, giống Notification). Không thay `job_post_moderation_actions`.
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String? // null = hệ thống
+  actorRole  Role?
+  action     String // hằng số trong audit-log.actions.ts, vd. "JOB_POST_APPROVED"
+  entityType String // "JobPost" | "Company" | "Skill" | "University" | "Major" | "Subscription"
+  entityId   String
+  summary    String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
 }
 
 // ─── messaging ──────────────────────────────────────────────────────────
@@ -933,9 +1033,13 @@ model Notification {
   link      String?
   isRead    Boolean          @default(false)
   readAt    DateTime?
+  // AD-16 — khoá chống lặp cho thông báo tạo bởi tác vụ quét định kỳ, vd. "JOB_POST_EXPIRING:{jobPostId}".
+  dedupeKey String?          @unique
   createdAt DateTime         @default(now())
 
   @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@index([userId, type, isRead])
   @@map("notifications")
 }
 

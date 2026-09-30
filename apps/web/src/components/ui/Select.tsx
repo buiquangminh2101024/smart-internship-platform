@@ -33,6 +33,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
       ref={ref}
       id={id}
       aria-invalid={!!error}
+      aria-describedby={id && (error || hint) ? `${id}-msg` : undefined}
       suppressHydrationWarning
       className={[
         "w-full rounded-lg border bg-white px-3 outline-none transition-colors",

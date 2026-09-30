@@ -45,6 +45,14 @@ export function SocketProvider({
       onNotification: (event) => {
         const invalidate = () => queryClient.invalidateQueries({ queryKey: ["notifications", area] });
         void invalidate();
+        // Thông báo nghiệp vụ mới (hồ sơ mới, tin được duyệt...) → số trên dashboard
+        // đã cũ (AD-16). Candidate không có dashboard nên key này không khớp gì.
+        void queryClient.invalidateQueries({ queryKey: [area, "dashboard"] });
+        // Lịch phỏng vấn được đặt / đổi / huỷ (FE-5): khối lịch và trạng thái hồ sơ ở /applications đã cũ.
+        if (area === "candidate" && event.type.startsWith("INTERVIEW_")) {
+          void queryClient.invalidateQueries({ queryKey: ["candidate", "interviews"] });
+          void queryClient.invalidateQueries({ queryKey: ["candidate", "applications"] });
+        }
         showBrowserNotification(area, "system", {
           title: event.title,
           body: event.body ?? "",
@@ -59,6 +67,8 @@ export function SocketProvider({
       onMessageNotification: (event) => {
         if (!isMessagingArea(area)) return; // admin không có tin nhắn — phòng hờ, server không emit event này cho admin
         void queryClient.invalidateQueries({ queryKey: unreadSummaryQueryKey(area) });
+        // KPI "Tin nhắn chưa đọc" của dashboard Employer.
+        void queryClient.invalidateQueries({ queryKey: [area, "dashboard", "overview"] });
         showBrowserNotification(area, "message", {
           title: `Tin nhắn mới từ ${event.senderName}`,
           body: event.preview,

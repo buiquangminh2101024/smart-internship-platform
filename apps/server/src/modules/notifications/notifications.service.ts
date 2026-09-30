@@ -1,8 +1,15 @@
-import type { NotificationType, Prisma, PrismaClient } from "@prisma/client";
-import type { Notification as NotificationDto, PaginatedResponse, UnreadCountResponse } from "@sip/shared-types";
+import { Prisma, type NotificationType, type PrismaClient, type Role } from "@prisma/client";
+import type {
+  Notification as NotificationDto,
+  NotificationGroup,
+  PaginatedResponse,
+  UnreadCountByGroupResponse,
+  UnreadCountResponse,
+} from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
 import type { Logger } from "../../shared/logger";
 import type { RealtimeNotifier } from "../../shared/ports/RealtimeNotifier";
+import { NOTIFICATION_GROUP_BY_TYPE, NOTIFICATION_GROUPS_BY_ROLE, typesInGroup } from "./notification-groups";
 import { toNotificationDto } from "./notification.mapper";
 import {
   OUTBOX_AGGREGATE_NOTIFICATION,
@@ -64,6 +71,7 @@ export class NotificationsService {
     recipientUserId: string,
     data: NotificationPayloadMap[T],
     tx?: Prisma.TransactionClient,
+    dedupeKey?: string,
   ): Promise<void> {
     const db = tx ?? this.prisma;
 
@@ -76,7 +84,14 @@ export class NotificationsService {
     const rendered = renderNotification(type, data, { webBaseUrl: this.webBaseUrl });
 
     const notification = await this.notificationsRepository.create(
-      { userId: recipientUserId, type, title: rendered.title, body: rendered.body, link: rendered.link },
+      {
+        userId: recipientUserId,
+        type,
+        title: rendered.title,
+        body: rendered.body,
+        link: rendered.link,
+        dedupeKey: dedupeKey ?? null,
+      },
       db,
     );
 
@@ -123,15 +138,41 @@ export class NotificationsService {
     }
   }
 
+  /**
+   * Cho cron quét định kỳ (AD-16): mỗi `dedupeKey` chỉ sinh một thông báo dù job
+   * chạy lại bao nhiêu lần. Tự mở transaction riêng cho từng người nhận (thông
+   * báo + outbox email) để một bản ghi trùng không làm hỏng cả lượt quét: vi
+   * phạm unique huỷ transaction của Postgres, nên không thể bắt lỗi rồi đi tiếp
+   * trong cùng transaction. Trả về true nếu đã tạo mới.
+   */
+  async notifyOnce<T extends NotificationType>(
+    type: T,
+    recipientUserId: string,
+    data: NotificationPayloadMap[T],
+    dedupeKey: string,
+  ): Promise<boolean> {
+    // Kiểm tra trước để đường thường (đã báo rồi) không phải đi qua lỗi DB.
+    if (await this.notificationsRepository.existsByDedupeKey(dedupeKey)) return false;
+    try {
+      await this.prisma.$transaction((tx) => this.notify(type, recipientUserId, data, tx, dedupeKey));
+      return true;
+    } catch (error) {
+      // Hai tiến trình cùng tạo một khoá: bên chậm hơn vấp unique → coi như đã báo.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return false;
+      throw error;
+    }
+  }
+
   // ─── Đọc (API cho mọi actor) ─────────────────────────────────────────────
 
   async list(
     userId: string,
-    query: { unreadOnly?: boolean | undefined; cursor?: string | undefined },
+    query: { unreadOnly?: boolean | undefined; cursor?: string | undefined; group?: NotificationGroup | undefined },
   ): Promise<PaginatedResponse<NotificationDto>> {
     const page = await this.notificationsRepository.listForUser(userId, {
       unreadOnly: query.unreadOnly ?? false,
       ...(query.cursor ? { cursor: query.cursor } : {}),
+      ...(query.group ? { types: typesInGroup(query.group) } : {}),
     });
     return {
       items: page.items.map(toNotificationDto),
@@ -142,6 +183,24 @@ export class NotificationsService {
 
   async unreadCount(userId: string): Promise<UnreadCountResponse> {
     return { count: await this.notificationsRepository.countUnread(userId) };
+  }
+
+  /**
+   * `total` đếm mọi loại chưa đọc (khớp chuông / unread-count); `groups` chỉ gồm
+   * nhóm của vai trò, nhóm không có gì = 0 để giao diện hiện đủ tab.
+   */
+  async unreadCountByGroup(userId: string, role: Role): Promise<UnreadCountByGroupResponse> {
+    const rows = await this.notificationsRepository.countUnreadByType(userId);
+    const groups: Partial<Record<NotificationGroup, number>> = {};
+    for (const group of NOTIFICATION_GROUPS_BY_ROLE[role]) groups[group] = 0;
+
+    let total = 0;
+    for (const { type, count } of rows) {
+      total += count;
+      const group = NOTIFICATION_GROUP_BY_TYPE[type];
+      if (group in groups) groups[group] = (groups[group] ?? 0) + count;
+    }
+    return { total, groups };
   }
 
   async markRead(userId: string, id: string): Promise<NotificationDto> {

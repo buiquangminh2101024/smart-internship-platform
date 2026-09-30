@@ -28,6 +28,12 @@ export class CandidateOutreachRateLimitService {
     }
   }
 
+  /** Số lời mời công ty đã gửi hôm nay — chỉ đọc (dashboard, AD-16). */
+  async getUsedToday(companyId: string): Promise<number> {
+    const value = await this.redis.get(companyDayKey(companyId));
+    return value ? Number(value) : 0;
+  }
+
   async recordUsage(companyId: string): Promise<void> {
     const key = companyDayKey(companyId);
     const count = await this.redis.incr(key);

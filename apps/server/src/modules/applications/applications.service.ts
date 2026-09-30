@@ -1,26 +1,39 @@
 import type { CreateApplicationRequest, UpdateApplicationEvaluationRequest, UpdateApplicationStatusRequest } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
+import type { EmployerRepository } from "../employers/employer.repository";
+import type { InterviewsRepository } from "../interviews/interviews.repository";
 import type { NotificationsService } from "../notifications/notifications.service";
 import type { ApplicationsRepository } from "./applications.repository";
 import type { PrismaClient, ApplicationStatus } from "@prisma/client";
 
+/** cancelReason của lịch bị huỷ tự động khi hồ sơ có kết quả (AD-16 M2). */
+const INTERVIEW_CANCEL_REASON_DECIDED = "Hồ sơ đã có kết quả";
+
 export class ApplicationsService {
   private readonly prisma: PrismaClient;
   private readonly applicationsRepository: ApplicationsRepository;
+  private readonly employerRepository: EmployerRepository;
   private readonly notificationsService: NotificationsService;
+  private readonly interviewsRepository: InterviewsRepository;
 
   constructor({
     prisma,
     applicationsRepository,
+    employerRepository,
     notificationsService,
+    interviewsRepository,
   }: {
     prisma: PrismaClient;
     applicationsRepository: ApplicationsRepository;
+    employerRepository: EmployerRepository;
     notificationsService: NotificationsService;
+    interviewsRepository: InterviewsRepository;
   }) {
     this.prisma = prisma;
     this.applicationsRepository = applicationsRepository;
+    this.employerRepository = employerRepository;
     this.notificationsService = notificationsService;
+    this.interviewsRepository = interviewsRepository;
   }
 
   async createApplication(userId: string, dto: CreateApplicationRequest) {
@@ -46,30 +59,51 @@ export class ApplicationsService {
     }
 
     const existing = await this.applicationsRepository.findByJobAndCandidate(dto.jobPostId, candidate.id);
-
-    // Nếu đã có đơn với trạng thái CANCELLED → cho phép ứng tuyển lại (upsert)
-    if (existing) {
-      if (existing.status === "CANCELLED") {
-        await this.applicationsRepository.update(existing.id, {
-          status: "PENDING",
-          cvId: dto.cvId,
-          coverLetter: dto.coverLetter ?? null,
-          reappliedAt: new Date(),
-        });
-        return this.applicationsRepository.findCandidateApplicationById(existing.id, candidate.id);
-      }
+    if (existing && existing.status !== "CANCELLED") {
       throw new AppError(400, "You have already applied to this job post");
     }
 
-    const created = await this.applicationsRepository.create({
-      jobPostId: dto.jobPostId,
-      candidateId: candidate.id,
-      cvId: dto.cvId,
-      ...(dto.coverLetter ? { coverLetter: dto.coverLetter } : {}),
-      status: "PENDING"
+    // Hồ sơ + lịch sử trạng thái + thông báo cho employer ghi chung một
+    // transaction (AD-16), cùng lý do với updateApplicationStatus bên dưới.
+    const applicationId = await this.prisma.$transaction(async (tx) => {
+      let id: string;
+      if (existing) {
+        // Đơn đã huỷ (CANCELLED) → cho phép ứng tuyển lại trên chính bản ghi cũ.
+        await this.applicationsRepository.update(
+          existing.id,
+          { status: "PENDING", cvId: dto.cvId, coverLetter: dto.coverLetter ?? null, reappliedAt: new Date() },
+          tx,
+        );
+        id = existing.id;
+      } else {
+        const created = await this.applicationsRepository.create(
+          {
+            jobPostId: dto.jobPostId,
+            candidateId: candidate.id,
+            cvId: dto.cvId,
+            ...(dto.coverLetter ? { coverLetter: dto.coverLetter } : {}),
+            status: "PENDING",
+          },
+          tx,
+        );
+        id = created.id;
+      }
+
+      await this.applicationsRepository.createStatusHistory(
+        { applicationId: id, fromStatus: existing ? existing.status : null, toStatus: "PENDING", actorId: userId },
+        tx,
+      );
+      const employers = await this.employerRepository.findManyByCompanyId(jobPost.companyId, tx);
+      await this.notificationsService.notifyMany(
+        "APPLICATION_RECEIVED",
+        employers.map((employer) => employer.userId),
+        { applicationId: id, jobPostId: jobPost.id, jobPostTitle: jobPost.title, candidateName: candidate.fullName },
+        tx,
+      );
+      return id;
     });
 
-    return this.applicationsRepository.findCandidateApplicationById(created.id, candidate.id);
+    return this.applicationsRepository.findCandidateApplicationById(applicationId, candidate.id);
   }
 
   async listCandidateApplications(userId: string) {
@@ -100,7 +134,13 @@ export class ApplicationsService {
       throw new AppError(400, "Chỉ có thể hủy đơn khi đang ở trạng thái chờ duyệt (PENDING). Đơn đã được nhà tuyển dụng tiếp nhận không thể hủy.");
     }
 
-    await this.applicationsRepository.update(id, { status: "CANCELLED" });
+    await this.prisma.$transaction(async (tx) => {
+      await this.applicationsRepository.update(id, { status: "CANCELLED" }, tx);
+      await this.applicationsRepository.createStatusHistory(
+        { applicationId: id, fromStatus: "PENDING", toStatus: "CANCELLED", actorId: userId },
+        tx,
+      );
+    });
     return this.applicationsRepository.findCandidateApplicationById(id, candidate.id);
   }
 
@@ -153,6 +193,15 @@ export class ApplicationsService {
     // ứng viên không bao giờ thấy trạng thái mới mà thiếu thông báo, và ngược lại.
     await this.prisma.$transaction(async (tx) => {
       await this.applicationsRepository.update(id, { status: dto.status }, tx);
+      await this.applicationsRepository.createStatusHistory(
+        { applicationId: id, fromStatus: app.status, toStatus: dto.status, actorId: userId },
+        tx,
+      );
+      // Hồ sơ có kết quả thì lịch phỏng vấn chưa diễn ra không còn ý nghĩa. Không
+      // gửi INTERVIEW_CANCELLED: ứng viên đã nhận APPLICATION_STATUS_CHANGED ngay dưới.
+      if (dto.status === "REJECTED" || dto.status === "ACCEPTED") {
+        await this.interviewsRepository.cancelUpcomingForApplication(id, INTERVIEW_CANCEL_REASON_DECIDED, tx);
+      }
       await this.notificationsService.notify(
         "APPLICATION_STATUS_CHANGED",
         app.candidate.userId,

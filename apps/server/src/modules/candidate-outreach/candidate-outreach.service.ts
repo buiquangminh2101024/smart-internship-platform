@@ -3,6 +3,7 @@ import type {
   CandidateOutreachInvitationDto,
   CandidateSearchResultDto,
   MatchResult,
+  OutreachDailyQuotaStatus,
   OutreachInvitationAction,
   OutreachSettings,
   RespondOutreachInvitationResponse,
@@ -347,19 +348,44 @@ export class CandidateOutreachService {
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
+  /** Hạn mức lời mời hôm nay của công ty — chỉ đọc, dùng cho dashboard Employer (AD-16). */
+  async getDailyQuotaStatus(employer: Pick<OutreachEmployer, "companyId" | "company">): Promise<OutreachDailyQuotaStatus> {
+    const quota = await this.lookupDailyQuota(employer);
+    if (!quota) return { mode: "BLOCKED" };
+    const usedToday = await this.rateLimit.getUsedToday(employer.companyId);
+    return {
+      mode: quota.mode,
+      dailyQuota: quota.dailyQuota,
+      usedToday,
+      remainingToday: Math.max(0, quota.dailyQuota - usedToday),
+    };
+  }
+
   /**
    * Q1/D4 — hạn mức lời mời/ngày theo gói của công ty. BLOCKED ⇒ 403 (dùng cả cho
    * tìm để không cho công ty hết quyền duyệt kho ứng viên).
    */
   private async resolveDailyQuota(employer: OutreachEmployer): Promise<number> {
-    const access = await this.subscriptionsService.getCompanySubscriptionAccess(employer.company);
-    if (access.mode === "BLOCKED") {
+    const quota = await this.lookupDailyQuota(employer);
+    if (!quota) {
       throw new AppError(403, "Công ty cần có gói dịch vụ còn hiệu lực để tìm và mời ứng viên.");
     }
-    if (access.mode === "TRIAL") return DEFAULT_OUTREACH_DAILY_QUOTA;
+    return quota.dailyQuota;
+  }
+
+  /** null = BLOCKED (không có gói còn hiệu lực). */
+  private async lookupDailyQuota(
+    employer: Pick<OutreachEmployer, "companyId" | "company">,
+  ): Promise<{ mode: "TRIAL" | "SUBSCRIBED"; dailyQuota: number } | null> {
+    const access = await this.subscriptionsService.getCompanySubscriptionAccess(employer.company);
+    if (access.mode === "BLOCKED") return null;
+    if (access.mode === "TRIAL") return { mode: "TRIAL", dailyQuota: DEFAULT_OUTREACH_DAILY_QUOTA };
     // Summary của SubscriptionAccessStatus không mang hạn mức lời mời ⇒ đọc thẳng gói.
     const active = await this.companySubscriptionRepository.findActiveByCompany(employer.companyId);
-    return active?.plan.outreachInvitationDailyQuota ?? DEFAULT_OUTREACH_DAILY_QUOTA;
+    return {
+      mode: "SUBSCRIBED",
+      dailyQuota: active?.plan.outreachInvitationDailyQuota ?? DEFAULT_OUTREACH_DAILY_QUOTA,
+    };
   }
 
   private async requireEmployer(userId: string): Promise<OutreachEmployer> {

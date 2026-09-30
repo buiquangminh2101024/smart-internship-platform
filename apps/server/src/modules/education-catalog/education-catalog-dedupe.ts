@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import type { SuggestCatalogEntryResponse } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
 import type { CatalogRateLimitService } from "../shared/catalog-rate-limit.service";
+import type { CatalogSuggestionNotifier } from "../shared/catalog-suggestion-notifier.service";
 import { AUTO_MATCH_THRESHOLD, GRAY_ZONE_THRESHOLD, type ApprovedCatalogMatch } from "../skills/skill-dedupe.service";
 import { rankSkillsByName } from "../skills/skill-token-match.util";
 import type { EducationCatalogDomain, EducationCatalogRepository } from "./education-catalog.types";
@@ -16,6 +17,7 @@ export interface CatalogDedupeDeps {
   domain: EducationCatalogDomain;
   repository: EducationCatalogRepository;
   catalogRateLimitService: CatalogRateLimitService;
+  catalogSuggestionNotifier: CatalogSuggestionNotifier;
   normalize: (raw: string) => string;
 }
 
@@ -101,6 +103,7 @@ export async function suggestCatalogEntry(
   }
 
   await catalogRateLimitService.recordCreation(domain, userId);
+  await deps.catalogSuggestionNotifier.notifyAdmins(domain, created, userId);
   return { id: created.id, name: created.name, status: "PENDING", matchType: "PENDING_REVIEW" };
 }
 

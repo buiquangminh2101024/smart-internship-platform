@@ -1,7 +1,7 @@
 import type { ElementType, HTMLAttributes, ReactNode } from "react";
 
 type Padding = "none" | "sm" | "md" | "lg";
-type Tone = "default" | "brand" | "sunken" | "warning";
+type Tone = "default" | "brand" | "sunken" | "warning" | "solid";
 
 export interface CardProps extends HTMLAttributes<HTMLElement> {
   padding?: Padding;
@@ -23,6 +23,8 @@ const toneClasses: Record<Tone, string> = {
   brand: "bg-surface-brand-soft border-brand-100",
   sunken: "bg-surface-page border-border-subtle",
   warning: "bg-marigold-100 border-marigold-300",
+  // Khối tâm điểm tối của dashboard — mỗi màn hình chỉ một khối (`brand` là nền sáng).
+  solid: "bg-brand-800 border-brand-800 text-white",
 };
 
 export function Card({ padding = "md", interactive = false, tone = "default", as, className = "", children, ...rest }: CardProps) {

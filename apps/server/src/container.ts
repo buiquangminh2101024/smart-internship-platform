@@ -20,6 +20,7 @@ import { UserRepository } from "./modules/users/user.repository";
 import { CompanyRepository } from "./modules/companies/company.repository";
 import { EmployerRepository } from "./modules/employers/employer.repository";
 import { CatalogRateLimitService } from "./modules/shared/catalog-rate-limit.service";
+import { CatalogSuggestionNotifier } from "./modules/shared/catalog-suggestion-notifier.service";
 import { logger, type Logger } from "./shared/logger";
 import { config } from "./shared/config/env";
 import type { RateLimiter } from "./shared/ports/RateLimiter";
@@ -67,6 +68,9 @@ export interface Cradle {
   // chế PENDING — docs/06-backend/cv-ai-extraction-phase2/PLAN.md Quyết định #3/#4).
   catalogRateLimitService: CatalogRateLimitService;
   catalogMatchVerifier: CatalogMatchVerifier;
+  // Phụ thuộc notificationsService (đăng ký ở notificationsRouter) — chỉ resolve
+  // lúc có request nên không phụ thuộc thứ tự mount.
+  catalogSuggestionNotifier: CatalogSuggestionNotifier;
 }
 
 export function buildContainer(): AwilixContainer<Cradle> {
@@ -101,6 +105,7 @@ export function buildContainer(): AwilixContainer<Cradle> {
     ).singleton(),
     catalogRateLimitService: asClass(CatalogRateLimitService).singleton(),
     catalogMatchVerifier: asClass(GeminiCatalogMatchVerifier).singleton(),
+    catalogSuggestionNotifier: asClass(CatalogSuggestionNotifier).singleton(),
   });
 
   return container;

@@ -15,6 +15,7 @@ import type { UserRepository } from "../users/user.repository";
 import type { CompanyRepository, CompanyWriteData } from "../companies/company.repository";
 import { toCompanyDto } from "../companies/company.mapper";
 import type { NotificationsService } from "../notifications/notifications.service";
+import type { AuditLogService } from "../audit-log/audit-log.service";
 import { CompanyVerificationService } from "./company-verification.service";
 import { EmployerRepository, type EmployerWithCompany } from "./employer.repository";
 
@@ -83,6 +84,7 @@ export class EmployersService {
   private readonly logger: Logger;
   private readonly employersConfig: EmployersConfig;
   private readonly notificationsService: NotificationsService;
+  private readonly auditLogService: AuditLogService;
 
   constructor({
     prisma,
@@ -95,6 +97,7 @@ export class EmployersService {
     logger,
     config,
     notificationsService,
+    auditLogService,
   }: {
     prisma: PrismaClient;
     employerRepository: EmployerRepository;
@@ -106,6 +109,7 @@ export class EmployersService {
     logger: Logger;
     config: EmployersConfig;
     notificationsService: NotificationsService;
+    auditLogService: AuditLogService;
   }) {
     this.prisma = prisma;
     this.employerRepository = employerRepository;
@@ -117,6 +121,7 @@ export class EmployersService {
     this.logger = logger;
     this.employersConfig = config;
     this.notificationsService = notificationsService;
+    this.auditLogService = auditLogService;
   }
 
   async getMe(userId: string): Promise<EmployerMeResponse> {
@@ -223,6 +228,8 @@ export class EmployersService {
       businessLicenseUrl: businessLicenseUrl ?? null,
       verificationNote,
       rejectedAt: null,
+      // AD-16 D13 — mốc chờ của hàng đợi Admin; chỉ đổi khi nộp/nộp lại hồ sơ.
+      verificationSubmittedAt: new Date(),
       isVerified: autoVerified,
       verifiedAt: autoVerified ? new Date() : null,
       ...brandingUrls,
@@ -250,6 +257,21 @@ export class EmployersService {
       // Nhánh auto-verify là đường phổ biến nhất khiến company trở thành
       // VERIFIED (Admin duyệt tay đi qua companies.service.ts) — trước Phase 10
       // luồng này im lặng, employer không nhận được xác nhận nào.
+      await this.auditLogService.record(
+        {
+          actorId: userId,
+          actorRole: "EMPLOYER",
+          action: autoVerified ? "COMPANY_AUTO_VERIFIED" : "COMPANY_SUBMITTED",
+          entityType: "Company",
+          entityId: companyId,
+          summary: autoVerified
+            ? `Công ty ${dto.name} được xác minh tự động`
+            : `${dto.name} ${mode === "create" ? "gửi" : "gửi lại"} hồ sơ xác minh công ty`,
+          metadata: { mode },
+        },
+        tx,
+      );
+
       if (autoVerified) {
         await this.notificationsService.notify(
           "COMPANY_VERIFIED",

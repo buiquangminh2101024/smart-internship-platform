@@ -17,6 +17,7 @@ const ADMIN_SESSION_COOKIE = "sip_session_admin";
 const EMPLOYER_STAGE_COOKIE = "sip_employer_stage";
 const EMPLOYER_ONBOARDING_PATH = "/employer/hoan-tat-thu-tuc";
 const EMPLOYER_PROFILE_PATH = "/employer/profile";
+const EMPLOYER_DASHBOARD_PATH = "/employer/dashboard";
 
 const CANDIDATE_ONLY_PREFIXES = [
   "/profile",
@@ -51,7 +52,7 @@ export function proxy(request: NextRequest) {
 
     if (pathname === EMPLOYER_ONBOARDING_PATH) {
       if (stage === "pending") return NextResponse.redirect(new URL(EMPLOYER_PROFILE_PATH, request.url));
-      if (stage === "active") return NextResponse.redirect(new URL("/employer", request.url));
+      if (stage === "active") return NextResponse.redirect(new URL(EMPLOYER_DASHBOARD_PATH, request.url));
       return NextResponse.next();
     }
 

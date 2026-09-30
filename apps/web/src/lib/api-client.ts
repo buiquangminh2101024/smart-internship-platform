@@ -8,11 +8,14 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/a
 
 export class ApiError extends Error {
   readonly status: number;
+  /** `data` của phản hồi lỗi, nếu server gửi kèm (vd. lỗi từng hồ sơ khi lên lịch hàng loạt trả 409). */
+  readonly data: unknown;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, data?: unknown) {
     super(message);
     this.status = status;
     this.name = "ApiError";
+    this.data = data;
   }
 }
 
@@ -62,7 +65,7 @@ function parseBody<T>(res: RawResponse<T>): T {
     // 413 thường do gateway (nginx) trả về trang HTML, không có body JSON để đọc message.
     const fallback =
       res.status === 413 ? "Tệp tải lên quá lớn, vui lòng chọn tệp nhỏ hơn" : "Đã có lỗi xảy ra, vui lòng thử lại";
-    throw new ApiError(res.status, res.body?.error ?? res.body?.message ?? fallback);
+    throw new ApiError(res.status, res.body?.error ?? res.body?.message ?? fallback, res.body?.data);
   }
 
   return res.body.data as T;

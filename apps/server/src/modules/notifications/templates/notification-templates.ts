@@ -1,4 +1,4 @@
-import type { NotificationType } from "@prisma/client";
+import type { InterviewMode, NotificationType } from "@prisma/client";
 import type { NotificationPayloadMap, RenderedNotification } from "../notification.types";
 
 type Renderer<T extends NotificationType> = (
@@ -60,6 +60,31 @@ function formatDate(date: Date): string {
 
 function absolute(ctx: TemplateContext, path: string): string {
   return `${ctx.webBaseUrl.replace(/\/$/, "")}${path}`;
+}
+
+/** "dd/mm/yyyy HH:mm (giờ Việt Nam)" — giờ hẹn phỏng vấn. */
+function formatDateTime(date: Date): string {
+  const time = date.toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", hour12: false });
+  return `${formatDate(date)} ${time} (giờ Việt Nam)`;
+}
+
+interface InterviewLines {
+  scheduledAt: Date;
+  durationMinutes: number;
+  mode: InterviewMode;
+  location: string | null;
+  note: string | null;
+}
+
+/** Các dòng chi tiết buổi phỏng vấn trong email, theo thứ tự hiển thị. */
+function interviewLines(data: InterviewLines): string[] {
+  const lines = [
+    `Thời gian: ${formatDateTime(data.scheduledAt)}, khoảng ${data.durationMinutes} phút.`,
+    data.mode === "ONLINE" ? "Hình thức: Online." : "Hình thức: Tại văn phòng.",
+  ];
+  if (data.location) lines.push(`${data.mode === "ONLINE" ? "Liên kết họp" : "Địa chỉ"}: ${data.location}`);
+  if (data.note) lines.push(`Ghi chú: ${data.note}`);
+  return lines;
 }
 
 /**
@@ -218,6 +243,143 @@ const templates: { [T in NotificationType]: Renderer<T> } = {
         : `${name} đã từ chối lời mời cho vị trí "${data.jobPostTitle}".`,
       link: `/employer/jobs/${data.jobPostId}/candidate-search`,
       email: null,
+    };
+  },
+
+  // AD-16 — dashboard. Cố ý không gửi email: chỉ hiển thị trong app, nhóm "Hồ sơ" có đánh dấu đã đọc hàng loạt.
+  APPLICATION_RECEIVED: (data) => ({
+    title: "Có hồ sơ ứng tuyển mới",
+    body: `${data.candidateName ?? "Một ứng viên"} vừa ứng tuyển vị trí "${data.jobPostTitle}".`,
+    link: `/employer/applications/${data.applicationId}`,
+    email: null,
+  }),
+
+  // Do cron hằng ngày tạo (dedupeKey = JOB_POST_EXPIRING:{jobPostId}:{userId}); chỉ trong app.
+  JOB_POST_EXPIRING: (data) => ({
+    title: "Tin tuyển dụng sắp hết hạn",
+    body: `Tin "${data.jobPostTitle}" sẽ hết hạn vào ${formatDate(data.expiresAt)}.`,
+    link: `/employer/jobs/${data.jobPostId}`,
+    email: null,
+  }),
+
+  // Do cron hằng ngày tạo (dedupeKey = SUBSCRIPTION_EXPIRING:{subscriptionId}:{userId}); có email.
+  SUBSCRIPTION_EXPIRING: (data, ctx) => {
+    const title = "Gói dịch vụ sắp hết hạn";
+    const body = `Gói "${data.planName}" sẽ hết hạn vào ${formatDate(data.endDate)}. Gia hạn để tiếp tục đăng tin và tìm ứng viên.`;
+    const link = "/employer/subscription";
+    return {
+      title,
+      body,
+      link,
+      email: {
+        subject: `Gói dịch vụ "${data.planName}" sắp hết hạn`,
+        html: emailHtml(title, [body], { label: "Xem gói dịch vụ", url: absolute(ctx, link) }),
+      },
+    };
+  },
+
+  // Cho Admin, chỉ trong app. Trang duyệt: kỹ năng ở /admin/skills, trường/ngành ở /admin/education-catalog.
+  CATALOG_ENTRY_SUGGESTED: (data) => {
+    const label = data.entryType === "SKILL" ? "kỹ năng" : data.entryType === "UNIVERSITY" ? "trường" : "ngành";
+    return {
+      title: "Có mục danh mục chờ duyệt",
+      body: `${data.suggestedByName ?? "Một người dùng"} vừa đề xuất ${label} "${data.entryName}".`,
+      link: data.entryType === "SKILL" ? "/admin/skills" : "/admin/education-catalog",
+      email: null,
+    };
+  },
+
+  // Cho Admin, chỉ trong app. Chưa có trang giao dịch cho Admin nên trỏ tới trang công ty (D14).
+  PAYMENT_COMPLETED: (data) => ({
+    title: "Có thanh toán thành công",
+    body: `${data.companyName} đã thanh toán gói "${data.planName}" (${data.amount.toLocaleString("vi-VN")}đ).`,
+    link: `/admin/companies/${data.companyId}`,
+    email: null,
+  }),
+
+  // AD-16 M2 — lịch phỏng vấn. Ba loại dưới chỉ gửi ứng viên, có email; nội dung
+  // không nhắc tới ứng viên khác, kể cả khi lên lịch nhóm (D12).
+  INTERVIEW_SCHEDULED: (data, ctx) => {
+    const title = "Bạn có lịch phỏng vấn mới";
+    const body = `${data.companyName} mời bạn phỏng vấn vị trí "${data.jobPostTitle}" lúc ${formatDateTime(data.scheduledAt)}.`;
+    const link = "/applications";
+    return {
+      title,
+      body,
+      link,
+      email: {
+        subject: `[${data.companyName}] Lịch phỏng vấn: ${data.jobPostTitle}`,
+        html: emailHtml(title, [`${data.companyName} mời bạn phỏng vấn vị trí "${data.jobPostTitle}".`, ...interviewLines(data)], {
+          label: "Xem lịch phỏng vấn",
+          url: absolute(ctx, link),
+        }),
+      },
+    };
+  },
+
+  INTERVIEW_RESCHEDULED: (data, ctx) => {
+    const title = "Lịch phỏng vấn đã thay đổi";
+    const body = `Lịch phỏng vấn vị trí "${data.jobPostTitle}" tại ${data.companyName} đã đổi sang ${formatDateTime(data.scheduledAt)}.`;
+    const link = "/applications";
+    return {
+      title,
+      body,
+      link,
+      email: {
+        subject: `[${data.companyName}] Đổi lịch phỏng vấn: ${data.jobPostTitle}`,
+        html: emailHtml(
+          title,
+          [
+            `${data.companyName} đã cập nhật lịch phỏng vấn vị trí "${data.jobPostTitle}".`,
+            `Lịch cũ: ${formatDateTime(data.previousScheduledAt)}.`,
+            ...interviewLines(data),
+          ],
+          { label: "Xem lịch phỏng vấn", url: absolute(ctx, link) },
+        ),
+      },
+    };
+  },
+
+  INTERVIEW_CANCELLED: (data, ctx) => {
+    const title = "Lịch phỏng vấn đã bị huỷ";
+    const body = `Buổi phỏng vấn vị trí "${data.jobPostTitle}" tại ${data.companyName} lúc ${formatDateTime(data.scheduledAt)} đã bị huỷ. Lý do: ${data.reason}`;
+    const link = "/applications";
+    return {
+      title,
+      body,
+      link,
+      email: {
+        subject: `[${data.companyName}] Huỷ lịch phỏng vấn: ${data.jobPostTitle}`,
+        html: emailHtml(title, [body], { label: "Xem hồ sơ ứng tuyển", url: absolute(ctx, link) }),
+      },
+    };
+  },
+
+  // Do cron hằng ngày tạo (dedupeKey = INTERVIEW_REMINDER:{interviewId}:{userId}:{scheduledAt ms}).
+  // Ứng viên có email; employer đặt lịch chỉ nhận trong app.
+  INTERVIEW_REMINDER: (data, ctx) => {
+    const title = "Nhắc lịch phỏng vấn ngày mai";
+    if (data.recipientRole === "EMPLOYER") {
+      return {
+        title,
+        body: `Bạn có buổi phỏng vấn với ${data.candidateName ?? "ứng viên"} (vị trí "${data.jobPostTitle}") lúc ${formatDateTime(data.scheduledAt)}.`,
+        link: `/employer/applications/${data.applicationId}`,
+        email: null,
+      };
+    }
+    const body = `Bạn có buổi phỏng vấn vị trí "${data.jobPostTitle}" tại ${data.companyName} lúc ${formatDateTime(data.scheduledAt)}.`;
+    const link = "/applications";
+    return {
+      title,
+      body,
+      link,
+      email: {
+        subject: `[${data.companyName}] Nhắc lịch phỏng vấn ngày mai: ${data.jobPostTitle}`,
+        html: emailHtml(title, [`Bạn có buổi phỏng vấn vị trí "${data.jobPostTitle}" tại ${data.companyName}.`, ...interviewLines(data)], {
+          label: "Xem lịch phỏng vấn",
+          url: absolute(ctx, link),
+        }),
+      },
     };
   },
 

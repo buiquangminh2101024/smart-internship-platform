@@ -4,6 +4,7 @@ import type { Logger } from "../../shared/logger";
 import type { SkillEmbeddingService } from "./skill-embedding.service";
 import type { SkillAliasRepository } from "./skill-alias.repository";
 import type { CatalogRateLimitService } from "../shared/catalog-rate-limit.service";
+import type { CatalogSuggestionNotifier } from "../shared/catalog-suggestion-notifier.service";
 import type { SkillsRepository } from "./skills.repository";
 import { rankSkillsByName, type SkillSimilarity } from "./skill-token-match.util";
 
@@ -36,6 +37,7 @@ export class SkillDedupeService {
   private readonly skillAliasRepository: SkillAliasRepository;
   private readonly skillEmbeddingService: SkillEmbeddingService;
   private readonly catalogRateLimitService: CatalogRateLimitService;
+  private readonly catalogSuggestionNotifier: CatalogSuggestionNotifier;
   private readonly logger: Logger;
 
   constructor({
@@ -44,6 +46,7 @@ export class SkillDedupeService {
     skillAliasRepository,
     skillEmbeddingService,
     catalogRateLimitService,
+    catalogSuggestionNotifier,
     logger,
   }: {
     prisma: PrismaClient;
@@ -51,6 +54,7 @@ export class SkillDedupeService {
     skillAliasRepository: SkillAliasRepository;
     skillEmbeddingService: SkillEmbeddingService;
     catalogRateLimitService: CatalogRateLimitService;
+    catalogSuggestionNotifier: CatalogSuggestionNotifier;
     logger: Logger;
   }) {
     this.prisma = prisma;
@@ -58,6 +62,7 @@ export class SkillDedupeService {
     this.skillAliasRepository = skillAliasRepository;
     this.skillEmbeddingService = skillEmbeddingService;
     this.catalogRateLimitService = catalogRateLimitService;
+    this.catalogSuggestionNotifier = catalogSuggestionNotifier;
     this.logger = logger;
   }
 
@@ -88,6 +93,7 @@ export class SkillDedupeService {
 
     await this.storeEmbedding(created.id, name);
     await this.catalogRateLimitService.recordCreation("skill", userId);
+    await this.catalogSuggestionNotifier.notifyAdmins("skill", created, userId);
 
     return { skillId: created.id, name: created.name, status: "PENDING", matchType: "PENDING_REVIEW" };
   }

@@ -25,7 +25,7 @@ export default function EmployerOnboardingPage() {
   // cookie stage bị thiếu lúc điều hướng) — tự sửa lại hướng đi cho đúng.
   useEffect(() => {
     if (!data) return;
-    if (data.stage === "ACTIVE") router.replace("/employer");
+    if (data.stage === "ACTIVE") router.replace("/employer/dashboard");
     else if (data.stage === "PENDING_VERIFICATION") router.replace("/employer/profile");
   }, [data, router]);
 

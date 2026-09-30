@@ -104,6 +104,9 @@ export function useUpdateApplicationStatus() {
     onSuccess: (data, { id }) => {
       void queryClient.invalidateQueries({ queryKey: ["employer", "applications", id] });
       void queryClient.invalidateQueries({ queryKey: ["employer", "job-posts", data.jobPostId, "applications"] });
+      // Chỉ đánh dấu cũ: dashboard tự tải lại khi mở lại; trang dashboard tự
+      // chọn khối nào tải lại ngay (xem EmployerTaskBoard).
+      void queryClient.invalidateQueries({ queryKey: ["employer", "dashboard"], refetchType: "none" });
     },
   });
 }

@@ -78,6 +78,14 @@ export class CompanySubscriptionRepository {
     });
   }
 
+  /** Cho cron subscription-expiring-notice.job.ts: gói ACTIVE còn hạn nhưng hết trước `until`. */
+  findActiveEndingBefore(until: Date): Promise<CompanySubscriptionWithPlan[]> {
+    return this.prisma.companySubscription.findMany({
+      where: { status: "ACTIVE", endDate: { gt: new Date(), lte: until } },
+      include: { plan: true },
+    });
+  }
+
   async expireOverdue(db: Db = this.prisma): Promise<number> {
     const result = await db.companySubscription.updateMany({
       where: { status: "ACTIVE", endDate: { lt: new Date() } },

@@ -1,4 +1,17 @@
-import type { NotificationType } from "@prisma/client";
+import type { InterviewMode, NotificationType } from "@prisma/client";
+
+/** Phần chung của payload INTERVIEW_* — mọi giá trị chụp tại lúc gửi. */
+interface InterviewDetails {
+  interviewId: string;
+  applicationId: string;
+  jobPostTitle: string;
+  companyName: string;
+  scheduledAt: Date;
+  durationMinutes: number;
+  mode: InterviewMode;
+  location: string | null;
+  note: string | null;
+}
 
 /**
  * Dữ liệu đầu vào để render template cho từng loại notification. Giữ ở
@@ -36,6 +49,31 @@ export interface NotificationPayloadMap {
     candidateName: string | null;
     accepted: boolean;
   };
+  // AD-16 — dashboard Employer & Admin, docs/06-backend/dashboard-employer-admin/PLAN.md
+  APPLICATION_RECEIVED: {
+    applicationId: string;
+    jobPostId: string;
+    jobPostTitle: string;
+    candidateName: string | null;
+  };
+  JOB_POST_EXPIRING: { jobPostId: string; jobPostTitle: string; expiresAt: Date };
+  SUBSCRIPTION_EXPIRING: { subscriptionId: string; planName: string; endDate: Date };
+  CATALOG_ENTRY_SUGGESTED: {
+    entryType: "SKILL" | "UNIVERSITY" | "MAJOR";
+    entryId: string;
+    entryName: string;
+    /** D14 — họ tên ứng viên / tên công ty của người đề xuất; null thì ghi "Một người dùng". */
+    suggestedByName: string | null;
+  };
+  PAYMENT_COMPLETED: { paymentId: string; companyId: string; companyName: string; planName: string; amount: number };
+  // AD-16 M2 — lịch phỏng vấn. Ba loại đầu chỉ gửi ứng viên (có email).
+  INTERVIEW_SCHEDULED: InterviewDetails;
+  INTERVIEW_RESCHEDULED: InterviewDetails & { previousScheduledAt: Date };
+  INTERVIEW_CANCELLED: Pick<InterviewDetails, "interviewId" | "applicationId" | "jobPostTitle" | "companyName" | "scheduledAt"> & {
+    reason: string;
+  };
+  // Cron nhắc lịch gửi cả hai phía; chỉ ứng viên nhận email.
+  INTERVIEW_REMINDER: InterviewDetails & { recipientRole: "CANDIDATE" | "EMPLOYER"; candidateName: string | null };
 }
 
 // Khoá của map phải trùng khít enum Prisma: thêm giá trị vào enum mà quên khai
