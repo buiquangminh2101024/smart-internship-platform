@@ -34,12 +34,14 @@ export function EmployerHomeHeader() {
 
   return (
     <header className="sticky top-0 z-20 border-b border-border-subtle bg-white/95 backdrop-blur">
-      <div className="mx-auto flex h-[72px] max-w-6xl items-center gap-8 px-6">
-        <Link href="/employer" className="flex items-center gap-2 text-lg font-semibold text-indigo-700">
+      <div className="mx-auto flex h-[72px] max-w-6xl items-center gap-4 px-6 sm:gap-8">
+        <Link href="/employer" className="flex shrink-0 items-center gap-2 text-lg font-semibold text-indigo-700">
           InternHub
-          <span className="rounded-md bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700">Doanh nghiệp</span>
+          <span className="hidden rounded-md bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-700 md:inline">Doanh nghiệp</span>
         </Link>
-        <nav className="flex flex-1 gap-6">
+        {/* Màn hình hẹp không đủ chỗ cho menu (trang từng rộng ~800px ở 375px) — ẩn như CandidateHomeHeader.
+            Hiện từ xl: ở 1024px các link bị xuống dòng. */}
+        <nav className="hidden flex-1 gap-6 xl:flex" aria-label="Điều hướng doanh nghiệp">
           {NAV_LINKS.map((link) => (
             <Link key={link.label} href={link.href} className="text-sm text-text-body hover:text-indigo-700">
               {link.label}
@@ -47,26 +49,28 @@ export function EmployerHomeHeader() {
           ))}
         </nav>
         {!hasHydrated ? (
-          <div className="h-9 w-[260px]" aria-hidden />
+          <div className="ml-auto h-9 w-10 sm:w-[260px]" aria-hidden />
         ) : user ? (
-          <div className="flex items-center gap-3">
+          <div className="ml-auto flex items-center gap-3">
+            {/* Màn hình hẹp chỉ hiện icon; nhãn vẫn còn cho trình đọc màn hình (sr-only).
+                Email chỉ hiện khi menu đang ẩn (lg): từ xl, email dài đẩy menu xuống nhiều dòng. */}
             <Button as="a" href="/employer/jobs" variant="ghost" size="sm" icon="briefcase">
-              Tin tuyển dụng
+              <span className="sr-only sm:not-sr-only">Tin tuyển dụng</span>
             </Button>
-            <Button as="a" href="/employer/profile" variant="ghost" size="sm">
-              {user.email}
+            <Button as="a" href="/employer/profile" variant="ghost" size="sm" icon="user-round">
+              <span className="sr-only lg:not-sr-only lg:max-w-60 lg:truncate xl:sr-only">{user.email}</span>
             </Button>
             <Button variant="ghost" size="sm" onClick={handleLogout}>
               Đăng xuất
             </Button>
           </div>
         ) : (
-          <div className="flex items-center gap-2">
+          <div className="ml-auto flex items-center gap-2">
             <Button as="a" href="/login?role=EMPLOYER" variant="ghost">
-              Đăng nhập nhà tuyển dụng
+              Đăng nhập<span className="hidden md:inline"> nhà tuyển dụng</span>
             </Button>
             <Button as="a" href="/register?role=EMPLOYER" className="!bg-indigo-600 hover:!bg-indigo-700">
-              Đăng tin miễn phí
+              Đăng tin<span className="hidden md:inline"> miễn phí</span>
             </Button>
           </div>
         )}

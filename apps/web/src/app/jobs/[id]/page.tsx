@@ -7,6 +7,7 @@ import { useJobApplicationStatus } from "@/hooks/useApplications";
 import { useCandidateJobMatch } from "@/hooks/useJobMatch";
 import { JobMatchCard, JobMatchCardSkeleton } from "@/components/jobs/JobMatchCard";
 import { JobPostContent, JobPostCompanyCard, JobPostHeaderCard } from "@/components/jobs/JobPostContent";
+import { SimilarJobsSection } from "@/components/jobs/SimilarJobsSection";
 import { CandidateHomeHeader } from "@/components/marketing/CandidateHomeHeader";
 import { SiteFooter } from "@/components/marketing/SiteFooter";
 import { Button } from "@/components/ui/Button";
@@ -151,6 +152,7 @@ export default function PublicJobDetailPage({ params }: { params: Promise<{ id: 
                 </>
               }
             />
+            <SimilarJobsSection jobId={job.id} />
           </>
         )}
       </main>

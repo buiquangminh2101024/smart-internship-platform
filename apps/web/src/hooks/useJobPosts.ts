@@ -10,6 +10,7 @@ import type {
   JobPostStats,
   JobPostStatus,
   PaginatedResponse,
+  SimilarJobItem,
   UpdateJobPostRequest,
 } from "@sip/shared-types";
 import { apiFetch, publicFetch } from "@/lib/api-client";
@@ -152,5 +153,19 @@ export function usePublicJobPost(id: string) {
     staleTime: Infinity,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
+  });
+}
+
+/**
+ * "Việc làm tương tự" (docs/05-frontend/phases/similar-jobs/PLAN.md). Tải riêng,
+ * không chặn nội dung tin; lỗi thì khối tự ẩn nên không retry.
+ */
+export function useSimilarJobs(jobId: string) {
+  return useQuery({
+    queryKey: ["job-posts", jobId, "similar"],
+    queryFn: () => publicFetch<SimilarJobItem[]>(`/job-posts/${jobId}/similar`),
+    enabled: !!jobId,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
   });
 }

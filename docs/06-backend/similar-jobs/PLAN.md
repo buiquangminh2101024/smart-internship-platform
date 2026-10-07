@@ -4,7 +4,7 @@ Câu hỏi đã chốt S1–S5: `docs/temp/ADMIN_USERS_AND_SIMILAR_JOBS_DECISION
 
 Song song: `docs/05-frontend/phases/similar-jobs/PLAN.md`.
 
-**Trạng thái: J1–J4 XONG (2026-10-07), ngưỡng cosine chốt 0,6.** Frontend chưa làm. Thứ tự ưu tiên: làm **sau** `docs/06-backend/admin-users-support/PLAN.md`; thiếu thời gian thì bỏ phần này trước (H1).
+**Trạng thái: J1–J4 XONG (2026-10-07), ngưỡng cosine chốt 0,6.** Frontend SJ1–SJ2 xong cùng ngày (`docs/05-frontend/phases/similar-jobs/PLAN.md`). Thứ tự ưu tiên: làm **sau** `docs/06-backend/admin-users-support/PLAN.md`; thiếu thời gian thì bỏ phần này trước (H1).
 
 ## Quyết định đã chốt
 
