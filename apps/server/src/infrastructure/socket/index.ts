@@ -6,6 +6,7 @@ import { config } from "../../shared/config/env";
 import { logger } from "../../shared/logger";
 import type { MessagingService } from "../../modules/messaging/messaging.service";
 import type { TokenBlacklist } from "../../shared/ports/TokenBlacklist";
+import type { AccountSuspensionStore } from "../../shared/ports/AccountSuspensionStore";
 
 export function setupSocketIo(httpServer: HttpServer, container: AwilixContainer) {
   const io = new SocketIOServer(httpServer, {
@@ -35,6 +36,12 @@ export function setupSocketIo(httpServer: HttpServer, container: AwilixContainer
       
       if (isBlacklisted) {
         return next(new Error("Authentication error: Token revoked"));
+      }
+
+      // Tài khoản bị khoá không được mở kết nối mới (AD-17).
+      const accountSuspensionStore = container.resolve<AccountSuspensionStore>("accountSuspensionStore");
+      if (await accountSuspensionStore.isSuspended(decoded.sub)) {
+        return next(new Error("Authentication error: Account suspended"));
       }
 
       socket.data.user = {

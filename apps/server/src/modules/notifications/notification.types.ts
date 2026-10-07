@@ -1,4 +1,5 @@
-import type { InterviewMode, NotificationType } from "@prisma/client";
+import type { InterviewMode, NotificationType, UserStatus } from "@prisma/client";
+import type { SupportCategory } from "@sip/shared-types";
 
 /** Phần chung của payload INTERVIEW_* — mọi giá trị chụp tại lúc gửi. */
 interface InterviewDetails {
@@ -74,6 +75,16 @@ export interface NotificationPayloadMap {
   };
   // Cron nhắc lịch gửi cả hai phía; chỉ ứng viên nhận email.
   INTERVIEW_REMINDER: InterviewDetails & { recipientRole: "CANDIDATE" | "EMPLOYER"; candidateName: string | null };
+  // AD-17 — khoá/mở khoá tài khoản (gửi chính người bị khoá) và yêu cầu hỗ trợ (gửi Admin).
+  ACCOUNT_SUSPENDED: { reason: string };
+  ACCOUNT_REACTIVATED: { requiresEmailVerification: boolean };
+  SUPPORT_CONTACT_RECEIVED: {
+    email: string;
+    category: SupportCategory;
+    message: string;
+    /** Trạng thái tài khoản trùng email người gửi; null = email chưa có tài khoản. */
+    accountStatus: UserStatus | null;
+  };
 }
 
 // Khoá của map phải trùng khít enum Prisma: thêm giá trị vào enum mà quên khai

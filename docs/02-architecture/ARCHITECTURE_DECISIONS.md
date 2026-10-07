@@ -375,6 +375,36 @@ Bắt buộc thêm khi gửi duyệt (áp dụng cho cả nhánh publish thẳng
 
 **Ảnh hưởng:** `schema.prisma` và hai migration (viết bằng `prisma migrate diff` giữa hai datamodel + kiểm chứng trên shadow DB tạm); module mới `dashboard` và `audit-log`; `applications` (bọc transaction ở `createApplication`/`cancelApplication`, ghi history, thêm `APPLICATION_RECEIVED`), `job-posts` (upsert `JobPostDailyStat` ở `getPublicDetail`, ghi `AuditLog`), `companies`, `employers`, `catalog`/`skills`/`education-catalog`, `payments` (ghi `AuditLog`, thông báo Admin); `notifications` (nhóm, tham số `group`, đếm theo nhóm, loại mới + template); `candidate-outreach` (tách `getDailyQuotaStatus` thành method public); hai cron mới (`job-post-expiring-notice`, `subscription-expiring-notice`); `packages/shared-types`; `main.ts` (mount router, khởi động cron). Frontend theo `docs/05-frontend/phases/dashboard-employer-admin/PLAN.md`.
 
+## AD-17 — Khoá tài khoản có hiệu lực ngay (Redis), mã lỗi trong response HTTP, module `support`
+
+**Ngày:** 2026-10-07 · **Phase liên quan:** không thuộc phase đánh số — dùng lại `TokenBlacklist` (Phase 2), Socket.IO (Phase 9), `notify()`/outbox (Phase 10, AD-8), `audit-log` (AD-16). Kế hoạch chi tiết: `docs/06-backend/admin-users-support/PLAN.md`, `docs/05-frontend/phases/admin-users-support/PLAN.md`. Câu hỏi đã chốt: `docs/temp/ADMIN_USERS_AND_SIMILAR_JOBS_DECISIONS.md` (chủ dự án chấp nhận toàn bộ khuyến nghị ngày 2026-10-07).
+
+> **Trạng thái: ĐÃ DUYỆT (2026-10-07, gồm P1–P4). Đang triển khai: backend B0–B7 xong, còn frontend.**
+
+**Quyết định:**
+
+1. **Trạng thái khoá được kiểm ở mỗi request.** Port `AccountSuspensionStore` (adapter Redis, khoá `user-suspended:{userId}`, không TTL) được `authenticate` và handshake Socket.IO kiểm sau bước blacklist `jti`. Khoá thì ghi khoá Redis và ngắt mọi socket của user (`RealtimeNotifier.disconnectUser`); mở khoá thì xoá khoá. Ghi Redis **sau** khi transaction commit. DB vẫn là nguồn sự thật: `refresh()` và đăng nhập tiếp tục kiểm `User.status`. Mất khoá Redis thì kẽ hở tối đa vẫn là thời hạn access token (15 phút).
+2. **Response lỗi HTTP mang `code`.** `errorHandler` trả thêm `AppError.code` (nếu có), `ApiResponse` có `code?: string`, `ApiError` ở frontend có `code`. Frontend phân nhánh theo mã (ví dụ `ACCOUNT_SUSPENDED`), không so chuỗi thông báo.
+3. **Quản lý người dùng nằm trong module `users`** (route `/admin/users*` có `authorize("ADMIN")`), không tạo module `admin` (`PROJECT_STRUCTURE.md` §5). Khoá/mở khoá ghi `AuditLog` (`USER_SUSPENDED`/`USER_REACTIVATED`, `entityType = "User"`, lý do trong `metadata.reason`) và gọi `notify()` trong cùng transaction.
+4. **Module `support` riêng** cho trang hỗ trợ (bản A: `POST /support/contact` công khai, giới hạn theo IP + email, gửi tới mọi Admin bằng `notifyMany`). Bản B/C chỉ thêm bảng vào module này.
+5. **`NotificationType` thêm `ACCOUNT_SUSPENDED`, `ACCOUNT_REACTIVATED`, `SUPPORT_CONTACT_RECEIVED`** trong một migration chỉ gồm `ALTER TYPE ... ADD VALUE`. Kiểm chứng bằng shadow DB tạm riêng (không bao giờ dùng `DATABASE_URL`, xem AD-16 mục 8), áp Neon bằng `db:deploy` sau khi chủ dự án đồng ý. Nhóm thông báo mới `ACCOUNT`. *(Thực tế 2026-10-07: máy không có shadow DB tạm, nên kiểm bằng `prisma migrate diff` giữa schema HEAD và schema mới, không kết nối DB; đã áp Neon sau khi chủ dự án đồng ý.)*
+6. **Đăng nhập Google chỉ tin email khi Google đã xác thực, và không giữ mật khẩu chưa xác thực** (bổ sung 2026-10-07, sau B5).
+   - `GoogleAuthClient` từ chối token có `email_verified !== true`: 401, mã `GOOGLE_EMAIL_UNVERIFIED`.
+   - G1: liên kết Google vào tài khoản `PENDING_VERIFICATION` thì kích hoạt (`ACTIVE`, `emailVerifiedAt`) **và xoá `passwordHash`**, trong một câu cập nhật có điều kiện trạng thái (`UserRepository.linkGoogleToUnverified`).
+   - Tài khoản `ACTIVE` liên kết Google vẫn giữ mật khẩu. `SUSPENDED` chỉ liên kết, vẫn bị chặn 403.
+   - Lý do: chống chiếm tài khoản trước. Kẻ xấu đăng ký trước bằng email nạn nhân (không có OTP nên kẹt ở `PENDING_VERIFICATION`). Nếu G1 kích hoạt mà giữ mật khẩu, kẻ xấu đăng nhập được ngay khi nạn nhân dùng Google. Firebase Auth xử lý tương tự.
+   - Hệ quả: người dùng đó chỉ đăng nhập được bằng Google, giống người đăng ký bằng Google từ đầu. Hộp thoại xác nhận liên kết để sau, cùng đợt với trang hỗ trợ bản B (`docs/01-project/FEATURE_BACKLOG.md`).
+7. **Lấy đúng IP khách khi đi qua gateway Nginx** (bổ sung 2026-10-07, sau B7, chủ dự án đồng ý).
+   - Vấn đề: Nginx không gửi IP khách và Express không tin proxy, nên `req.ip` là IP của Nginx với mọi khách. Mọi giới hạn theo IP (`/support/contact`, OTP) thành giới hạn chung toàn hệ thống; `vnp_IpAddr` của VNPay cũng sai.
+   - Nginx (`infra/nginx/nginx.conf`, mọi `location /api`): `proxy_set_header X-Forwarded-For $remote_addr;` — **ghi đè**, không nối (`$proxy_add_x_forwarded_for`), để giá trị `X-Forwarded-For` khách tự gửi lên bị bỏ ở gateway.
+   - Express (`main.ts`): `app.set("trust proxy", ["loopback", "uniquelocal"])` — chỉ tin header khi kết nối đến từ loopback/mạng nội bộ (Nginx trong Docker), không dùng `true` hay đếm số hop. Khách gọi thẳng cổng 4000 từ Internet không giả được IP.
+   - Giới hạn còn lại: ai gọi thẳng cổng 4000 từ mạng nội bộ vẫn tự đặt được `X-Forwarded-For`. Khi triển khai thật chỉ mở cổng của Nginx.
+   - Giới hạn OTP theo IP (1000/giờ) giữ nguyên; hạ xuống là quyết định riêng.
+
+**Lý do:** JWT không trạng thái nên khoá trong DB không thu hồi được access token đang còn hạn. Kiểm DB ở mỗi request thì tốn thêm một truy vấn; một khoá Redis (hạ tầng sẵn có, cùng mẫu blacklist) là cách rẻ nhất để chặn ngay. Mã lỗi máy đọc được đã có ở `AppError` và kênh socket nhưng bị bỏ ở HTTP; bổ sung chung một lần thay vì để từng màn hình so chuỗi tiếng Anh.
+
+**Ảnh hưởng:** `shared/middleware/authenticate.ts`, `shared/middleware/errorHandler.ts`, `infrastructure/socket/index.ts`, `shared/ports/` (port mới + `RealtimeNotifier.disconnectUser`), `container.ts`, `modules/users`, `modules/auth` (mã lỗi; sửa liên kết Google cho tài khoản chưa xác thực), `infrastructure/google-auth-client.ts` (`email_verified`), `modules/audit-log` (hành động + truy vấn bản ghi mới nhất theo đối tượng), `modules/notifications` (3 loại, template, nhóm), module mới `support`, `main.ts` (kèm `trust proxy`), `infra/nginx/nginx.conf` (`X-Forwarded-For`), `packages/shared-types`, `schema.prisma` + 1 migration. Frontend: `lib/api-client.ts`, `LoginForm`, `/admin/users`, `/support`, map thông báo.
+
 ## Phần ghi chú của chủ dự án
 
 *(để trống)*

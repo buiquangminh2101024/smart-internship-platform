@@ -4,6 +4,7 @@ import type { Role } from "@prisma/client";
 import { AppError } from "../errors/AppError";
 import type { JwtService } from "../../modules/auth/jwt.service";
 import type { TokenBlacklist } from "../ports/TokenBlacklist";
+import type { AccountSuspensionStore } from "../ports/AccountSuspensionStore";
 
 export interface AuthenticatedUser {
   id: string;
@@ -35,11 +36,17 @@ export function authenticate(container: AwilixContainer): RequestHandler {
 
         const jwtService = container.resolve<JwtService>("jwtService");
         const tokenBlacklist = container.resolve<TokenBlacklist>("tokenBlacklist");
+        const accountSuspensionStore = container.resolve<AccountSuspensionStore>("accountSuspensionStore");
 
         const payload = jwtService.verifyAccessToken(header.slice(7));
 
         if (await tokenBlacklist.isRevoked(payload.jti)) {
           throw new AppError(401, "Token has been revoked");
+        }
+
+        // Admin khoá tài khoản ⇒ chặn ngay cả khi access token còn hạn (AD-17).
+        if (await accountSuspensionStore.isSuspended(payload.sub)) {
+          throw new AppError(401, "Account is suspended", "ACCOUNT_SUSPENDED");
         }
 
         req.user = { id: payload.sub, role: payload.role, jti: payload.jti, exp: payload.exp };

@@ -36,6 +36,11 @@ export class GoogleAuthClient {
     if (!payload?.sub || !payload.email) {
       throw new AppError(401, "Invalid Google ID token payload");
     }
+    // Email trong token chỉ đáng tin khi Google đã xác thực nó (AD-17) — luồng
+    // liên kết tài khoản theo email và G1 đều dựa vào điều này.
+    if (payload.email_verified !== true) {
+      throw new AppError(401, "Google account email is not verified", "GOOGLE_EMAIL_UNVERIFIED");
+    }
 
     return { googleId: payload.sub, email: payload.email };
   }

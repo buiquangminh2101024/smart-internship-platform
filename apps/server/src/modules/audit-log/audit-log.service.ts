@@ -5,10 +5,11 @@ import type { UserRepository } from "../users/user.repository";
 import type { AuditLogRepository, AuditLogWriteData } from "./audit-log.repository";
 
 /**
- * `metadata.reason` — lý do Admin nhập khi từ chối/gỡ tin, từ chối công ty. Dòng
+ * `metadata.reason` — lý do Admin nhập khi từ chối/gỡ tin, từ chối công ty, khoá
+ * tài khoản (AD-17, dùng lại ở users.service). Dòng
  * khác không có khoá này (hoặc metadata không phải object) ⇒ null.
  */
-function readReason(metadata: Prisma.JsonValue): string | null {
+export function readReason(metadata: Prisma.JsonValue): string | null {
   if (typeof metadata !== "object" || metadata === null || Array.isArray(metadata)) return null;
   const reason = metadata["reason"];
   return typeof reason === "string" && reason.trim() !== "" ? reason : null;

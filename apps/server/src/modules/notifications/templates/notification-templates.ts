@@ -1,4 +1,5 @@
-import type { InterviewMode, NotificationType } from "@prisma/client";
+import type { InterviewMode, NotificationType, UserStatus } from "@prisma/client";
+import type { SupportCategory } from "@sip/shared-types";
 import type { NotificationPayloadMap, RenderedNotification } from "../notification.types";
 
 type Renderer<T extends NotificationType> = (
@@ -23,6 +24,23 @@ const APPLICATION_STATUS_LABEL: Record<string, string> = {
 
 function statusLabel(status: string): string {
   return APPLICATION_STATUS_LABEL[status] ?? status;
+}
+
+const SUPPORT_CATEGORY_LABEL: Record<SupportCategory, string> = {
+  ACCOUNT_SUSPENDED: "Tài khoản bị khoá",
+  OTHER: "Vấn đề khác",
+};
+
+const USER_STATUS_LABEL: Record<UserStatus, string> = {
+  PENDING_VERIFICATION: "chưa xác thực email",
+  ACTIVE: "đang hoạt động",
+  SUSPENDED: "đang bị khoá",
+};
+
+/** Cắt chuỗi về tối đa `max` ký tự, thêm "…" nếu bị cắt. */
+function excerpt(value: string, max: number): string {
+  const text = value.replace(/\s+/g, " ").trim();
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
 }
 
 function escapeHtml(value: string): string {
@@ -379,6 +397,70 @@ const templates: { [T in NotificationType]: Renderer<T> } = {
           label: "Xem lịch phỏng vấn",
           url: absolute(ctx, link),
         }),
+      },
+    };
+  },
+
+  // AD-17 — gửi chính người bị khoá. Người dùng chỉ thấy bản trong app sau khi
+  // được mở khoá, nên email mới là kênh báo tin chính.
+  ACCOUNT_SUSPENDED: (data, ctx) => {
+    const title = "Tài khoản của bạn đã bị khoá";
+    const body = `Tài khoản của bạn đã bị quản trị viên khoá. Lý do: ${data.reason}`;
+    return {
+      title,
+      body,
+      link: "/support",
+      email: {
+        subject: "Tài khoản của bạn đã bị khoá",
+        html: emailHtml(title, [body, "Nếu bạn cho rằng đây là nhầm lẫn, hãy gửi yêu cầu hỗ trợ cho quản trị viên."], {
+          label: "Liên hệ hỗ trợ",
+          url: absolute(ctx, "/support?category=ACCOUNT_SUSPENDED"),
+        }),
+      },
+    };
+  },
+
+  ACCOUNT_REACTIVATED: (data, ctx) => {
+    const title = "Tài khoản của bạn đã được mở khoá";
+    const body = data.requiresEmailVerification
+      ? "Tài khoản của bạn đã được mở khoá. Bạn cần xác thực email khi đăng nhập lại."
+      : "Tài khoản của bạn đã được mở khoá. Bạn có thể đăng nhập lại bình thường.";
+    const link = "/login";
+    return {
+      title,
+      body,
+      link,
+      email: {
+        subject: "Tài khoản của bạn đã được mở khoá",
+        html: emailHtml(title, [body], { label: "Đăng nhập", url: absolute(ctx, link) }),
+      },
+    };
+  },
+
+  // Gửi mọi Admin, có email kèm toàn văn lời nhắn (trong app chỉ hiện trích đoạn).
+  // Admin trả lời người gửi qua email riêng — nền tảng không có hộp thư hỗ trợ.
+  SUPPORT_CONTACT_RECEIVED: (data, ctx) => {
+    const title = `Yêu cầu hỗ trợ mới từ ${data.email}`;
+    const category = `Loại vấn đề: ${SUPPORT_CATEGORY_LABEL[data.category]}.`;
+    const account = `Tài khoản: ${data.accountStatus ? USER_STATUS_LABEL[data.accountStatus] : "không có tài khoản dùng email này"}.`;
+    const link = `/admin/users?q=${encodeURIComponent(data.email)}`;
+    return {
+      title,
+      body: `${category} ${account} Nội dung: ${excerpt(data.message, 160)}`,
+      link,
+      email: {
+        subject: `[Hỗ trợ] ${SUPPORT_CATEGORY_LABEL[data.category]} — ${data.email}`,
+        html: emailHtml(
+          title,
+          [
+            `Email người gửi: ${data.email}`,
+            category,
+            account,
+            "Nội dung:",
+            ...data.message.split(/\r?\n/).filter((line) => line.trim() !== ""),
+          ],
+          { label: "Xem người dùng", url: absolute(ctx, link) },
+        ),
       },
     };
   },

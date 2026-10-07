@@ -46,6 +46,7 @@ import type { NotificationsService } from "./modules/notifications/notifications
 import type { EmailSender } from "./shared/ports/EmailSender";
 import { auditLogRouter } from "./modules/audit-log/audit-log.routes";
 import { dashboardRouter } from "./modules/dashboard/dashboard.routes";
+import { supportRouter } from "./modules/support/support.routes";
 import { startJobPostExpiringNoticeJob } from "./modules/job-posts/job-post-expiring-notice.job";
 import { startSubscriptionExpiringNoticeJob } from "./modules/subscriptions/subscription-expiring-notice.job";
 import type { EmployerRepository } from "./modules/employers/employer.repository";
@@ -59,6 +60,9 @@ import { logger } from "./shared/logger";
 const container = buildContainer();
 
 const app = express();
+// Sau gateway Nginx (AD-17 mục 7): lấy req.ip từ X-Forwarded-For, nhưng chỉ khi
+// kết nối đến từ loopback/mạng nội bộ — gọi thẳng cổng 4000 từ ngoài không giả được IP.
+app.set("trust proxy", ["loopback", "uniquelocal"]);
 
 // Tạo httpServer + Socket.IO trước khi mount router để realtimeNotifier có mặt
 // trong container ngay từ đầu (route vẫn thêm được vào `app` sau đó). Socket.IO
@@ -113,6 +117,8 @@ app.use("/api", notificationsRouter(container));
 app.use("/api", auditLogRouter(container));
 // Chỉ đọc (AD-16); các service nó gọi resolve lúc có request.
 app.use("/api", dashboardRouter(container));
+// Trang hỗ trợ bản A (AD-17) — công khai; notificationsService resolve lúc có request.
+app.use("/api", supportRouter(container));
 
 app.use(errorHandler);
 

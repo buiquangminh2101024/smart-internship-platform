@@ -42,7 +42,14 @@ export type NotificationType =
   | "INTERVIEW_SCHEDULED"
   | "INTERVIEW_RESCHEDULED"
   | "INTERVIEW_CANCELLED"
-  | "INTERVIEW_REMINDER";
+  | "INTERVIEW_REMINDER"
+  // AD-17 — khoá/mở khoá tài khoản, yêu cầu hỗ trợ
+  | "ACCOUNT_SUSPENDED"
+  | "ACCOUNT_REACTIVATED"
+  | "SUPPORT_CONTACT_RECEIVED";
+
+/** Loại vấn đề của form /support (AD-17). */
+export type SupportCategory = "ACCOUNT_SUSPENDED" | "OTHER";
 
 export type InterviewMode = "ONLINE" | "ONSITE";
 
@@ -56,6 +63,8 @@ export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;
+  /** Mã lỗi máy đọc được khi lỗi mang `AppError.code` (AD-17), ví dụ "ACCOUNT_SUSPENDED". */
+  code?: string;
   message?: string;
 }
 
@@ -135,6 +144,52 @@ export interface UserProfile {
   role: Role;
   status: UserStatus;
   emailVerifiedAt: string | null;
+}
+
+// ─── Quản lý người dùng (Admin, AD-17) ───────────────────────────────────
+
+/** GET /admin/users — `q` tìm theo email, không phân biệt hoa thường. */
+export interface AdminUserListQuery {
+  role?: Role;
+  status?: UserStatus;
+  q?: string;
+  cursor?: string;
+}
+
+/** Lần khoá gần nhất (AuditLog `USER_SUSPENDED`), chỉ có khi đang `SUSPENDED`. */
+export interface AdminUserSuspension {
+  reason: string | null;
+  /** Email Admin đã khoá; null nếu tài khoản Admin đó không còn. */
+  byEmail: string | null;
+  at: string;
+}
+
+export interface AdminUserListItem {
+  id: string;
+  email: string;
+  role: Role;
+  status: UserStatus;
+  /** Ứng viên: họ tên; Employer: tên công ty; null nếu chưa có hồ sơ hoặc là Admin. */
+  name: string | null;
+  /** Công ty của Employer, để mở trang công ty; null với vai trò khác. */
+  companyId: string | null;
+  /** null ⇒ mở khoá sẽ về `PENDING_VERIFICATION` (U4). */
+  emailVerifiedAt: string | null;
+  createdAt: string;
+  suspension: AdminUserSuspension | null;
+}
+
+/** POST /admin/users/:id/suspend */
+export interface SuspendUserRequest {
+  reason: string;
+}
+
+/** POST /support/contact — công khai, luôn trả "Đã gửi yêu cầu" (AD-17, H1–H4). */
+export interface SupportContactRequest {
+  email: string;
+  category: SupportCategory;
+  /** 20–2000 ký tự sau khi trim. */
+  message: string;
 }
 
 // ─── Catalog (danh mục dùng chung, admin-managed) ────────────────────────
@@ -1175,7 +1230,8 @@ export type NotificationGroup =
   | "INTERVIEWS"
   | "SUBSCRIPTION"
   | "CATALOG"
-  | "PAYMENTS";
+  | "PAYMENTS"
+  | "ACCOUNT";
 
 /** GET /notifications/unread-count/by-group — `groups` chỉ gồm các nhóm của vai trò hiện tại, nhóm trống = 0. */
 export interface UnreadCountByGroupResponse {

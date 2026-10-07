@@ -20,8 +20,11 @@ export const AUDIT_ACTIONS = [
   "CATALOG_ENTRY_MERGED",
   // Thanh toán
   "PAYMENT_COMPLETED",
+  // Tài khoản người dùng (AD-17)
+  "USER_SUSPENDED",
+  "USER_REACTIVATED",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
-export type AuditEntityType = "JobPost" | "Company" | "Skill" | "University" | "Major" | "Subscription";
+export type AuditEntityType = "JobPost" | "Company" | "Skill" | "University" | "Major" | "Subscription" | "User";

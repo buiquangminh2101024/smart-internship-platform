@@ -38,4 +38,6 @@ export interface RealtimeNotifier {
   pushMessageToUser(userId: string, payload: RealtimeMessagePayload): Promise<void> | void;
   /** Event `conversation:unavailable` — khoá gửi tin ở phía chưa xoá. */
   notifyConversationUnavailable(userId: string, payload: ConversationUnavailablePayload): Promise<void> | void;
+  /** Ngắt mọi socket đang mở của user — gọi sau khi Admin khoá tài khoản (AD-17). */
+  disconnectUser(userId: string): Promise<void> | void;
 }
