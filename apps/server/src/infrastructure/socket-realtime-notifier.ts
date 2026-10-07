@@ -37,6 +37,14 @@ export class SocketIoRealtimeNotifier implements RealtimeNotifier {
     this.emit(userId, REALTIME_EVENT_CONVERSATION_UNAVAILABLE, payload);
   }
 
+  disconnectUser(userId: string): void {
+    try {
+      this.io.in(`user:${userId}`).disconnectSockets(true);
+    } catch (error) {
+      this.logger.error("Ngắt socket của user thất bại", { userId, error });
+    }
+  }
+
   private emit(userId: string, event: string, payload: unknown): void {
     try {
       this.io.to(`user:${userId}`).emit(event, payload);

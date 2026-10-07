@@ -12,6 +12,7 @@ import { JobRecommendationRepository } from "./job-recommendation.repository";
 import { JobRecommendationService } from "./job-recommendation.service";
 import { MatchEmbeddingRepository } from "./match-embedding.repository";
 import { MatchEmbeddingService } from "./match-embedding.service";
+import { SimilarJobsService } from "./similar-jobs.service";
 import { ScoringJobMatcher } from "./scoring-job-matcher";
 
 export function jobMatchingRouter(container: AwilixContainer): Router {
@@ -29,6 +30,8 @@ export function jobMatchingRouter(container: AwilixContainer): Router {
     // "Việc làm phù hợp" (AD-14) — candidate-insights cũng resolve jobRecommendationService.
     jobRecommendationRepository: asClass(JobRecommendationRepository).singleton(),
     jobRecommendationService: asClass(JobRecommendationService).singleton(),
+    // "Việc làm tương tự" ở trang chi tiết tin (docs/06-backend/similar-jobs/PLAN.md).
+    similarJobsService: asClass(SimilarJobsService).singleton(),
     jobMatchingController: asClass(JobMatchingController).singleton(),
   });
 
@@ -36,6 +39,11 @@ export function jobMatchingRouter(container: AwilixContainer): Router {
   const resolveController = () => container.resolve<JobMatchingController>("jobMatchingController");
   const candidateGuard = [authenticate(container), authorize("CANDIDATE")];
   const employerGuard = [authenticate(container), authorize("EMPLOYER")];
+
+  // --- Công khai ---
+  router.get("/job-posts/:id/similar", (req, res, next) => {
+    void resolveController().listSimilarJobs(req, res, next);
+  });
 
   // --- Candidate ---
   router.get("/candidate/job-posts/:id/match", ...candidateGuard, (req, res, next) => {

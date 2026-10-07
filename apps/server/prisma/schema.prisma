@@ -79,6 +79,9 @@ enum NotificationType {
   INTERVIEW_RESCHEDULED // AD-16 M2 — ứng viên: lịch phỏng vấn bị đổi
   INTERVIEW_CANCELLED // AD-16 M2 — ứng viên: lịch phỏng vấn bị huỷ
   INTERVIEW_REMINDER // AD-16 M2 — ứng viên + employer đặt lịch: nhắc trước một ngày (cron)
+  ACCOUNT_SUSPENDED // AD-17 — người dùng: tài khoản bị Admin khoá (kèm lý do)
+  ACCOUNT_REACTIVATED // AD-17 — người dùng: tài khoản được mở khoá
+  SUPPORT_CONTACT_RECEIVED // AD-17 — Admin: có yêu cầu hỗ trợ mới từ trang /support
 }
 
 // AD-16 M2 — lịch phỏng vấn. "Đã diễn ra" suy ra từ scheduledAt, không lưu COMPLETED.

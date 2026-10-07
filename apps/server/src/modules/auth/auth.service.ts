@@ -116,7 +116,7 @@ export class AuthService {
       throw new AppError(403, "Email not verified — please verify the OTP sent at registration");
     }
     if (user.status === "SUSPENDED") {
-      throw new AppError(403, "Account is suspended");
+      throw new AppError(403, "Account is suspended", "ACCOUNT_SUSPENDED");
     }
 
     return this.issueTokens(user);
@@ -134,7 +134,12 @@ export class AuthService {
         if (existingByEmail.role === "ADMIN") {
           throw new AppError(403, "Google sign-in is not available for this account");
         }
-        user = await this.userRepository.linkGoogleId(existingByEmail.id, profile.googleId);
+        // G1 (AD-17): Google đã xác thực email ⇒ tài khoản chờ xác thực được kích hoạt
+        // (kèm xoá mật khẩu chưa xác thực). SUSPENDED chỉ liên kết, vẫn bị chặn bên dưới.
+        user =
+          existingByEmail.status === "PENDING_VERIFICATION"
+            ? await this.userRepository.linkGoogleToUnverified(existingByEmail.id, profile.googleId)
+            : await this.userRepository.linkGoogleId(existingByEmail.id, profile.googleId);
       } else {
         user = await this.userRepository.createWithGoogle({
           email: profile.email,
@@ -145,7 +150,7 @@ export class AuthService {
     }
 
     if (user.status === "SUSPENDED") {
-      throw new AppError(403, "Account is suspended");
+      throw new AppError(403, "Account is suspended", "ACCOUNT_SUSPENDED");
     }
 
     return this.issueTokens(user);

@@ -24,6 +24,9 @@ export const NOTIFICATION_GROUP_BY_TYPE: Record<NotificationType, NotificationGr
   INTERVIEW_RESCHEDULED: "INTERVIEWS",
   INTERVIEW_CANCELLED: "INTERVIEWS",
   INTERVIEW_REMINDER: "INTERVIEWS",
+  ACCOUNT_SUSPENDED: "ACCOUNT",
+  ACCOUNT_REACTIVATED: "ACCOUNT",
+  SUPPORT_CONTACT_RECEIVED: "ACCOUNT",
 };
 
 // Record<NotificationGroup, ...> ép liệt kê đủ nhóm của shared-types — nguồn cho
@@ -37,15 +40,17 @@ const GROUP_KEYS: Record<NotificationGroup, true> = {
   SUBSCRIPTION: true,
   CATALOG: true,
   PAYMENTS: true,
+  ACCOUNT: true,
 };
 export const NOTIFICATION_GROUPS = Object.keys(GROUP_KEYS) as [NotificationGroup, ...NotificationGroup[]];
 
 // Thứ tự = thứ tự tab trên giao diện. Employer chỉ nhận INTERVIEW_REMINDER trong
-// nhóm INTERVIEWS (ba loại còn lại gửi ứng viên).
+// nhóm INTERVIEWS (ba loại còn lại gửi ứng viên). ACCOUNT (AD-17): ứng viên/NTD nhận
+// thông báo khoá/mở khoá, Admin nhận yêu cầu hỗ trợ.
 export const NOTIFICATION_GROUPS_BY_ROLE: Record<Role, NotificationGroup[]> = {
-  CANDIDATE: ["APPLICATIONS", "INTERVIEWS", "INVITATIONS"],
-  EMPLOYER: ["APPLICATIONS", "JOB_POSTS", "COMPANY", "INVITATIONS", "INTERVIEWS", "SUBSCRIPTION"],
-  ADMIN: ["JOB_POSTS", "COMPANY", "CATALOG", "PAYMENTS"],
+  CANDIDATE: ["APPLICATIONS", "INTERVIEWS", "INVITATIONS", "ACCOUNT"],
+  EMPLOYER: ["APPLICATIONS", "JOB_POSTS", "COMPANY", "INVITATIONS", "INTERVIEWS", "SUBSCRIPTION", "ACCOUNT"],
+  ADMIN: ["JOB_POSTS", "COMPANY", "CATALOG", "PAYMENTS", "ACCOUNT"],
 };
 
 export function typesInGroup(group: NotificationGroup): NotificationType[] {

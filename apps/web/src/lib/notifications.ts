@@ -68,6 +68,9 @@ export const NOTIFICATION_GROUP_BY_TYPE: Record<NotificationType, NotificationGr
   INTERVIEW_RESCHEDULED: "INTERVIEWS",
   INTERVIEW_CANCELLED: "INTERVIEWS",
   INTERVIEW_REMINDER: "INTERVIEWS",
+  ACCOUNT_SUSPENDED: "ACCOUNT",
+  ACCOUNT_REACTIVATED: "ACCOUNT",
+  SUPPORT_CONTACT_RECEIVED: "ACCOUNT",
 };
 
 export const NOTIFICATION_GROUP_META: Record<NotificationGroup, { label: string; icon: string }> = {
@@ -79,6 +82,7 @@ export const NOTIFICATION_GROUP_META: Record<NotificationGroup, { label: string;
   SUBSCRIPTION: { label: "Gói dịch vụ", icon: "credit-card" },
   CATALOG: { label: "Danh mục", icon: "tag" },
   PAYMENTS: { label: "Thanh toán", icon: "wallet" },
+  ACCOUNT: { label: "Tài khoản", icon: "user-cog" },
 };
 
 /**
@@ -106,6 +110,10 @@ export const NOTIFICATION_ACTION_LABEL: Record<NotificationType, string> = {
   INTERVIEW_RESCHEDULED: "Xem lịch phỏng vấn",
   INTERVIEW_CANCELLED: "Xem hồ sơ ứng tuyển",
   INTERVIEW_REMINDER: "Xem lịch phỏng vấn",
+  // Người bị khoá không vào được trang nào cần đăng nhập — link trỏ về /support (AD-17).
+  ACCOUNT_SUSPENDED: "Liên hệ hỗ trợ",
+  ACCOUNT_REACTIVATED: "Đăng nhập",
+  SUPPORT_CONTACT_RECEIVED: "Xem người dùng",
 };
 
 /** Loại cảnh báo (bị từ chối, bị gỡ, sắp hết hạn): tô marigold thay màu khu vực. */
@@ -115,6 +123,7 @@ export const WARNING_NOTIFICATION_TYPES: ReadonlySet<NotificationType> = new Set
   "JOB_POST_EXPIRING",
   "COMPANY_REJECTED",
   "SUBSCRIPTION_EXPIRING",
+  "ACCOUNT_SUSPENDED",
 ]);
 
 export function formatRelativeTime(iso: string): string {

@@ -38,4 +38,8 @@ export class NoopRealtimeNotifier implements RealtimeNotifier {
       conversationId: payload.conversationId,
     });
   }
+
+  disconnectUser(userId: string): void {
+    this.logger.info("Realtime disconnect skipped (Socket.IO không khả dụng)", { userId });
+  }
 }

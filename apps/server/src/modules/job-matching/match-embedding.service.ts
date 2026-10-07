@@ -100,6 +100,21 @@ export class MatchEmbeddingService {
     }
   }
 
+  /**
+   * "Việc làm tương tự" (S3): bảo đảm riêng tin đang xem có vector khớp hash hiện tại.
+   * false nếu không tính được (model lỗi, văn bản rỗng, lỗi DB) ⇒ gọi bên rơi về
+   * nhánh kỹ năng trùng.
+   */
+  async ensureJobVector(job: EmbeddingTarget): Promise<boolean> {
+    try {
+      const ready = await this.ensureVectors("job", [job], 1);
+      return ready.has(job.id);
+    } catch (error) {
+      this.logger.error("Match embedding failed — similar jobs fall back to shared skills", { error });
+      return false;
+    }
+  }
+
   /** Bảo đảm mỗi target có vector khớp hash hiện tại; trả về tập id đã sẵn sàng. */
   private async ensureVectors(kind: EmbeddingKind, targets: EmbeddingTarget[], maxNew: number): Promise<Set<string>> {
     const byId = new Map<string, EmbeddingTarget>();

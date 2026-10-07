@@ -13,14 +13,14 @@ import { SocketProvider } from "@/components/realtime/SocketProvider";
 // Bố cục theo ảnh mẫu `Screenshot 2026-09-12 134326.png` (panel 1 & 2): header
 // "Admin Panel / System Control" + các mục. "Tổng quan" là dashboard AD-16 ở
 // `/admin/dashboard` vì `/admin` là trang đăng nhập bí mật (AD-1). "Người dùng"
-// và "Báo cáo" chưa có module nên để disable.
+// là trang quản lý tài khoản (AD-17); "Báo cáo" chưa có module nên để disable.
 const NAV_ITEMS: SideNavItem[] = [
   { label: "Tổng quan", icon: "layout-dashboard", href: "/admin/dashboard" },
   { label: "Tin tuyển dụng", icon: "clipboard-check", href: "/admin/jobs", matchNested: true },
   { label: "Nhà tuyển dụng", icon: "building-2", href: "/admin/companies", matchNested: true },
   { label: "Kỹ năng", icon: "sparkles", href: "/admin/skills", matchNested: true },
   { label: "Danh mục học vấn", icon: "graduation-cap", href: "/admin/education-catalog", matchNested: true },
-  { label: "Người dùng", icon: "users", soon: true },
+  { label: "Người dùng", icon: "users", href: "/admin/users" },
   { label: "Báo cáo", icon: "flag", soon: true },
   { label: "Cài đặt", icon: "settings", href: "/admin/settings" },
 ];
@@ -31,6 +31,7 @@ const CRUMB_LABELS: Record<string, string> = {
   companies: "Nhà tuyển dụng",
   skills: "Kỹ năng",
   "education-catalog": "Danh mục học vấn",
+  users: "Người dùng",
   notifications: "Thông báo",
   settings: "Cài đặt",
 };

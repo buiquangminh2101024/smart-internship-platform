@@ -15,9 +15,9 @@ export type NotificationCenterTab = "ALL" | NotificationGroup;
 
 /** Thứ tự tab theo khu vực — khớp `NOTIFICATION_GROUPS_BY_ROLE` phía server. */
 export const NOTIFICATION_GROUPS_BY_AREA: Record<AuthArea, NotificationGroup[]> = {
-  candidate: ["APPLICATIONS", "INTERVIEWS", "INVITATIONS"],
-  employer: ["APPLICATIONS", "JOB_POSTS", "COMPANY", "INVITATIONS", "INTERVIEWS", "SUBSCRIPTION"],
-  admin: ["JOB_POSTS", "COMPANY", "CATALOG", "PAYMENTS"],
+  candidate: ["APPLICATIONS", "INTERVIEWS", "INVITATIONS", "ACCOUNT"],
+  employer: ["APPLICATIONS", "JOB_POSTS", "COMPANY", "INVITATIONS", "INTERVIEWS", "SUBSCRIPTION", "ACCOUNT"],
+  admin: ["JOB_POSTS", "COMPANY", "CATALOG", "PAYMENTS", "ACCOUNT"],
 };
 
 /**

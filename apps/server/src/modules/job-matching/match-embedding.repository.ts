@@ -82,6 +82,29 @@ export class MatchEmbeddingRepository {
     `);
     return new Map(rows.map((row) => [row.id, Number(row.cosine)]));
   }
+
+  /**
+   * "Việc làm tương tự" (docs/06-backend/similar-jobs/PLAN.md): `take` tin gần tin
+   * `jobPostId` nhất, cosine giảm dần. Chỉ tin PUBLISHED còn hạn (S5) và chỉ vector
+   * cùng model + templateVersion với tin gốc (S7). Tin gốc chưa có vector ⇒ [].
+   */
+  async nearestJobs(jobPostId: string, take: number): Promise<Array<{ id: string; cosine: number }>> {
+    const rows = await this.prisma.$queryRaw<Array<{ id: string; cosine: number }>>(Prisma.sql`
+      SELECT o."jobPostId" AS id, 1 - (o."embedding" <=> s."embedding") AS cosine
+      FROM job_post_embeddings s
+      JOIN job_post_embeddings o
+        ON o."jobPostId" <> s."jobPostId"
+       AND o."model" = s."model"
+       AND o."templateVersion" = s."templateVersion"
+      JOIN job_posts p ON p."id" = o."jobPostId"
+      WHERE s."jobPostId" = ${jobPostId}
+        AND p."status" = 'PUBLISHED'
+        AND (p."expiresAt" IS NULL OR p."expiresAt" > now())
+      ORDER BY o."embedding" <=> s."embedding"
+      LIMIT ${take}
+    `);
+    return rows.map((row) => ({ id: row.id, cosine: Number(row.cosine) }));
+  }
 }
 
 function identifier(name: string): Prisma.Sql {

@@ -78,8 +78,8 @@ export function CandidateHomeHeader() {
 
   return (
     <header className="sticky top-0 z-20 border-b border-border-subtle bg-white/95 backdrop-blur">
-      <div className="mx-auto flex h-[72px] max-w-6xl items-center gap-8 px-6">
-        <Link href="/" className="text-lg font-semibold text-pine-800">InternHub</Link>
+      <div className="mx-auto flex h-[72px] max-w-6xl items-center gap-4 px-6 sm:gap-8">
+        <Link href="/" className="shrink-0 text-lg font-semibold text-pine-800">InternHub</Link>
         <nav className="hidden flex-1 gap-6 md:flex" aria-label="Điều hướng chính">
           {NAV_LINKS.map((link) => (
             <Link key={link.label} href={link.href} className="text-sm text-text-body hover:text-pine-700">{link.label}</Link>
@@ -169,7 +169,11 @@ export function CandidateHomeHeader() {
         ) : (
           <div className="ml-auto flex items-center gap-2">
             <Button as="a" href="/login" variant="ghost">Đăng nhập</Button>
-            <Button as="a" href="/register">Tạo hồ sơ miễn phí</Button>
+            <Button as="a" href="/register">
+              {/* Màn hình hẹp (375px) không đủ chỗ cho nhãn đầy đủ — trang bị cuộn ngang. */}
+              <span className="sm:hidden">Tạo hồ sơ</span>
+              <span className="hidden sm:inline">Tạo hồ sơ miễn phí</span>
+            </Button>
           </div>
         )}
       </div>

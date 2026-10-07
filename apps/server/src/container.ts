@@ -5,6 +5,7 @@ import { prisma } from "./infrastructure/prisma";
 import { redis } from "./infrastructure/redis";
 import { RedisRateLimiter } from "./infrastructure/redis-rate-limiter";
 import { RedisTokenBlacklist } from "./infrastructure/redis-token-blacklist";
+import { RedisAccountSuspensionStore } from "./infrastructure/redis-account-suspension-store";
 import { RedisOtpStore } from "./infrastructure/redis-otp-store";
 import { ResendEmailSender } from "./infrastructure/resend-email-sender";
 import { ConsoleEmailSender } from "./infrastructure/console-email-sender";
@@ -25,6 +26,7 @@ import { logger, type Logger } from "./shared/logger";
 import { config } from "./shared/config/env";
 import type { RateLimiter } from "./shared/ports/RateLimiter";
 import type { TokenBlacklist } from "./shared/ports/TokenBlacklist";
+import type { AccountSuspensionStore } from "./shared/ports/AccountSuspensionStore";
 import type { OtpStore } from "./shared/ports/OtpStore";
 import type { EmailSender } from "./shared/ports/EmailSender";
 import type { RealtimeNotifier } from "./shared/ports/RealtimeNotifier";
@@ -46,6 +48,8 @@ export interface Cradle {
   redis: Redis;
   rateLimiter: RateLimiter;
   tokenBlacklist: TokenBlacklist;
+  // Cờ khoá tài khoản cho authenticate/Socket.IO (AD-17).
+  accountSuspensionStore: AccountSuspensionStore;
   otpStore: OtpStore;
   emailSender: EmailSender;
   // Bản Socket.IO khi gateway khởi tạo được, fallback no-op nếu lỗi —
@@ -83,6 +87,7 @@ export function buildContainer(): AwilixContainer<Cradle> {
     redis: asValue(redis),
     rateLimiter: asClass(RedisRateLimiter).singleton(),
     tokenBlacklist: asClass(RedisTokenBlacklist).singleton(),
+    accountSuspensionStore: asClass(RedisAccountSuspensionStore).singleton(),
     otpStore: asClass(RedisOtpStore).singleton(),
     emailSender: config.DEV_SKIP_EMAIL_SENDING
       ? asClass(ConsoleEmailSender).singleton()

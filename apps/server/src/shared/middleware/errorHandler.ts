@@ -6,6 +6,7 @@ import { logger } from "../logger";
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof AppError) {
     const body: ApiResponse = { success: false, error: err.message };
+    if (err.code) body.code = err.code;
     res.status(err.statusCode).json(body);
     return;
   }
