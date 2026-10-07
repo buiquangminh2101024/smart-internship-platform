@@ -55,6 +55,18 @@ export const RECOMMENDATION_POOL_SIZE = 50;
 /** Giai đoạn B: số tin điểm rule cao nhất được chấm lại bằng hybrid. */
 export const RECOMMENDATION_RERANK_SIZE = 20;
 
+// "Việc làm tương tự" ở trang chi tiết tin (docs/06-backend/similar-jobs/PLAN.md, S4).
+/** Số tin tối đa trả về. */
+export const SIMILAR_JOBS_LIMIT = 4;
+// 0.6 chốt 2026-10-07 sau J4 (10 tin): các cặp hợp lý đều ≥ 0.6, 0.5 lọt cặp lạc (Kế toán ↔
+// QA Automation 0.598). Đo lại khi > ~50 tin công khai hoặc đổi model/templateVersion.
+/** Cosine tối thiểu giữa hai tin (nhánh vector). */
+export const SIMILAR_JOBS_MIN_COSINE = 0.6;
+/** Số tin gần nhất lấy từ SQL trước khi lọc theo ngưỡng. */
+export const SIMILAR_JOBS_POOL = 20;
+/** Số tên kỹ năng trùng tối đa trên mỗi thẻ. */
+export const SIMILAR_JOBS_MAX_SHARED_SKILLS = 3;
+
 /** Tỉ lệ số năm tối thiểu để kinh nghiệm được xếp PARTIAL thay vì BELOW. */
 export const EXPERIENCE_PARTIAL_RATIO = 0.5;
 

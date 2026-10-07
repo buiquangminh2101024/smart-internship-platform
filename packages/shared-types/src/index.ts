@@ -776,6 +776,17 @@ export interface JobRecommendationList {
   items: JobRecommendation[];
 }
 
+// ─── Việc làm tương tự (trang chi tiết tin) ──────────────────────────────
+// docs/06-backend/similar-jobs/PLAN.md. Công khai, tối đa 4 tin; rỗng ⇒ ẩn khối.
+
+export interface SimilarJobItem {
+  jobPost: JobPost;
+  /** Cosine giữa vector hai tin; null khi xếp theo kỹ năng trùng (nhánh dự phòng S6). */
+  similarity: number | null;
+  /** Tên kỹ năng (đã duyệt) trùng với tin đang xem, tối đa 3; có thể rỗng ở nhánh vector. */
+  sharedSkills: string[];
+}
+
 // ─── Tìm & mời ứng viên (B3, AD-15) ──────────────────────────────────────
 // docs/06-backend/candidate-outreach/PLAN.md. Không bao giờ có phone/email/
 // dateOfBirth — NTD liên hệ qua lời mời/hội thoại.

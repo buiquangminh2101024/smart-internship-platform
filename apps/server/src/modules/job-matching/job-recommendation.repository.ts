@@ -1,4 +1,4 @@
-import type { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import type { JobPost as JobPostDto } from "@sip/shared-types";
 import { toJobPostDto } from "../job-posts/job-post.mapper";
 import { jobPostInclude } from "../job-posts/job-post.repository";
@@ -55,6 +55,36 @@ export class JobRecommendationRepository {
       const row = byId.get(id);
       return row ? [toJobPostDto(row, { publicOnly: true })] : [];
     });
+  }
+
+  /** Tin còn hiển thị công khai: PUBLISHED và chưa hết hạn (S5 của "Việc làm tương tự"). */
+  async isPubliclyListed(jobPostId: string): Promise<boolean> {
+    const count = await this.prisma.jobPost.count({
+      where: { id: jobPostId, status: "PUBLISHED", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
+    });
+    return count > 0;
+  }
+
+  /**
+   * Nhánh dự phòng của "Việc làm tương tự" (S6, docs/06-backend/similar-jobs/PLAN.md):
+   * tin công khai khác có ít nhất một kỹ năng APPROVED trùng với `jobPostId`, nhiều kỹ
+   * năng trùng trước, hoà thì mới đăng trước. Không đụng bảng embedding.
+   */
+  async findBySharedSkills(jobPostId: string, take: number): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT o."jobPostId" AS id
+      FROM job_post_skills s
+      JOIN skills k ON k."id" = s."skillId" AND k."status" = 'APPROVED'
+      JOIN job_post_skills o ON o."skillId" = s."skillId" AND o."jobPostId" <> s."jobPostId"
+      JOIN job_posts p ON p."id" = o."jobPostId"
+      WHERE s."jobPostId" = ${jobPostId}
+        AND p."status" = 'PUBLISHED'
+        AND (p."expiresAt" IS NULL OR p."expiresAt" > now())
+      GROUP BY o."jobPostId", p."publishedAt"
+      ORDER BY COUNT(*) DESC, p."publishedAt" DESC NULLS LAST
+      LIMIT ${take}
+    `);
+    return rows.map((row) => row.id);
   }
 
   private async findIds(where: Prisma.JobPostWhereInput, take: number): Promise<string[]> {
