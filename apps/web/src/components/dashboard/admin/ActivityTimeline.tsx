@@ -36,12 +36,15 @@ const ENTITY_ICON: Record<string, string> = {
   Skill: "sparkles",
   University: "graduation-cap",
   Major: "graduation-cap",
+  User: "user-round",
 };
 
 /** Icon theo loại thao tác: duyệt xanh, từ chối đỏ, gỡ tin marigold, xác minh brand, không phải Admin xám. */
 function lookOf(item: AuditActivityItem): { tone: Tone; icon: string } {
   if (item.actorRole !== "ADMIN") return { tone: "sys", icon: ENTITY_ICON[item.entityType] ?? "history" };
   if (item.action.endsWith("_REJECTED")) return { tone: "no", icon: "x" };
+  if (item.action === "USER_SUSPENDED") return { tone: "no", icon: "lock" };
+  if (item.action === "USER_REACTIVATED") return { tone: "ok", icon: "lock-open" };
   if (item.action === "JOB_POST_RETRACTED") return { tone: "down", icon: "arrow-down" };
   if (item.action === "COMPANY_VERIFIED") return { tone: "brand", icon: "building-2" };
   if (/APPROVED|MERGED|PUBLISHED/.test(item.action)) return { tone: "ok", icon: "check" };

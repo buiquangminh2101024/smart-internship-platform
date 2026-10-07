@@ -15,3 +15,14 @@ export const AREA_HOME: Record<AuthArea, string> = {
   employer: "/employer",
   admin: "/admin",
 };
+
+/**
+ * Khu vực của một đường dẫn: `/employer*` và `/admin*` thuộc khu riêng, còn
+ * lại (kể cả trang công khai) thuộc Candidate — cùng quy tắc với
+ * `CandidateSocketRoot` trong `app/provider.tsx`.
+ */
+export function areaForPath(pathname: string): AuthArea {
+  if (/^\/admin(\/|$)/.test(pathname)) return "admin";
+  if (/^\/employer(\/|$)/.test(pathname)) return "employer";
+  return "candidate";
+}

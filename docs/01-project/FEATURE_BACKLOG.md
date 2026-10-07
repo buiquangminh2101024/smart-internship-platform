@@ -78,6 +78,7 @@ Danh sách chức năng mà các nền tảng tuyển dụng thực tế (TopCV,
 | Tìm kiếm toàn văn, gợi ý từ khoá, tuỳ chọn sắp xếp | 🟡 | Hiện mới có lọc cơ bản. |
 | Đính kèm file trong chat, hiện "đang nhập…" | 🟢 | |
 | Song ngữ Anh/Việt, PWA | 🟢 | |
+| Bỏ token khỏi `localStorage`: refresh token chuyển sang cookie httpOnly (server đặt ở login / verify-otp / google / refresh, xoá ở logout), access token chỉ giữ trong bộ nhớ, mở lại trang thì gọi `/auth/refresh` | 🟡 | Phần chính của mục "Phase 12 — Rà soát bảo mật" ở trên (AD-2 đã hẹn đánh giá lại). Thêm 2026-10-07 theo quyết định chủ dự án. Thay đổi kiến trúc: phải viết AD mới thay AD-2/AD-4 và plan riêng trước khi code. Phạm vi: auth controller, CORS `credentials` + axios `withCredentials`, chống CSRF (`SameSite`, kiểm `Origin`), 3 cookie riêng theo area (AD-4), `proxy.ts` đọc cookie thật thay cookie đánh dấu `sip_session_*`, khoảng 15 file web đang đọc token. ~1 ngày. Ghi chú: cookie vẫn dùng chung giữa các tab, nên vẫn cần giữ cách sửa "chỉ điều hướng khi tab ở đúng khu vực" (`endSession` trong `lib/api-client.ts`, F6 của `docs/05-frontend/phases/admin-users-support/PLAN.md`). Dọn luôn key cũ `sip-auth` còn sót trong `localStorage`. |
 
 ---
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { ApiError } from "@/lib/api-client";
 
 declare global {
   interface Window {
@@ -13,6 +14,18 @@ declare global {
       };
     };
   }
+}
+
+/**
+ * Câu lỗi cho luồng `/auth/google` dùng chung ở form đăng nhập và đăng ký.
+ * `GOOGLE_EMAIL_UNVERIFIED` (AD-17 mục 6): Google chưa xác thực email của tài khoản đó.
+ */
+export function googleAuthErrorMessage(err: unknown, fallback: string): string {
+  if (!(err instanceof ApiError)) return fallback;
+  if (err.code === "GOOGLE_EMAIL_UNVERIFIED") {
+    return "Google chưa xác thực email của tài khoản này. Hãy xác thực email trong tài khoản Google, hoặc dùng email và mật khẩu.";
+  }
+  return err.message;
 }
 
 export interface GoogleAuthButtonProps {

@@ -9,7 +9,7 @@ import { completeAuth, navigateAfterAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { OtpForm } from "./OtpForm";
-import { GoogleAuthButton } from "./GoogleAuthButton";
+import { GoogleAuthButton, googleAuthErrorMessage } from "./GoogleAuthButton";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -39,7 +39,7 @@ export function RegisterForm({ role }: RegisterFormProps) {
       const user = await completeAuth(tokens);
       await navigateAfterAuth(router, user);
     } catch (err) {
-      setFormError(err instanceof ApiError ? err.message : "Không đăng ký được bằng Google, vui lòng thử lại");
+      setFormError(googleAuthErrorMessage(err, "Không đăng ký được bằng Google, vui lòng thử lại"));
     } finally {
       setGoogleSubmitting(false);
     }

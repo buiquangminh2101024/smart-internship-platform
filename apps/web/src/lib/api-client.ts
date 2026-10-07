@@ -1,7 +1,7 @@
 import axios, { type Method } from "axios";
 import type { ApiResponse, RefreshResponse } from "@sip/shared-types";
 import type { AuthArea } from "./auth-area";
-import { AREA_HOME } from "./auth-area";
+import { AREA_HOME, areaForPath } from "./auth-area";
 import { authStoreForArea } from "@/stores/auth-store";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
@@ -10,12 +10,15 @@ export class ApiError extends Error {
   readonly status: number;
   /** `data` của phản hồi lỗi, nếu server gửi kèm (vd. lỗi từng hồ sơ khi lên lịch hàng loạt trả 409). */
   readonly data: unknown;
+  /** Mã lỗi máy đọc được (`AppError.code`, AD-17), vd. "ACCOUNT_SUSPENDED". So mã này thay vì so chuỗi message. */
+  readonly code: string | undefined;
 
-  constructor(status: number, message: string, data?: unknown) {
+  constructor(status: number, message: string, data?: unknown, code?: string) {
     super(message);
     this.status = status;
     this.name = "ApiError";
     this.data = data;
+    this.code = code;
   }
 }
 
@@ -65,7 +68,7 @@ function parseBody<T>(res: RawResponse<T>): T {
     // 413 thường do gateway (nginx) trả về trang HTML, không có body JSON để đọc message.
     const fallback =
       res.status === 413 ? "Tệp tải lên quá lớn, vui lòng chọn tệp nhỏ hơn" : "Đã có lỗi xảy ra, vui lòng thử lại";
-    throw new ApiError(res.status, res.body?.error ?? res.body?.message ?? fallback, res.body?.data);
+    throw new ApiError(res.status, res.body?.error ?? res.body?.message ?? fallback, res.body?.data, res.body?.code);
   }
 
   return res.body.data as T;
@@ -120,10 +123,24 @@ export function refreshAccessTokenShared(area: AuthArea): Promise<string | null>
 }
 
 /**
+ * Phiên của `area` hết hạn hẳn (refresh thất bại): luôn xoá phiên đó, nhưng chỉ
+ * điều hướng về trang chủ của area khi tab đang ở đúng khu vực ấy. Các store
+ * dùng chung localStorage giữa các tab, nên tab Admin cũng chạy `SessionSync`
+ * của Candidate; không có điều kiện này thì ứng viên bị khoá (AD-17) sẽ kéo cả
+ * tab Admin cùng trình duyệt về `/`.
+ */
+function endSession(area: AuthArea): void {
+  authStoreForArea(area).getState().clear();
+  if (typeof window !== "undefined" && areaForPath(window.location.pathname) === area) {
+    window.location.href = AREA_HOME[area];
+  }
+}
+
+/**
  * Fetch wrapper cho endpoint cần access token, đọc/ghi đúng store của
  * `area` được truyền vào — tự đính access token nếu có, refresh một lần khi
  * gặp 401 rồi thử lại; nếu vẫn thất bại thì clear đúng session của area đó
- * và điều hướng về homepage area đó (không đụng tới area khác).
+ * và điều hướng về homepage area đó nếu tab đang ở khu vực ấy (`endSession`).
  */
 export async function apiFetch<T = void>(area: AuthArea, path: string, init: RequestInit = {}): Promise<T> {
   const store = authStoreForArea(area);
@@ -136,10 +153,7 @@ export async function apiFetch<T = void>(area: AuthArea, path: string, init: Req
     if (newToken) {
       res = await doFetch<T>(path, newToken, init);
     } else {
-      store.getState().clear();
-      if (typeof window !== "undefined") {
-        window.location.href = AREA_HOME[area];
-      }
+      endSession(area);
     }
   }
 
@@ -185,10 +199,7 @@ export async function apiUpload<T = void>(
     if (newToken) {
       res = await send(newToken);
     } else {
-      store.getState().clear();
-      if (typeof window !== "undefined") {
-        window.location.href = AREA_HOME[area];
-      }
+      endSession(area);
     }
   }
 
