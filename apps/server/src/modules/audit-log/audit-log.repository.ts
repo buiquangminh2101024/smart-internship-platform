@@ -45,6 +45,20 @@ export class AuditLogRepository {
     return { items, hasMore, ...(nextCursor ? { nextCursor } : {}) };
   }
 
+  /** `limit` dòng mới nhất của một entity kèm tổng số (AD-18: lịch sử trên trang chi tiết người dùng). */
+  async listByEntity(
+    entityType: AuditEntityType,
+    entityId: string,
+    limit: number,
+  ): Promise<{ items: AuditLog[]; total: number }> {
+    const where = { entityType, entityId };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.auditLog.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: limit }),
+      this.prisma.auditLog.count({ where }),
+    ]);
+    return { items, total };
+  }
+
   /**
    * Dòng mới nhất của `action` cho từng entity, trong một truy vấn (AD-17: lý do,
    * người khoá, thời điểm khoá trên danh sách người dùng). Entity chưa có dòng

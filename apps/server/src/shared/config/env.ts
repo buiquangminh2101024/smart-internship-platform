@@ -1,6 +1,7 @@
 import path from "node:path";
 import dotenv from "dotenv";
 import { z } from "zod";
+import { DURATION_PATTERN } from "./duration";
 
 // Repo giữ một .env duy nhất ở root (xem .env.example). npm workspaces chạy
 // script này với cwd = apps/server, nên root .env nằm ở "../../.env".
@@ -19,8 +20,10 @@ const baseSchema = z.object({
 
   JWT_ACCESS_SECRET: z.string().min(1, "JWT_ACCESS_SECRET is required"),
   JWT_REFRESH_SECRET: z.string().min(1, "JWT_REFRESH_SECRET is required"),
-  JWT_ACCESS_EXPIRY: z.string().min(1).default("15m"),
-  JWT_REFRESH_EXPIRY: z.string().min(1).default("7d"),
+  // Bắt buộc dạng <số><s|m|h|d> (AD-18): TTL khoá Redis thu hồi phiên tính từ
+  // JWT_ACCESS_EXPIRY, sai định dạng thì dừng khởi động thay vì TTL sai lặng lẽ.
+  JWT_ACCESS_EXPIRY: z.string().regex(DURATION_PATTERN, 'Expected <number><s|m|h|d>, e.g. "15m"').default("15m"),
+  JWT_REFRESH_EXPIRY: z.string().regex(DURATION_PATTERN, 'Expected <number><s|m|h|d>, e.g. "7d"').default("7d"),
 
   OTP_HARDCODE: z.preprocess(
     (value) => (typeof value === "string" ? value === "true" : value),

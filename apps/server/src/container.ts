@@ -6,6 +6,7 @@ import { redis } from "./infrastructure/redis";
 import { RedisRateLimiter } from "./infrastructure/redis-rate-limiter";
 import { RedisTokenBlacklist } from "./infrastructure/redis-token-blacklist";
 import { RedisAccountSuspensionStore } from "./infrastructure/redis-account-suspension-store";
+import { RedisSessionRevocationStore } from "./infrastructure/redis-session-revocation-store";
 import { RedisOtpStore } from "./infrastructure/redis-otp-store";
 import { ResendEmailSender } from "./infrastructure/resend-email-sender";
 import { ConsoleEmailSender } from "./infrastructure/console-email-sender";
@@ -20,6 +21,7 @@ import { GeminiCatalogMatchVerifier } from "./infrastructure/gemini-catalog-matc
 import { UserRepository } from "./modules/users/user.repository";
 import { CompanyRepository } from "./modules/companies/company.repository";
 import { EmployerRepository } from "./modules/employers/employer.repository";
+import { SessionRevocationService } from "./modules/auth/session-revocation.service";
 import { CatalogRateLimitService } from "./modules/shared/catalog-rate-limit.service";
 import { CatalogSuggestionNotifier } from "./modules/shared/catalog-suggestion-notifier.service";
 import { logger, type Logger } from "./shared/logger";
@@ -27,6 +29,7 @@ import { config } from "./shared/config/env";
 import type { RateLimiter } from "./shared/ports/RateLimiter";
 import type { TokenBlacklist } from "./shared/ports/TokenBlacklist";
 import type { AccountSuspensionStore } from "./shared/ports/AccountSuspensionStore";
+import type { SessionRevocationStore } from "./shared/ports/SessionRevocationStore";
 import type { OtpStore } from "./shared/ports/OtpStore";
 import type { EmailSender } from "./shared/ports/EmailSender";
 import type { RealtimeNotifier } from "./shared/ports/RealtimeNotifier";
@@ -50,6 +53,10 @@ export interface Cradle {
   tokenBlacklist: TokenBlacklist;
   // Cờ khoá tài khoản cho authenticate/Socket.IO (AD-17).
   accountSuspensionStore: AccountSuspensionStore;
+  // Mốc "đăng xuất mọi thiết bị" cho authenticate/Socket.IO (AD-18).
+  sessionRevocationStore: SessionRevocationStore;
+  // Dùng chung bởi auth (đặt lại mật khẩu) và users (nút Admin "Buộc đăng xuất").
+  sessionRevocationService: SessionRevocationService;
   otpStore: OtpStore;
   emailSender: EmailSender;
   // Bản Socket.IO khi gateway khởi tạo được, fallback no-op nếu lỗi —
@@ -88,6 +95,10 @@ export function buildContainer(): AwilixContainer<Cradle> {
     rateLimiter: asClass(RedisRateLimiter).singleton(),
     tokenBlacklist: asClass(RedisTokenBlacklist).singleton(),
     accountSuspensionStore: asClass(RedisAccountSuspensionStore).singleton(),
+    sessionRevocationStore: asClass(RedisSessionRevocationStore).singleton(),
+    // Phụ thuộc realtimeNotifier (đăng ký trong registerRealtime) — chỉ resolve
+    // lúc có request nên không phụ thuộc thứ tự đăng ký.
+    sessionRevocationService: asClass(SessionRevocationService).singleton(),
     otpStore: asClass(RedisOtpStore).singleton(),
     emailSender: config.DEV_SKIP_EMAIL_SENDING
       ? asClass(ConsoleEmailSender).singleton()
