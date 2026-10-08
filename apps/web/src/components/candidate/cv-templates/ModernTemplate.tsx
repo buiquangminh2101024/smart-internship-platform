@@ -32,7 +32,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginBottom: 8,
     marginTop: 16,
-    textTransform: "uppercase",
     borderBottom: "1px solid rgba(255,255,255,0.3)",
     paddingBottom: 4,
   },
@@ -75,8 +74,8 @@ export function ModernTemplate({ data, config }: { data: CvBuilderData; config: 
             if (section === "personal") {
               return (
                 <View key={`${section}-${index}`}>
-                  <Text style={styles.name}>{personal.fullName || "Tên ứng viên"}</Text>
-                  <Text style={styles.headline}>{personal.headline || "Vị trí ứng tuyển"}</Text>
+                  <Text style={styles.name}>{(personal.fullName || "Tên ứng viên").toUpperCase()}</Text>
+                  <Text style={styles.headline}>{(personal.headline || "Vị trí ứng tuyển").toUpperCase()}</Text>
                   
                   <View style={{ marginTop: 20 }}>
                     <Text style={styles.sectionTitleLeft}>Liên hệ</Text>

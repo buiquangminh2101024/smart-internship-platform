@@ -24,8 +24,7 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: "bold",
     marginBottom: 4,
-    textTransform: "uppercase",
-  },
+    },
   headline: {
     fontSize: 14,
     color: "#444",
@@ -42,8 +41,7 @@ const styles = StyleSheet.create({
     borderBottom: "1px solid #eee",
     paddingBottom: 2,
     marginTop: 16,
-    textTransform: "uppercase",
-  },
+    },
 });
 
 export function ProfileTemplate({ data, config }: { data: CvBuilderData; config: CvBuilderConfig }) {
@@ -59,8 +57,8 @@ export function ProfileTemplate({ data, config }: { data: CvBuilderData; config:
           ) : (
             <View style={{ ...styles.avatar, backgroundColor: "#eee" }} />
           )}
-          <Text style={{ ...styles.name, color: primaryColor }}>{personal.fullName || "Tên ứng viên"}</Text>
-          <Text style={styles.headline}>{personal.headline || "Vị trí ứng tuyển"}</Text>
+          <Text style={{ ...styles.name, color: primaryColor }}>{(personal.fullName || "Tên ứng viên").toUpperCase()}</Text>
+          <Text style={styles.headline}>{(personal.headline || "Vị trí ứng tuyển").toUpperCase()}</Text>
           <View style={styles.contact}>
             {personal.phone ? <Text>{personal.phone}</Text> : null}
             {personal.email ? <Text>• {personal.email}</Text> : null}

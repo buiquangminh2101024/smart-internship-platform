@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { Suspense } from "react";
 
 const CvEditorClient = dynamic(
   () => import("@/components/candidate/CvEditorClient").then((mod) => mod.CvEditorClient),
@@ -8,5 +9,9 @@ const CvEditorClient = dynamic(
 );
 
 export function CvEditorWrapper() {
-  return <CvEditorClient />;
+  return (
+    <Suspense fallback={<div className="p-10 text-center text-text-muted">Đang tải...</div>}>
+      <CvEditorClient />
+    </Suspense>
+  );
 }

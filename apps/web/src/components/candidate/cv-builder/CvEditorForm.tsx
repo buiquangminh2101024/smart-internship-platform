@@ -264,36 +264,42 @@ export function CvEditorForm({ data, onChange, config, onConfigChange, activeTem
                   <div className="p-4 pt-0 bg-white">
                     {sectionId === "personal" && (
                       <div className="grid gap-3 pt-3 border-t border-border-subtle">
+                        {(() => {
+                          const activeTpl = CV_TEMPLATES.find(t => t.id === activeTemplateId);
+                          const hasAvatar = activeTpl ? activeTpl.hasAvatar : true;
+                          return hasAvatar ? (
+                            <div className="flex items-center gap-3 mb-2">
+                              <div className="w-14 h-14 shrink-0 rounded-full bg-neutral-100 border border-border-default overflow-hidden flex items-center justify-center">
+                                {data.personal.avatarUrl ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={data.personal.avatarUrl} alt="Ảnh đại diện" className="w-full h-full object-cover" />
+                                ) : (
+                                  <Icon name="user" size={22} className="text-text-muted" />
+                                )}
+                              </div>
+                              <div className="grid gap-1">
+                                <div className="flex gap-2">
+                                  <Button type="button" variant="secondary" size="sm" icon="upload" loading={uploadImage.isPending} onClick={() => avatarInputRef.current?.click()}>
+                                    Tải ảnh lên
+                                  </Button>
+                                  {data.personal.avatarUrl ? (
+                                    <Button type="button" variant="ghost" size="sm" disabled={uploadImage.isPending} onClick={() => updateSection("personal", { ...data.personal, avatarUrl: "" })}>
+                                      Xoá
+                                    </Button>
+                                  ) : null}
+                                </div>
+                                <span className="text-xs text-text-muted">JPG hoặc PNG, tối đa 2MB</span>
+                                {avatarError ? <span className="text-xs text-red-600">{avatarError}</span> : null}
+                              </div>
+                              <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png" className="hidden" onChange={handleAvatarFile} />
+                            </div>
+                          ) : null;
+                        })()}
                         <input className="w-full p-2.5 text-sm border border-border-default rounded-lg focus:outline-none focus:border-pine-500 focus:ring-1 focus:ring-pine-500" value={data.personal.fullName} onChange={(e) => updateSection("personal", { ...data.personal, fullName: e.target.value })} placeholder="Họ và tên" />
                         <input className="w-full p-2.5 text-sm border border-border-default rounded-lg focus:outline-none focus:border-pine-500 focus:ring-1 focus:ring-pine-500" value={data.personal.headline} onChange={(e) => updateSection("personal", { ...data.personal, headline: e.target.value })} placeholder="Tiêu đề nghề nghiệp" />
                         <input className="w-full p-2.5 text-sm border border-border-default rounded-lg focus:outline-none focus:border-pine-500 focus:ring-1 focus:ring-pine-500" value={data.personal.email} onChange={(e) => updateSection("personal", { ...data.personal, email: e.target.value })} placeholder="Email" />
                         <input className="w-full p-2.5 text-sm border border-border-default rounded-lg focus:outline-none focus:border-pine-500 focus:ring-1 focus:ring-pine-500" value={data.personal.phone} onChange={(e) => updateSection("personal", { ...data.personal, phone: e.target.value })} placeholder="Số điện thoại" />
                         <input className="w-full p-2.5 text-sm border border-border-default rounded-lg focus:outline-none focus:border-pine-500 focus:ring-1 focus:ring-pine-500" value={data.personal.city} onChange={(e) => updateSection("personal", { ...data.personal, city: e.target.value })} placeholder="Thành phố/Địa chỉ" />
-                        <div className="flex items-center gap-3">
-                          <div className="w-14 h-14 shrink-0 rounded-full bg-neutral-100 border border-border-default overflow-hidden flex items-center justify-center">
-                            {data.personal.avatarUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={data.personal.avatarUrl} alt="Ảnh đại diện" className="w-full h-full object-cover" />
-                            ) : (
-                              <Icon name="user" size={22} className="text-text-muted" />
-                            )}
-                          </div>
-                          <div className="grid gap-1">
-                            <div className="flex gap-2">
-                              <Button type="button" variant="secondary" size="sm" icon="upload" loading={uploadImage.isPending} onClick={() => avatarInputRef.current?.click()}>
-                                Tải ảnh lên
-                              </Button>
-                              {data.personal.avatarUrl ? (
-                                <Button type="button" variant="ghost" size="sm" disabled={uploadImage.isPending} onClick={() => updateSection("personal", { ...data.personal, avatarUrl: "" })}>
-                                  Xoá
-                                </Button>
-                              ) : null}
-                            </div>
-                            <span className="text-xs text-text-muted">JPG hoặc PNG, tối đa 2MB</span>
-                            {avatarError ? <span className="text-xs text-red-600">{avatarError}</span> : null}
-                          </div>
-                          <input ref={avatarInputRef} type="file" accept="image/jpeg,image/png" className="hidden" onChange={handleAvatarFile} />
-                        </div>
                       </div>
                     )}
                     

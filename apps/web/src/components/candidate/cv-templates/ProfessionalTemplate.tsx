@@ -33,8 +33,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "bold",
     marginBottom: 4,
-    textTransform: "uppercase",
-  },
+    },
   headline: {
     fontSize: 12,
     marginBottom: 20,
@@ -48,7 +47,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 20,
     marginBottom: 10,
-    textTransform: "uppercase",
     borderBottom: "1px solid #ddd",
     paddingBottom: 4,
   },
@@ -57,7 +55,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 15,
     marginBottom: 10,
-    textTransform: "uppercase",
     borderBottom: "2px solid #eee",
     paddingBottom: 4,
   },
@@ -77,8 +74,8 @@ export function ProfessionalTemplate({ data, config }: { data: CvBuilderData; co
             <View style={{ ...styles.avatar, backgroundColor: "#ddd" }} />
           )}
           
-          <Text style={{ ...styles.name, color: primaryColor }}>{personal.fullName || "Tên ứng viên"}</Text>
-          <Text style={{ ...styles.headline, color: primaryColor }}>{personal.headline || "Vị trí ứng tuyển"}</Text>
+          <Text style={{ ...styles.name, color: primaryColor }}>{(personal.fullName || "Tên ứng viên").toUpperCase()}</Text>
+          <Text style={{ ...styles.headline, color: primaryColor }}>{(personal.headline || "Vị trí ứng tuyển").toUpperCase()}</Text>
           
           <Text style={{ ...styles.sectionTitleLeft, color: primaryColor }}>Liên hệ</Text>
           {personal.phone ? <Text style={styles.contactItem}>{personal.phone}</Text> : null}

@@ -44,6 +44,11 @@ export class CvController {
       const cvId = req.body.cvId;
       const templateId = req.body.templateId;
       const builderData = JSON.parse(req.body.builderData || "{}");
+      
+      if (file && req.body.cvName) {
+        file.originalname = req.body.cvName;
+      }
+
       const result = await this.cvService.saveBuilderCv(req.user!.id, cvId, templateId, builderData, file);
       res.status(cvId ? 200 : 201).json({ success: true, data: result } satisfies ApiResponse);
     } catch (error) {
