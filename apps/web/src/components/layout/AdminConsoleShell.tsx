@@ -20,7 +20,7 @@ const NAV_ITEMS: SideNavItem[] = [
   { label: "Nhà tuyển dụng", icon: "building-2", href: "/admin/companies", matchNested: true },
   { label: "Kỹ năng", icon: "sparkles", href: "/admin/skills", matchNested: true },
   { label: "Danh mục học vấn", icon: "graduation-cap", href: "/admin/education-catalog", matchNested: true },
-  { label: "Người dùng", icon: "users", href: "/admin/users" },
+  { label: "Người dùng", icon: "users", href: "/admin/users", matchNested: true },
   { label: "Báo cáo", icon: "flag", soon: true },
   { label: "Cài đặt", icon: "settings", href: "/admin/settings" },
 ];

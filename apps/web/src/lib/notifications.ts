@@ -70,6 +70,8 @@ export const NOTIFICATION_GROUP_BY_TYPE: Record<NotificationType, NotificationGr
   INTERVIEW_REMINDER: "INTERVIEWS",
   ACCOUNT_SUSPENDED: "ACCOUNT",
   ACCOUNT_REACTIVATED: "ACCOUNT",
+  ACCOUNT_ACTIVATED: "ACCOUNT",
+  PASSWORD_RESET_SUGGESTED: "ACCOUNT",
   SUPPORT_CONTACT_RECEIVED: "ACCOUNT",
 };
 
@@ -113,6 +115,8 @@ export const NOTIFICATION_ACTION_LABEL: Record<NotificationType, string> = {
   // Người bị khoá không vào được trang nào cần đăng nhập — link trỏ về /support (AD-17).
   ACCOUNT_SUSPENDED: "Liên hệ hỗ trợ",
   ACCOUNT_REACTIVATED: "Đăng nhập",
+  ACCOUNT_ACTIVATED: "Đăng nhập",
+  PASSWORD_RESET_SUGGESTED: "Đặt lại mật khẩu",
   SUPPORT_CONTACT_RECEIVED: "Xem người dùng",
 };
 

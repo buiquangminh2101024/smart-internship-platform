@@ -23,6 +23,10 @@ export const AUDIT_ACTIONS = [
   // Tài khoản người dùng (AD-17)
   "USER_SUSPENDED",
   "USER_REACTIVATED",
+  // Mở rộng 1 (AD-18)
+  "USER_SESSIONS_REVOKED",
+  "USER_ACTIVATED",
+  "USER_PASSWORD_RESET_GUIDE_SENT",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];

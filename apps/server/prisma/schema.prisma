@@ -82,6 +82,8 @@ enum NotificationType {
   ACCOUNT_SUSPENDED // AD-17 — người dùng: tài khoản bị Admin khoá (kèm lý do)
   ACCOUNT_REACTIVATED // AD-17 — người dùng: tài khoản được mở khoá
   SUPPORT_CONTACT_RECEIVED // AD-17 — Admin: có yêu cầu hỗ trợ mới từ trang /support
+  ACCOUNT_ACTIVATED // AD-18 — người dùng: Admin kích hoạt thủ công tài khoản chưa xác thực
+  PASSWORD_RESET_SUGGESTED // AD-18 — người dùng: Admin gửi hướng dẫn đặt lại mật khẩu (link /forgot-password)
 }
 
 // AD-16 M2 — lịch phỏng vấn. "Đã diễn ra" suy ra từ scheduledAt, không lưu COMPLETED.
@@ -193,15 +195,18 @@ enum CatalogAliasSource {
 // the register/Google endpoints (see §12b).
 
 model User {
-  id              String     @id @default(cuid())
-  email           String     @unique
-  passwordHash    String?
-  googleId        String?    @unique
-  role            Role
-  status          UserStatus @default(PENDING_VERIFICATION)
-  emailVerifiedAt DateTime?
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  id                String     @id @default(cuid())
+  email             String     @unique
+  passwordHash      String?
+  googleId          String?    @unique
+  role              Role
+  status            UserStatus @default(PENDING_VERIFICATION)
+  emailVerifiedAt   DateTime?
+  // AD-18 — mốc "đăng xuất mọi thiết bị". Token có iat <= mốc này bị từ chối.
+  // Nguồn sự thật cho /auth/refresh; Redis giữ bản sao ngắn hạn cho authenticate/socket.
+  sessionsRevokedAt DateTime?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
 
   candidate           Candidate?
   employer            Employer?

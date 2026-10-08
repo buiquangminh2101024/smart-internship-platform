@@ -405,6 +405,37 @@ Bắt buộc thêm khi gửi duyệt (áp dụng cho cả nhánh publish thẳng
 
 **Ảnh hưởng:** `shared/middleware/authenticate.ts`, `shared/middleware/errorHandler.ts`, `infrastructure/socket/index.ts`, `shared/ports/` (port mới + `RealtimeNotifier.disconnectUser`), `container.ts`, `modules/users`, `modules/auth` (mã lỗi; sửa liên kết Google cho tài khoản chưa xác thực), `infrastructure/google-auth-client.ts` (`email_verified`), `modules/audit-log` (hành động + truy vấn bản ghi mới nhất theo đối tượng), `modules/notifications` (3 loại, template, nhóm), module mới `support`, `main.ts` (kèm `trust proxy`), `infra/nginx/nginx.conf` (`X-Forwarded-For`), `packages/shared-types`, `schema.prisma` + 1 migration. Frontend: `lib/api-client.ts`, `LoginForm`, `/admin/users`, `/support`, map thông báo.
 
+## AD-18 — Thu hồi mọi phiên của một người dùng: mốc `sessionsRevokedAt` (DB) + khoá Redis sống bằng access token
+
+**Ngày:** 2026-10-07 · **Phase liên quan:** không thuộc phase đánh số — Mở rộng 1 của quản lý người dùng (sau AD-17). Kế hoạch: `docs/06-backend/admin-users-ext1/PLAN.md`, `docs/05-frontend/phases/admin-users-ext1/PLAN.md`.
+
+> **Trạng thái: ĐÃ DUYỆT (2026-10-07).** Chủ dự án chọn cách "DB + Redis" và duyệt plan Mở rộng 1.
+
+**Bối cảnh:** JWT không lưu trạng thái, refresh token cũng không được lưu ở server (AD-2), nên không có danh sách phiên để xoá. Blacklist theo `jti` chỉ thu hồi được token mà server đang cầm (lúc đăng xuất). Cờ khoá của AD-17 chặn theo người nhưng là khoá vĩnh viễn, không dùng được cho "đăng xuất mọi nơi rồi cho đăng nhập lại".
+
+**Quyết định:**
+
+1. **Mốc thời gian theo người dùng.** Cột `User.sessionsRevokedAt DateTime?` là nguồn sự thật. Mọi token (access lẫn refresh) có `iat <= mốc` (tính bằng giây) bị từ chối với 401, mã `SESSION_REVOKED`.
+2. **Ai đọc ở đâu:**
+   - `refresh()` so `iat` của refresh token với cột DB, trong truy vấn user đã có sẵn (kiểm `status`), không thêm truy vấn.
+   - `authenticate` và handshake Socket.IO đọc khoá Redis `sessions-revoked-at:{userId}` (port `SessionRevocationStore`), không đọc DB.
+3. **Khoá Redis có TTL = `JWT_ACCESS_EXPIRY`**, không phải thời hạn refresh token. Sau khoảng đó mọi access token cấp trước mốc đã tự hết hạn; refresh token cũ thì luôn bị DB chặn. Thiếu khoá Redis nghĩa là không còn gì cần chặn, nên `authenticate` không hỏi lại DB.
+4. **Thứ tự ghi:** cột DB trong transaction của thao tác (cùng `AuditLog` nếu có); sau commit mới ghi Redis và ngắt socket (`RealtimeNotifier.disconnectUser`), giống AD-17 mục 1. Redis lỗi chỉ log: kẽ hở tối đa là thời hạn access token.
+5. **Ai kích hoạt:** Admin (nút "Buộc đăng xuất", chỉ với tài khoản `ACTIVE`, ghi `AuditLog USER_SESSIONS_REVOKED`) và người dùng tự đặt lại mật khẩu (`resetPassword`, cùng transaction với đổi mật khẩu). Đổi mật khẩu từ trang Cài đặt cũng đi qua `resetPassword` (dùng luồng OTP, quyết định E9), nên không có đường đổi mật khẩu nào bỏ qua bước thu hồi. Logic gói trong `SessionRevocationService` (module `auth`, đăng ký ở `container.ts`).
+6. **Thời hạn token được kiểm định dạng lúc khởi động** (`durationToSeconds`), vì TTL Redis tính từ `JWT_ACCESS_EXPIRY`.
+
+**Phương án không chọn:**
+
+- *Chỉ Redis, TTL = thời hạn refresh token (7 ngày):* không cần migration, nhưng Redis mất dữ liệu thì refresh token cũ dùng lại được tới 7 ngày.
+- *Chỉ DB, đọc ở mỗi request:* thêm một truy vấn Neon (vài chục – vài trăm ms) vào mọi API.
+- *Lưu từng refresh token (quản lý phiên):* đá được từng thiết bị nhưng phải viết lại đăng nhập / làm mới / đăng xuất. Để cùng đợt bỏ token khỏi `localStorage` (backlog).
+
+**Hạn chế:** chỉ đăng xuất được **mọi** thiết bị cùng lúc. Buộc đăng xuất không đổi mật khẩu: người biết mật khẩu vẫn đăng nhập lại được, nên khi nghi tài khoản bị chiếm cần kèm đặt lại mật khẩu.
+
+**Tương thích về sau:** khi chuyển refresh token sang cookie httpOnly, cơ chế giữ nguyên (chỉ đổi chỗ đọc token trong `refresh()` và xoá cookie khi trả `SESSION_REVOKED`). Nếu thêm quản lý phiên thì thay phần trong `SessionRevocationService`, giữ khoá Redis để chặn access token còn sống.
+
+**Ảnh hưởng:** `schema.prisma` + 1 migration (cột + 2 giá trị `NotificationType` của cùng đợt), `shared/config` (`duration.ts`, `env.ts`), `shared/ports/SessionRevocationStore.ts`, `infrastructure/redis-session-revocation-store.ts`, `container.ts`, `shared/middleware/authenticate.ts`, `infrastructure/socket/index.ts`, `modules/auth` (`refresh`, `resetPassword`, service mới), `modules/users`, `user.repository.ts`.
+
 ## Phần ghi chú của chủ dự án
 
 *(để trống)*

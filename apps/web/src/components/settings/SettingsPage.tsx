@@ -5,6 +5,7 @@ import { Icon } from "@/components/ui/Icon";
 import { useBrowserNotification } from "@/hooks/useBrowserNotification";
 import type { BrowserNotificationKind } from "@/lib/browser-notification";
 import type { AuthArea } from "@/lib/auth-area";
+import { PasswordCard } from "./PasswordCard";
 
 const TOGGLES: { kind: BrowserNotificationKind; icon: string; label: string; description: string }[] = [
   {
@@ -22,9 +23,9 @@ const TOGGLES: { kind: BrowserNotificationKind; icon: string; label: string; des
 ];
 
 /**
- * Trang "Cài đặt" dùng chung candidate/employer/admin: bật/tắt riêng từng loại
- * thông báo qua trình duyệt (lưu theo trình duyệt, localStorage). Admin không
- * có hội thoại nên không hiện toggle "Tin nhắn mới" (AD-12).
+ * Trang "Cài đặt" dùng chung candidate/employer/admin: đổi mật khẩu (AD-18, E9)
+ * và bật/tắt riêng từng loại thông báo qua trình duyệt (lưu theo trình duyệt,
+ * localStorage). Admin không có hội thoại nên không hiện toggle "Tin nhắn mới" (AD-12).
  */
 export function SettingsPage({ area }: { area: AuthArea }) {
   const toggles = area === "admin" ? TOGGLES.filter((toggle) => toggle.kind !== "message") : TOGGLES;
@@ -32,6 +33,8 @@ export function SettingsPage({ area }: { area: AuthArea }) {
   return (
     <div className="mx-auto grid w-full max-w-3xl gap-6 px-6 py-12">
       <h1 className="text-2xl font-semibold text-text-strong">Cài đặt</h1>
+
+      <PasswordCard area={area} />
 
       <Card padding="md" className="grid gap-5">
         <div>

@@ -22,13 +22,13 @@ const REASON_MAX = 500;
 
 /**
  * Lỗi khiến hộp thoại vô nghĩa (đã bị khoá / mở khoá ở nơi khác, tài khoản không
- * còn) thì đóng hộp thoại và báo bằng toast; danh sách tự tải lại (`onSettled`).
+ * còn) thì đóng hộp thoại và báo bằng toast; danh sách và trang chi tiết tự tải lại (`onSettled`).
  * Lỗi khác (mạng, 5xx) giữ hộp thoại để thử lại.
  */
-function staleMessage(err: unknown, conflict: string): string | null {
+export function staleMessage(err: unknown, conflict: string): string | null {
   if (!(err instanceof ApiError)) return null;
   if (err.status === 409) return conflict;
-  if (err.status === 404) return "Không tìm thấy tài khoản này. Danh sách đã được tải lại.";
+  if (err.status === 404) return "Không tìm thấy tài khoản này. Thông tin đã được tải lại.";
   return null;
 }
 
@@ -89,7 +89,7 @@ function SuspendContent({
       await mutation.mutateAsync({ userId: user.id, data: { reason: trimmed } });
       onDone({ tone: "success", message: `Đã khoá tài khoản ${user.email}.` });
     } catch (err) {
-      const stale = staleMessage(err, "Tài khoản này đã bị khoá trước đó. Danh sách đã được tải lại.");
+      const stale = staleMessage(err, "Tài khoản này đã bị khoá trước đó. Thông tin đã được tải lại.");
       if (stale) {
         onDone({ tone: "danger", message: stale });
         return;
@@ -233,7 +233,7 @@ function ReactivateContent({
           : `Đã mở khoá tài khoản ${user.email}. Tài khoản về trạng thái Chờ xác thực.`,
       });
     } catch (err) {
-      const stale = staleMessage(err, "Tài khoản này không còn bị khoá. Danh sách đã được tải lại.");
+      const stale = staleMessage(err, "Tài khoản này không còn bị khoá. Thông tin đã được tải lại.");
       if (stale) {
         onDone({ tone: "danger", message: stale });
         return;
