@@ -437,6 +437,51 @@ const templates: { [T in NotificationType]: Renderer<T> } = {
     };
   },
 
+  // AD-18 (E3) — Admin kích hoạt thủ công tài khoản chưa xác thực email, sau khi
+  // người dùng liên hệ /support. Người dùng chưa từng đăng nhập được nên email là
+  // kênh báo tin chính.
+  ACCOUNT_ACTIVATED: (_data, ctx) => {
+    const title = "Tài khoản của bạn đã được kích hoạt";
+    const body = "Quản trị viên đã kích hoạt tài khoản của bạn. Bạn có thể đăng nhập ngay, không cần nhập mã xác thực.";
+    const link = "/login";
+    return {
+      title,
+      body,
+      link,
+      email: {
+        subject: "Tài khoản của bạn đã được kích hoạt",
+        html: emailHtml(title, [body], { label: "Đăng nhập", url: absolute(ctx, link) }),
+      },
+    };
+  },
+
+  // AD-18 (E1) — Admin chỉ gửi đường dẫn tới /forgot-password, người dùng tự xin
+  // OTP ở đó (OTP chỉ sống 5 phút). Không đưa email lên URL để link không làm lộ
+  // địa chỉ khi bị chuyển tiếp / ghi log.
+  PASSWORD_RESET_SUGGESTED: (_data, ctx) => {
+    const title = "Hướng dẫn đặt lại mật khẩu";
+    const body =
+      "Quản trị viên gửi bạn hướng dẫn đặt lại mật khẩu theo yêu cầu hỗ trợ. Mật khẩu hiện tại của bạn chưa thay đổi.";
+    const link = "/forgot-password";
+    return {
+      title,
+      body,
+      link,
+      email: {
+        subject: "Hướng dẫn đặt lại mật khẩu",
+        html: emailHtml(
+          title,
+          [
+            body,
+            "Bấm nút bên dưới, nhập email của bạn để nhận mã xác thực rồi đặt mật khẩu mới.",
+            "Nếu bạn không yêu cầu hỗ trợ, hãy bỏ qua email này.",
+          ],
+          { label: "Đặt lại mật khẩu", url: absolute(ctx, link) },
+        ),
+      },
+    };
+  },
+
   // Gửi mọi Admin, có email kèm toàn văn lời nhắn (trong app chỉ hiện trích đoạn).
   // Admin trả lời người gửi qua email riêng — nền tảng không có hộp thư hỗ trợ.
   SUPPORT_CONTACT_RECEIVED: (data, ctx) => {

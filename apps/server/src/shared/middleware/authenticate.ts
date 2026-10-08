@@ -5,6 +5,8 @@ import { AppError } from "../errors/AppError";
 import type { JwtService } from "../../modules/auth/jwt.service";
 import type { TokenBlacklist } from "../ports/TokenBlacklist";
 import type { AccountSuspensionStore } from "../ports/AccountSuspensionStore";
+import type { SessionRevocationStore } from "../ports/SessionRevocationStore";
+import { isIssuedBeforeRevocation } from "../../modules/auth/session-revocation.service";
 
 export interface AuthenticatedUser {
   id: string;
@@ -37,6 +39,7 @@ export function authenticate(container: AwilixContainer): RequestHandler {
         const jwtService = container.resolve<JwtService>("jwtService");
         const tokenBlacklist = container.resolve<TokenBlacklist>("tokenBlacklist");
         const accountSuspensionStore = container.resolve<AccountSuspensionStore>("accountSuspensionStore");
+        const sessionRevocationStore = container.resolve<SessionRevocationStore>("sessionRevocationStore");
 
         const payload = jwtService.verifyAccessToken(header.slice(7));
 
@@ -47,6 +50,14 @@ export function authenticate(container: AwilixContainer): RequestHandler {
         // Admin khoá tài khoản ⇒ chặn ngay cả khi access token còn hạn (AD-17).
         if (await accountSuspensionStore.isSuspended(payload.sub)) {
           throw new AppError(401, "Account is suspended", "ACCOUNT_SUSPENDED");
+        }
+
+        // Bị "đăng xuất mọi thiết bị" (Admin bấm, hoặc đặt lại mật khẩu) ⇒ chặn
+        // token cấp trước mốc. Không có mốc trong Redis ⇒ không có gì cần chặn,
+        // không hỏi lại DB (AD-18).
+        const revokedAtSec = await sessionRevocationStore.getRevokedAt(payload.sub);
+        if (isIssuedBeforeRevocation(payload.iat, revokedAtSec)) {
+          throw new AppError(401, "Session has been revoked", "SESSION_REVOKED");
         }
 
         req.user = { id: payload.sub, role: payload.role, jti: payload.jti, exp: payload.exp };

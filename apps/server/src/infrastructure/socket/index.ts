@@ -7,6 +7,8 @@ import { logger } from "../../shared/logger";
 import type { MessagingService } from "../../modules/messaging/messaging.service";
 import type { TokenBlacklist } from "../../shared/ports/TokenBlacklist";
 import type { AccountSuspensionStore } from "../../shared/ports/AccountSuspensionStore";
+import type { SessionRevocationStore } from "../../shared/ports/SessionRevocationStore";
+import { isIssuedBeforeRevocation } from "../../modules/auth/session-revocation.service";
 
 export function setupSocketIo(httpServer: HttpServer, container: AwilixContainer) {
   const io = new SocketIOServer(httpServer, {
@@ -42,6 +44,13 @@ export function setupSocketIo(httpServer: HttpServer, container: AwilixContainer
       const accountSuspensionStore = container.resolve<AccountSuspensionStore>("accountSuspensionStore");
       if (await accountSuspensionStore.isSuspended(decoded.sub)) {
         return next(new Error("Authentication error: Account suspended"));
+      }
+
+      // Token cấp trước mốc "đăng xuất mọi thiết bị" không được mở kết nối mới (AD-18).
+      const sessionRevocationStore = container.resolve<SessionRevocationStore>("sessionRevocationStore");
+      const revokedAtSec = await sessionRevocationStore.getRevokedAt(decoded.sub);
+      if (isIssuedBeforeRevocation(decoded.iat ?? 0, revokedAtSec)) {
+        return next(new Error("Authentication error: Session revoked"));
       }
 
       socket.data.user = {

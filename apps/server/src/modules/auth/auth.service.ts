@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import { randomInt } from "node:crypto";
-import type { Role, User } from "@prisma/client";
+import type { PrismaClient, Role, User } from "@prisma/client";
 import type { AuthTokensResponse } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
 import type { Logger } from "../../shared/logger";
@@ -11,6 +11,7 @@ import type { EmailSender } from "../../shared/ports/EmailSender";
 import type { GoogleAuthClient } from "../../infrastructure/google-auth-client";
 import type { UserRepository } from "../users/user.repository";
 import type { JwtService } from "./jwt.service";
+import { isIssuedBeforeRevocation, toRevokedAtSec, type SessionRevocationService } from "./session-revocation.service";
 
 const SALT_ROUNDS = 12;
 const OTP_RESEND_COOLDOWN_SECONDS = 60;
@@ -26,6 +27,7 @@ interface OtpConfig {
 }
 
 export class AuthService {
+  private readonly prisma: PrismaClient;
   private readonly userRepository: UserRepository;
   private readonly jwtService: JwtService;
   private readonly otpStore: OtpStore;
@@ -33,10 +35,12 @@ export class AuthService {
   private readonly emailSender: EmailSender;
   private readonly googleAuthClient: GoogleAuthClient;
   private readonly tokenBlacklist: TokenBlacklist;
+  private readonly sessionRevocationService: SessionRevocationService;
   private readonly logger: Logger;
   private readonly otpConfig: OtpConfig;
 
   constructor({
+    prisma,
     userRepository,
     jwtService,
     otpStore,
@@ -44,9 +48,11 @@ export class AuthService {
     emailSender,
     googleAuthClient,
     tokenBlacklist,
+    sessionRevocationService,
     logger,
     config,
   }: {
+    prisma: PrismaClient;
     userRepository: UserRepository;
     jwtService: JwtService;
     otpStore: OtpStore;
@@ -54,9 +60,11 @@ export class AuthService {
     emailSender: EmailSender;
     googleAuthClient: GoogleAuthClient;
     tokenBlacklist: TokenBlacklist;
+    sessionRevocationService: SessionRevocationService;
     logger: Logger;
     config: OtpConfig;
   }) {
+    this.prisma = prisma;
     this.userRepository = userRepository;
     this.jwtService = jwtService;
     this.otpStore = otpStore;
@@ -64,6 +72,7 @@ export class AuthService {
     this.emailSender = emailSender;
     this.googleAuthClient = googleAuthClient;
     this.tokenBlacklist = tokenBlacklist;
+    this.sessionRevocationService = sessionRevocationService;
     this.logger = logger;
     this.otpConfig = config;
   }
@@ -167,11 +176,22 @@ export class AuthService {
   }
 
   async resetPassword(email: string, otp: string, newPassword: string): Promise<void> {
-    const user = await this.requireUserByEmail(email);
+    const user = await this.userRepository.findByEmail(email);
+    if (!user) {
+      // P2 (AD-18): trả lỗi giống sai mã thay vì 404, để trang /forgot-password
+      // công khai không cho dò email nào có tài khoản (forgotPassword cũng không tiết lộ).
+      throw new AppError(400, "Invalid or expired OTP");
+    }
     await this.assertOtpMatches("reset-password", user.email, otp);
 
     const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
-    await this.userRepository.updatePassword(user.id, passwordHash);
+    // Đổi mật khẩu ⇒ đăng xuất mọi thiết bị (AD-18): nếu mật khẩu cũ bị lộ thì
+    // phiên của kẻ gian cũng mất. Mật khẩu và mốc thu hồi ghi cùng transaction.
+    const revokedAtSec = await this.prisma.$transaction(async (tx) => {
+      await this.userRepository.updatePassword(user.id, passwordHash, tx);
+      return this.sessionRevocationService.revokeInTx(user.id, tx);
+    });
+    await this.sessionRevocationService.propagate(user.id, revokedAtSec);
   }
 
   async refresh(refreshToken: string): Promise<{ accessToken: string }> {
@@ -184,6 +204,13 @@ export class AuthService {
     const user = await this.userRepository.findById(payload.sub);
     if (!user || user.status !== "ACTIVE") {
       throw new AppError(401, "Account is not active");
+    }
+
+    // Refresh token cấp trước mốc "đăng xuất mọi thiết bị" ⇒ từ chối (AD-18).
+    // Đọc từ cột DB (nguồn sự thật) trong cùng truy vấn findById ở trên, vì
+    // refresh token sống 7 ngày, lâu hơn nhiều so với bản sao Redis.
+    if (isIssuedBeforeRevocation(payload.iat, toRevokedAtSec(user.sessionsRevokedAt))) {
+      throw new AppError(401, "Session has been revoked", "SESSION_REVOKED");
     }
 
     const access = this.jwtService.signAccessToken({ sub: user.id, role: user.role });

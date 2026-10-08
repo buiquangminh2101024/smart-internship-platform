@@ -50,6 +50,7 @@ Danh sách chức năng mà các nền tảng tuyển dụng thực tế (TopCV,
 | Gợi ý "việc làm tương tự" ở trang chi tiết tin | 🟡 | Rẻ, vì đã có `job-matching`. |
 | Thư xin việc và câu hỏi sàng lọc khi ứng tuyển | 🟡 | |
 | Ứng viên xác nhận hoặc xin đổi lịch phỏng vấn; link họp online; file lịch `.ics` | 🟡 | Bổ sung cho module `interviews` đã có. |
+| Chấp nhận lời mời ứng tuyển (B3) thì ứng tuyển luôn: thêm nút "Chấp nhận và ứng tuyển" bên cạnh "Chấp nhận" (chỉ nhắn tin, như cũ) | 🟡 | Thêm 2026-10-07 theo quyết định chủ dự án. Hiện Accept chỉ tạo hội thoại (AD-15 mục 6), không tạo `Application`, nên nhà tuyển dụng chưa đặt lịch phỏng vấn được (lịch cần hồ sơ `SHORTLISTED`). Ứng viên phải tự vào trang tin để ứng tuyển, còn thẻ lời mời đã chấp nhận chỉ có nút "Nhắn tin". **Backend** (~1 giờ, không migration): `respond` nhận thêm `cvId`/`coverLetter` không bắt buộc. Thứ tự xử lý: kiểm lời mời còn `PENDING` → gọi lại `ApplicationsService.createApplication` (lỗi thì dừng, lời mời vẫn chờ; đã ứng tuyển rồi thì bỏ qua) → Accept và tạo hội thoại. Hai bước không chung transaction, vì `createApplication` tự mở transaction. **Frontend**: hộp chọn CV khi bấm nút, xử lý ứng viên chưa có CV. Thay đổi AD-15 nên phải ghi vào `docs/02-architecture/` trước khi code. Tổng ~2–3 giờ. Cách nhẹ hơn nếu không làm: thêm nút "Ứng tuyển tin này" trên thẻ đã chấp nhận, dẫn tới trang tin, chỉ sửa frontend. |
 | Theo dõi công ty (follow) và nhận thông báo khi công ty đăng tin mới | 🟢 | Đã có trang công ty công khai `/companies/[id]`. |
 | Tuỳ chọn tắt/bật email theo từng loại thông báo | 🟢 | Hiện chỉ có tuỳ chọn cho thông báo trình duyệt. |
 | Đánh giá/review công ty | 🟢 | Phải kèm cơ chế kiểm duyệt nội dung. |
@@ -63,6 +64,7 @@ Danh sách chức năng mà các nền tảng tuyển dụng thực tế (TopCV,
 | Tin nổi bật / đẩy tin trả phí | 🟡 | Mở rộng từ hệ thống gói (Phase 5), thanh toán qua sandbox. |
 | Phân quyền nhiều vai trò trong công ty (HR, trưởng nhóm, chỉ xem…) | 🟢 | Hiện chỉ phân biệt `isCompanyAdmin` và thành viên. |
 | Phiếu đánh giá sau phỏng vấn (scorecard) | 🟢 | |
+| Thao tác lịch phỏng vấn ngay tại hồ sơ: đổi/huỷ lịch trên trang danh sách theo tin; nút "Đặt lịch" trên trang chi tiết hồ sơ và trên từng dòng | 🟡 | Thêm 2026-10-07 theo quyết định chủ dự án. Hiện tại: `/employer/jobs/[id]/applications` đặt lịch được (tick hồ sơ `SHORTLISTED` chưa có lịch → thanh dưới cùng → hộp đặt lịch đơn hoặc hàng loạt qua `useInterviewScheduling`), nhưng hồ sơ đã có lịch chỉ hiện "Đã có lịch DD/MM", còn đổi/huỷ lịch chỉ có ở trang tổng quan (`EmployerTaskBoard`, `InterviewGroups`). `/employer/applications/[id]` chỉ có nút chuyển trạng thái. Chỉ sửa frontend, vì API đặt/đổi/huỷ lịch đã có. Dùng lại `useInterviewScheduling`, `InterviewDialog`, `CancelInterviewDialog`. Nút chỉ hiện khi trạng thái cho phép: đặt lịch với `SHORTLISTED`, đổi/huỷ với lịch `SCHEDULED`. |
 
 ## 5. Đặc thù tuyển thực tập (điểm khác biệt của khoá luận)
 

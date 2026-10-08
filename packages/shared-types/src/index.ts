@@ -46,7 +46,10 @@ export type NotificationType =
   // AD-17 — khoá/mở khoá tài khoản, yêu cầu hỗ trợ
   | "ACCOUNT_SUSPENDED"
   | "ACCOUNT_REACTIVATED"
-  | "SUPPORT_CONTACT_RECEIVED";
+  | "SUPPORT_CONTACT_RECEIVED"
+  // AD-18 — Admin kích hoạt thủ công, gửi hướng dẫn đặt lại mật khẩu
+  | "ACCOUNT_ACTIVATED"
+  | "PASSWORD_RESET_SUGGESTED";
 
 /** Loại vấn đề của form /support (AD-17). */
 export type SupportCategory = "ACCOUNT_SUSPENDED" | "OTHER";
@@ -144,16 +147,41 @@ export interface UserProfile {
   role: Role;
   status: UserStatus;
   emailVerifiedAt: string | null;
+  /** false ⇒ tài khoản chỉ đăng nhập bằng Google, không có mật khẩu để đổi (AD-18, E9). */
+  hasPassword: boolean;
 }
 
 // ─── Quản lý người dùng (Admin, AD-17) ───────────────────────────────────
 
-/** GET /admin/users — `q` tìm theo email, không phân biệt hoa thường. */
+/** Phương thức đăng nhập của tài khoản: chỉ mật khẩu, chỉ Google, hoặc cả hai. */
+export type AdminUserLoginMethod = "PASSWORD" | "GOOGLE" | "BOTH";
+
+export type AdminUserSort = "newest" | "oldest" | "email";
+
+/**
+ * GET /admin/users — phân trang theo số trang, 20 dòng/trang (E6). `q` tìm theo
+ * email, họ tên ứng viên hoặc tên công ty, không phân biệt hoa thường. Ngày tạo
+ * dạng `YYYY-MM-DD` theo giờ Việt Nam, tính cả hai đầu.
+ */
 export interface AdminUserListQuery {
   role?: Role;
   status?: UserStatus;
   q?: string;
-  cursor?: string;
+  loginMethod?: AdminUserLoginMethod;
+  emailVerified?: boolean;
+  createdFrom?: string;
+  createdTo?: string;
+  /** Mặc định `newest`. */
+  sort?: AdminUserSort;
+  /** Bắt đầu từ 1, mặc định 1. */
+  page?: number;
+}
+
+export interface AdminUserListResponse {
+  items: AdminUserListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 /** Lần khoá gần nhất (AuditLog `USER_SUSPENDED`), chỉ có khi đang `SUSPENDED`. */
@@ -177,11 +205,153 @@ export interface AdminUserListItem {
   emailVerifiedAt: string | null;
   createdAt: string;
   suspension: AdminUserSuspension | null;
+  /** false ⇒ chỉ đăng nhập bằng Google: không gửi được hướng dẫn đặt lại mật khẩu (P4). */
+  hasPassword: boolean;
+  hasGoogle: boolean;
 }
 
 /** POST /admin/users/:id/suspend */
 export interface SuspendUserRequest {
   reason: string;
+}
+
+// ─── Quản lý người dùng — Mở rộng 1 (AD-18) ──────────────────────────────
+
+/** POST /admin/users/:id/revoke-sessions — đăng xuất mọi thiết bị; lý do không bắt buộc (E2). */
+export interface RevokeSessionsRequest {
+  reason?: string;
+}
+
+/** POST /admin/users/:id/activate — kích hoạt thủ công tài khoản chưa xác thực email (E3). */
+export interface ActivateUserRequest {
+  reason: string;
+}
+
+/** POST /admin/users/bulk/suspend — tối đa 20 người, chung một lý do (E7). */
+export interface BulkSuspendUsersRequest {
+  userIds: string[];
+  reason: string;
+}
+
+/** POST /admin/users/bulk/reactivate */
+export interface BulkReactivateUsersRequest {
+  userIds: string[];
+}
+
+/** Kết quả của từng người trong thao tác hàng loạt; lỗi mang mã HTTP và message như khi gọi lẻ. */
+export interface AdminBulkActionResult {
+  userId: string;
+  ok: boolean;
+  status?: number;
+  message?: string;
+}
+
+/** Luôn trả 200, kể cả khi không người nào thành công — kết quả nằm trong `results`. */
+export interface AdminBulkActionResponse {
+  results: AdminBulkActionResult[];
+}
+
+/** Tối đa 20 dòng mới nhất kèm tổng số (P6). */
+export interface AdminLimitedList<T> {
+  total: number;
+  items: T[];
+}
+
+export interface AdminUserAccount extends AdminUserListItem {
+  /** Lần buộc đăng xuất gần nhất (Admin hoặc tự đặt lại mật khẩu); null nếu chưa từng. */
+  sessionsRevokedAt: string | null;
+}
+
+/** Nhật ký thao tác trên tài khoản (AuditLog `entityType = "User"`). */
+export interface AdminUserHistoryEntry {
+  id: string;
+  action: string;
+  summary: string;
+  reason: string | null;
+  /** null ⇒ hệ thống, hoặc tài khoản người thao tác không còn. */
+  actorEmail: string | null;
+  at: string;
+}
+
+export interface AdminUserEducation {
+  universityName: string | null;
+  majorName: string | null;
+  degree: string | null;
+  startYear: number | null;
+  endYear: number | null;
+  isCurrent: boolean;
+}
+
+export interface AdminUserCandidateProfile {
+  fullName: string | null;
+  headline: string | null;
+  isOpenToOutreach: boolean;
+  educations: AdminUserEducation[];
+  skills: string[];
+}
+
+/** Chỉ tên file và ngày tải — không có link tải (E4). */
+export interface AdminUserCv {
+  id: string;
+  fileName: string;
+  uploadedAt: string;
+  isDefault: boolean;
+  isHidden: boolean;
+}
+
+export interface AdminUserJobRef {
+  id: string;
+  title: string;
+}
+
+export interface AdminUserCompanyRef {
+  id: string;
+  name: string;
+}
+
+export interface AdminUserApplication {
+  id: string;
+  jobPost: AdminUserJobRef;
+  company: AdminUserCompanyRef;
+  status: ApplicationStatus;
+  createdAt: string;
+}
+
+export interface AdminUserInvitation {
+  id: string;
+  jobPost: AdminUserJobRef;
+  company: AdminUserCompanyRef;
+  status: OutreachInvitationStatus;
+  createdAt: string;
+  expiresAt: string;
+}
+
+/** Không có số điện thoại, ngày sinh (E4). */
+export interface AdminUserCandidateDetail {
+  /** null ⇒ ứng viên chưa tạo hồ sơ (dòng hồ sơ chỉ được tạo khi cần). */
+  profile: AdminUserCandidateProfile | null;
+  cvs: AdminUserCv[];
+  applications: AdminLimitedList<AdminUserApplication>;
+  invitations: AdminLimitedList<AdminUserInvitation>;
+}
+
+export interface AdminUserEmployerDetail {
+  company: { id: string; name: string; verificationStatus: CompanyVerificationStatus };
+  isCompanyAdmin: boolean;
+  title: string | null;
+  /** Số tin do chính người này tạo, theo trạng thái; trạng thái không có tin = 0. */
+  jobPostCounts: Record<JobPostStatus, number>;
+}
+
+/**
+ * GET /admin/users/:id (E4, E5). Admin xem Admin (E8): chỉ `account` + `history`.
+ * Employer chưa gắn công ty thì `employer` là null.
+ */
+export interface AdminUserDetail {
+  account: AdminUserAccount;
+  history: AdminLimitedList<AdminUserHistoryEntry>;
+  candidate: AdminUserCandidateDetail | null;
+  employer: AdminUserEmployerDetail | null;
 }
 
 /** POST /support/contact — công khai, luôn trả "Đã gửi yêu cầu" (AD-17, H1–H4). */

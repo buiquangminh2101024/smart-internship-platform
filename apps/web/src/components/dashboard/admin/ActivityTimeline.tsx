@@ -45,6 +45,9 @@ function lookOf(item: AuditActivityItem): { tone: Tone; icon: string } {
   if (item.action.endsWith("_REJECTED")) return { tone: "no", icon: "x" };
   if (item.action === "USER_SUSPENDED") return { tone: "no", icon: "lock" };
   if (item.action === "USER_REACTIVATED") return { tone: "ok", icon: "lock-open" };
+  if (item.action === "USER_ACTIVATED") return { tone: "ok", icon: "user-check" };
+  if (item.action === "USER_SESSIONS_REVOKED") return { tone: "sys", icon: "log-out" };
+  if (item.action === "USER_PASSWORD_RESET_GUIDE_SENT") return { tone: "sys", icon: "key-round" };
   if (item.action === "JOB_POST_RETRACTED") return { tone: "down", icon: "arrow-down" };
   if (item.action === "COMPANY_VERIFIED") return { tone: "brand", icon: "building-2" };
   if (/APPROVED|MERGED|PUBLISHED/.test(item.action)) return { tone: "ok", icon: "check" };

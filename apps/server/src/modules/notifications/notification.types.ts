@@ -78,6 +78,10 @@ export interface NotificationPayloadMap {
   // AD-17 — khoá/mở khoá tài khoản (gửi chính người bị khoá) và yêu cầu hỗ trợ (gửi Admin).
   ACCOUNT_SUSPENDED: { reason: string };
   ACCOUNT_REACTIVATED: { requiresEmailVerification: boolean };
+  // AD-18 — Admin kích hoạt thủ công / gửi hướng dẫn đặt lại mật khẩu (gửi chính
+  // người đó). Nội dung cố định nên payload rỗng.
+  ACCOUNT_ACTIVATED: Record<string, never>;
+  PASSWORD_RESET_SUGGESTED: Record<string, never>;
   SUPPORT_CONTACT_RECEIVED: {
     email: string;
     category: SupportCategory;

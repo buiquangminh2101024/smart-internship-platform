@@ -1,7 +1,11 @@
-import type { Prisma, PrismaClient, Role, User, UserStatus } from "@prisma/client";
-import type { CatalogSuggester } from "@sip/shared-types";
+import type { JobPostStatus, Prisma, PrismaClient, Role, User, UserStatus } from "@prisma/client";
+import type { AdminUserLoginMethod, AdminUserSort, CatalogSuggester } from "@sip/shared-types";
 
-const ADMIN_PAGE_SIZE = 20;
+export const ADMIN_PAGE_SIZE = 20;
+// P6 — trang chi tiết trả tối đa chừng này dòng mới nhất cho mỗi danh sách.
+export const ADMIN_DETAIL_LIMIT = 20;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Cột cho danh sách người dùng của Admin (AD-17, U7) — kèm tên hiển thị.
 const ADMIN_LIST_SELECT = {
@@ -11,11 +15,106 @@ const ADMIN_LIST_SELECT = {
   status: true,
   emailVerifiedAt: true,
   createdAt: true,
+  // Chỉ để tính hasPassword / hasGoogle; toAdminUserListItem không trả hash ra ngoài.
+  passwordHash: true,
+  googleId: true,
   candidate: { select: { fullName: true } },
   employer: { select: { companyId: true, company: { select: { name: true } } } },
 } satisfies Prisma.UserSelect;
 
 export type AdminUserRow = Prisma.UserGetPayload<{ select: typeof ADMIN_LIST_SELECT }>;
+
+const JOB_AND_COMPANY_REF = {
+  jobPost: { select: { id: true, title: true } },
+  company: { select: { id: true, name: true } },
+} as const;
+
+// Trang chi tiết (E4, E5): cột của danh sách + mốc buộc đăng xuất + dữ liệu theo
+// vai trò. Không chọn phone, dateOfBirth (ứng viên) và fileUrl (CV).
+const ADMIN_DETAIL_SELECT = {
+  ...ADMIN_LIST_SELECT,
+  sessionsRevokedAt: true,
+  candidate: {
+    select: {
+      fullName: true,
+      headline: true,
+      isOpenToOutreach: true,
+      educations: {
+        select: {
+          degree: true,
+          startYear: true,
+          endYear: true,
+          isCurrent: true,
+          university: { select: { name: true } },
+          major: { select: { name: true } },
+        },
+        orderBy: [{ isCurrent: "desc" }, { startYear: "desc" }, { createdAt: "desc" }],
+      },
+      skills: { select: { skill: { select: { name: true } } }, orderBy: { skill: { name: "asc" } } },
+      cvs: {
+        select: { id: true, fileName: true, uploadedAt: true, isDefault: true, isHidden: true },
+        orderBy: { uploadedAt: "desc" },
+      },
+      // Application không có companyId riêng ⇒ lấy công ty qua tin.
+      applications: {
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+          jobPost: { select: { id: true, title: true, company: { select: { id: true, name: true } } } },
+        },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: ADMIN_DETAIL_LIMIT,
+      },
+      outreachInvitations: {
+        select: { id: true, status: true, createdAt: true, expiresAt: true, ...JOB_AND_COMPANY_REF },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: ADMIN_DETAIL_LIMIT,
+      },
+      _count: { select: { applications: true, outreachInvitations: true } },
+    },
+  },
+  employer: {
+    select: {
+      id: true,
+      companyId: true,
+      isCompanyAdmin: true,
+      title: true,
+      company: { select: { name: true, verificationStatus: true } },
+    },
+  },
+} satisfies Prisma.UserSelect;
+
+export type AdminUserDetailRow = Prisma.UserGetPayload<{ select: typeof ADMIN_DETAIL_SELECT }>;
+
+export interface AdminUserListOptions {
+  role?: Role | undefined;
+  status?: UserStatus | undefined;
+  q?: string | undefined;
+  loginMethod?: AdminUserLoginMethod | undefined;
+  emailVerified?: boolean | undefined;
+  createdFrom?: string | undefined;
+  createdTo?: string | undefined;
+  sort: AdminUserSort;
+  page: number;
+}
+
+const ADMIN_LIST_ORDER: Record<AdminUserSort, Prisma.UserOrderByWithRelationInput[]> = {
+  newest: [{ createdAt: "desc" }, { id: "desc" }],
+  oldest: [{ createdAt: "asc" }, { id: "asc" }],
+  email: [{ email: "asc" }, { id: "asc" }],
+};
+
+const LOGIN_METHOD_WHERE: Record<AdminUserLoginMethod, Prisma.UserWhereInput> = {
+  PASSWORD: { passwordHash: { not: null }, googleId: null },
+  GOOGLE: { passwordHash: null, googleId: { not: null } },
+  BOTH: { passwordHash: { not: null }, googleId: { not: null } },
+};
+
+/** `YYYY-MM-DD` (đã kiểm ở DTO) ⇒ 00:00 giờ Việt Nam của ngày đó. */
+function vnStartOfDay(date: string): Date {
+  return new Date(`${date}T00:00:00+07:00`);
+}
 
 // Dùng chung giữa module `auth` (xác thực/token) và `users` (hồ sơ/quản trị
 // tài khoản) — xem PROJECT_STRUCTURE.md §5 lý do 2 module tách tầng service
@@ -77,34 +176,71 @@ export class UserRepository {
     );
   }
 
-  /** AD-17 (U7) — mới tạo trước, phân trang cursor theo id; `q` tìm theo email. */
-  async listForAdmin(options: {
-    role?: Role | undefined;
-    status?: UserStatus | undefined;
-    q?: string | undefined;
-    cursor?: string | undefined;
-  }): Promise<{ items: AdminUserRow[]; nextCursor?: string; hasMore: boolean }> {
-    const where: Prisma.UserWhereInput = {
-      ...(options.role ? { role: options.role } : {}),
-      ...(options.status ? { status: options.status } : {}),
-      ...(options.q ? { email: { contains: options.q, mode: "insensitive" } } : {}),
-    };
-    const rows = await this.prisma.user.findMany({
-      where,
-      select: ADMIN_LIST_SELECT,
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      take: ADMIN_PAGE_SIZE + 1,
-      ...(options.cursor ? { cursor: { id: options.cursor }, skip: 1 } : {}),
-    });
-    const hasMore = rows.length > ADMIN_PAGE_SIZE;
-    const items = hasMore ? rows.slice(0, ADMIN_PAGE_SIZE) : rows;
-    const nextCursor = hasMore ? items[items.length - 1]?.id : undefined;
-    return { items, hasMore, ...(nextCursor ? { nextCursor } : {}) };
+  /**
+   * AD-17 (U7), Mở rộng 1 (E6) — phân trang theo số trang, kèm tổng số. `q` khớp
+   * email, họ tên ứng viên hoặc tên công ty. Luôn sắp thêm theo `id` để hai dòng
+   * cùng `createdAt` không đổi chỗ giữa các trang.
+   */
+  async listForAdmin(options: AdminUserListOptions): Promise<{ items: AdminUserRow[]; total: number }> {
+    const conditions: Prisma.UserWhereInput[] = [];
+    if (options.role) conditions.push({ role: options.role });
+    if (options.status) conditions.push({ status: options.status });
+    if (options.q) {
+      const contains = { contains: options.q, mode: "insensitive" } as const;
+      conditions.push({
+        OR: [
+          { email: contains },
+          { candidate: { is: { fullName: contains } } },
+          { employer: { is: { company: { is: { name: contains } } } } },
+        ],
+      });
+    }
+    if (options.loginMethod) conditions.push(LOGIN_METHOD_WHERE[options.loginMethod]);
+    if (options.emailVerified !== undefined) {
+      conditions.push({ emailVerifiedAt: options.emailVerified ? { not: null } : null });
+    }
+    if (options.createdFrom) conditions.push({ createdAt: { gte: vnStartOfDay(options.createdFrom) } });
+    if (options.createdTo) {
+      // Tính cả ngày createdTo ⇒ nhỏ hơn 00:00 ngày hôm sau.
+      conditions.push({ createdAt: { lt: new Date(vnStartOfDay(options.createdTo).getTime() + DAY_MS) } });
+    }
+
+    const where: Prisma.UserWhereInput = { AND: conditions };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.user.findMany({
+        where,
+        select: ADMIN_LIST_SELECT,
+        orderBy: ADMIN_LIST_ORDER[options.sort],
+        skip: (options.page - 1) * ADMIN_PAGE_SIZE,
+        take: ADMIN_PAGE_SIZE,
+      }),
+      this.prisma.user.count({ where }),
+    ]);
+    return { items, total };
   }
 
   findForAdmin(id: string, tx?: Prisma.TransactionClient): Promise<AdminUserRow | null> {
     const db = tx ?? this.prisma;
     return db.user.findUnique({ where: { id }, select: ADMIN_LIST_SELECT });
+  }
+
+  /**
+   * Trang chi tiết người dùng của Admin (E4, E5), một truy vấn lồng.
+   *
+   * Đọc thẳng bảng của module khác (Candidate, Cv, Application,
+   * CandidateOutreachInvitation, Employer, Company) thay vì gọi service của các
+   * module đó, giống module `dashboard`: đây là API chỉ đọc cho Admin, không ghi
+   * bảng của ai, nên không cần đi qua quy tắc nghiệp vụ của module sở hữu. Module
+   * kia đổi cấu trúc bảng thì sửa ở đây.
+   */
+  findDetailForAdmin(id: string): Promise<AdminUserDetailRow | null> {
+    return this.prisma.user.findUnique({ where: { id }, select: ADMIN_DETAIL_SELECT });
+  }
+
+  /** Số tin do Employer này tạo, theo trạng thái (E5). Cùng lý do đọc chéo bảng như findDetailForAdmin. */
+  async countJobPostsByStatus(employerId: string): Promise<Map<JobPostStatus, number>> {
+    const rows = await this.prisma.jobPost.groupBy({ by: ["status"], where: { employerId }, _count: { _all: true } });
+    return new Map(rows.map((row) => [row.status, row._count._all]));
   }
 
   /**
@@ -166,6 +302,20 @@ export class UserRepository {
     return count === 1 ? this.prisma.user.findUniqueOrThrow({ where: { id } }) : this.linkGoogleId(id, googleId);
   }
 
+  /**
+   * Kích hoạt thủ công (AD-18, E3/P1): chỉ đổi khi vẫn PENDING_VERIFICATION. Ghi
+   * cả `emailVerifiedAt` để lần khoá rồi mở khoá sau không đưa người này về
+   * PENDING_VERIFICATION (U4). Trả false nếu trạng thái đã đổi giữa chừng.
+   */
+  async activateManually(id: string, tx?: Prisma.TransactionClient): Promise<boolean> {
+    const db = tx ?? this.prisma;
+    const { count } = await db.user.updateMany({
+      where: { id, status: "PENDING_VERIFICATION" },
+      data: { status: "ACTIVE", emailVerifiedAt: new Date() },
+    });
+    return count === 1;
+  }
+
   markVerified(id: string): Promise<User> {
     return this.prisma.user.update({
       where: { id },
@@ -173,7 +323,14 @@ export class UserRepository {
     });
   }
 
-  updatePassword(id: string, passwordHash: string): Promise<User> {
-    return this.prisma.user.update({ where: { id }, data: { passwordHash } });
+  updatePassword(id: string, passwordHash: string, tx?: Prisma.TransactionClient): Promise<User> {
+    const db = tx ?? this.prisma;
+    return db.user.update({ where: { id }, data: { passwordHash } });
+  }
+
+  /** Ghi mốc "đăng xuất mọi thiết bị" (AD-18) — chỉ gọi qua SessionRevocationService. */
+  async markSessionsRevoked(id: string, at: Date, tx?: Prisma.TransactionClient): Promise<void> {
+    const db = tx ?? this.prisma;
+    await db.user.update({ where: { id }, data: { sessionsRevokedAt: at } });
   }
 }
