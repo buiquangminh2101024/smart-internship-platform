@@ -72,11 +72,12 @@ export function useCvUpload() {
 export function useSaveBuilderCv() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ cvId, templateId, builderData, file }: { cvId?: string, templateId: string, builderData: any, file?: File }) => {
+    mutationFn: ({ cvId, templateId, builderData, file, cvName }: { cvId?: string, templateId: string, builderData: any, file?: File, cvName?: string }) => {
       const formData = new FormData();
       if (cvId) formData.append("cvId", cvId);
       formData.append("templateId", templateId);
       formData.append("builderData", JSON.stringify(builderData));
+        if (cvName) formData.append("cvName", cvName);
       if (file) formData.append("file", file);
       
       return apiUpload<CandidateCvRecord>("candidate", "/candidates/me/cvs/builder", formData);

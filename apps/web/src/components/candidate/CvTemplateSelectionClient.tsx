@@ -21,7 +21,8 @@ export const CV_TEMPLATES = [
     description: "Mẫu CV truyền thống, rõ ràng và chuyên nghiệp. Phù hợp cho hầu hết mọi ngành nghề.",
     category: "Classic",
     component: ClassicTemplate,
-    defaultConfig: { primaryColor: "#1a1a1a", fontFamily: "Roboto" }
+    defaultConfig: { primaryColor: "#1a1a1a", fontFamily: "Roboto" },
+    hasAvatar: false
   },
   {
     id: "modern",
@@ -29,7 +30,8 @@ export const CV_TEMPLATES = [
     description: "Thiết kế hiện đại, làm nổi bật kỹ năng và kinh nghiệm. Có cột bên giúp phân chia thông tin tốt hơn.",
     category: "Modern",
     component: ModernTemplate,
-    defaultConfig: { primaryColor: "#059669", fontFamily: "Roboto" }
+    defaultConfig: { primaryColor: "#059669", fontFamily: "Roboto" },
+    hasAvatar: false
   },
   {
     id: "minimal",
@@ -37,7 +39,8 @@ export const CV_TEMPLATES = [
     description: "Tối giản, tinh tế, tập trung vào nội dung chữ. Rất thân thiện với các hệ thống ATS.",
     category: "Minimal",
     component: MinimalTemplate,
-    defaultConfig: { primaryColor: "#000000", fontFamily: "Roboto" }
+    defaultConfig: { primaryColor: "#000000", fontFamily: "Roboto" },
+    hasAvatar: false
   },
   {
     id: "profile",
@@ -45,7 +48,8 @@ export const CV_TEMPLATES = [
     description: "Mẫu CV có ảnh đại diện ở giữa, tạo ấn tượng cá nhân mạnh mẽ.",
     category: "Avatar",
     component: ProfileTemplate,
-    defaultConfig: { primaryColor: "#2563eb", fontFamily: "Roboto" }
+    defaultConfig: { primaryColor: "#2563eb", fontFamily: "Roboto" },
+    hasAvatar: true
   },
   {
     id: "professional",
@@ -53,7 +57,8 @@ export const CV_TEMPLATES = [
     description: "Thiết kế hai cột chuyên nghiệp với ảnh đại diện bên trái. Cân đối và hiện đại.",
     category: "Avatar",
     component: ProfessionalTemplate,
-    defaultConfig: { primaryColor: "#0891b2", fontFamily: "Roboto" }
+    defaultConfig: { primaryColor: "#0891b2", fontFamily: "Roboto" },
+    hasAvatar: true
   },
   {
     id: "creative",
@@ -61,7 +66,8 @@ export const CV_TEMPLATES = [
     description: "Khối tiêu đề màu sắc nổi bật có chứa ảnh đại diện, phù hợp cho ngành sáng tạo.",
     category: "Avatar",
     component: CreativeTemplate,
-    defaultConfig: { primaryColor: "#dc2626", fontFamily: "Roboto" }
+    defaultConfig: { primaryColor: "#dc2626", fontFamily: "Roboto" },
+    hasAvatar: true
   }
 ];
 

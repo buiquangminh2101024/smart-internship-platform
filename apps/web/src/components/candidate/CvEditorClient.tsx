@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useCandidateFullProfile, useSaveBuilderCv, useCvList } from "@/hooks/useCvs";
@@ -10,6 +10,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { CV_TEMPLATES } from "./CvTemplateSelectionClient";
 import { mapProfileToCvBuilderData, type CvBuilderData, type CvBuilderConfig } from "@/lib/cv-builder";
 import { CvEditorForm, type EditorTab } from "./cv-builder/CvEditorForm";
+import { useDebounce } from "@/hooks/useDebounce";
 
 const PDFViewer = dynamic(
   () => import("@react-pdf/renderer").then((mod) => mod.PDFViewer),
@@ -41,17 +42,51 @@ export function CvEditorClient() {
   const activeTemplate = CV_TEMPLATES.find(t => t.id === activeTemplateId) || CV_TEMPLATES[0]!;
   const TemplateComponent = activeTemplate.component;
 
+  const debouncedBuilderData = useDebounce(builderData, 800);
+
+  const pdfDocument = useMemo(() => {
+    const pdfData = debouncedBuilderData || builderData;
+    if (!pdfData || !templateConfig) return null;
+    return (
+      <PDFViewer key={activeTemplateId} className="w-full h-full border-none" showToolbar={true}>
+        <TemplateComponent data={pdfData} config={templateConfig} />
+      </PDFViewer>
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTemplateId, TemplateComponent, debouncedBuilderData, templateConfig]);
+
   useEffect(() => {
     if (cvId && cvs) {
       const existingCv = cvs.find(c => c.id === cvId);
-      if (existingCv) {
+      if (existingCv && !builderData) {
         if (existingCv.fileName) {
           setCvName(existingCv.fileName.replace(/\.pdf$/i, ""));
         }
         if (existingCv.builderData) {
-          setBuilderData(existingCv.builderData.profile as CvBuilderData);
-          if (existingCv.builderData.config) {
-            setTemplateConfig(existingCv.builderData.config as CvBuilderConfig);
+          // Add fallback to avoid undefined crashes
+          const parsed = existingCv.builderData as any;
+          const loadedProfile = parsed.profile || {};
+          const safeData: CvBuilderData = {
+            personal: {
+              fullName: loadedProfile.personal?.fullName || "",
+              headline: loadedProfile.personal?.headline || "",
+              email: loadedProfile.personal?.email || "",
+              phone: loadedProfile.personal?.phone || "",
+              city: loadedProfile.personal?.city || "",
+              avatarUrl: loadedProfile.personal?.avatarUrl || "",
+            },
+            summary: loadedProfile.summary || "",
+            experiences: loadedProfile.experiences || [],
+            educations: loadedProfile.educations || [],
+            projects: loadedProfile.projects || [],
+            skills: loadedProfile.skills || [],
+            certificates: loadedProfile.certificates || [],
+            sectionOrder: loadedProfile.sectionOrder || ["personal", "summary", "experiences", "educations", "projects", "skills", "certificates"],
+          };
+          
+          setBuilderData(safeData);
+          if (parsed.config) {
+            setTemplateConfig(parsed.config as CvBuilderConfig);
           } else {
             setTemplateConfig(activeTemplate.defaultConfig);
           }
@@ -105,10 +140,18 @@ export function CvEditorClient() {
     setIsGenerating(true);
     setErrorMsg("");
 
+    const finalFileName = `${cvName.trim() || 'CV chua dat ten'}.pdf`;
+
+    // Duplicate name check
+    if (cvs && cvs.some(c => c.fileName === finalFileName && c.id !== cvId)) {
+      setErrorMsg("Tên CV này đã tồn tại. Vui lòng chọn một tên khác.");
+      setIsGenerating(false);
+      return;
+    }
+
     try {
       const { pdf } = await import("@react-pdf/renderer");
       const blob = await pdf(<TemplateComponent data={builderData!} config={templateConfig!} />).toBlob();
-      const finalFileName = `${cvName.trim() || 'CV chua dat ten'}.pdf`;
       const file = new File([blob], finalFileName, { type: "application/pdf" });
 
       const fullBuilderData = { profile: builderData, config: templateConfig };
@@ -116,6 +159,7 @@ export function CvEditorClient() {
       const payload: any = {
         templateId: activeTemplateId,
         builderData: fullBuilderData,
+        cvName: finalFileName,
         file
       };
       if (cvId) payload.cvId = cvId;
@@ -218,9 +262,7 @@ export function CvEditorClient() {
             <Icon name="info" size={14} />
             Gợi ý: Trực tiếp thay đổi thông tin tại thanh menu bên trái
           </div>
-          <PDFViewer className="w-full h-full border-none" showToolbar={true}>
-            <TemplateComponent data={builderData} config={templateConfig} />
-          </PDFViewer>
+          {pdfDocument}
         </div>
 
       </div>

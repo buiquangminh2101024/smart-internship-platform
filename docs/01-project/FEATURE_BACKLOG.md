@@ -42,6 +42,7 @@ Danh sách chức năng mà các nền tảng tuyển dụng thực tế (TopCV,
 
 | Chức năng | Mức | Ghi chú |
 |---|---|---|
+| Chức năng Tạo CV (CV Builder): tự động tạo PDF từ hồ sơ (Education, Experience, Skills...) đã điền, tuỳ chỉnh mẫu, lưu trực tiếp vào danh sách CV | 🔴 | Tận dụng `@react-pdf/renderer` có sẵn, hoàn toàn xử lý ở frontend, reuse API có sẵn (Profile, CV Upload). |
 | Thông báo việc làm mới (job alert): lưu bộ lọc tìm kiếm, nhận email khi có tin mới phù hợp | 🔴 | Dùng lại matcher và hàng đợi email (outbox) sẵn có. |
 | Đổi mật khẩu (khi đã đăng nhập) | 🔴 | Trang Cài đặt hiện chỉ có bật/tắt thông báo trình duyệt. |
 | Cài đặt quyền riêng tư: cho/không cho nhà tuyển dụng tìm thấy hồ sơ | 🟡 | Cần thiết vì đã có tính năng "Tìm & mời ứng viên" (B3). Liên quan Nghị định 13/2023 về dữ liệu cá nhân. |

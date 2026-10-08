@@ -29,8 +29,7 @@ const styles = StyleSheet.create({
     color: "#000",
     marginBottom: 8,
     marginTop: 16,
-    textTransform: "uppercase",
-  },
+    },
   divider: {
     borderBottom: "1px solid #000",
     marginBottom: 8,
@@ -44,7 +43,7 @@ export function MinimalTemplate({ data, config }: { data: CvBuilderData; config:
     <Document>
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
-          <Text style={styles.name}>{personal.fullName || "Tên ứng viên"}</Text>
+          <Text style={styles.name}>{(personal.fullName || "Tên ứng viên").toUpperCase()}</Text>
           <Text style={styles.contactText}>
             {[
               personal.phone,

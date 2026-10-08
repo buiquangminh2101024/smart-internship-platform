@@ -17,8 +17,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "bold",
     marginBottom: 4,
-    textTransform: "uppercase",
-  },
+    },
   headline: {
     fontSize: 14,
     color: "#444",
@@ -35,8 +34,7 @@ const styles = StyleSheet.create({
     borderBottom: "1px solid #ccc",
     paddingBottom: 2,
     marginTop: 16,
-    textTransform: "uppercase",
-  },
+    },
 });
 
 export function ClassicTemplate({ data, config }: { data: CvBuilderData; config: CvBuilderConfig }) {
@@ -47,8 +45,8 @@ export function ClassicTemplate({ data, config }: { data: CvBuilderData; config:
     <Document>
       <Page size="A4" style={styles.page}>
         <View style={{ ...styles.header, borderBottomColor: primaryColor }}>
-          <Text style={{ ...styles.name, color: primaryColor }}>{personal.fullName || "Tên ứng viên"}</Text>
-          <Text style={styles.headline}>{personal.headline || "Vị trí ứng tuyển"}</Text>
+          <Text style={{ ...styles.name, color: primaryColor }}>{(personal.fullName || "Tên ứng viên").toUpperCase()}</Text>
+          <Text style={styles.headline}>{(personal.headline || "Vị trí ứng tuyển").toUpperCase()}</Text>
           <View style={styles.contact}>
             {personal.phone ? <Text>{personal.phone}</Text> : null}
             {personal.email ? <Text>• {personal.email}</Text> : null}
