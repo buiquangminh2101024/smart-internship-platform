@@ -2,11 +2,13 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import type { RegistrableRole } from "@sip/shared-types";
 import { LoginForm } from "@/components/auth/LoginForm";
+import { PasswordChangedNote } from "@/components/auth/PasswordChangedNote";
 
 export const metadata: Metadata = { title: "Đăng nhập — InternHub" };
 
 interface LoginPageProps {
-  searchParams: Promise<{ role?: string }>;
+  /** `reset=1`: vừa đổi mật khẩu ở `/forgot-password` hoặc Cài đặt (AD-18). */
+  searchParams: Promise<{ role?: string; reset?: string }>;
 }
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
@@ -21,6 +23,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           {role === "EMPLOYER" ? "Dành cho nhà tuyển dụng" : "Dành cho sinh viên"}
         </p>
       </div>
+      {params.reset === "1" ? <PasswordChangedNote /> : null}
       <LoginForm role={role} />
       <p className="text-center text-sm text-text-muted">
         Chưa có tài khoản?{" "}

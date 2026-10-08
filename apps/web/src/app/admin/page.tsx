@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { use, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { AuthTokensResponse } from "@sip/shared-types";
 import { apiFetch, publicFetch, ApiError } from "@/lib/api-client";
@@ -8,11 +8,14 @@ import { fetchProfileWithToken } from "@/lib/auth";
 import { useAdminAuthStore, useCurrentUser } from "@/stores/auth-store";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { PasswordChangedNote } from "@/components/auth/PasswordChangedNote";
 
 // Trang bí mật — chỉ email/password, không Google, không link đăng ký, không
 // có entry point từ nơi khác (xem AD-1). Sai role cũng chỉ báo lỗi chung,
-// không tiết lộ đây là trang dành riêng cho Admin.
-export default function AdminLoginPage() {
+// không tiết lộ đây là trang dành riêng cho Admin. `?reset=1`: vừa đổi mật khẩu
+// ở trang Cài đặt (AD-18, E9).
+export default function AdminLoginPage({ searchParams }: { searchParams: Promise<{ reset?: string }> }) {
+  const passwordChanged = use(searchParams).reset === "1";
   const router = useRouter();
   const user = useCurrentUser("admin");
   const [email, setEmail] = useState("");
@@ -90,6 +93,7 @@ export default function AdminLoginPage() {
           <h1 className="text-xl font-semibold text-text-strong">Quản trị hệ thống</h1>
           <p className="text-sm text-text-muted">Đăng nhập bằng tài khoản Admin</p>
         </div>
+        {passwordChanged ? <PasswordChangedNote /> : null}
         <Input
           label="Email"
           type="email"

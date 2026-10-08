@@ -114,6 +114,12 @@ export function LoginForm({ role }: LoginFormProps) {
         autoComplete="current-password"
         required
       />
+      <Link
+        href={role === "EMPLOYER" ? "/forgot-password?role=EMPLOYER" : "/forgot-password"}
+        className="-mt-2 justify-self-end text-sm font-medium text-brand-700 hover:underline"
+      >
+        Quên mật khẩu?
+      </Link>
       {formError ? <p className="text-sm text-red-600">{formError}</p> : null}
       {suspendedHref ? (
         <p role="alert" className="text-sm text-red-600">

@@ -2,7 +2,7 @@
 
 Song song với `docs/06-backend/admin-users-ext1/PLAN.md` (API, quyết định E1–E8, P1–P8; **không chép lại ở đây**). Quyết định kiến trúc: AD-18. Nối tiếp `docs/05-frontend/phases/admin-users-support/PLAN.md`.
 
-**Trạng thái: ĐÃ DUYỆT (2026-10-07).** Chưa code (chờ backend đợt 4).
+**Trạng thái: ĐÃ DUYỆT (2026-10-07).** Backend xong cả 4 đợt. Frontend: xong đợt 1 (F1 + F2 + F3), đợt 2 (F4 + F5), đợt 3 (F6 + F6b) và F7 (kiểm trên trình duyệt, trừ các thao tác ghi dữ liệu), 2026-10-08.
 
 ## Quyết định
 
@@ -86,7 +86,79 @@ Mọi mutation trên một người: invalidate `["admin", "users"]` (gồm cả
 | F6b | Thẻ "Đổi mật khẩu" trên trang Cài đặt (quyết định 7). Cần B9 backend (`hasPassword`) và `ResetPasswordForm` tách ở F6. | ~1 giờ |
 | F7 | Kiểm trên trình duyệt (kịch bản dưới), 375px và ≥ 1280px, `npx tsc --noEmit`, ESLint các file sửa | ~1 giờ |
 
-Tổng **khoảng 12 giờ**. Gợi ý gộp đợt như lần trước: đợt 1 = F1 + F2, đợt 2 = F3, đợt 3 = F4 + F5, đợt 4 = F6 + F6b, cuối cùng F7. Mỗi đợt dừng báo cáo, chạy `tsc` + lint.
+Tổng **khoảng 12 giờ**. Gộp đợt (chốt 2026-10-08): đợt 1 = F1 + F2 + F3 (cùng trang danh sách, cùng bảng và hook `useAdminUsers`; F1 sửa luôn 2 lỗi `tsc` ở `lib/notifications.ts`), đợt 2 = F4 + F5 (trang chi tiết), đợt 3 = F6 + F6b (mật khẩu), cuối cùng F7. Mỗi đợt dừng báo cáo, chạy `tsc` + lint.
+
+## Kết quả đợt 1 (F1 + F2 + F3)
+
+File: `lib/notifications.ts`, `components/dashboard/admin/ActivityTimeline.tsx`, `hooks/useAdminUsers.ts`, `app/admin/(console)/users/page.tsx`; mới `components/admin/UserBulkDialogs.tsx` (khoá / mở khoá hàng loạt, hộp thoại kết quả), `components/admin/UserListControls.tsx` (`UserSelectionBar`, `PageNav`). `tsc` sạch (hết 2 lỗi `lib/notifications.ts`), ESLint các file sửa sạch. Chưa xem trên trình duyệt (để F7).
+
+Lệch / bổ sung so với plan:
+
+- Thanh chọn nhiều nền trắng, viền + bóng, thay vì nền `brand-800` như `SelectionBar` của Employer — Admin bản D không có khối tối. Nút "Khoá (n)" đỏ đặc, "Mở khoá (n)" viền.
+- Dùng lại `RowCheckbox` / `TriStateCheckbox` từ `components/interviews/SelectionBar.tsx`, không viết ô chọn mới.
+- Lựa chọn lưu theo id rồi lấy dữ liệu từ trang hiện tại, nên sau khi danh sách tải lại (vd. vừa khoá lẻ một người đang được chọn) số "Khoá (n)" / "Mở khoá (n)" theo trạng thái mới. Bỏ chọn khi bất kỳ tham số URL nào đổi (bộ lọc, sắp xếp, trang).
+- "Từ ngày" sau "Đến ngày": web không gọi API (server trả 400), báo lỗi ở ô "Đến ngày" và thay bảng bằng một câu hướng dẫn.
+- Trang vượt quá tổng (vd. lọc "Hoạt động", khoá hết người ở trang cuối): hiện "Trang n không còn người dùng nào" kèm nút "Về trang cuối", không tự nhảy trang.
+- Trong lúc chuyển trang, bảng cũ mờ đi (`keepPreviousData`) và ô chọn bị tắt tới khi có dữ liệu mới.
+- Link email sang `/admin/users/[id]` đã có nhưng trang chi tiết làm ở đợt 2 ⇒ tới lúc đó link ra 404.
+- Nút "Bộ lọc khác" không có `aria-expanded` (`DashButton` không nhận thuộc tính này); trạng thái mở / đóng đọc qua chữ ẩn.
+
+## Kết quả đợt 2 (F4 + F5)
+
+File: `hooks/useAdminUsers.ts` (thêm `useAdminUserDetail`, `useRevokeUserSessions`, `useActivateUser`, `useSendPasswordResetGuide`), `app/admin/(console)/users/page.tsx` (dùng `UserMeta`), `components/admin/UserStatusDialogs.tsx` (export `staleMessage`, đổi câu báo tải lại), `components/layout/AdminConsoleShell.tsx` (mục "Người dùng" thêm `matchNested`); mới `app/admin/(console)/users/[id]/page.tsx`, `components/admin/UserMeta.tsx` (nhãn trạng thái, `SuspensionNote` tách từ trang danh sách), `components/admin/UserDetailSections.tsx` (các khối), `components/admin/UserDetailActions.tsx` (nút + "Thao tác khác"), `components/admin/UserAccountDialogs.tsx` (3 hộp thoại mới). `tsc` sạch, ESLint các file sửa sạch. Chưa xem trên trình duyệt (để F7).
+
+Lệch / bổ sung so với plan:
+
+- Breadcrumb đoạn `[id]` ghi "Chi tiết", không ghi email: `companies/[id]` thực tế cũng ghi "Chi tiết" (`buildCrumbs` không biết dữ liệu trang). Email đã là tiêu đề trang.
+- Cột phải không `sticky`: lịch sử tối đa 20 dòng có thể cao hơn màn hình, khi đó phần dưới bị che tới cuối trang.
+- Nút chính "Khoá tài khoản" dùng kiểu chữ đỏ không nền (như nút "Khoá" ở danh sách); nút đỏ đặc để dành cho hộp xác nhận. "Mở khoá" (tài khoản bị khoá) và "Kích hoạt thủ công" là nút chính màu brand.
+- "Thao tác khác" là nút mở / đóng một danh sách nút (`aria-expanded`), không phải `role="menu"`, nên không cần phím mũi tên. Mục "Gửi hướng dẫn đặt lại mật khẩu" khi chỉ có Google dùng `aria-disabled` (vẫn Tab tới được) kèm dòng "Tài khoản chỉ đăng nhập bằng Google".
+- 429 khi gửi hướng dẫn: đóng hộp thoại, toast "Đã gửi hướng dẫn 3 lần trong giờ qua cho tài khoản này. Bạn thử lại sau." Cùng cách với 409 (đóng + toast + tải lại).
+- Lý do của "Buộc đăng xuất" và "Kích hoạt thủ công" chỉ lưu trong lịch sử (server không gửi cho người dùng); ô lý do ghi rõ điều này.
+- Câu báo khi 409/404 ở hộp thoại khoá / mở khoá đổi "Danh sách đã được tải lại" thành "Thông tin đã được tải lại" để dùng được ở cả trang chi tiết.
+- Màu trạng thái đơn ứng tuyển: Chờ duyệt marigold, Đang xem xét / Vào danh sách rút gọn / Mời phỏng vấn brand, Được nhận xanh, Bị từ chối đỏ, Đã huỷ xám (không dùng `info` vì là màu Indigo của Employer).
+
+## Kết quả đợt 3 (F6 + F6b)
+
+File: `app/(auth)/login/page.tsx` (khung `?reset=1`), `components/auth/LoginForm.tsx` (link "Quên mật khẩu?"), `app/admin/page.tsx` (khung `?reset=1`), `components/settings/SettingsPage.tsx` (thêm thẻ "Mật khẩu"); mới `app/(auth)/forgot-password/page.tsx`, `components/auth/ForgotPasswordForm.tsx` (bước 1 + bước 2), `components/auth/ResetPasswordForm.tsx` (form bước 2 dùng chung), `components/auth/PasswordChangedNote.tsx` (khung xanh "Đã đổi mật khẩu"), `components/settings/PasswordCard.tsx`, `hooks/usePasswordReset.ts`, `lib/password-reset.ts` (câu lỗi 429, link về trang đăng nhập, xoá phiên). `proxy.ts` không chặn `/forgot-password`, không sửa. `tsc` sạch, ESLint các file sửa sạch. Chưa xem trên trình duyệt (để F7).
+
+Lệch / bổ sung so với plan:
+
+- Không dùng lại ô mã của `OtpForm` (gắn với `/auth/verify-otp` và đăng nhập ngay sau khi xác thực); `ResetPasswordForm` có ô riêng `inputMode="numeric"`, `autocomplete="one-time-code"`, kèm ô `username` ẩn để trình quản lý mật khẩu lưu đúng tài khoản.
+- Câu xác nhận ở Cài đặt bỏ "Chúng tôi" (giọng văn `sip-ui` không xưng "chúng tôi"): "Mã xác thực sẽ được gửi tới {email}. Sau khi đổi, mọi thiết bị đang đăng nhập, kể cả thiết bị này, sẽ bị đăng xuất."
+- Form nhập mã ở Cài đặt hiện ngay trong thẻ "Mật khẩu" (không nằm trong hộp thoại), kèm nút "Huỷ đổi mật khẩu". Hộp thoại chỉ để xác nhận gửi mã; lỗi khi xin mã (429…) hiện trong hộp thoại, hộp thoại giữ nguyên.
+- Không tách `endSession` khỏi `lib/api-client.ts`: phần xoá phiên chỉ là `clear()` của store, nên viết `clearSessionsOfEmail` ở `lib/password-reset.ts` (xoá phiên của khu vực nào đang đăng nhập đúng email vừa đổi). Trang `/forgot-password` cũng gọi hàm này, để người đang đăng nhập mà bấm link từ thông báo "Đặt lại mật khẩu" không còn hiện là đang đăng nhập sau khi đổi.
+- Đổi xong ở Cài đặt dùng `window.location.replace` thay cho `router.replace`: tải lại hẳn trang để bỏ dữ liệu của phiên cũ còn trong bộ nhớ (React Query, socket). Trang `/forgot-password` vẫn `router.replace`.
+- 429 khi xin mã có ba câu theo ba hạn mức của server: vừa xin mã (đợi 60 giây), email xin quá nhiều lần trong giờ, mạng xin quá nhiều lần trong giờ.
+- "Gửi lại mã" thành công thì xoá ô mã và ghi "Đã gửi mã mới tới {email}. Mã cũ không dùng được nữa." (server ghi đè mã cũ).
+- Link "Quên mật khẩu?" nằm ngay dưới ô mật khẩu, căn phải. Trang đăng nhập Admin chỉ có khung `?reset=1`, không có link "Quên mật khẩu?" (AD-1: không có lối vào nào khác).
+- Link trong email / thông báo hướng dẫn của Admin là `/forgot-password` không kèm email, nên người dùng tự nhập email ở bước 1.
+
+## Kết quả F7 (kiểm trên trình duyệt, 2026-10-08)
+
+Chrome, desktop 1536px; 375px xem qua iframe cùng origin (cửa sổ không thu nhỏ được). Tài khoản: ứng viên và nhà tuyển dụng demo của `seed-match-demo`, phiên Admin có sẵn trên trình duyệt. Chỉ xem và mở / huỷ hộp thoại, không bấm thao tác ghi dữ liệu (khoá, buộc đăng xuất, kích hoạt, gửi hướng dẫn, đổi mật khẩu). Ngoại lệ: thẻ "Mật khẩu" của ứng viên demo đã xin mã 2 lần (không đổi mật khẩu).
+
+Đã kiểm, chạy đúng:
+
+- `/forgot-password`: focus ô email; bỏ trống báo lỗi; email không có tài khoản vẫn sang bước 2; bước 2 báo lỗi từng ô, focus ô sai đầu tiên, ô mã lọc chữ; mã sai báo tại ô mã (400); "Đổi email" về bước 1 giữ email; link "Quay lại đăng nhập" giữ `role`.
+- `/login`: link "Quên mật khẩu?" (giữ `role=EMPLOYER`); khung xanh `?reset=1`.
+- Cài đặt (ứng viên, nhà tuyển dụng, Admin): thẻ "Mật khẩu"; hộp thoại xác nhận, Esc đóng và trả focus về nút; xin mã xong form hiện trong thẻ, focus ô mã; xin lại trong 60 giây hiện câu 429 trong hộp thoại.
+- `/admin/users`: sắp xếp "Cũ nhất", trang 2, "Bộ lọc khác" (đếm số bộ lọc), tìm theo họ tên, trạng thái rỗng + "Xoá bộ lọc", khoảng ngày ngược báo lỗi và không gọi API, chọn nhiều + thanh thao tác, hộp thoại khoá hàng loạt báo lỗi khi thiếu lý do, Esc trả focus về nút.
+- `/admin/users/[id]`: skeleton khi tải, đủ các khối (hồ sơ, CV không tải được, đơn ứng tuyển, lời mời, tài khoản, lịch sử rỗng); "Thao tác khác" `aria-expanded`, mở thì focus mục đầu, Esc đóng và trả focus; hộp thoại "Gửi hướng dẫn…" mở / huỷ được.
+- Không có lỗi console. Nội dung trang chi tiết, Cài đặt, `/forgot-password` không tràn ngang ở bề rộng ~360px.
+
+Đã sửa trong F7:
+
+- Nút "Gửi lại mã (n giây)" cách đôi (hai mục flex trong `Button` có `gap-2`) ⇒ bọc một `span`.
+- Thẻ "Mật khẩu": bấm "Huỷ đổi mật khẩu" thì focus rơi về `body` ⇒ nút "Đổi mật khẩu" hiện lại với `autoFocus`.
+- `/admin/users` ở màn hẹp: bảng `min-w-[880px]` kéo rộng cả cột grid của trang (cả tiêu đề, bộ lọc) ⇒ thêm `min-w-0` cho khung bọc, giờ chỉ bảng cuộn ngang.
+
+Chưa kiểm / ngoài phạm vi:
+
+- Đổi mật khẩu thành công (cần mã OTP thật), các thao tác ghi dữ liệu của kịch bản 2, 4, 5, 6: chủ dự án tự chạy.
+- Dòng "không có mật khẩu" của tài khoản chỉ có Google: không có tài khoản test; sửa `localStorage` không được vì web lấy lại thông tin người dùng từ server.
+- Khung xanh ở `/admin?reset=1`: Admin đang đăng nhập nên trang hiện màn "Đã đăng nhập".
+- Có sẵn từ trước, không sửa: ở 375px shell ứng viên / Employer / Admin vẫn hiện sidebar 240px (cùng mục "header tràn ngang" để sau); `/login` rộng 377px do nút Google cố định 320px.
 
 ## Kịch bản demo
 
