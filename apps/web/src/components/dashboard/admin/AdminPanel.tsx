@@ -65,20 +65,32 @@ export interface SegmentedOption<T extends string | number> {
   label: string;
 }
 
-/** Nút gộp nền xám (chọn kỳ 7/30/90, lọc hoạt động); trạng thái qua `aria-pressed`. */
+/**
+ * Nút gộp nền xám (chọn kỳ 7/30/90, lọc hoạt động); trạng thái qua `aria-pressed`.
+ * `size="md"` (cao 36px, chữ 13px) cho thanh công cụ của trang; `fullWidth` giãn
+ * hết ngang, các nút chia đều.
+ */
 export function SegmentedControl<T extends string | number>({
   options,
   value,
   onChange,
   label,
+  size = "sm",
+  fullWidth = false,
 }: {
   options: SegmentedOption<T>[];
   value: T;
   onChange: (value: T) => void;
   label: string;
+  size?: "sm" | "md";
+  fullWidth?: boolean;
 }) {
   return (
-    <div role="group" aria-label={label} className="inline-flex gap-0.5 rounded-[10px] bg-surface-hover p-[3px]">
+    <div
+      role="group"
+      aria-label={label}
+      className={`gap-0.5 rounded-[10px] bg-surface-hover p-[3px] ${fullWidth ? "flex w-full" : "inline-flex"}`}
+    >
       {options.map((option) => {
         const pressed = option.value === value;
         return (
@@ -87,7 +99,9 @@ export function SegmentedControl<T extends string | number>({
             type="button"
             aria-pressed={pressed}
             onClick={() => onChange(option.value)}
-            className={`h-7 cursor-pointer rounded-[7px] px-2.5 text-xs font-bold transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 ${
+            className={`${size === "md" ? "h-[30px] whitespace-nowrap px-3 text-[13px]" : "h-7 px-2.5 text-xs"} ${
+              fullWidth ? "min-w-0 flex-1" : ""
+            } cursor-pointer rounded-[7px] font-bold transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 ${
               pressed ? "bg-surface-card text-brand-700 shadow-[0_1px_2px_rgba(11,31,27,0.12)]" : "text-text-muted hover:text-text-strong"
             }`}
           >

@@ -4,7 +4,25 @@ Song song: `docs/06-backend/employer-interviews/PLAN.md` (tham số API, phân t
 Quy ước giao diện: `.claude/skills/sip-ui/SKILL.md`.
 Quyết định đã chốt (2026-10-11 và 2026-10-12): `docs/temp/EMPLOYER_INTERVIEWS_DECISIONS.md` (D1–D19). Mock: `docs/temp/ui-compare/dashboard/employer-lich-da-dat.html`. Cả hai nằm trong `docs/temp` (gitignore, không commit), nên mọi điểm cần để code đều được chép lại trong file này.
 
-**Trạng thái: ĐÃ LẬP KẾ HOẠCH (2026-10-11, cập nhật 2026-10-12: tab mặc định và tab "Chờ đặt lịch" theo D16–D19), CHỜ CHỦ DỰ ÁN DUYỆT. Chưa viết code. Còn 1 điểm cần chủ dự án xác nhận, xem mục cuối Phần 2.**
+**Trạng thái: ĐÃ TRIỂN KHAI (2026-10-12).** Đã duyệt 2026-10-12 (điểm cuối Phần 2: tải lại danh sách sau khi đổi / huỷ). Chia ba lượt: A backend, B tab "Chờ đặt lịch", C tab "Lịch đã đặt", `useInterviewActions`, trang theo tin và chi tiết hồ sơ. Cả ba lượt xong 2026-10-12.
+
+Lượt B gồm bước 1, 2 (phần "chờ đặt lịch"), 4, 5, 7 và nửa đầu bước 8 (link "Xem tất cả n hồ sơ" của nhóm chờ đặt lịch). Ghi chú triển khai:
+
+- Tab "Chờ đặt lịch" vẫn dùng `useInterviewScheduling` có sẵn; `useInterviewActions` để lượt C.
+- Số trên tab và nút lọc trừ ngay các hồ sơ vừa đặt lịch trên máy (so với lúc lấy dữ liệu, `requestedAt`), không gọi lại API, để dòng vừa đặt vẫn ở lại kèm nhãn (D18).
+- "tiếp từ trang trước": trang có nhiều tin thì so số hồ sơ của tin đầu trang với `jobCounts`; trang chỉ có một tin thì hỏi API hồ sơ cuối của trang trước (`pageSize=1`).
+- `AwaitingScheduleRow` thêm chữ marigold đậm khi chờ quá 2 ngày, nên nhóm chờ đặt lịch trên dashboard cũng có màu này.
+- Shell Employer giữ sidebar 240px ở mọi cỡ màn hình (có từ trước), nên ở 375px cả portal đều tràn ngang. Phần nội dung của trang mới đã kiểm tra vừa 375px khi bỏ sidebar.
+
+Lượt C gồm bước 2 (phần còn lại), 3, 6, nửa sau bước 8, 9 và 11. Ghi chú triển khai:
+
+- `useInterviewActions` trả `schedule` / `reschedule` / `cancel` và gọi `onChanged({ kind, ... })`. Dashboard truyền `onChanged` tải lại số tổng quan, hành vi giữ như cũ. Tab "Chờ đặt lịch" vẫn dùng `useInterviewScheduling` như lượt B.
+- Tab "Lịch đã đặt" sau khi đổi / huỷ: tải lại danh sách, rồi mở ngày chứa buổi đó và đưa focus về dòng (đổi lịch, hoặc huỷ khi đang bật "Hiện lịch đã huỷ") hoặc về tiêu đề ngày (huỷ). Huỷ lịch tải lại cả số trên tab "Chờ đặt lịch".
+- Ô lọc theo tin ở tab "Lịch đã đặt" lấy danh sách tin bằng `useEmployerJobPostOptions` (`hooks/useJobPosts.ts`), tải lần lượt các trang 20 tin của `/employer/job-posts`, tối đa 20 trang.
+- Nút "Tải thêm lịch" dùng `aria-disabled` thay cho `disabled` để focus ở lại nút trong lúc tải. `useUpcomingInterviews` chỉ thử lại 1 lần để lỗi hiện sớm. Lỗi "Tải thêm" giữ danh sách đã có; chỉ báo lỗi cả khối khi chưa tải được trang nào.
+- `week` trên URL là ngày bất kỳ thì quy về thứ Hai của tuần đó; sai định dạng thì về tuần hiện tại.
+- Trang theo tin: thêm nút "Đổi lịch" ở cột "Thao tác"; chưa thêm nút "Đặt lịch" trên từng dòng (vẫn tick rồi dùng thanh dưới cùng).
+- Chi tiết hồ sơ: lịch sử dùng nhãn "Đã diễn ra" (như phía ứng viên) cho buổi đã qua giờ; khối tự có `ToastViewport` vì trang chưa có.
 
 ## Mục tiêu
 

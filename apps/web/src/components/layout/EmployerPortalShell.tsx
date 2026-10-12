@@ -19,6 +19,7 @@ import { SocketProvider } from "@/components/realtime/SocketProvider";
 const NAV_ITEMS: SideNavItem[] = [
   { label: "Tổng quan", icon: "layout-dashboard", href: "/employer/dashboard" },
   { label: "Tin tuyển dụng", icon: "briefcase", href: "/employer/jobs", matchNested: true },
+  { label: "Lịch phỏng vấn", icon: "calendar-days", href: "/employer/interviews" },
   { label: "Tin nhắn", icon: "messages-square", href: "/employer/messages", matchNested: true },
   { label: "Hồ sơ công ty", icon: "building-2", href: "/employer/profile" },
   { label: "Gói dịch vụ", icon: "credit-card", href: "/employer/subscription", matchNested: true },
@@ -30,6 +31,7 @@ const CRUMB_LABELS: Record<string, string> = {
   jobs: "Tin tuyển dụng",
   new: "Đăng tin mới",
   applications: "Ứng viên",
+  interviews: "Lịch phỏng vấn",
   messages: "Tin nhắn",
   profile: "Hồ sơ công ty",
   subscription: "Gói dịch vụ",

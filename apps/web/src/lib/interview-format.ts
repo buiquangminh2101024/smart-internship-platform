@@ -64,9 +64,45 @@ export function daysBetween(from: string, to: string): number {
   return Math.round((toUtc(to) - toUtc(from)) / DAY_MS);
 }
 
-function weekdayLong(isoDate: string): string {
+export function weekdayLong(isoDate: string): string {
   const [year, month, day] = isoDate.split("-").map(Number);
   return WEEKDAY_LONG[new Date(Date.UTC(year!, month! - 1, day!)).getUTCDay()]!;
+}
+
+/** Thứ Hai của tuần chứa ngày `isoDate` (YYYY-MM-DD). */
+export function mondayOf(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const weekday = new Date(Date.UTC(year!, month! - 1, day!)).getUTCDay();
+  return addDaysIso(isoDate, -((weekday + 6) % 7));
+}
+
+/** Ngày lịch hợp lệ dạng YYYY-MM-DD (loại `2026-02-30`). */
+export function isIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  return addDaysIso(value, 0) === value;
+}
+
+/** Khoảng tuần từ thứ Hai: `12/10 – 18/10/2026`; khác năm thì ghi cả hai năm. */
+export function formatWeekRange(monday: string): string {
+  const sunday = addDaysIso(monday, 6);
+  const [startYear, startMonth, startDay] = monday.split("-");
+  const [endYear, endMonth, endDay] = sunday.split("-");
+  const start = startYear === endYear ? `${startDay}/${startMonth}` : `${startDay}/${startMonth}/${startYear}`;
+  return `${start} – ${endDay}/${endMonth}/${endYear}`;
+}
+
+/** `2026-10-12` → `Tháng 10/2026`. */
+export function formatMonthLabel(isoDate: string): string {
+  const [year, month] = isoDate.split("-");
+  return `Tháng ${Number(month)}/${year}`;
+}
+
+/** Thời lượng: `45 phút`, `2 giờ`, `2 giờ 15 phút`. */
+export function formatDuration(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) return `${rest} phút`;
+  return rest === 0 ? `${hours} giờ` : `${hours} giờ ${rest} phút`;
 }
 
 /** `"2026-10-02"` → `"Thứ Sáu, 02/10/2026"`. */

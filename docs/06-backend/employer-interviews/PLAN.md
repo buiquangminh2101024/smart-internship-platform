@@ -5,7 +5,7 @@ Các quyết định đã chốt với chủ dự án (2026-10-11) nằm ở `do
 
 **Trạng thái: ĐÃ TRIỂN KHAI bước 1–7 (2026-10-12, chủ dự án duyệt cùng ngày).** Kiểm chứng: `tsc` server và web sạch; `tests/unit/interviews-pagination.test.ts` 7/7; thử trên PostgreSQL tạm (container `pgvector/pgvector:pg16`, cổng 55432, không dùng Neon) 82 kiểm tra đều đạt, gồm 3 chế độ "sắp tới" (trang 24/20/6: trang đầu kéo tới hết ngày bận), đủ 4 tổ hợp `sort` × `group` của "chờ đặt lịch", kẹp `page`, `jobCounts`, dashboard giữ hành vi cũ, chi tiết hồ sơ kèm lịch và 404 với công ty khác.
 
-Lưu ý tới khi xong frontend lượt B: `useAwaitingSchedule` ở web vẫn gọi không kèm `page`, nên trang hồ sơ theo tin và nút "mở rộng" trên dashboard chỉ nhận 50 hồ sơ đầu (trước đây 100).
+Frontend lượt B (2026-10-12) đã chuyển `useAwaitingSchedule` sang tải lần lượt mọi trang (`pageSize=100`); nút "mở rộng" trên dashboard được thay bằng link sang `/employer/interviews`.
 
 ## Mục tiêu
 
