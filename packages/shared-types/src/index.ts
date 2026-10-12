@@ -1290,7 +1290,12 @@ export interface CandidateApplicationSummary extends Application {
 export interface EmployerApplicationDetail extends Application {
   jobPost: JobPost;
   cv: CvRecord;
-  candidate: any; 
+  candidate: any;
+}
+
+/** GET /employer/applications/:id — chi tiết hồ sơ kèm mọi lịch phỏng vấn, sớm nhất trước. */
+export interface EmployerApplicationView extends EmployerApplicationDetail {
+  interviews: ApplicationInterview[];
 }
 
 // --- Messaging (Phase 9) -------------------------------------------------
@@ -1641,6 +1646,48 @@ export interface AwaitingScheduleApplication {
   jobPostTitle: string;
   /** Lúc hồ sơ vào trạng thái hiện tại. */
   waitingSince: string;
+}
+
+/** `oldest`: chờ lâu nhất trước (mặc định). `newest`: chờ ngắn nhất trước. */
+export type AwaitingScheduleSort = "oldest" | "newest";
+
+/** Số hồ sơ chờ đặt lịch của một tin, cho hàng nút lọc theo tin. */
+export interface AwaitingScheduleJobCount {
+  jobPostId: string;
+  jobPostTitle: string;
+  count: number;
+}
+
+/**
+ * GET /employer/interviews/awaiting — phân trang theo số trang (D18, ngoại lệ của
+ * API_CONVENTIONS.md), không dùng PaginatedResponse vì không có cursor.
+ */
+export interface AwaitingSchedulePage {
+  items: AwaitingScheduleApplication[];
+  /** Số hồ sơ chờ theo bộ lọc tin hiện tại. */
+  total: number;
+  /** Trang thực sự trả về: yêu cầu vượt trang cuối thì là trang cuối. */
+  page: number;
+  pageSize: number;
+  /** Mọi tin có hồ sơ chờ, không phụ thuộc `jobPostId`; xếp theo tên tin. */
+  jobCounts: AwaitingScheduleJobCount[];
+}
+
+/** GET /employer/interviews?scope= — `range` (mặc định): from/to; `upcoming`: từ đầu hôm nay, phân trang cursor. */
+export type EmployerInterviewScope = "range" | "upcoming";
+
+/** Lịch của một hồ sơ, trả kèm GET /employer/applications/:id (không lặp các trường hồ sơ đã có). */
+export interface ApplicationInterview {
+  id: string;
+  scheduledAt: string;
+  durationMinutes: number;
+  mode: InterviewMode;
+  location: string | null;
+  note: string | null;
+  status: InterviewStatus;
+  cancelReason: string | null;
+  createdById: string;
+  createdAt: string;
 }
 
 export interface EmployerInterview {

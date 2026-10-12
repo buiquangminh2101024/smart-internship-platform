@@ -43,6 +43,8 @@ interface PaginatedResponse<T> {
 
 Dùng **cursor-based pagination** (`nextCursor`, không dùng `page`/`limit` offset) cho mọi endpoint danh sách — nhất quán cho các list có thể thay đổi thường xuyên (tin tuyển dụng, ứng tuyển).
 
+**Ngoại lệ:** `GET /employer/interviews/awaiting` dùng `page`/`pageSize` (mặc định 50, tối đa 100) và trả `AwaitingSchedulePage` (`items`, `total`, `page`, `pageSize`, `jobCounts`) vì giao diện cần nhảy tới trang bất kỳ. Danh sách ngắn; chấp nhận việc hồ sơ dồn trang khi dữ liệu đổi, `page` vượt trang cuối thì trả trang cuối. Xem `docs/06-backend/employer-interviews/PLAN.md` (D18).
+
 ## 3. HTTP status code conventions
 
 | Status | Khi nào dùng |

@@ -1,5 +1,13 @@
 import type { NextFunction, Request, Response } from "express";
-import type { ApiResponse, CandidateApplicationSummary, EmployerApplicationDetail, PaginatedResponse, ApplicationStatus } from "@sip/shared-types";
+import type {
+  ApiResponse,
+  CandidateApplicationSummary,
+  EmployerApplicationDetail,
+  EmployerApplicationView,
+  PaginatedResponse,
+  ApplicationStatus,
+} from "@sip/shared-types";
+import { toApplicationInterview } from "../interviews/interview.mapper";
 import type { ApplicationsService } from "./applications.service";
 import { toCandidateApplicationSummary, toEmployerApplicationDetail } from "./application.mapper";
 
@@ -68,8 +76,11 @@ export class ApplicationsController {
 
   getEmployerDetail = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const result = await this.applicationsService.getEmployerApplicationDetail(req.user!.id, req.params.id as string);
-      const body: ApiResponse<EmployerApplicationDetail> = { success: true, data: toEmployerApplicationDetail(result) };
+      const { app, interviews } = await this.applicationsService.getEmployerApplicationDetail(req.user!.id, req.params.id as string);
+      const body: ApiResponse<EmployerApplicationView> = {
+        success: true,
+        data: { ...toEmployerApplicationDetail(app), interviews: interviews.map(toApplicationInterview) },
+      };
       res.json(body);
     } catch (error) {
       next(error);

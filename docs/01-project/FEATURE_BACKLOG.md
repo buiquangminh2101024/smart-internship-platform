@@ -8,6 +8,10 @@ Danh sách chức năng mà các nền tảng tuyển dụng thực tế (TopCV,
 - 🟡 **Trung bình** — điểm cộng rõ rệt.
 - 🟢 **Thấp** — làm nếu còn thời gian.
 
+**Đánh dấu:**
+
+- 📌 **Chuẩn bị làm ngay** — chủ dự án đã chọn làm tiếp theo (đánh dấu 2026-10-11). Chưa có plan.
+
 **Ngoài phạm vi (đã chốt):**
 
 - Thanh toán VNPay/MoMo thật: dự án chỉ dùng **sandbox**, vì đơn vị chỉ có đăng ký doanh nghiệp, không đủ điều kiện mở merchant thật.
@@ -37,6 +41,7 @@ Danh sách chức năng mà các nền tảng tuyển dụng thực tế (TopCV,
 | Báo cáo tin lừa đảo/vi phạm (người dùng báo, Admin xử lý) | 🔴 | Tin tuyển thực tập dễ bị lợi dụng. Luồng xử lý có thể dùng lại `TAKEN_DOWN` và `JobPostModerationAction` sẵn có. |
 | Màn hình Admin quản lý gói dịch vụ | 🟡 | Backend đã có `POST`/`PATCH /subscription-plans`, chỉ còn thiếu UI. |
 | Hoá đơn/biên lai cho giao dịch | 🟢 | |
+| 📌 Trang nhật ký hoạt động toàn hệ thống (audit log) cho Admin | 🟡 | Thêm 2026-10-11. Hiện chỉ dashboard Admin có khối "Hoạt động gần đây" (`ActivityTimeline`, lọc Quản trị viên / Tất cả), và chỉ hiện vài mục mới nhất. `/admin/users/[id]` chỉ có hoạt động của một người dùng. Chưa có trang riêng để xem toàn bộ. |
 
 ## 3. Ứng viên
 
@@ -64,7 +69,11 @@ Danh sách chức năng mà các nền tảng tuyển dụng thực tế (TopCV,
 | Tin nổi bật / đẩy tin trả phí | 🟡 | Mở rộng từ hệ thống gói (Phase 5), thanh toán qua sandbox. |
 | Phân quyền nhiều vai trò trong công ty (HR, trưởng nhóm, chỉ xem…) | 🟢 | Hiện chỉ phân biệt `isCompanyAdmin` và thành viên. |
 | Phiếu đánh giá sau phỏng vấn (scorecard) | 🟢 | |
-| Thao tác lịch phỏng vấn ngay tại hồ sơ: đổi/huỷ lịch trên trang danh sách theo tin; nút "Đặt lịch" trên trang chi tiết hồ sơ và trên từng dòng | 🟡 | Thêm 2026-10-07 theo quyết định chủ dự án. Hiện tại: `/employer/jobs/[id]/applications` đặt lịch được (tick hồ sơ `SHORTLISTED` chưa có lịch → thanh dưới cùng → hộp đặt lịch đơn hoặc hàng loạt qua `useInterviewScheduling`), nhưng hồ sơ đã có lịch chỉ hiện "Đã có lịch DD/MM", còn đổi/huỷ lịch chỉ có ở trang tổng quan (`EmployerTaskBoard`, `InterviewGroups`). `/employer/applications/[id]` chỉ có nút chuyển trạng thái. Chỉ sửa frontend, vì API đặt/đổi/huỷ lịch đã có. Dùng lại `useInterviewScheduling`, `InterviewDialog`, `CancelInterviewDialog`. Nút chỉ hiện khi trạng thái cho phép: đặt lịch với `SHORTLISTED`, đổi/huỷ với lịch `SCHEDULED`. |
+| 📌 Thao tác lịch phỏng vấn ngay tại hồ sơ: đổi/huỷ lịch trên trang danh sách theo tin; nút "Đặt lịch" trên trang chi tiết hồ sơ và trên từng dòng | 🟡 | Thêm 2026-10-07 theo quyết định chủ dự án. Hiện tại: `/employer/jobs/[id]/applications` đặt lịch được (tick hồ sơ `SHORTLISTED` chưa có lịch → thanh dưới cùng → hộp đặt lịch đơn hoặc hàng loạt qua `useInterviewScheduling`), nhưng hồ sơ đã có lịch chỉ hiện "Đã có lịch DD/MM", còn đổi/huỷ lịch chỉ có ở trang tổng quan (`EmployerTaskBoard`, `InterviewGroups`). `/employer/applications/[id]` chỉ có nút chuyển trạng thái. Chỉ sửa frontend, vì API đặt/đổi/huỷ lịch đã có. Dùng lại `useInterviewScheduling`, `InterviewDialog`, `CancelInterviewDialog`. Nút chỉ hiện khi trạng thái cho phép: đặt lịch với `SHORTLISTED`, đổi/huỷ với lịch `SCHEDULED`. |
+| 📌 Xem tất cả lịch phỏng vấn sắp tới của mọi tin trong một danh sách | 🟡 | Thêm 2026-10-11. Hiện chỉ có ở dashboard (nhóm "Lịch phỏng vấn sắp tới" trong `EmployerTaskBoard`/`InterviewGroups`). Ngoài dashboard chỉ xem được theo từng tin. Chưa có trang lịch phỏng vấn riêng. Liên quan mục "Thao tác lịch phỏng vấn ngay tại hồ sơ" ở trên. |
+| 📌 Đặt lịch phỏng vấn hàng loạt cho hồ sơ của nhiều tin cùng lúc | 🟡 | Thêm 2026-10-11. Hiện chỉ có ở dashboard (nhóm "Hồ sơ chờ đặt lịch" + `SelectionBar`). `/employer/jobs/[id]/applications` chỉ đặt hàng loạt được trong phạm vi một tin. |
+| 📌 Danh sách hồ sơ chờ xử lý của mọi tin (kèm thời gian đã chờ, Xem xét / Từ chối ngay tại dòng) | 🟡 | Thêm 2026-10-11. Hiện chỉ dashboard có, và chỉ hiện vài hồ sơ đầu. Link "Xem tất cả N hồ sơ theo từng tin" dẫn về `/employer/jobs`, nên phải mở từng tin. Chưa có trang danh sách hồ sơ ứng tuyển chung. |
+| Tìm lịch phỏng vấn theo tên ứng viên trên trang `/employer/interviews` | 🟢 | Thêm 2026-10-11. Dùng khi ứng viên gọi hỏi giờ hoặc xin dời lịch mà nhà tuyển dụng không nhớ tin/ngày. Cố ý chưa làm trong đợt lịch phỏng vấn (D15 trong `docs/temp/EMPLOYER_INTERVIEWS_DECISIONS.md`): lọc theo tin + nhóm ngày đóng/mở đã đủ với vài chục buổi. Cần thêm tham số tìm (không phân biệt hoa thường) vào chế độ "sắp tới" của `GET /employer/interviews`, kết hợp được với cursor và `jobPostId`; frontend thêm ô tìm có trễ khi gõ, ghi lên URL, trạng thái "Không tìm thấy". Nên làm khi có phản hồi khó tìm lịch, hoặc khi mỗi công ty thường có trên khoảng 50 buổi sắp tới. |
 
 ## 5. Đặc thù tuyển thực tập (điểm khác biệt của khoá luận)
 

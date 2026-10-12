@@ -1,9 +1,11 @@
 import type { InterviewMode, PrismaClient } from "@prisma/client";
 import type {
   AwaitingScheduleApplication,
+  AwaitingSchedulePage,
   BatchScheduleFailureReason,
   CandidateInterview,
   EmployerInterview,
+  PaginatedResponse,
 } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
 import type { ApplicationsRepository } from "../applications/applications.repository";
@@ -27,7 +29,9 @@ const VN_OFFSET_MS = 7 * 60 * MINUTE_MS;
 const MAX_DAYS_AHEAD = 180;
 const DEFAULT_LIST_DAYS = 30;
 const MAX_LIST_DAYS = 92;
-const AWAITING_LIST_LIMIT = 100;
+/** Chế độ "sắp tới" (D14): tối thiểu 20 buổi mỗi trang (trừ trang cuối), không cắt ngang một ngày, trần 100. */
+export const UPCOMING_PAGE_SIZE = 20;
+export const UPCOMING_PAGE_MAX = 100;
 const CANDIDATE_LIST_LIMIT = 100;
 /** Lô 20 hồ sơ ghi vài trăm câu lệnh (lịch, history, thông báo, outbox) — dư sức hơn mặc định 5 giây của Prisma. */
 const BATCH_TRANSACTION_TIMEOUT_MS = 30_000;
@@ -36,6 +40,40 @@ const BATCH_TRANSACTION_TIMEOUT_MS = 30_000;
 export function vnDayStart(date: Date, days = 0): Date {
   const vnMidnight = Math.floor((date.getTime() + VN_OFFSET_MS) / DAY_MS) * DAY_MS;
   return new Date(vnMidnight - VN_OFFSET_MS + days * DAY_MS);
+}
+
+/**
+ * Cắt một trang "sắp tới" (D14). `rows` đã xếp (scheduledAt, id) và có tối đa `max + 1`
+ * dòng: lấy `pageSize` dòng rồi kéo dài tới hết ngày (giờ Việt Nam) của dòng cuối,
+ * nhưng không quá `max`. Chỉ khi chạm trần thì một ngày mới bị chia sang trang sau.
+ */
+export function cutAtDayBoundary<T extends { scheduledAt: Date }>(
+  rows: T[],
+  pageSize: number,
+  max: number,
+): { items: T[]; hasMore: boolean } {
+  if (rows.length <= pageSize) return { items: rows, hasMore: false };
+  let n = pageSize;
+  while (n < rows.length && n < max && sameVnDay(rows[n]!.scheduledAt, rows[n - 1]!.scheduledAt)) n++;
+  return { items: rows.slice(0, n), hasMore: rows.length > n };
+}
+
+function sameVnDay(a: Date, b: Date): boolean {
+  return vnDayStart(a).getTime() === vnDayStart(b).getTime();
+}
+
+/** Cursor mờ của chế độ "sắp tới": base64url("<ISO scheduledAt>|<id>"). */
+export function encodeCursor(position: { scheduledAt: Date; id: string }): string {
+  return Buffer.from(`${position.scheduledAt.toISOString()}|${position.id}`, "utf8").toString("base64url");
+}
+
+export function decodeCursor(cursor: string): { scheduledAt: Date; id: string } {
+  const decoded = Buffer.from(cursor, "base64url").toString("utf8");
+  const separator = decoded.indexOf("|");
+  const scheduledAt = new Date(decoded.slice(0, separator));
+  const id = decoded.slice(separator + 1);
+  if (separator <= 0 || !id || Number.isNaN(scheduledAt.getTime())) throw new AppError(400, "Invalid cursor");
+  return { scheduledAt, id };
 }
 
 interface SlotRequest {
@@ -177,8 +215,10 @@ export class InterviewsService {
 
   // ─── Employer: đọc ────────────────────────────────────────────────────────
 
-  async listForEmployer(userId: string, query: ListEmployerInterviewsQuery): Promise<EmployerInterview[]> {
+  async listForEmployer(userId: string, query: ListEmployerInterviewsQuery): Promise<PaginatedResponse<EmployerInterview>> {
     const employer = await this.requireEmployer(userId);
+    if (query.scope === "upcoming") return this.listUpcomingPage(employer.companyId, query);
+
     const from = query.from ?? vnDayStart(new Date());
     const to = query.to ?? new Date(from.getTime() + DEFAULT_LIST_DAYS * DAY_MS);
     if (to <= from) throw new AppError(400, "`to` must be after `from`");
@@ -188,25 +228,65 @@ export class InterviewsService {
     const interviews = await this.interviewsRepository.listForCompany(employer.companyId, {
       from,
       to,
+      jobPostId: query.jobPostId,
       includeCancelled: query.includeCancelled,
     });
-    return interviews.map(toEmployerInterview);
+    return { items: interviews.map(toEmployerInterview), hasMore: false };
   }
 
-  async listAwaiting(userId: string, query: ListAwaitingScheduleQuery): Promise<AwaitingScheduleApplication[]> {
-    const employer = await this.requireEmployer(userId);
-    const page = await this.interviewsRepository.listAwaitingSchedule(employer.companyId, {
+  /**
+   * Chế độ "sắp tới" (D5, D6, D14): từ đầu hôm nay (giờ VN, để nhóm "Hôm nay" giữ cả
+   * buổi đã qua giờ), không giới hạn ngày xa nhất. Lấy `UPCOMING_PAGE_MAX + 1` dòng để
+   * biết còn trang sau mà không cần truy vấn thêm.
+   */
+  private async listUpcomingPage(companyId: string, query: ListEmployerInterviewsQuery): Promise<PaginatedResponse<EmployerInterview>> {
+    const rows = await this.interviewsRepository.listCompanyFrom(companyId, {
+      from: vnDayStart(new Date()),
+      after: query.cursor ? decodeCursor(query.cursor) : null,
       jobPostId: query.jobPostId,
-      limit: AWAITING_LIST_LIMIT,
+      includeCancelled: query.includeCancelled,
+      take: UPCOMING_PAGE_MAX + 1,
     });
-    return page.items.map(toAwaitingScheduleApplication);
+    const { items, hasMore } = cutAtDayBoundary(rows, UPCOMING_PAGE_SIZE, UPCOMING_PAGE_MAX);
+    const last = items[items.length - 1];
+    return {
+      items: items.map(toEmployerInterview),
+      hasMore,
+      ...(hasMore && last ? { nextCursor: encodeCursor(last) } : {}),
+    };
+  }
+
+  /** D18: phân trang theo số trang; `page` vượt trang cuối thì trả trang cuối (F7). */
+  async listAwaiting(userId: string, query: ListAwaitingScheduleQuery): Promise<AwaitingSchedulePage> {
+    const { companyId } = await this.requireEmployer(userId);
+    const [total, jobCounts] = await Promise.all([
+      this.interviewsRepository.countAwaitingSchedule(companyId, query.jobPostId),
+      this.interviewsRepository.countAwaitingByJob(companyId),
+    ]);
+    const lastPage = Math.max(1, Math.ceil(total / query.pageSize));
+    const page = Math.min(query.page, lastPage);
+    const rows =
+      total === 0
+        ? []
+        : await this.interviewsRepository.listAwaitingSchedule(companyId, {
+            jobPostId: query.jobPostId,
+            sort: query.sort,
+            group: query.group === "job" && !query.jobPostId,
+            offset: (page - 1) * query.pageSize,
+            limit: query.pageSize,
+          });
+    return { items: rows.map(toAwaitingScheduleApplication), total, page, pageSize: query.pageSize, jobCounts };
   }
 
   // ─── Dùng bởi dashboard (AD-16: dashboard gọi service của module chủ) ──────
 
+  /** Trang đầu, chờ lâu nhất trước, không nhóm; `total` không phụ thuộc `limit`. */
   async awaitingForCompany(companyId: string, limit: number): Promise<{ total: number; items: AwaitingScheduleApplication[] }> {
-    const page = await this.interviewsRepository.listAwaitingSchedule(companyId, { limit });
-    return { total: page.total, items: page.items.map(toAwaitingScheduleApplication) };
+    const [total, rows] = await Promise.all([
+      this.interviewsRepository.countAwaitingSchedule(companyId),
+      this.interviewsRepository.listAwaitingSchedule(companyId, { sort: "oldest", group: false, offset: 0, limit }),
+    ]);
+    return { total, items: rows.map(toAwaitingScheduleApplication) };
   }
 
   /** Lịch chưa diễn ra trong 7 ngày tới (tới hết ngày thứ 7 kể cả hôm nay, giờ Việt Nam). */
