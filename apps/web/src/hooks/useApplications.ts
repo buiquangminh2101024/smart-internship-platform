@@ -5,6 +5,7 @@ import type {
   CreateApplicationRequest, 
   PaginatedResponse,
   EmployerApplicationDetail,
+  EmployerApplicationView,
   UpdateApplicationStatusRequest,
   UpdateApplicationEvaluationRequest,
   ApplicationStatus
@@ -86,7 +87,7 @@ export function useEmployerApplication(id: string) {
   return useQuery({
     queryKey: ["employer", "applications", id],
     queryFn: async () => {
-      return apiFetch<EmployerApplicationDetail>("employer", "/employer/applications/" + id);
+      return apiFetch<EmployerApplicationView>("employer", "/employer/applications/" + id);
     },
     enabled: !!id,
   });

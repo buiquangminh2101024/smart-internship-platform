@@ -1024,6 +1024,57 @@ export interface OutreachSettings {
   isOpenToOutreach: boolean;
 }
 
+// ─── Trang "Lời mời" của Employer (docs/06-backend/outreach-hub/PLAN.md) ──
+// Cấp công ty (Q1). Trạng thái luôn là trạng thái hiển thị (PENDING quá hạn hoặc
+// tin không còn PUBLISHED ⇒ EXPIRED), ở cả bộ lọc lẫn số đếm.
+
+export interface OutreachInvitationCounts {
+  total: number;
+  pending: number;
+  accepted: number;
+  declined: number;
+  expired: number;
+}
+
+export interface OutreachJobSummary {
+  jobPostId: string;
+  title: string;
+  status: JobPostStatus;
+  expiresAt: string | null;
+  /** Người xem là người đăng tin ⇒ được tìm / mời (B3). */
+  isOwner: boolean;
+  invitations: OutreachInvitationCounts;
+}
+
+/** GET /employer/outreach/summary */
+export interface EmployerOutreachSummary {
+  quota: OutreachDailyQuotaStatus;
+  /** Lời mời của công ty gửi trong 30 ngày qua. */
+  last30Days: { sent: number; accepted: number; declined: number; pending: number };
+  /**
+   * Tin PUBLISHED của công ty (Q3) cùng các tin khác đã có lời mời (cho bộ lọc theo
+   * tin). PUBLISHED trước: tin của người xem trước, rồi hạn gần nhất.
+   */
+  jobs: OutreachJobSummary[];
+}
+
+/** Một dòng của GET /employer/outreach/invitations. */
+export interface CompanyOutreachInvitationDto extends SentOutreachInvitationDto {
+  jobPost: { id: string; title: string; status: JobPostStatus };
+  /** Người xem là người gửi lời mời. */
+  sentByMe: boolean;
+}
+
+export interface CompanyOutreachInvitationQuery {
+  status?: OutreachInvitationStatus;
+  jobPostId?: string;
+  /** Chỉ lời mời do người xem gửi. */
+  mine?: boolean;
+  cursor?: string;
+  /** 1–50, mặc định 20. */
+  limit?: number;
+}
+
 // ─── Phân tích hồ sơ (A1 + A4, AD-14) ───────────────────────────────────
 // docs/06-backend/candidate-insights/PLAN.md. Lưu persistent, chỉ tính lại khi
 // Candidate bấm "Phân tích hồ sơ".
@@ -1290,7 +1341,12 @@ export interface CandidateApplicationSummary extends Application {
 export interface EmployerApplicationDetail extends Application {
   jobPost: JobPost;
   cv: CvRecord;
-  candidate: any; 
+  candidate: any;
+}
+
+/** GET /employer/applications/:id — chi tiết hồ sơ kèm mọi lịch phỏng vấn, sớm nhất trước. */
+export interface EmployerApplicationView extends EmployerApplicationDetail {
+  interviews: ApplicationInterview[];
 }
 
 // --- Messaging (Phase 9) -------------------------------------------------
@@ -1641,6 +1697,48 @@ export interface AwaitingScheduleApplication {
   jobPostTitle: string;
   /** Lúc hồ sơ vào trạng thái hiện tại. */
   waitingSince: string;
+}
+
+/** `oldest`: chờ lâu nhất trước (mặc định). `newest`: chờ ngắn nhất trước. */
+export type AwaitingScheduleSort = "oldest" | "newest";
+
+/** Số hồ sơ chờ đặt lịch của một tin, cho hàng nút lọc theo tin. */
+export interface AwaitingScheduleJobCount {
+  jobPostId: string;
+  jobPostTitle: string;
+  count: number;
+}
+
+/**
+ * GET /employer/interviews/awaiting — phân trang theo số trang (D18, ngoại lệ của
+ * API_CONVENTIONS.md), không dùng PaginatedResponse vì không có cursor.
+ */
+export interface AwaitingSchedulePage {
+  items: AwaitingScheduleApplication[];
+  /** Số hồ sơ chờ theo bộ lọc tin hiện tại. */
+  total: number;
+  /** Trang thực sự trả về: yêu cầu vượt trang cuối thì là trang cuối. */
+  page: number;
+  pageSize: number;
+  /** Mọi tin có hồ sơ chờ, không phụ thuộc `jobPostId`; xếp theo tên tin. */
+  jobCounts: AwaitingScheduleJobCount[];
+}
+
+/** GET /employer/interviews?scope= — `range` (mặc định): from/to; `upcoming`: từ đầu hôm nay, phân trang cursor. */
+export type EmployerInterviewScope = "range" | "upcoming";
+
+/** Lịch của một hồ sơ, trả kèm GET /employer/applications/:id (không lặp các trường hồ sơ đã có). */
+export interface ApplicationInterview {
+  id: string;
+  scheduledAt: string;
+  durationMinutes: number;
+  mode: InterviewMode;
+  location: string | null;
+  note: string | null;
+  status: InterviewStatus;
+  cancelReason: string | null;
+  createdById: string;
+  createdAt: string;
 }
 
 export interface EmployerInterview {

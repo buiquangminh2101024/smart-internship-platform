@@ -10,15 +10,22 @@ import { BATCH_MAX } from "@/lib/interview-format";
  * Lên lịch phỏng vấn". Đặt làm con cuối của khối chứa danh sách: `sticky`
  * giữ thanh ở đáy màn hình trong lúc khối đó còn hiện, và chừa chỗ cuối khối
  * nên không che hàng cuối. Số đếm đọc qua vùng `aria-live` luôn có mặt.
+ * Trang có phân trang / lọc tin truyền thêm `jobCount` và `elsewhereCount`.
  */
 export function SelectionBar({
   count,
   onClear,
   onSchedule,
+  jobCount,
+  elsewhereCount = 0,
 }: {
   count: number;
   onClear: () => void;
   onSchedule: () => void;
+  /** Số tin của các hồ sơ đã chọn: ghi "… ứng viên của m tin". */
+  jobCount?: number;
+  /** Số hồ sơ đã chọn không nằm trên trang / bộ lọc đang xem. */
+  elsewhereCount?: number;
 }) {
   const over = count > BATCH_MAX;
   const [announcement, setAnnouncement] = useState("");
@@ -44,6 +51,12 @@ export function SelectionBar({
           >
             <p className="font-semibold">
               Đã chọn <b className="font-num text-lg tabular-nums">{count}</b> ứng viên
+              {jobCount !== undefined ? (
+                <>
+                  {" "}
+                  của <b className="font-num tabular-nums">{jobCount}</b> tin
+                </>
+              ) : null}
             </p>
             <button
               type="button"
@@ -68,6 +81,11 @@ export function SelectionBar({
             >
               Lên lịch phỏng vấn
             </DashButton>
+            {elsewhereCount > 0 ? (
+              <p className="basis-full text-[13px] text-brand-100">
+                Có {elsewhereCount} ứng viên đã chọn nằm ở trang khác hoặc tin khác.
+              </p>
+            ) : null}
           </div>
         </div>
       ) : null}

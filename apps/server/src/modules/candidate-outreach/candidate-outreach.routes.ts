@@ -4,7 +4,11 @@ import { authenticate } from "../../shared/middleware/authenticate";
 import { authorize } from "../../shared/middleware/authorize";
 import { validate } from "../../shared/middleware/validate";
 import { CandidateOutreachController } from "./candidate-outreach.controller";
-import { respondOutreachInvitationSchema, updateOutreachSettingsSchema } from "./candidate-outreach.dto";
+import {
+  listCompanyInvitationsQuerySchema,
+  respondOutreachInvitationSchema,
+  updateOutreachSettingsSchema,
+} from "./candidate-outreach.dto";
 import { CandidateOutreachRateLimitService } from "./candidate-outreach-rate-limit.service";
 import { CandidateOutreachRepository } from "./candidate-outreach.repository";
 import { CandidateOutreachService } from "./candidate-outreach.service";
@@ -40,6 +44,20 @@ export function candidateOutreachRouter(container: AwilixContainer): Router {
   router.post("/employer/job-posts/:jobId/candidates/:candidateId/invitations", ...employerGuard, (req, res, next) => {
     void resolveController().invite(req, res, next);
   });
+
+  // --- Employer — trang "Lời mời" cấp công ty (docs/06-backend/outreach-hub/PLAN.md) ---
+  router.get("/employer/outreach/summary", ...employerGuard, (req, res, next) => {
+    void resolveController().getCompanySummary(req, res, next);
+  });
+
+  router.get(
+    "/employer/outreach/invitations",
+    ...employerGuard,
+    validate(listCompanyInvitationsQuerySchema, "query"),
+    (req, res, next) => {
+      void resolveController().listCompanyInvitations(req, res, next);
+    },
+  );
 
   // --- Candidate ---
   router.get("/candidate/outreach-invitations", ...candidateGuard, (req, res, next) => {

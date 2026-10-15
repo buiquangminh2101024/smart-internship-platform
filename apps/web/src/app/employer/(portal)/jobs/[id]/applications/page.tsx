@@ -12,15 +12,10 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ToastViewport, type ToastData } from "@/components/ui/Toast";
 import { RowCheckbox, SelectionBar, TriStateCheckbox } from "@/components/interviews/SelectionBar";
-import { useInterviewScheduling } from "@/components/interviews/useInterviewScheduling";
+import { useInterviewActions } from "@/components/interviews/useInterviewActions";
 import { formatVnDayMonth, vnTodayIso } from "@/lib/dashboard-format";
 import { addDaysIso, vnIso } from "@/lib/interview-format";
-import type {
-  ApplicationMatchSummary,
-  ApplicationStatus,
-  AwaitingScheduleApplication,
-  EmployerInterview,
-} from "@sip/shared-types";
+import type { ApplicationMatchSummary, ApplicationStatus, EmployerInterview } from "@sip/shared-types";
 
 // Xếp hạng ứng viên (A3, AD-13 mục 9) — docs/05-frontend/phases/candidate-ranker/PLAN.md.
 type SortMode = "newest" | "match";
@@ -102,43 +97,26 @@ export default function EmployerJobApplicationsPage() {
   const awaitingById = new Map((awaiting ?? []).map((item) => [item.applicationId, item]));
   const [range] = useState(upcomingRange);
   const [now] = useState(Date.now);
-  const { data: upcoming } = useEmployerInterviews(range);
+  const { data: upcoming } = useEmployerInterviews(range, { jobPostId: jobId });
   const upcomingByApplication = new Map<string, EmployerInterview>();
   for (const interview of upcoming ?? []) {
-    if (interview.jobPostId !== jobId || new Date(interview.scheduledAt).getTime() <= now) continue;
+    if (new Date(interview.scheduledAt).getTime() <= now) continue;
     if (!upcomingByApplication.has(interview.applicationId)) upcomingByApplication.set(interview.applicationId, interview);
   }
-  const [selected, setSelected] = useState<Map<string, AwaitingScheduleApplication>>(() => new Map());
+  // Trang này không giữ hàng cũ: sau mọi thao tác, tải lại trạng thái hồ sơ và lịch ngay.
+  const interviewActions = useInterviewActions({
+    notify: push,
+    onChanged: () => {
+      void queryClient.invalidateQueries({ queryKey: EMPLOYER_INTERVIEWS_KEY });
+      void queryClient.invalidateQueries({ queryKey: ["employer", "job-posts", jobId, "applications"] });
+    },
+  });
+  const { selected, toggle } = interviewActions;
   const selectableInView = (displayedApplications ?? []).flatMap((app) => {
     const item = awaitingById.get(app.id);
     return item ? [item] : [];
   });
   const selectedInView = selectableInView.filter((item) => selected.has(item.applicationId)).length;
-
-  function toggle(items: AwaitingScheduleApplication[], checked: boolean) {
-    setSelected((prev) => {
-      const next = new Map(prev);
-      for (const item of items) {
-        if (checked) next.set(item.applicationId, item);
-        else next.delete(item.applicationId);
-      }
-      return next;
-    });
-  }
-
-  const scheduling = useInterviewScheduling({
-    notify: push,
-    onScheduled: (created) => {
-      setSelected((prev) => {
-        const next = new Map(prev);
-        for (const interview of created) next.delete(interview.applicationId);
-        return next;
-      });
-      // Trang này không giữ hàng cũ: tải lại trạng thái hồ sơ và lịch ngay.
-      void queryClient.invalidateQueries({ queryKey: EMPLOYER_INTERVIEWS_KEY });
-      void queryClient.invalidateQueries({ queryKey: ["employer", "job-posts", jobId, "applications"] });
-    },
-  });
 
   return (
     <div className="space-y-6">
@@ -260,9 +238,21 @@ export default function EmployerJobApplicationsPage() {
                       />
                     </td>
                     <td className="p-4">
-                      <Button as="a" href={"/employer/applications/" + app.id} size="sm" variant="secondary">
-                        Xem chi tiết
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        <Button as="a" href={"/employer/applications/" + app.id} size="sm" variant="secondary">
+                          Xem chi tiết
+                        </Button>
+                        {upcomingInterview ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            icon="calendar-clock"
+                            onClick={() => interviewActions.reschedule(upcomingInterview)}
+                          >
+                            Đổi lịch
+                          </Button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -274,10 +264,10 @@ export default function EmployerJobApplicationsPage() {
 
       <SelectionBar
         count={selected.size}
-        onClear={() => setSelected(new Map())}
-        onSchedule={() => scheduling.start([...selected.values()])}
+        onClear={interviewActions.clearSelection}
+        onSchedule={() => interviewActions.schedule([...selected.values()])}
       />
-      {scheduling.dialogs}
+      {interviewActions.dialogs}
       <ToastViewport toasts={toasts} onDismiss={dismiss} />
     </div>
   );

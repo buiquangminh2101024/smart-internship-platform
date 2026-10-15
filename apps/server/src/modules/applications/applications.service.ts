@@ -163,11 +163,18 @@ export class ApplicationsService {
     return this.applicationsRepository.findEmployerApplicationsByJobId(jobId, employer.companyId, status);
   }
 
+  /**
+   * Hồ sơ kèm mọi lịch phỏng vấn (D3). Hai truy vấn chạy song song, cả hai đều lọc theo
+   * công ty; hồ sơ không thuộc công ty thì 404.
+   */
   async getEmployerApplicationDetail(userId: string, id: string) {
     const employer = await this.requireEmployer(userId);
-    const app = await this.applicationsRepository.findEmployerApplicationById(id, employer.companyId);
+    const [app, interviews] = await Promise.all([
+      this.applicationsRepository.findEmployerApplicationById(id, employer.companyId),
+      this.interviewsRepository.listForApplication(id, employer.companyId),
+    ]);
     if (!app) throw new AppError(404, "Application not found");
-    return app;
+    return { app, interviews };
   }
 
   async updateApplicationStatus(userId: string, id: string, dto: UpdateApplicationStatusRequest) {

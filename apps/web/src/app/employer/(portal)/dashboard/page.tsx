@@ -112,7 +112,7 @@ export default function EmployerDashboardPage() {
               { label: "Phỏng vấn sắp tới", value: overview.data.interviews.upcomingCount },
             ]}
           />
-          <EmployerKpiGrid overview={overview.data} />
+          <EmployerKpiGrid overview={overview.data} notify={push} />
         </>
       )}
 

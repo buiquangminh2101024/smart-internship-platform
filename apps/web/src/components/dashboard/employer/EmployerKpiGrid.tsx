@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { EmployerDashboardOverview } from "@sip/shared-types";
 import { StatCard } from "@/components/ui/StatCard";
+import type { ToastData } from "@/components/ui/Toast";
 import { MESSAGES_HREF } from "@/lib/messaging";
 import {
   formatChange,
@@ -21,7 +22,13 @@ import { DashButton } from "../DashButton";
 export const PENDING_TASKS_ANCHOR = "viec-ho-so-cho";
 
 /** Sáu thẻ KPI của Employer (plan FE, mục "Employer"; hình theo mẫu bản C). */
-export function EmployerKpiGrid({ overview }: { overview: EmployerDashboardOverview }) {
+export function EmployerKpiGrid({
+  overview,
+  notify,
+}: {
+  overview: EmployerDashboardOverview;
+  notify: (tone: ToastData["tone"], message: string) => void;
+}) {
   const { jobs, applications, messages, outreach, interviews } = overview;
   const newApps = applications.newLast7Days;
   const next = interviews.next;
@@ -54,6 +61,8 @@ export function EmployerKpiGrid({ overview }: { overview: EmployerDashboardOverv
       <StatCard
         label="Hồ sơ mới trong 7 ngày"
         icon="inbox"
+        // Chưa có trang hồ sơ của cả công ty (F1) — tạm báo "đang cập nhật".
+        onClick={() => notify("info", "Trang quản lý hồ sơ đang được cập nhật, vui lòng quay lại sau.")}
         value={formatNumber(newApps.current)}
         unit="hồ sơ"
         delta={{ text: formatChange(newApps.current, newApps.previous), trend: trendOf(newApps.current, newApps.previous) }}
@@ -93,6 +102,7 @@ export function EmployerKpiGrid({ overview }: { overview: EmployerDashboardOverv
       <StatCard
         label="Lịch phỏng vấn sắp tới"
         icon="calendar"
+        href="/employer/interviews"
         value={formatNumber(interviews.upcomingCount)}
         unit="lịch"
         hint={
@@ -179,6 +189,7 @@ function OutreachKpi({ outreach }: { outreach: EmployerDashboardOverview["outrea
     <StatCard
       label="Lời mời còn lại hôm nay"
       icon="send"
+      href="/employer/outreach"
       value={formatNumber(quota.remainingToday)}
       unit={`/ ${formatNumber(quota.dailyQuota)} lời mời`}
       hint={quota.mode === "TRIAL" ? "Đang dùng thử, đặt lại lúc 07:00 mỗi ngày" : "Đặt lại lúc 07:00 mỗi ngày"}

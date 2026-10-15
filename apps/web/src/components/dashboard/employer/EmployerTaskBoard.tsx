@@ -3,31 +3,15 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useQueryClient } from "@tanstack/react-query";
-import type {
-  AwaitingScheduleApplication,
-  DashboardAttentionJob,
-  DashboardPendingApplication,
-  EmployerInterview,
-} from "@sip/shared-types";
+import type { DashboardAttentionJob, DashboardPendingApplication } from "@sip/shared-types";
 import { ApiError } from "@/lib/api-client";
 import { useUpdateApplicationStatus } from "@/hooks/useApplications";
 import { EMPLOYER_DASHBOARD_KEY, useEmployerDashboardTasks } from "@/hooks/useEmployerDashboard";
 import { formatDeadline } from "@/lib/job-post-display";
-import {
-  formatNumber,
-  formatVnDate,
-  formatVnDayMonth,
-  formatVnTime,
-  formatWaited,
-  initialsOf,
-  waitedOverDays,
-} from "@/lib/dashboard-format";
-import { useEmployerMe } from "@/hooks/useEmployerMe";
+import { formatNumber, formatVnDate, formatWaited, initialsOf, waitedOverDays } from "@/lib/dashboard-format";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { CancelInterviewDialog } from "@/components/interviews/CancelInterviewDialog";
-import { InterviewDialog, candidateLabel } from "@/components/interviews/InterviewDialog";
 import { SelectionBar } from "@/components/interviews/SelectionBar";
-import { useInterviewScheduling } from "@/components/interviews/useInterviewScheduling";
+import { useInterviewActions } from "@/components/interviews/useInterviewActions";
 import type { ToastData } from "@/components/ui/Toast";
 import { BlockError, BlockSkeleton } from "../BlockState";
 import { DashButton } from "../DashButton";
@@ -79,7 +63,7 @@ export function EmployerTaskBoard({ notify }: { notify: Notify }) {
             selected={interviews.selected}
             scheduled={interviews.scheduled}
             onToggle={interviews.toggle}
-            onSchedule={(item) => interviews.scheduling.start([item])}
+            onSchedule={(item) => interviews.schedule([item])}
           />
         </div>
         <div className="flex min-w-0 flex-col gap-4">
@@ -89,14 +73,14 @@ export function EmployerTaskBoard({ notify }: { notify: Notify }) {
             items={upcomingInterviews.items}
             updated={interviews.updated}
             cancelled={interviews.cancelled}
-            onReschedule={interviews.setRescheduling}
+            onReschedule={interviews.reschedule}
           />
         </div>
       </div>
       <SelectionBar
         count={interviews.selected.size}
         onClear={interviews.clearSelection}
-        onSchedule={() => interviews.scheduling.start([...interviews.selected.values()])}
+        onSchedule={() => interviews.schedule([...interviews.selected.values()])}
       />
       {interviews.dialogs}
     </div>
@@ -104,100 +88,16 @@ export function EmployerTaskBoard({ notify }: { notify: Notify }) {
 }
 
 /**
- * Trạng thái của hai nhóm lịch phỏng vấn: hồ sơ đang chọn, hồ sơ vừa đặt lịch,
- * buổi vừa đổi / huỷ, và các hộp thoại. Sau mỗi thao tác chỉ tải lại số tổng
- * quan; danh sách việc giữ nguyên (kèm nhãn) tới lần mở trang kế tiếp.
+ * Hai nhóm lịch phỏng vấn dùng chung `useInterviewActions`. Sau mỗi thao tác
+ * chỉ tải lại số tổng quan; danh sách việc giữ nguyên (kèm nhãn) tới lần mở
+ * trang kế tiếp.
  */
 function useInterviewTasks(notify: Notify) {
   const queryClient = useQueryClient();
-  const { data: me } = useEmployerMe();
-  const [selected, setSelected] = useState<Map<string, AwaitingScheduleApplication>>(() => new Map());
-  const [scheduled, setScheduled] = useState<Record<string, EmployerInterview>>({});
-  const [updated, setUpdated] = useState<Record<string, EmployerInterview>>({});
-  const [cancelled, setCancelled] = useState<Record<string, true>>({});
-  const [rescheduling, setRescheduling] = useState<EmployerInterview | null>(null);
-  const [cancelling, setCancelling] = useState<EmployerInterview | null>(null);
-
-  const refreshOverview = () =>
-    void queryClient.invalidateQueries({ queryKey: [...EMPLOYER_DASHBOARD_KEY, "overview"] });
-
-  const scheduling = useInterviewScheduling({
+  return useInterviewActions({
     notify,
-    onScheduled: (created) => {
-      setScheduled((prev) => ({
-        ...prev,
-        ...Object.fromEntries(created.map((interview) => [interview.applicationId, interview])),
-      }));
-      setSelected((prev) => {
-        const next = new Map(prev);
-        for (const interview of created) next.delete(interview.applicationId);
-        return next;
-      });
-      refreshOverview();
-    },
+    onChanged: () => void queryClient.invalidateQueries({ queryKey: [...EMPLOYER_DASHBOARD_KEY, "overview"] }),
   });
-
-  function toggle(items: AwaitingScheduleApplication[], checked: boolean) {
-    setSelected((prev) => {
-      const next = new Map(prev);
-      for (const item of items) {
-        if (checked) next.set(item.applicationId, item);
-        else next.delete(item.applicationId);
-      }
-      return next;
-    });
-  }
-
-  const dialogs = (
-    <>
-      {scheduling.dialogs}
-      <InterviewDialog
-        target={rescheduling ? { kind: "reschedule", interview: rescheduling } : null}
-        companyAddress={me?.company?.address}
-        onClose={() => setRescheduling(null)}
-        onRescheduled={(interview) => {
-          setRescheduling(null);
-          setUpdated((prev) => ({ ...prev, [interview.id]: interview }));
-          notify(
-            "success",
-            `Đã đổi lịch phỏng vấn với ${candidateLabel(interview.candidateName)} sang ${formatVnDayMonth(
-              interview.scheduledAt,
-            )} lúc ${formatVnTime(interview.scheduledAt)}.`,
-          );
-          refreshOverview();
-        }}
-        onRequestCancel={(interview) => {
-          setRescheduling(null);
-          setCancelling(interview);
-        }}
-      />
-      <CancelInterviewDialog
-        interview={cancelling}
-        onClose={() => setCancelling(null)}
-        onCancelled={(interview) => {
-          setCancelling(null);
-          setCancelled((prev) => ({ ...prev, [interview.id]: true }));
-          notify(
-            "success",
-            `Đã huỷ buổi phỏng vấn với ${candidateLabel(interview.candidateName)}. Hồ sơ quay lại nhóm chờ đặt lịch.`,
-          );
-          refreshOverview();
-        }}
-      />
-    </>
-  );
-
-  return {
-    selected,
-    scheduled,
-    updated,
-    cancelled,
-    toggle,
-    clearSelection: () => setSelected(new Map()),
-    setRescheduling,
-    scheduling,
-    dialogs,
-  };
 }
 
 function PendingApplicationsGroup({

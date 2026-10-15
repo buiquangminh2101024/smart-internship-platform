@@ -3,11 +3,15 @@ import type {
   ApiResponse,
   CandidateOutreachInvitationDto,
   CandidateSearchResultDto,
+  CompanyOutreachInvitationDto,
+  EmployerOutreachSummary,
   OutreachSettings,
+  PaginatedResponse,
   RespondOutreachInvitationRequest,
   RespondOutreachInvitationResponse,
   SentOutreachInvitationDto,
 } from "@sip/shared-types";
+import type { ListCompanyInvitationsQuery } from "./candidate-outreach.dto";
 import type { CandidateOutreachService } from "./candidate-outreach.service";
 
 export class CandidateOutreachController {
@@ -33,6 +37,29 @@ export class CandidateOutreachController {
     try {
       const result = await this.candidateOutreachService.listSentInvitations(req.user!.id, req.params.jobId as string);
       const body: ApiResponse<SentOutreachInvitationDto[]> = { success: true, data: result };
+      res.json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getCompanySummary = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await this.candidateOutreachService.getCompanySummary(req.user!.id);
+      const body: ApiResponse<EmployerOutreachSummary> = { success: true, data: result };
+      res.json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  listCompanyInvitations = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await this.candidateOutreachService.listCompanyInvitations(
+        req.user!.id,
+        req.query as unknown as ListCompanyInvitationsQuery,
+      );
+      const body: ApiResponse<PaginatedResponse<CompanyOutreachInvitationDto>> = { success: true, data: result };
       res.json(body);
     } catch (error) {
       next(error);

@@ -1,10 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import type { AwaitingScheduleApplication, EmployerInterview } from "@sip/shared-types";
-import { useAwaitingSchedule } from "@/hooks/useInterviews";
-import { formatNumber, formatVnDayMonth, formatVnTime, formatWaited, initialsOf } from "@/lib/dashboard-format";
+import { formatNumber, initialsOf } from "@/lib/dashboard-format";
 import {
   MODE_ICON,
   TZ_LABEL,
@@ -13,18 +11,15 @@ import {
   vnDateAndMinutes,
 } from "@/lib/interview-format";
 import { Icon } from "@/components/ui/Icon";
-import { RowCheckbox, TriStateCheckbox } from "@/components/interviews/SelectionBar";
-import { candidateLabel } from "@/components/interviews/InterviewDialog";
+import { TriStateCheckbox } from "@/components/interviews/SelectionBar";
+import { AwaitingScheduleRow } from "@/components/interviews/AwaitingScheduleRow";
 import { DashButton } from "../DashButton";
 import { TaskBadge, TaskGroup, TaskRow } from "../TaskGroup";
 
-/** Số hàng mỗi nhóm hiện sẵn (API dashboard trả 5). */
-const VISIBLE_ROWS = 5;
-
 /**
  * "Hồ sơ chờ đặt lịch" (FE-5): chọn nhiều để lên lịch hàng loạt, hoặc "Đặt
- * lịch" từng hồ sơ. Dashboard trả 5 hồ sơ chờ lâu nhất; "Hiện thêm" tải danh
- * sách đầy đủ (tối đa 100) ngay trong nhóm vì chưa có trang riêng.
+ * lịch" từng hồ sơ. Dashboard hiện 5 hồ sơ chờ lâu nhất để báo có việc; danh
+ * sách đầy đủ nằm ở tab "Chờ đặt lịch" của `/employer/interviews`.
  */
 export function AwaitingScheduleGroup({
   total,
@@ -42,18 +37,15 @@ export function AwaitingScheduleGroup({
   onToggle: (items: AwaitingScheduleApplication[], checked: boolean) => void;
   onSchedule: (item: AwaitingScheduleApplication) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const full = useAwaitingSchedule(undefined, expanded);
-  const rows = expanded && full.data ? full.data : items;
-  const open = rows.filter((item) => !scheduled[item.applicationId]);
+  const open = items.filter((item) => !scheduled[item.applicationId]);
   const selectedInView = open.filter((item) => selected.has(item.applicationId)).length;
   const scheduledCount = Object.keys(scheduled).length;
-  const hidden = Math.max(0, total - items.length);
+  const remaining = Math.max(0, total - scheduledCount);
 
   return (
     <TaskGroup
       title="Hồ sơ chờ đặt lịch"
-      count={Math.max(0, total - scheduledCount)}
+      count={remaining}
       emptyText="Chưa có hồ sơ nào chờ đặt lịch. Chuyển hồ sơ sang “Lọt vào vòng trong” thì hồ sơ sẽ hiện ở đây."
       toolbar={
         <>
@@ -69,78 +61,23 @@ export function AwaitingScheduleGroup({
         </>
       }
       footer={
-        hidden > 0 ? (
-          <button
-            type="button"
-            aria-expanded={expanded}
-            disabled={expanded && full.isPending}
-            onClick={() => setExpanded((value) => !value)}
-            className="cursor-pointer py-1.5 text-brand-700 hover:underline disabled:cursor-progress"
-          >
-            {expanded && full.isPending
-              ? "Đang tải…"
-              : expanded && full.isError
-                ? "Không tải được danh sách đầy đủ — thu gọn"
-                : expanded
-                  ? "Thu gọn"
-                  : `Hiện thêm ${formatNumber(hidden)} hồ sơ`}
-          </button>
+        total > items.length ? (
+          <Link href="/employer/interviews" className="text-brand-700 hover:underline">
+            Xem tất cả {formatNumber(remaining)} hồ sơ
+          </Link>
         ) : undefined
       }
     >
-      {(expanded && full.data ? rows : rows.slice(0, VISIBLE_ROWS)).map((item) => {
-        const interview = scheduled[item.applicationId];
-        const isSelected = selected.has(item.applicationId);
-        const name = candidateLabel(item.candidateName);
-        return (
-          <TaskRow
-            key={item.applicationId}
-            done={interview !== undefined}
-            selected={isSelected}
-            select={
-              interview ? (
-                <span aria-hidden className="-mx-2 -my-1 h-10 w-10 flex-none" />
-              ) : (
-                <RowCheckbox checked={isSelected} label={name} onChange={(checked) => onToggle([item], checked)} />
-              )
-            }
-            initials={initialsOf(item.candidateName)}
-            title={
-              <Link href={`/employer/applications/${item.applicationId}`} className="hover:text-brand-700 hover:underline">
-                {item.candidateName ?? "Ứng viên chưa đặt tên"}
-              </Link>
-            }
-            meta={
-              <span className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-                <span>
-                  {item.jobPostTitle}
-                  <span aria-hidden> ·</span>
-                </span>
-                {item.status === "INTERVIEWING" ? (
-                  <>
-                    <TaskBadge tone="warning">Cần đặt lại lịch</TaskBadge>
-                    <span>chờ {formatWaited(item.waitingSince)}</span>
-                  </>
-                ) : (
-                  <span>vào vòng trong {formatWaited(item.waitingSince)} trước</span>
-                )}
-              </span>
-            }
-            actions={
-              interview ? (
-                <TaskBadge tone="success">
-                  <Icon name="check" size={14} className="mr-1" />
-                  Đã đặt lịch {formatVnDayMonth(interview.scheduledAt)} · {formatVnTime(interview.scheduledAt)}
-                </TaskBadge>
-              ) : (
-                <DashButton size="sm" icon="calendar-plus" onClick={() => onSchedule(item)}>
-                  Đặt lịch
-                </DashButton>
-              )
-            }
-          />
-        );
-      })}
+      {items.map((item) => (
+        <AwaitingScheduleRow
+          key={item.applicationId}
+          item={item}
+          selected={selected.has(item.applicationId)}
+          scheduled={scheduled[item.applicationId]}
+          onToggle={(checked) => onToggle([item], checked)}
+          onSchedule={() => onSchedule(item)}
+        />
+      ))}
     </TaskGroup>
   );
 }
@@ -173,9 +110,14 @@ export function UpcomingInterviewsGroup({
       count={Math.max(0, total - cancelledCount)}
       emptyText="Chưa có buổi phỏng vấn nào trong 7 ngày tới. Đặt lịch từ nhóm “Hồ sơ chờ đặt lịch”."
       footer={
-        hidden > 0 ? (
-          <span className="font-normal text-text-muted">Còn {formatNumber(hidden)} buổi khác trong 7 ngày tới.</span>
-        ) : undefined
+        <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          {hidden > 0 ? (
+            <span className="font-normal text-text-muted">Còn {formatNumber(hidden)} buổi khác trong 7 ngày tới.</span>
+          ) : null}
+          <Link href="/employer/interviews?view=upcoming" className="text-brand-700 hover:underline">
+            Xem tất cả<span className="sr-only"> lịch phỏng vấn sắp tới</span>
+          </Link>
+        </span>
       }
     >
       {items.map((original) => {

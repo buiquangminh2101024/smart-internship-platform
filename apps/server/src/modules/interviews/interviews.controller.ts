@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import type {
   ApiResponse,
-  AwaitingScheduleApplication,
+  AwaitingSchedulePage,
   BatchScheduleInterviewsFailure,
   BatchScheduleInterviewsResponse,
   CandidateInterview,
@@ -72,11 +72,11 @@ export class InterviewsController {
 
   listEmployer = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const items = await this.interviewsService.listForEmployer(
+      const data = await this.interviewsService.listForEmployer(
         req.user!.id,
         req.query as unknown as ListEmployerInterviewsQuery,
       );
-      const body: ApiResponse<PaginatedResponse<EmployerInterview>> = { success: true, data: { items, hasMore: false } };
+      const body: ApiResponse<PaginatedResponse<EmployerInterview>> = { success: true, data };
       res.json(body);
     } catch (error) {
       next(error);
@@ -85,11 +85,8 @@ export class InterviewsController {
 
   listAwaiting = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const items = await this.interviewsService.listAwaiting(req.user!.id, req.query as unknown as ListAwaitingScheduleQuery);
-      const body: ApiResponse<PaginatedResponse<AwaitingScheduleApplication>> = {
-        success: true,
-        data: { items, hasMore: false },
-      };
+      const data = await this.interviewsService.listAwaiting(req.user!.id, req.query as unknown as ListAwaitingScheduleQuery);
+      const body: ApiResponse<AwaitingSchedulePage> = { success: true, data };
       res.json(body);
     } catch (error) {
       next(error);
