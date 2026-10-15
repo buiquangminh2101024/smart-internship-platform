@@ -189,8 +189,7 @@ function OutreachKpi({ outreach }: { outreach: EmployerDashboardOverview["outrea
     <StatCard
       label="Lời mời còn lại hôm nay"
       icon="send"
-      // Lời mời gửi theo từng tin (/employer/jobs/[id]/candidate-search), nên tạm trỏ danh sách tin.
-      href="/employer/jobs"
+      href="/employer/outreach"
       value={formatNumber(quota.remainingToday)}
       unit={`/ ${formatNumber(quota.dailyQuota)} lời mời`}
       hint={quota.mode === "TRIAL" ? "Đang dùng thử, đặt lại lúc 07:00 mỗi ngày" : "Đặt lại lúc 07:00 mỗi ngày"}

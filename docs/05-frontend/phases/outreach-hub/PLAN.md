@@ -3,7 +3,7 @@
 Song song: `docs/06-backend/outreach-hub/PLAN.md` (API, câu hỏi Q1–Q3).
 Quy ước giao diện: `.claude/skills/sip-ui/SKILL.md`. Trang tìm ứng viên theo tin giữ nguyên (`docs/05-frontend/phases/candidate-outreach/PLAN.md`).
 
-**Trạng thái: ĐÃ DUYỆT (2026-10-15). Backend (bước 1) đã xong; frontend chưa code.**
+**Trạng thái: ĐÃ DUYỆT (2026-10-15). Bước 1 (backend) và bước 2 (frontend) đã xong; còn bước 3 (kiểm trên trình duyệt).**
 
 ## Route và điều hướng
 
@@ -22,7 +22,7 @@ Quy ước giao diện: `.claude/skills/sip-ui/SKILL.md`. Trang tìm ứng viên
    - "Kết quả 30 ngày": số đã gửi, `SegmentBar` Chấp nhận / Từ chối / Đang chờ (có nhãn và số).
 3. **Tìm ứng viên theo tin** (`Panel`): các tin `status = PUBLISHED` trong `summary.jobs`, mỗi tin một hàng: tiêu đề, "Còn N ngày", số lời mời "Đã mời X · Chấp nhận Y", nút **Tìm ứng viên** → `/employer/jobs/[id]/candidate-search`. Tin không phải của người xem: nút bị khoá kèm dòng "Chỉ người đăng tin mới tìm và mời được". Rỗng: "Chưa có tin nào đang hiển thị. Đăng tin để bắt đầu mời ứng viên." + nút "Đăng tin mới".
 4. **Lời mời đã gửi** (`Panel`):
-   - Bộ lọc: `ChipGroup` trạng thái (Tất cả · Đang chờ · Đã chấp nhận · Đã từ chối · Hết hạn), `Select` theo tin (lấy từ `summary.jobs`, gồm cả tin đã đóng có lời mời), `ChipGroup` "Cả công ty / Do tôi gửi" (Q1).
+   - Bộ lọc: `ChipGroup` trạng thái (Tất cả · Đang chờ · Đã chấp nhận · Đã từ chối · Hết hạn), `Select` theo tin (lấy từ `summary.jobs`, gồm cả tin đã đóng có lời mời), `ChipGroup` "Cả công ty / Bạn gửi" (Q1; không dùng "tôi" theo giọng văn sip-ui, khớp nhãn "Bạn gửi" trên dòng).
    - Danh sách: dùng lại `SentInvitationRow`, thêm prop tuỳ chọn hiện tên tin (liên kết tới `/employer/jobs/[id]`) và nhãn "Bạn gửi". Trang tìm ứng viên không truyền prop mới nên không đổi.
    - Nút "Tải thêm" (cursor), 20 dòng mỗi lần.
    - Rỗng theo bộ lọc: "Không có lời mời nào khớp bộ lọc." + "Xoá bộ lọc".
@@ -39,7 +39,7 @@ Thêm vào `hooks/useCandidateOutreach.ts`:
 | `useCompanyOutreachInvitations(filter)` | `["employer","outreach","invitations",filter]` (`useInfiniteQuery`) | `GET /employer/outreach/invitations` |
 
 Làm mới:
-- `useSendOutreachInvitation` (đã có) thêm invalidate `["employer","outreach"]` khi gửi thành công.
+- `useSendOutreachInvitation` (đã có) thêm invalidate `["employer","outreach"]` khi gửi thành công, cùng `["employer","dashboard","overview"]` (thẻ hạn mức trên dashboard bớt 1 lượt).
 - `SocketProvider`: thông báo `CANDIDATE_OUTREACH_INVITATION_RESPONDED` invalidate `["employer","outreach"]` (cùng chỗ đang invalidate dashboard).
 
 ## Trạng thái
@@ -53,8 +53,8 @@ Gộp còn 3 bước cho cả trang (2026-10-15): **1** backend (plan BE) → **
 | Bước | Nội dung | Phụ thuộc | Điều kiện xong |
 |---|---|---|---|
 | FE-0 | Chủ dự án duyệt plan (cùng Q1–Q3 của backend). | — | Xong 2026-10-15. |
-| **2** (FE-1 + FE-2) | Hook, trang `/employer/outreach`, mục menu, crumb, mở rộng `SentInvitationRow`; đổi `href` thẻ KPI dashboard, liên kết quay lại ở trang tìm ứng viên, invalidate sau khi gửi / khi có phản hồi. | Bước 1 | `tsc`, eslint các file mới sạch. |
-| **3** (FE-3) | Kiểm trên trình duyệt với tài khoản thật: 375px và desktop, đủ trạng thái, bộ lọc trong URL; gửi lời mời ở trang tìm ⇒ quay lại trang Lời mời thấy dòng mới và số đếm tăng. | Bước 2 | Chủ dự án xem và xác nhận. |
+| **2** (FE-1 + FE-2) | Hook, trang `/employer/outreach`, mục menu, crumb, mở rộng `SentInvitationRow`; đổi `href` thẻ KPI dashboard, liên kết quay lại ở trang tìm ứng viên, invalidate sau khi gửi / khi có phản hồi. | Bước 1 | **Xong 2026-10-15**: `tsc` web sạch, eslint 8 file sạch. Khối trang ở `components/employer/OutreachHubBlocks.tsx`. |
+| **3** (FE-3) | Kiểm trên trình duyệt với tài khoản thật: 375px và desktop, đủ trạng thái, bộ lọc trong URL; gửi lời mời ở trang tìm ⇒ quay lại trang Lời mời thấy dòng mới và số đếm tăng. | Bước 2 | Chủ dự án xem và xác nhận. **Đã kiểm 2026-10-15** (qua nginx `:8080`, tài khoản Employer demo, 0 lời mời): số liệu, khối tin, bộ lọc + URL + quay lại giữ bộ lọc, "Xoá bộ lọc", API 400/404, link KPI dashboard, link "Tất cả lời mời"; 375px không tràn ngang (tiêu đề tin đổi từ cắt sang xuống dòng). Chưa kiểm: gửi lời mời thật, "Tải thêm" (cần > 20 lời mời). Khung portal chưa thu gọn sidebar ở màn hẹp (có sẵn, mọi trang Employer đều bị) — ngoài phạm vi. |
 
 ## Ngoài phạm vi
 
