@@ -9,7 +9,8 @@ import { useCurrentUser, useEmployerAuthStore } from "@/stores/auth-store";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
-import { SideNav, type SideNavItem } from "./SideNav";
+import { MobileNavDrawer, useMobileNav } from "./MobileNavDrawer";
+import { SideNav, pendingBadgeTone, type SideNavItem } from "./SideNav";
 import { PortalTopbar, buildCrumbs } from "./PortalTopbar";
 import { SocketProvider } from "@/components/realtime/SocketProvider";
 
@@ -62,6 +63,8 @@ export function EmployerPortalShell({ children }: { children: ReactNode }) {
       : item,
   );
 
+  const mobileNav = useMobileNav();
+
   async function handleLogout() {
     const refreshToken = useEmployerAuthStore.getState().refreshToken ?? undefined;
     try {
@@ -74,45 +77,78 @@ export function EmployerPortalShell({ children }: { children: ReactNode }) {
     }
   }
 
+  const newJobButton = (
+    <Button as="a" href="/employer/jobs/new" icon="plus" fullWidth>
+      Đăng tin mới
+    </Button>
+  );
+
   return (
     <SocketProvider area="employer">
       <div data-role="employer" className="flex min-h-screen flex-col bg-surface-page">
-        <PortalTopbar
-          area="employer"
+        {/* Ngăn kéo mở ⇒ topbar và nội dung phía sau `inert` (mobile-shell PLAN). */}
+        <div inert={mobileNav.open} className="flex flex-1 flex-col">
+          <PortalTopbar
+            area="employer"
+            roleLabel="Doanh nghiệp"
+            homeHref="/employer/dashboard"
+            crumbs={buildCrumbs(pathname, { label: "Employer Portal", href: "/employer" }, CRUMB_LABELS)}
+            userEmail={user?.email}
+            accountHref="/employer/profile"
+            onLogout={handleLogout}
+            menu={{
+              open: mobileNav.open,
+              onOpen: mobileNav.show,
+              controlsId: mobileNav.drawerId,
+              pendingTone: pendingBadgeTone(navItems),
+            }}
+            menuButtonRef={mobileNav.buttonRef}
+          />
+
+          <div className="flex flex-1 items-stretch">
+            <SideNav items={navItems} header={<CompanyHeader company={company} />} footer={newJobButton} />
+
+            <main className="min-w-0 flex-1">{children}</main>
+          </div>
+        </div>
+
+        <MobileNavDrawer
+          id={mobileNav.drawerId}
+          open={mobileNav.open}
+          onClose={mobileNav.close}
+          items={navItems}
+          header={<CompanyHeader company={company} wrap />}
+          footer={newJobButton}
           roleLabel="Doanh nghiệp"
           homeHref="/employer/dashboard"
-          crumbs={buildCrumbs(pathname, { label: "Employer Portal", href: "/employer" }, CRUMB_LABELS)}
           userEmail={user?.email}
           accountHref="/employer/profile"
           onLogout={handleLogout}
         />
-
-        <div className="flex flex-1 items-stretch">
-          <SideNav
-            items={navItems}
-            header={
-              <div className="grid gap-1">
-                <span className="flex items-center gap-2 text-sm font-semibold text-text-strong">
-                  <Icon name="building-2" size={16} className="text-brand-600" />
-                  <span className="truncate">{company?.name ?? "Employer Portal"}</span>
-                </span>
-                {company ? (
-                  <Badge tone={company.isVerified ? "success" : "warning"}>
-                    {company.isVerified ? "Đã xác minh" : "Chờ xác minh"}
-                  </Badge>
-                ) : null}
-              </div>
-            }
-            footer={
-              <Button as="a" href="/employer/jobs/new" icon="plus" fullWidth>
-                Đăng tin mới
-              </Button>
-            }
-          />
-
-          <main className="min-w-0 flex-1">{children}</main>
-        </div>
       </div>
     </SocketProvider>
+  );
+}
+
+/** Tên công ty kèm huy hiệu xác minh. `wrap`: tên dài xuống tối đa 2 dòng (ngăn kéo) thay vì cắt. */
+function CompanyHeader({
+  company,
+  wrap = false,
+}: {
+  company: { name: string; isVerified: boolean } | undefined;
+  wrap?: boolean;
+}) {
+  return (
+    <div className={`grid gap-1 ${wrap ? "justify-items-start" : ""}`}>
+      <span className={`flex gap-2 text-sm font-semibold text-text-strong ${wrap ? "items-start" : "items-center"}`}>
+        <Icon name="building-2" size={16} className={`flex-none text-brand-600 ${wrap ? "mt-0.5" : ""}`} />
+        <span className={wrap ? "line-clamp-2 break-words" : "truncate"}>{company?.name ?? "Employer Portal"}</span>
+      </span>
+      {company ? (
+        <Badge tone={company.isVerified ? "success" : "warning"}>
+          {company.isVerified ? "Đã xác minh" : "Chờ xác minh"}
+        </Badge>
+      ) : null}
+    </div>
   );
 }
