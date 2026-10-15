@@ -24,6 +24,7 @@ Danh sách chức năng mà các nền tảng tuyển dụng thực tế (TopCV,
 
 | Việc | Mức | Ghi chú |
 |---|---|---|
+| Sửa lỗi: gộp ngành (`Major`) làm mất yêu cầu ngành của tin tuyển dụng | 🔴 | Thêm 2026-10-12, phát hiện khi rà sơ đồ lớp. `MajorRepository.merge` (`apps/server/src/modules/education-catalog/major.repository.ts`) chỉ chuyển `Education` và alias sang ngành đích rồi xoá ngành nguồn. `JobPostMajor` cascade theo `Major`, nên liên kết tin–ngành nguồn **bị xoá** thay vì chuyển sang ngành đích. `SkillsRepository.merge` có chuyển `JobPostSkill`, nên chỉ `Major` bị. Lỗi xảy ra khi ngành `PENDING` gắn được vào tin: `findExistingMajorIds` (`job-posts/job-post.repository.ts:192`) không lọc `status`; chưa kiểm giao diện có cho chọn ngành chờ duyệt không. Hướng sửa: chuyển `JobPostMajor` sang ngành đích trong cùng transaction (khoá chính ghép, nên tạo bản mới giữ nguyên `relevance` + bỏ trùng như `Skill`), không cần migration. |
 | Cập nhật `PROJECT_STATUS.md` | 🔴 | Phase 8, 9, 10 vẫn ghi "Chưa bắt đầu", dù đã triển khai xong. Các khối AI và dashboard cũng chưa có trong bảng. |
 | Phase 13 — Kiểm thử tự động | 🔴 | Hiện mới có unit test cho `job-matching`. Cần integration test cho các luồng ứng tuyển, duyệt tin và nhắn tin. |
 | Phase 14 — Triển khai và kịch bản demo | 🔴 | Từ một bản clone mới, chạy theo tài liệu phải ra được bản demo. |

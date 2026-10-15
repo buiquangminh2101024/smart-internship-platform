@@ -1,4 +1,4 @@
-import { Prisma, type JobPostStatus, type PrismaClient } from "@prisma/client";
+import { Prisma, type JobPostStatus, type OutreachInvitationStatus, type PrismaClient } from "@prisma/client";
 import { BLOCKING_INVITATION_STATUSES } from "./candidate-outreach.config";
 
 type Db = PrismaClient | Prisma.TransactionClient;
@@ -41,6 +41,55 @@ export interface OutreachJobPost {
   employerId: string;
   companyId: string;
 }
+
+/** Bộ lọc của danh sách lời mời cấp công ty; `status` là trạng thái hiển thị. */
+export interface CompanyInvitationFilter {
+  status?: OutreachInvitationStatus | undefined;
+  jobPostId?: string | undefined;
+  /** Chỉ lời mời do employer này gửi. */
+  employerId?: string | undefined;
+  /** Id lời mời cuối của trang trước — lấy các dòng xếp sau nó theo (createdAt, id). */
+  afterId?: string | undefined;
+}
+
+export interface InvitationCountsRow {
+  total: number;
+  pending: number;
+  accepted: number;
+  declined: number;
+  expired: number;
+}
+
+export interface OutreachJobRow {
+  id: string;
+  title: string;
+  status: JobPostStatus;
+  expiresAt: Date | null;
+  employerId: string;
+}
+
+// Các cột DateTime lưu UTC không múi giờ ⇒ so với now() quy về UTC (giống dashboard.repository).
+const NOW_UTC = Prisma.sql`(now() AT TIME ZONE 'UTC')`;
+
+/**
+ * Trạng thái hiển thị trong SQL — cùng quy tắc với `effectiveStatus` của mapper:
+ * PENDING đã quá expiresAt hoặc tin không còn PUBLISHED ⇒ EXPIRED (sweep chỉ chạy
+ * mỗi giờ). Cần alias `i` (lời mời) và `j` (tin). Mọi chỗ lọc / đếm theo trạng thái
+ * của trang "Lời mời" dùng hằng này để số đếm khớp nhãn trên từng dòng.
+ */
+const EFFECTIVE_STATUS = Prisma.sql`(CASE
+  WHEN i."status" = 'PENDING' AND (i."expiresAt" <= ${NOW_UTC} OR j."status" <> 'PUBLISHED') THEN 'EXPIRED'
+  ELSE i."status"::text
+END)`;
+
+const COUNT_COLUMNS = Prisma.sql`
+  COUNT(*)::int AS "total",
+  COUNT(*) FILTER (WHERE ${EFFECTIVE_STATUS} = 'PENDING')::int AS "pending",
+  COUNT(*) FILTER (WHERE ${EFFECTIVE_STATUS} = 'ACCEPTED')::int AS "accepted",
+  COUNT(*) FILTER (WHERE ${EFFECTIVE_STATUS} = 'DECLINED')::int AS "declined",
+  COUNT(*) FILTER (WHERE ${EFFECTIVE_STATUS} = 'EXPIRED')::int AS "expired"`;
+
+const EMPTY_COUNTS: InvitationCountsRow = { total: 0, pending: 0, accepted: 0, declined: 0, expired: 0 };
 
 export interface CreateInvitationData {
   companyId: string;
@@ -223,6 +272,81 @@ export class CandidateOutreachRepository {
       where: { candidateId },
       include: invitationInclude,
       orderBy: { createdAt: "desc" },
+    });
+  }
+
+  // ─── Trang "Lời mời" cấp công ty (docs/06-backend/outreach-hub/PLAN.md) ──
+
+  /**
+   * Id lời mời của công ty theo bộ lọc, mới nhất trước, tối đa `take` dòng. Lọc trạng
+   * thái bằng EFFECTIVE_STATUS nên phải chạy SQL; dòng đầy đủ lấy bằng `findManyByIds`.
+   */
+  async listCompanyInvitationIds(companyId: string, filter: CompanyInvitationFilter, take: number): Promise<string[]> {
+    const conditions = [Prisma.sql`i."companyId" = ${companyId}`];
+    if (filter.status) conditions.push(Prisma.sql`${EFFECTIVE_STATUS} = ${filter.status}`);
+    if (filter.jobPostId) conditions.push(Prisma.sql`i."jobPostId" = ${filter.jobPostId}`);
+    if (filter.employerId) conditions.push(Prisma.sql`i."employerId" = ${filter.employerId}`);
+    if (filter.afterId) {
+      conditions.push(Prisma.sql`(i."createdAt", i."id") < (
+        SELECT c."createdAt", c."id" FROM candidate_outreach_invitations c WHERE c."id" = ${filter.afterId}
+      )`);
+    }
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT i."id"
+      FROM candidate_outreach_invitations i
+      JOIN job_posts j ON j."id" = i."jobPostId"
+      WHERE ${Prisma.join(conditions, " AND ")}
+      ORDER BY i."createdAt" DESC, i."id" DESC
+      LIMIT ${take}
+    `);
+    return rows.map((row) => row.id);
+  }
+
+  /** Dòng đầy đủ theo đúng thứ tự `ids`; id không còn tồn tại bị bỏ qua. */
+  async findManyByIds(ids: string[]): Promise<InvitationWithRelations[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.prisma.candidateOutreachInvitation.findMany({
+      where: { id: { in: ids } },
+      include: invitationInclude,
+    });
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    return ids.flatMap((id) => byId.get(id) ?? []);
+  }
+
+  /** Cursor hợp lệ = id một lời mời của chính công ty. */
+  async isCompanyInvitation(companyId: string, id: string): Promise<boolean> {
+    const row = await this.prisma.candidateOutreachInvitation.findFirst({ where: { id, companyId }, select: { id: true } });
+    return row !== null;
+  }
+
+  /** Số lời mời theo từng tin của công ty, trạng thái hiển thị. Tin chưa có lời mời không có trong Map. */
+  async countByJobPost(companyId: string): Promise<Map<string, InvitationCountsRow>> {
+    const rows = await this.prisma.$queryRaw<Array<InvitationCountsRow & { jobPostId: string }>>(Prisma.sql`
+      SELECT i."jobPostId", ${COUNT_COLUMNS}
+      FROM candidate_outreach_invitations i
+      JOIN job_posts j ON j."id" = i."jobPostId"
+      WHERE i."companyId" = ${companyId}
+      GROUP BY i."jobPostId"
+    `);
+    return new Map(rows.map(({ jobPostId, ...counts }) => [jobPostId, counts]));
+  }
+
+  /** Lời mời của công ty gửi trong 30 ngày — cùng mốc với dashboardRepository.outreachLast30Days. */
+  async countLast30Days(companyId: string): Promise<InvitationCountsRow> {
+    const [row] = await this.prisma.$queryRaw<InvitationCountsRow[]>(Prisma.sql`
+      SELECT ${COUNT_COLUMNS}
+      FROM candidate_outreach_invitations i
+      JOIN job_posts j ON j."id" = i."jobPostId"
+      WHERE i."companyId" = ${companyId} AND i."createdAt" > ${NOW_UTC} - interval '30 days'
+    `);
+    return row ?? EMPTY_COUNTS;
+  }
+
+  /** Tin PUBLISHED của công ty cùng các tin đã có lời mời (bộ lọc theo tin cần cả tin đã đóng). */
+  findOutreachJobs(companyId: string): Promise<OutreachJobRow[]> {
+    return this.prisma.jobPost.findMany({
+      where: { companyId, OR: [{ status: "PUBLISHED" }, { outreachInvitations: { some: {} } }] },
+      select: { id: true, title: true, status: true, expiresAt: true, employerId: true },
     });
   }
 

@@ -1024,6 +1024,57 @@ export interface OutreachSettings {
   isOpenToOutreach: boolean;
 }
 
+// ─── Trang "Lời mời" của Employer (docs/06-backend/outreach-hub/PLAN.md) ──
+// Cấp công ty (Q1). Trạng thái luôn là trạng thái hiển thị (PENDING quá hạn hoặc
+// tin không còn PUBLISHED ⇒ EXPIRED), ở cả bộ lọc lẫn số đếm.
+
+export interface OutreachInvitationCounts {
+  total: number;
+  pending: number;
+  accepted: number;
+  declined: number;
+  expired: number;
+}
+
+export interface OutreachJobSummary {
+  jobPostId: string;
+  title: string;
+  status: JobPostStatus;
+  expiresAt: string | null;
+  /** Người xem là người đăng tin ⇒ được tìm / mời (B3). */
+  isOwner: boolean;
+  invitations: OutreachInvitationCounts;
+}
+
+/** GET /employer/outreach/summary */
+export interface EmployerOutreachSummary {
+  quota: OutreachDailyQuotaStatus;
+  /** Lời mời của công ty gửi trong 30 ngày qua. */
+  last30Days: { sent: number; accepted: number; declined: number; pending: number };
+  /**
+   * Tin PUBLISHED của công ty (Q3) cùng các tin khác đã có lời mời (cho bộ lọc theo
+   * tin). PUBLISHED trước: tin của người xem trước, rồi hạn gần nhất.
+   */
+  jobs: OutreachJobSummary[];
+}
+
+/** Một dòng của GET /employer/outreach/invitations. */
+export interface CompanyOutreachInvitationDto extends SentOutreachInvitationDto {
+  jobPost: { id: string; title: string; status: JobPostStatus };
+  /** Người xem là người gửi lời mời. */
+  sentByMe: boolean;
+}
+
+export interface CompanyOutreachInvitationQuery {
+  status?: OutreachInvitationStatus;
+  jobPostId?: string;
+  /** Chỉ lời mời do người xem gửi. */
+  mine?: boolean;
+  cursor?: string;
+  /** 1–50, mặc định 20. */
+  limit?: number;
+}
+
 // ─── Phân tích hồ sơ (A1 + A4, AD-14) ───────────────────────────────────
 // docs/06-backend/candidate-insights/PLAN.md. Lưu persistent, chỉ tính lại khi
 // Candidate bấm "Phân tích hồ sơ".

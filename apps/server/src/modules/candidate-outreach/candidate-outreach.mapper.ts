@@ -1,6 +1,7 @@
 import type {
   CandidateOutreachInvitationDto,
   CandidateSearchResultDto,
+  CompanyOutreachInvitationDto,
   MatchResult,
   OutreachCandidateCardDto,
   OutreachInvitationStatus,
@@ -49,6 +50,21 @@ export function toSentOutreachInvitationDto(
     matchScore: invitation.matchScore,
     matchWeightsVersion: invitation.matchWeightsVersion,
     canViewProfile,
+  };
+}
+
+/** Dòng của trang "Lời mời" cấp công ty: dòng "Đã mời" kèm tin và cờ người gửi. */
+export function toCompanyOutreachInvitationDto(
+  invitation: InvitationWithRelations,
+  card: CandidateSearchCardRow | null,
+  canViewProfile: boolean,
+  viewerEmployerId: string,
+  now: Date = new Date(),
+): CompanyOutreachInvitationDto {
+  return {
+    ...toSentOutreachInvitationDto(invitation, card, canViewProfile, now),
+    jobPost: { id: invitation.jobPost.id, title: invitation.jobPost.title, status: invitation.jobPost.status },
+    sentByMe: invitation.employerId === viewerEmployerId,
   };
 }
 

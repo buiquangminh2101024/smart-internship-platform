@@ -2,10 +2,14 @@ import type { PrismaClient } from "@prisma/client";
 import type {
   CandidateOutreachInvitationDto,
   CandidateSearchResultDto,
+  CompanyOutreachInvitationDto,
+  EmployerOutreachSummary,
   MatchResult,
   OutreachDailyQuotaStatus,
   OutreachInvitationAction,
+  OutreachJobSummary,
   OutreachSettings,
+  PaginatedResponse,
   RespondOutreachInvitationResponse,
   SentOutreachInvitationDto,
 } from "@sip/shared-types";
@@ -29,9 +33,11 @@ import {
   PREFILTER_LIMIT,
   TOP_RESULT_COUNT,
 } from "./candidate-outreach.config";
+import type { ListCompanyInvitationsQuery } from "./candidate-outreach.dto";
 import {
   toCandidateOutreachInvitationDto,
   toCandidateSearchResultDto,
+  toCompanyOutreachInvitationDto,
   toSentOutreachInvitationDto,
 } from "./candidate-outreach.mapper";
 import type {
@@ -161,6 +167,89 @@ export class CandidateOutreachService {
         now,
       ),
     );
+  }
+
+  /**
+   * Trang "Lời mời" (docs/06-backend/outreach-hub/PLAN.md): hạn mức, kết quả 30 ngày và
+   * tin kèm số lời mời — cấp công ty (Q1). Chỉ đọc ⇒ không đòi công ty còn gói.
+   */
+  async getCompanySummary(userId: string): Promise<EmployerOutreachSummary> {
+    const employer = await this.requireEmployer(userId);
+    const [quota, last30Days, countsByJob, jobs] = await Promise.all([
+      this.getDailyQuotaStatus(employer),
+      this.repository.countLast30Days(employer.companyId),
+      this.repository.countByJobPost(employer.companyId),
+      this.repository.findOutreachJobs(employer.companyId),
+    ]);
+    return {
+      quota,
+      last30Days: {
+        sent: last30Days.total,
+        accepted: last30Days.accepted,
+        declined: last30Days.declined,
+        pending: last30Days.pending,
+      },
+      jobs: jobs
+        .map((job) => ({
+          jobPostId: job.id,
+          title: job.title,
+          status: job.status,
+          expiresAt: job.expiresAt ? job.expiresAt.toISOString() : null,
+          isOwner: job.employerId === employer.id,
+          invitations: countsByJob.get(job.id) ?? { total: 0, pending: 0, accepted: 0, declined: 0, expired: 0 },
+        }))
+        .sort(compareOutreachJobs),
+    };
+  }
+
+  /** Mọi lời mời công ty đã gửi, mới nhất trước, phân trang cursor (Q1: `mine` chỉ là bộ lọc). */
+  async listCompanyInvitations(
+    userId: string,
+    query: ListCompanyInvitationsQuery,
+  ): Promise<PaginatedResponse<CompanyOutreachInvitationDto>> {
+    const employer = await this.requireEmployer(userId);
+    if (query.jobPostId) {
+      const jobPost = await this.repository.findJobPost(query.jobPostId);
+      if (!jobPost || jobPost.companyId !== employer.companyId) throw new AppError(404, "Job post not found");
+    }
+    if (query.cursor && !(await this.repository.isCompanyInvitation(employer.companyId, query.cursor))) {
+      throw new AppError(400, "Invalid cursor");
+    }
+
+    // Lấy dư 1 dòng để biết còn trang sau mà không cần đếm.
+    const ids = await this.repository.listCompanyInvitationIds(
+      employer.companyId,
+      {
+        status: query.status,
+        jobPostId: query.jobPostId,
+        employerId: query.mine ? employer.id : undefined,
+        afterId: query.cursor,
+      },
+      query.limit + 1,
+    );
+    const hasMore = ids.length > query.limit;
+    const invitations = await this.repository.findManyByIds(ids.slice(0, query.limit));
+    const candidateIds = [...new Set(invitations.map((invitation) => invitation.candidateId))];
+    const [cards, accessible] = await Promise.all([
+      this.repository.findSearchCards(candidateIds),
+      this.repository.findProfileAccessibleCandidateIds(employer.companyId, candidateIds),
+    ]);
+    const cardById = new Map(cards.map((card) => [card.candidateId, card]));
+    const now = new Date();
+    const last = invitations[invitations.length - 1];
+    return {
+      items: invitations.map((invitation) =>
+        toCompanyOutreachInvitationDto(
+          invitation,
+          cardById.get(invitation.candidateId) ?? null,
+          accessible.has(invitation.candidateId),
+          employer.id,
+          now,
+        ),
+      ),
+      hasMore,
+      ...(hasMore && last ? { nextCursor: last.id } : {}),
+    };
   }
 
   async invite(userId: string, jobPostId: string, candidateId: string): Promise<SentOutreachInvitationDto> {
@@ -412,6 +501,24 @@ export class CandidateOutreachService {
     if (!candidateId) throw new AppError(404, "Candidate profile not found");
     return candidateId;
   }
+}
+
+/**
+ * Q3 của trang "Lời mời": tin PUBLISHED trước (tìm / mời được), trong đó tin của người
+ * xem trước, rồi hạn gần nhất (không có hạn xếp cuối); các tin còn lại theo tên.
+ */
+export function compareOutreachJobs(left: OutreachJobSummary, right: OutreachJobSummary): number {
+  const leftPublished = left.status === "PUBLISHED";
+  const rightPublished = right.status === "PUBLISHED";
+  if (leftPublished !== rightPublished) return leftPublished ? -1 : 1;
+  if (!leftPublished) return left.title.localeCompare(right.title, "vi");
+  if (left.isOwner !== right.isOwner) return left.isOwner ? -1 : 1;
+  if (left.expiresAt !== right.expiresAt) {
+    if (left.expiresAt === null) return 1;
+    if (right.expiresAt === null) return -1;
+    return left.expiresAt < right.expiresAt ? -1 : 1;
+  }
+  return left.title.localeCompare(right.title, "vi");
 }
 
 /** Q2 — chỉ tìm/mời cho tin đang PUBLISHED. */
