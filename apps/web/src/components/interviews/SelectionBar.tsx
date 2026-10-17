@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Icon } from "@/components/ui/Icon";
 import { DashButton } from "@/components/dashboard/DashButton";
 import { BATCH_MAX } from "@/lib/interview-format";
@@ -10,32 +10,39 @@ import { BATCH_MAX } from "@/lib/interview-format";
  * Lên lịch phỏng vấn". Đặt làm con cuối của khối chứa danh sách: `sticky`
  * giữ thanh ở đáy màn hình trong lúc khối đó còn hiện, và chừa chỗ cuối khối
  * nên không che hàng cuối. Số đếm đọc qua vùng `aria-live` luôn có mặt.
- * Trang có phân trang / lọc tin truyền thêm `jobCount` và `elsewhereCount`.
+ * Trang có phân trang / lọc tin truyền thêm `jobCount` và `elsewhereCount`;
+ * trang có nhiều thao tác truyền `actions` thay cho nút mặc định.
  */
 export function SelectionBar({
   count,
   onClear,
   onSchedule,
+  actions,
+  unit = "ứng viên",
   jobCount,
   elsewhereCount = 0,
 }: {
   count: number;
   onClear: () => void;
-  onSchedule: () => void;
+  onSchedule?: () => void;
+  /** Thay nút "Lên lịch phỏng vấn" mặc định (vd. thao tác hàng loạt của trang "Ứng viên"). */
+  actions?: ReactNode;
+  /** Đơn vị sau số đếm: "Đã chọn N ứng viên" / "Đã chọn N hồ sơ". */
+  unit?: string;
   /** Số tin của các hồ sơ đã chọn: ghi "… ứng viên của m tin". */
   jobCount?: number;
   /** Số hồ sơ đã chọn không nằm trên trang / bộ lọc đang xem. */
   elsewhereCount?: number;
 }) {
-  const over = count > BATCH_MAX;
+  const over = actions === undefined && count > BATCH_MAX;
   const [announcement, setAnnouncement] = useState("");
   const previous = useRef(count);
 
   useEffect(() => {
     if (previous.current === count) return;
     previous.current = count;
-    setAnnouncement(count > 0 ? `Đã chọn ${count} ứng viên` : "Đã bỏ chọn tất cả");
-  }, [count]);
+    setAnnouncement(count > 0 ? `Đã chọn ${count} ${unit}` : "Đã bỏ chọn tất cả");
+  }, [count, unit]);
 
   return (
     <>
@@ -50,7 +57,7 @@ export function SelectionBar({
             className="pointer-events-auto flex w-full max-w-[760px] flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-brand-800 py-2.5 pr-3 pl-5 text-white shadow-[0_12px_32px_rgba(11,31,27,0.3)]"
           >
             <p className="font-semibold">
-              Đã chọn <b className="font-num text-lg tabular-nums">{count}</b> ứng viên
+              Đã chọn <b className="font-num text-lg tabular-nums">{count}</b> {unit}
               {jobCount !== undefined ? (
                 <>
                   {" "}
@@ -72,15 +79,17 @@ export function SelectionBar({
                 Tối đa {BATCH_MAX} ứng viên mỗi lần
               </span>
             ) : null}
-            <DashButton
-              variant="light"
-              icon="calendar-plus"
-              disabled={over}
-              onClick={onSchedule}
-              className="max-[480px]:flex-[1_1_100%]"
-            >
-              Lên lịch phỏng vấn
-            </DashButton>
+            {actions ?? (
+              <DashButton
+                variant="light"
+                icon="calendar-plus"
+                disabled={over}
+                onClick={() => onSchedule?.()}
+                className="max-[480px]:flex-[1_1_100%]"
+              >
+                Lên lịch phỏng vấn
+              </DashButton>
+            )}
             {elsewhereCount > 0 ? (
               <p className="basis-full text-[13px] text-brand-100">
                 Có {elsewhereCount} ứng viên đã chọn nằm ở trang khác hoặc tin khác.

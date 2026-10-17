@@ -156,10 +156,11 @@ function PendingApplicationsGroup({
         title="Hồ sơ chờ xử lý"
         count={remaining}
         emptyText="Chưa có hồ sơ chờ xử lý. Hồ sơ mới sẽ hiện ở đây khi ứng viên nộp."
+        // Luôn có đường sang trang "Ứng viên" khi còn hồ sơ chờ, kể cả khi đã hiện đủ.
         footer={
-          total > items.length ? (
-            <Link href="/employer/jobs" className="text-brand-700 hover:underline">
-              Xem tất cả {formatNumber(total)} hồ sơ theo từng tin
+          total > 0 ? (
+            <Link href="/employer/applications?status=PENDING" className="text-brand-700 hover:underline">
+              Xem tất cả {formatNumber(total)} hồ sơ
             </Link>
           ) : undefined
         }

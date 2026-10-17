@@ -3,7 +3,7 @@
 Song song: `docs/05-frontend/phases/employer-applications/PLAN.md`.
 Nền tảng: Phase 8 (module `applications`), AD-16 (lịch sử trạng thái, thông báo trong transaction), `docs/06-backend/employer-interviews/PLAN.md` (D18, phân trang đánh số).
 
-**Trạng thái: BƯỚC 1 XONG (2026-10-17).** D1–D10 đã chốt theo đề xuất ngày 2026-10-17; Q1 đã chốt (bỏ sắp theo điểm, thay bằng sắp theo kỹ năng khớp — D10). Backend xong, xem "Ghi chú triển khai — Bước 1". Bước 2 (frontend) chờ lệnh.
+**Trạng thái: BƯỚC 1 XONG (2026-10-17).** D1–D10 đã chốt theo đề xuất ngày 2026-10-17; Q1 đã chốt (bỏ sắp theo điểm, thay bằng sắp theo kỹ năng khớp — D10). Backend xong, xem "Ghi chú triển khai — Bước 1". Bước 2 (frontend) xong 2026-10-17, xem plan FE.
 
 ## Mục tiêu
 

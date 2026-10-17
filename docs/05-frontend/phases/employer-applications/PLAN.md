@@ -3,7 +3,7 @@
 Song song: `docs/06-backend/employer-applications/PLAN.md` (H1–H10, D1–D10, Q1, API).
 Theo skill `sip-ui`; bố cục và hàng hồ sơ theo dashboard bản C (`docs/05-frontend/phases/dashboard-employer-admin/PLAN.md`); phân trang và thanh chọn theo trang Lịch phỏng vấn (`docs/05-frontend/phases/employer-interviews/PLAN.md`, D12, D18).
 
-**Trạng thái: CHỜ DUYỆT (2026-10-17).** Q1 đã chốt: không sắp theo điểm phù hợp, thay bằng sắp theo kỹ năng khớp (D10 backend). Chờ lệnh bắt đầu code.
+**Trạng thái: BƯỚC 2 XONG (2026-10-17).** Q1 đã chốt: không sắp theo điểm phù hợp, thay bằng sắp theo kỹ năng khớp (D10 backend). Frontend đã code, `tsc` và lint sạch ở các file của bước này; xem "Ghi chú triển khai — Bước 2". Bước 3 (kiểm trên trình duyệt) chờ lệnh.
 
 ## Route và điều hướng
 
@@ -84,6 +84,25 @@ Từ trên xuống, nội dung tối đa 1240px như các trang portal khác:
 ## Ngoài phạm vi
 
 Sắp theo điểm phù hợp (Q1 backend); khớp kỹ năng gần nghĩa, xét số năm kinh nghiệm; lý do từ chối; "Được nhận" hàng loạt; lọc theo ngày; xuất file; giữ lựa chọn qua nhiều trang.
+
+## Ghi chú triển khai — Bước 2 (2026-10-17)
+
+**File:** trang mới `app/employer/(portal)/applications/page.tsx`; `components/applications/` gồm `ApplicationRow.tsx` (hàng bảng + thẻ, nút theo trạng thái, chữ khớp kỹ năng), `ApplicationsToolbar.tsx`, `ApplicationBulkActions.tsx`, `useApplicationsPageParams.ts`; `lib/application-status.ts`; sửa `hooks/useApplications.ts`, `components/interviews/SelectionBar.tsx`, `components/layout/EmployerPortalShell.tsx`, `components/dashboard/employer/EmployerTaskBoard.tsx`, `EmployerKpiGrid.tsx`, `dashboard/page.tsx`, `jobs/[id]/applications/page.tsx`. Không thêm dependency, không đổi backend.
+
+**Khác với plan / chi tiết thêm:**
+- **Thêm file `useApplicationsPageParams.ts`** (đọc/ghi URL, như `useInterviewsPageParams` của trang Lịch phỏng vấn). `status`, `sort` lạ ⇒ mặc định; `page` không phải số nguyên dương ⇒ 1; `q` dưới 2 ký tự ⇒ không tìm. `job` không phải tin của công ty (API trả 404) ⇒ tự bỏ khỏi URL. `sort` bằng mặc định của tab thì không ghi lên URL.
+- **Ô tìm không dùng `useDebounce`** mà hẹn giờ 300ms ngay trong `onChange`. Với `useDebounce`, bấm Back đổi URL nhưng giá trị debounce cũ vẫn còn, effect có thể gửi lại từ khoá cũ. Gõ 1 ký tự thì hiện gợi ý "Nhập ít nhất 2 ký tự để tìm." (đặt ngoài `Input`, vì truyền `hint` làm ô nhập bị dựng lại và mất focus).
+- **Hàng ở lại sau thao tác:** lần thao tác đầu tiên chụp lại danh sách của trang đang xem; danh sách được tải lại ngay để số trên tab và "trên N" đúng, nhưng các hàng vẫn hiện theo bản đã chụp, kèm trạng thái mới và nhãn xanh, cho tới khi đổi tab, bộ lọc, sắp xếp hay trang. Lựa chọn cũng gắn với tổ hợp đó nên đổi là bỏ chọn (D2). Thao tác xong sau khi đã đổi tổ hợp thì không ghi nhãn vào tổ hợp mới.
+- **Hàng vừa xử lý vẫn có nút của trạng thái mới** (vd. vừa "Vào danh sách rút gọn" thì hiện "Đặt lịch"), để làm tiếp không phải đổi tab.
+- **Làm mới dữ liệu khác:** `useUpdateApplicationStatus` (dùng chung với dashboard, chi tiết hồ sơ) nay tải lại cả danh sách cấp công ty và đánh dấu cũ lịch phỏng vấn. Hook hàng loạt đánh dấu cũ chi tiết các hồ sơ đã đổi, mọi danh sách hồ sơ theo tin, dashboard và lịch phỏng vấn. Trang tải lại ngay số tổng quan của dashboard để số trên menu "Ứng viên" đúng.
+- **Nút của thanh thao tác** viết trong `ApplicationBulkActions`, không dùng `DashButton`: nền thanh tối nên "Từ chối" dùng chữ `red-200` có viền, ba nút còn lại nền trắng. Nút khoá dùng `aria-disabled` (không phải `disabled`) để vẫn nhận focus và hiện `title` nêu lý do. `SelectionBar` thêm `actions` và `unit` ("hồ sơ"); khi có `actions` thì không tự hiện "Tối đa 20", mà khối nút tự hiện "Tối đa 20 ứng viên mỗi lần đặt lịch" khi quá.
+- **Bảng ≥ 768px** nằm trong vùng cuộn ngang `relative` để phòng khi cột không đủ chỗ (768–1023px không có sidebar nhưng nội dung chỉ ~736px). Cần xem ở bước 3.
+- **Menu:** mục "Ứng viên" có `matchNested`, nên trang chi tiết `/employer/applications/[id]` cũng sáng mục này. Nhãn đọc của số chờ: "N hồ sơ chờ duyệt".
+- **Link dashboard:** đổi chữ thành "Xem tất cả N hồ sơ" (bỏ "theo từng tin"), và hiện mỗi khi còn hồ sơ chờ (trước chỉ hiện khi nhiều hơn số hàng trên dashboard). Thêm theo chủ dự án: thẻ KPI "Hồ sơ mới trong 7 ngày" trước chỉ báo toast "đang cập nhật", nay dẫn sang `/employer/applications` (tab Tất cả, mới nhất trước; chưa lọc theo ngày). Bỏ prop `notify` của `EmployerKpiGrid` vì không còn chỗ dùng.
+- **Trang hồ sơ theo tin:** chỉ sửa nhãn `Badge` như plan. Ô lọc trạng thái ở trang đó vẫn ghi kèm mã tiếng Anh, chưa sửa (ngoài phạm vi).
+- Thông báo lỗi khi đổi từng hồ sơ: 409 hiện nguyên câu tiếng Việt của server; 400 / 404 ⇒ "Hồ sơ của … đã đổi trạng thái hoặc không còn. Tải lại trang để xem trạng thái mới."; lỗi khác ⇒ "Không cập nhật được hồ sơ. Kiểm tra kết nối rồi thử lại."
+
+**Kiểm:** `tsc --noEmit` của `apps/web` sạch. `npm run lint --workspace web` không có lỗi hay cảnh báo nào ở các file trên; 15 lỗi, 23 cảnh báo còn lại là ở các file có sẵn, không liên quan. **Chưa kiểm trên trình duyệt** (bước 3).
 
 ## Ghi chú của chủ dự án
 

@@ -15,6 +15,7 @@ import { RowCheckbox, SelectionBar, TriStateCheckbox } from "@/components/interv
 import { useInterviewActions } from "@/components/interviews/useInterviewActions";
 import { formatVnDayMonth, vnTodayIso } from "@/lib/dashboard-format";
 import { addDaysIso, vnIso } from "@/lib/interview-format";
+import { APPLICATION_STATUS_LABEL } from "@/lib/application-status";
 import type { ApplicationMatchSummary, ApplicationStatus, EmployerInterview } from "@sip/shared-types";
 
 // Xếp hạng ứng viên (A3, AD-13 mục 9) — docs/05-frontend/phases/candidate-ranker/PLAN.md.
@@ -217,11 +218,9 @@ export default function EmployerJobApplicationsPage() {
                     <td className="p-4 text-gray-600">{new Date(app.createdAt).toLocaleDateString()}</td>
                     <td className="p-4">
                       <div className="flex flex-wrap gap-1.5">
-                        <Badge tone={
-                          app.status === "ACCEPTED" ? "success" :
-                          app.status === "REJECTED" || app.status === "CANCELLED" ? "danger" :
-                          app.status === "PENDING" ? "warning" : "info"
-                        }>{app.status}</Badge>
+                        <Badge tone={APPLICATION_STATUS_LABEL[app.status].tone}>
+                          {APPLICATION_STATUS_LABEL[app.status].label}
+                        </Badge>
                         {upcomingInterview ? (
                           <Badge tone="neutral" icon="calendar">
                             Đã có lịch {formatVnDayMonth(upcomingInterview.scheduledAt)}
