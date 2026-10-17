@@ -412,6 +412,8 @@ model Education {
   description  String?
   createdAt    DateTime    @default(now())
 
+  // Tra học vấn đại diện theo ứng viên (danh sách Ứng viên, dashboard, thẻ tìm ứng viên).
+  @@index([candidateId])
   @@map("educations")
 }
 
