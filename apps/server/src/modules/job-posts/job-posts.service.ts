@@ -1,7 +1,6 @@
 
 import type {
   Company,
-  Employer,
   JobPostStatus,
   JobPostType,
   Prisma,
@@ -21,6 +20,7 @@ import { AppError } from "../../shared/errors/AppError";
 import type { AuditLogService } from "../audit-log/audit-log.service";
 import type { CompanyRepository } from "../companies/company.repository";
 import type { EmployerRepository } from "../employers/employer.repository";
+import type { EmployerIdentity, EmployerIdentityCache } from "../employers/employer-identity-cache";
 import type { NotificationPayloadMap } from "../notifications/notification.types";
 import type { NotificationsService } from "../notifications/notifications.service";
 import type { SubscriptionsService } from "../subscriptions/subscriptions.service";
@@ -40,6 +40,7 @@ export class JobPostsService {
   private readonly prisma: PrismaClient;
   private readonly jobPostRepository: JobPostRepository;
   private readonly employerRepository: EmployerRepository;
+  private readonly employerIdentityCache: EmployerIdentityCache;
   private readonly companyRepository: CompanyRepository;
   private readonly subscriptionsService: SubscriptionsService;
   private readonly notificationsService: NotificationsService;
@@ -50,6 +51,7 @@ export class JobPostsService {
     prisma,
     jobPostRepository,
     employerRepository,
+    employerIdentityCache,
     companyRepository,
     subscriptionsService,
     notificationsService,
@@ -59,6 +61,7 @@ export class JobPostsService {
     prisma: PrismaClient;
     jobPostRepository: JobPostRepository;
     employerRepository: EmployerRepository;
+    employerIdentityCache: EmployerIdentityCache;
     companyRepository: CompanyRepository;
     subscriptionsService: SubscriptionsService;
     notificationsService: NotificationsService;
@@ -68,6 +71,7 @@ export class JobPostsService {
     this.prisma = prisma;
     this.jobPostRepository = jobPostRepository;
     this.employerRepository = employerRepository;
+    this.employerIdentityCache = employerIdentityCache;
     this.companyRepository = companyRepository;
     this.subscriptionsService = subscriptionsService;
     this.notificationsService = notificationsService;
@@ -119,7 +123,7 @@ export class JobPostsService {
 
     const created = await this.jobPostRepository.create({
       companyId: company.id,
-      employerId: employer.id,
+      employerId: employer.employerId,
       status: "DRAFT",
       ...this.toWriteData(dto),
       title: dto.title,
@@ -539,16 +543,14 @@ export class JobPostsService {
       : `Your remaining quota is not enough to ${action}`;
   }
 
-  private async requireEmployer(userId: string) {
-    const employer = await this.employerRepository.findByUserId(userId);
-    if (!employer) {
-      throw new AppError(404, "Employer profile not found");
-    }
-    return employer;
+  // AD-19: chỉ cần companyId, employerId ⇒ lấy từ cache. Company (isVerified,
+  // hạn mức) vẫn đọc mới nhất ở requireVerifiedCompany.
+  private requireEmployer(userId: string): Promise<EmployerIdentity> {
+    return this.employerIdentityCache.require(userId);
   }
 
   /** Company phải được Admin xác minh trước khi tạo/đăng tin (AD-5, AD-6). */
-  private async requireVerifiedCompany(userId: string): Promise<{ company: Company; employer: Employer }> {
+  private async requireVerifiedCompany(userId: string): Promise<{ company: Company; employer: EmployerIdentity }> {
     const employer = await this.requireEmployer(userId);
     const company = await this.companyRepository.findById(employer.companyId);
     if (!company) {

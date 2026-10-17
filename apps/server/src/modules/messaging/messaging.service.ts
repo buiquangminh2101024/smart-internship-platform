@@ -4,7 +4,7 @@ import { AppError } from "../../shared/errors/AppError";
 import type { Logger } from "../../shared/logger";
 import type { RealtimeNotifier } from "../../shared/ports/RealtimeNotifier";
 import type { CandidateRepository } from "../candidates/candidate.repository";
-import type { EmployerRepository } from "../employers/employer.repository";
+import type { EmployerIdentityCache } from "../employers/employer-identity-cache";
 import type { JobPostRepository } from "../job-posts/job-post.repository";
 import type { ConversationWithRelations, MessagingRepository } from "./messaging.repository";
 
@@ -17,7 +17,7 @@ const DELETABLE_JOB_POST_STATUSES: readonly JobPostStatus[] = ["CLOSED", "EXPIRE
 export class MessagingService {
   private readonly messagingRepository: MessagingRepository;
   private readonly candidateRepository: CandidateRepository;
-  private readonly employerRepository: EmployerRepository;
+  private readonly employerIdentityCache: EmployerIdentityCache;
   private readonly jobPostRepository: JobPostRepository;
   private readonly realtimeNotifier: RealtimeNotifier;
   private readonly logger: Logger;
@@ -25,21 +25,21 @@ export class MessagingService {
   constructor({
     messagingRepository,
     candidateRepository,
-    employerRepository,
+    employerIdentityCache,
     jobPostRepository,
     realtimeNotifier,
     logger,
   }: {
     messagingRepository: MessagingRepository;
     candidateRepository: CandidateRepository;
-    employerRepository: EmployerRepository;
+    employerIdentityCache: EmployerIdentityCache;
     jobPostRepository: JobPostRepository;
     realtimeNotifier: RealtimeNotifier;
     logger: Logger;
   }) {
     this.messagingRepository = messagingRepository;
     this.candidateRepository = candidateRepository;
-    this.employerRepository = employerRepository;
+    this.employerIdentityCache = employerIdentityCache;
     this.jobPostRepository = jobPostRepository;
     this.realtimeNotifier = realtimeNotifier;
     this.logger = logger;
@@ -52,7 +52,7 @@ export class MessagingService {
       return this.enrichWithLatestMessages(convs);
     } else if (role === "EMPLOYER") {
       const employer = await this.requireEmployer(userId);
-      const convs = await this.messagingRepository.findConversationsByEmployerId(employer.id);
+      const convs = await this.messagingRepository.findConversationsByEmployerId(employer.employerId);
       const enriched = await this.enrichWithLatestMessages(convs);
       // Link "CV ứng viên" chỉ có khi ứng viên đã nộp đơn vào đúng tin này —
       // hội thoại do employer chủ động mở trước thì applicationId = null.
@@ -74,7 +74,7 @@ export class MessagingService {
       return { count: await this.messagingRepository.countUnreadConversations(role, candidate.id, userId) };
     } else if (role === "EMPLOYER") {
       const employer = await this.requireEmployer(userId);
-      return { count: await this.messagingRepository.countUnreadConversations(role, employer.id, userId) };
+      return { count: await this.messagingRepository.countUnreadConversations(role, employer.employerId, userId) };
     }
     throw new AppError(403, "Invalid role for messaging");
   }
@@ -92,7 +92,7 @@ export class MessagingService {
       candidateId = candidate.id;
     } else if (role === "EMPLOYER") {
       const employer = await this.requireEmployer(userId);
-      if (jobPost.employerId !== employer.id) {
+      if (jobPost.employerId !== employer.employerId) {
         throw new AppError(403, "You do not own this job post");
       }
       if (!targetCandidateId) {
@@ -216,10 +216,10 @@ export class MessagingService {
     return candidate;
   }
 
-  private async requireEmployer(userId: string) {
-    const employer = await this.employerRepository.findByUserId(userId);
-    if (!employer) throw new AppError(404, "Employer profile not found");
-    return employer;
+  // AD-19: chỉ cần employerId ⇒ lấy từ cache, không hỏi DB (chuông tin nhắn,
+  // mỗi tin gửi qua socket đều đi qua đây).
+  private requireEmployer(userId: string) {
+    return this.employerIdentityCache.require(userId);
   }
 
   async requireConversationAccess(userId: string, role: Role, conversationId: string) {
@@ -235,7 +235,7 @@ export class MessagingService {
       }
     } else if (role === "EMPLOYER") {
       const employer = await this.requireEmployer(userId);
-      if (conv.employerId !== employer.id) {
+      if (conv.employerId !== employer.employerId) {
         throw new AppError(403, "You do not have access to this conversation");
       }
     } else {

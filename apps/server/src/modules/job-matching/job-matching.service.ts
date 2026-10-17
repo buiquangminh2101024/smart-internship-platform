@@ -2,6 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 import type { ApplicationMatchSummary, MatchResult, MatchSemanticStatus } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
 import type { CandidateMatchProfile, JobMatcher, JobMatchProfile } from "../../shared/ports/JobMatcher";
+import type { EmployerIdentityCache } from "../employers/employer-identity-cache";
 import type { CandidateMatchProfileLoader } from "./candidate-match-profile.loader";
 import type { JobMatchProfileLoader } from "./job-match-profile.loader";
 import { MAX_NEW_EMBEDDINGS_PER_REQUEST } from "./job-matching.config";
@@ -20,6 +21,7 @@ export type JobMatcherMode = "rule" | "hybrid";
  */
 export class JobMatchingService {
   private readonly prisma: PrismaClient;
+  private readonly employerIdentityCache: EmployerIdentityCache;
   private readonly ruleJobMatcher: JobMatcher;
   private readonly hybridJobMatcher: JobMatcher;
   private readonly matchEmbeddingService: MatchEmbeddingService;
@@ -29,6 +31,7 @@ export class JobMatchingService {
 
   constructor({
     prisma,
+    employerIdentityCache,
     ruleJobMatcher,
     hybridJobMatcher,
     matchEmbeddingService,
@@ -37,6 +40,7 @@ export class JobMatchingService {
     config,
   }: {
     prisma: PrismaClient;
+    employerIdentityCache: EmployerIdentityCache;
     ruleJobMatcher: JobMatcher;
     hybridJobMatcher: JobMatcher;
     matchEmbeddingService: MatchEmbeddingService;
@@ -45,6 +49,7 @@ export class JobMatchingService {
     config: { JOB_MATCHER_MODE: JobMatcherMode };
   }) {
     this.prisma = prisma;
+    this.employerIdentityCache = employerIdentityCache;
     this.ruleJobMatcher = ruleJobMatcher;
     this.hybridJobMatcher = hybridJobMatcher;
     this.matchEmbeddingService = matchEmbeddingService;
@@ -152,10 +157,9 @@ export class JobMatchingService {
     return result.semantic.available ? "AVAILABLE" : "PENDING";
   }
 
-  private async requireEmployer(userId: string) {
-    const employer = await this.prisma.employer.findUnique({ where: { userId }, select: { companyId: true } });
-    if (!employer) throw new AppError(404, "Employer profile not found");
-    return employer;
+  // AD-19: companyId lấy từ cache.
+  private requireEmployer(userId: string) {
+    return this.employerIdentityCache.require(userId);
   }
 
   private async requireCandidateProfile(candidateId: string): Promise<CandidateMatchProfile> {

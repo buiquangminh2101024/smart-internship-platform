@@ -20,7 +20,7 @@ import {
 } from "../../src/modules/applications/applications.repository";
 import { ApplicationsService, canTransition, defaultSort } from "../../src/modules/applications/applications.service";
 
-const EMPLOYER = { id: "emp-1", userId: "user-emp-1", companyId: "co-1" };
+const EMPLOYER = { employerId: "emp-1", userId: "user-emp-1", companyId: "co-1" };
 const TX = { tx: true };
 
 function row(id: string): CompanyApplicationRow {
@@ -95,7 +95,6 @@ function buildService(options: Options = {}) {
     },
   };
   const prisma = {
-    employer: { findUnique: async () => EMPLOYER },
     $transaction: async (fn: (tx: unknown) => Promise<unknown>, transactionOptions?: { timeout?: number }) => {
       calls.transactionTimeout = transactionOptions?.timeout;
       return fn(TX);
@@ -105,6 +104,7 @@ function buildService(options: Options = {}) {
     prisma,
     applicationsRepository,
     employerRepository: {},
+    employerIdentityCache: { require: async () => EMPLOYER },
     interviewsRepository: {
       cancelUpcomingForApplication: async (applicationId: string) => {
         calls.cancelled.push(applicationId);

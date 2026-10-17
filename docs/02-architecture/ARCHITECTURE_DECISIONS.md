@@ -436,6 +436,41 @@ Bắt buộc thêm khi gửi duyệt (áp dụng cho cả nhánh publish thẳng
 
 **Ảnh hưởng:** `schema.prisma` + 1 migration (cột + 2 giá trị `NotificationType` của cùng đợt), `shared/config` (`duration.ts`, `env.ts`), `shared/ports/SessionRevocationStore.ts`, `infrastructure/redis-session-revocation-store.ts`, `container.ts`, `shared/middleware/authenticate.ts`, `infrastructure/socket/index.ts`, `modules/auth` (`refresh`, `resetPassword`, service mới), `modules/users`, `user.repository.ts`.
 
+## AD-19 — Cache `userId → {employerId, companyId}` trong bộ nhớ server (ngoại lệ của "cache dùng Redis")
+
+**Ngày:** 2026-10-17 · **Phase liên quan:** không thuộc phase đánh số, là việc tăng tốc sau trang Ứng viên. Kế hoạch: `docs/06-backend/employer-identity-cache/PLAN.md`.
+
+> **Trạng thái: ĐÃ DUYỆT (2026-10-17), ĐÃ TRIỂN KHAI (2026-10-17), đã kiểm trên trình duyệt.** Chủ dự án chốt trần 10.000 mục, thêm `dashboard` và `candidate-outreach` vào phạm vi. Chi tiết và số đo sau khi làm: `docs/06-backend/employer-identity-cache/PLAN.md`.
+
+**Bối cảnh:** gần như mọi API của Employer bắt đầu bằng việc tra `Employer` theo `userId` để lấy `companyId` hoặc `employerId`. Mỗi lần tra là 1 lượt đi về Neon. Riêng `findByUserId` có `include: company` nên Prisma chạy 2 câu, tức 2 lượt. Đo ngày 2026-10-17 trên Neon thật (máy dev, Neon và Redis ở Singapore, trung vị 25 lần, chỉ đọc):
+
+| Chức năng | Không cache | Cache thử | Giảm |
+|---|---|---|---|
+| Số tin nhắn chưa đọc (chuông, hỏi lại mỗi khi có tin mới hoặc 30 giây/lần khi mất socket) | 156–173 ms | 52–57 ms | ~110 ms |
+| Mở hội thoại, tải tin nhắn (cũng là đường kiểm quyền của mỗi tin gửi qua socket) | 517–575 ms | 414–459 ms | ~110 ms |
+| Trang Ứng viên, trang 1 | 116 ms | 58 ms | ~58 ms |
+
+Kết quả có cache trùng hoàn toàn với không cache ở cả 3 trường hợp.
+
+**Quyết định:**
+
+1. **Chỉ cache danh tính, không cache dữ liệu đổi được.** Giá trị là `{ userId, employerId, companyId }`. Không cache `isCompanyAdmin`, `title`, `phone` và mọi trường của `Company` (`verificationStatus`, `verifiedAt`, `name`…). Chỗ nào cần các trường đó vẫn đọc DB như hiện nay.
+2. **Lý do an toàn:** đọc code ngày 2026-10-17 thấy `Employer` chỉ được **tạo** (`employers.service.ts`: tạo công ty, vào công ty bằng mã mời) và sửa `title`/`phone` (`updateProfile`). Không có code đổi `companyId`, không có code xoá `Employer` hay xoá cứng `User`. Vì vậy, một khi đã tra được thì `employerId` và `companyId` không đổi.
+3. **Lưu trong bộ nhớ process, không qua Redis.** Map có TTL 10 phút (lưới an toàn) và trần 10.000 mục (~4,2 MB, đo 2026-10-17). Vượt trần thì dọn mục đã hết hạn trước, vẫn vượt mới bỏ mục cũ nhất còn hạn, kèm `logger.warn` tối đa 1 lần/phút. Vượt trần không gây lỗi hay sai dữ liệu, người bị bỏ chỉ tra DB lại như hiện nay. Không cache kết quả "không tìm thấy", vì Employer đang làm thủ tục sẽ có bản ghi ngay sau đó (AD-5). Không cache lỗi. Nhiều request cùng lúc thiếu cache thì chỉ chạy một câu DB (gộp promise).
+4. **Xoá cache chủ động:** có hàm `invalidate(userId)` và cơ chế thế hệ theo `userId` (cài bằng chính promise đang tra: `invalidate` xoá nó, lần tra cũ thấy mình không còn là promise hiện hành thì không lưu), để một lần đọc DB bắt đầu trước khi xoá không ghi đè giá trị cũ vào cache. **Hiện chưa có chỗ nào cần gọi** (mục 2). Quy tắc cho sau này: code nào đổi `Employer.companyId`, xoá `Employer`, hay xoá cứng `User` của Employer thì phải gọi `invalidate` **sau khi transaction commit**. Nếu quyền truy cập bị mất (rời công ty, bị gỡ khỏi công ty) thì gọi thêm thu hồi phiên AD-18. Không đưa việc xoá cache vào outbox, vì outbox chạy theo cron và chậm từ 1 đến 30 phút.
+5. **Phạm vi:** các service chỉ cần id: `messaging`, `applications` (phía employer), `interviews`, `job-posts`, `job-post-requirements`, `job-matching`. Thêm `dashboard`: id lấy từ cache, còn chỗ cần trường company thì **đọc company theo `companyId` từ DB** (vẫn mới nhất). `candidate-outreach` làm cùng kiểu với `dashboard`. Không đổi `subscriptions` (cần `isCompanyAdmin` mới nhất cho quyền mua gói) và `employers`.
+6. **Không đổi bảo mật:** khoá tài khoản (AD-17) và thu hồi phiên (AD-18) vẫn được `authenticate` kiểm ở mỗi request, không phụ thuộc cache này.
+
+**Phương án không chọn:**
+
+- *Cache trong Redis:* mỗi lần đọc vẫn mất 1 lượt Redis (đo được ~33 ms từ máy dev), và phải tự lo hạn sống và đồng bộ. Lợi duy nhất là dùng chung được cho nhiều instance, mà dự án đang chạy một instance (`INITIAL_ARCHITECTURE_PLAN.md` §5).
+- *Đưa `companyId` vào JWT:* không tốn lượt nào. Nhưng token cũ giữ `companyId` tới hết hạn, và phải sửa đăng nhập, làm mới token, các test token. Đổi công ty thì phải thu hồi phiên mới có hiệu lực.
+- *Chỉ bỏ `include: company` trong `findByUserId`:* bớt được 1 trong 2 lượt cho các module dùng hàm này, nhưng vẫn còn 1 lượt mỗi request. Phần này vẫn được làm như một phần của plan: lúc thiếu cache thì chỉ `select` id.
+
+**Hạn chế:** chạy nhiều instance thì `invalidate` chỉ xoá được cache của instance đang chạy. Khi đó phải thêm kênh xoá qua Redis pub/sub (Redis sẵn có), TTL vẫn là lưới an toàn. Hiện chưa có chỗ nào gọi `invalidate` nên hạn chế này chưa ảnh hưởng gì. Lợi về tốc độ phụ thuộc vào khoảng cách tới Neon: server đặt cùng vùng với DB thì mỗi lượt chỉ còn vài ms.
+
+**Ảnh hưởng:** `modules/employers` (lớp cache mới, 1 method `select` id ở `employer.repository.ts`), `container.ts` (đăng ký singleton), 8 service ở mục 5 (kèm 1 method `select` company ở `candidate-outreach.repository.ts`), test unit của các service đó và test mới cho cache. Không đổi schema, API hay frontend. Không thêm dependency.
+
 ## Phần ghi chú của chủ dự án
 
 *(để trống)*

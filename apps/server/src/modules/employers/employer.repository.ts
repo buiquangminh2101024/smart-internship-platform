@@ -18,6 +18,12 @@ export class EmployerRepository {
     return db.employer.findUnique({ where: { userId }, include: { company: true } });
   }
 
+  // AD-19: chỉ phần danh tính cho EmployerIdentityCache — 1 câu thay vì 2 câu
+  // của `include: company` ở findByUserId.
+  findIdentityByUserId(userId: string, db: Db = this.prisma): Promise<Pick<Employer, "id" | "companyId"> | null> {
+    return db.employer.findUnique({ where: { userId }, select: { id: true, companyId: true } });
+  }
+
   create(
     data: { userId: string; companyId: string; isCompanyAdmin: boolean; title?: string; phone?: string },
     db: Db = this.prisma,

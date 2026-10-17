@@ -16,6 +16,7 @@ import type {
 import { AppError } from "../../shared/errors/AppError";
 import type { Logger } from "../../shared/logger";
 import type { CandidateMatchProfile, JobMatcher, JobMatchProfile } from "../../shared/ports/JobMatcher";
+import type { EmployerIdentityCache } from "../employers/employer-identity-cache";
 import type { CandidateMatchProfileLoader } from "../job-matching/candidate-match-profile.loader";
 import type { JobMatchProfileLoader } from "../job-matching/job-match-profile.loader";
 import { MAX_NEW_EMBEDDINGS_PER_REQUEST } from "../job-matching/job-matching.config";
@@ -57,6 +58,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export class CandidateOutreachService {
   private readonly prisma: PrismaClient;
   private readonly repository: CandidateOutreachRepository;
+  private readonly employerIdentityCache: EmployerIdentityCache;
   private readonly rateLimit: CandidateOutreachRateLimitService;
   private readonly subscriptionsService: SubscriptionsService;
   private readonly companySubscriptionRepository: CompanySubscriptionRepository;
@@ -73,6 +75,7 @@ export class CandidateOutreachService {
   constructor({
     prisma,
     candidateOutreachRepository,
+    employerIdentityCache,
     candidateOutreachRateLimitService,
     subscriptionsService,
     companySubscriptionRepository,
@@ -88,6 +91,7 @@ export class CandidateOutreachService {
   }: {
     prisma: PrismaClient;
     candidateOutreachRepository: CandidateOutreachRepository;
+    employerIdentityCache: EmployerIdentityCache;
     candidateOutreachRateLimitService: CandidateOutreachRateLimitService;
     subscriptionsService: SubscriptionsService;
     companySubscriptionRepository: CompanySubscriptionRepository;
@@ -103,6 +107,7 @@ export class CandidateOutreachService {
   }) {
     this.prisma = prisma;
     this.repository = candidateOutreachRepository;
+    this.employerIdentityCache = employerIdentityCache;
     this.rateLimit = candidateOutreachRateLimitService;
     this.subscriptionsService = subscriptionsService;
     this.companySubscriptionRepository = companySubscriptionRepository;
@@ -148,7 +153,7 @@ export class CandidateOutreachService {
 
   /** Danh sách "Đã mời" (D6): chỉ đọc ⇒ không đòi tin PUBLISHED hay công ty còn gói. */
   async listSentInvitations(userId: string, jobPostId: string): Promise<SentOutreachInvitationDto[]> {
-    const employer = await this.requireEmployer(userId);
+    const employer = await this.requireEmployerIdentity(userId);
     const jobPost = await this.requireOwnedJobPost(employer, jobPostId);
 
     const invitations = await this.repository.listForJobPost(jobPost.id);
@@ -207,7 +212,7 @@ export class CandidateOutreachService {
     userId: string,
     query: ListCompanyInvitationsQuery,
   ): Promise<PaginatedResponse<CompanyOutreachInvitationDto>> {
-    const employer = await this.requireEmployer(userId);
+    const employer = await this.requireEmployerIdentity(userId);
     if (query.jobPostId) {
       const jobPost = await this.repository.findJobPost(query.jobPostId);
       if (!jobPost || jobPost.companyId !== employer.companyId) throw new AppError(404, "Job post not found");
@@ -477,14 +482,22 @@ export class CandidateOutreachService {
     };
   }
 
+  // AD-19: id lấy từ cache (0 câu DB) cho các API chỉ cần id.
+  private async requireEmployerIdentity(userId: string): Promise<Pick<OutreachEmployer, "id" | "companyId">> {
+    const { employerId, companyId } = await this.employerIdentityCache.require(userId);
+    return { id: employerId, companyId };
+  }
+
+  // Cần company (hạn mức theo gói, tên công ty trong thông báo) ⇒ đọc mới nhất theo companyId.
   private async requireEmployer(userId: string): Promise<OutreachEmployer> {
-    const employer = await this.repository.findEmployerByUserId(userId);
-    if (!employer) throw new AppError(404, "Employer profile not found");
-    return employer;
+    const employer = await this.requireEmployerIdentity(userId);
+    const company = await this.repository.findOutreachCompany(employer.companyId);
+    if (!company) throw new AppError(404, "Employer profile not found");
+    return { ...employer, company };
   }
 
   /** Chỉ người đăng tin (jobPost.employerId) — tin của người khác trả 404 như không tồn tại. */
-  private async requireOwnedJobPost(employer: OutreachEmployer, jobPostId: string): Promise<OutreachJobPost> {
+  private async requireOwnedJobPost(employer: Pick<OutreachEmployer, "id">, jobPostId: string): Promise<OutreachJobPost> {
     const jobPost = await this.repository.findJobPost(jobPostId);
     if (!jobPost || jobPost.employerId !== employer.id) throw new AppError(404, "Job post not found");
     return jobPost;

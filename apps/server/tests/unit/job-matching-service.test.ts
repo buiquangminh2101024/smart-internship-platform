@@ -56,7 +56,6 @@ const fakePrisma = {
     findUnique: async () => ({ status: "PUBLISHED" }),
     findFirst: async () => ({ id: JOB.jobPostId }),
   },
-  employer: { findUnique: async () => ({ companyId: "co-1" }) },
   application: {
     findMany: async () => [...PROFILES.keys()].map((candidateId) => ({ id: `app-${candidateId}`, candidateId })),
     findFirst: async () => ({ candidateId: "c1", jobPostId: JOB.jobPostId }),
@@ -93,6 +92,7 @@ function setup(mode: JobMatcherMode) {
   const embeddings = new FakeEmbeddings();
   const service = new JobMatchingService({
     prisma: fakePrisma,
+    employerIdentityCache: { require: async () => ({ userId: "u-1", employerId: "e-1", companyId: "co-1" }) } as never,
     // Calibration của ví dụ PLAN (lo 0.25, hi 0.75) để số dễ kiểm tay.
     ruleJobMatcher: new ScoringJobMatcher(RULE_WEIGHTS_V1),
     hybridJobMatcher: new ScoringJobMatcher(HYBRID_WEIGHTS_V1, { lo: 0.25, hi: 0.75 }),

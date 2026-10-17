@@ -77,7 +77,7 @@ function setup(options: { jobPost?: Record<string, unknown> | null; extract?: ()
       setMajors: async (...args: unknown[]) => void calls.setMajors.push(args),
       update: async (...args: unknown[]) => void calls.update.push(args),
     } as never,
-    employerRepository: { findByUserId: async () => ({ companyId: "co-1" }) } as never,
+    employerIdentityCache: { require: async () => ({ userId: "u-1", employerId: "e-1", companyId: "co-1" }) } as never,
     requirementExtractor: extractor,
     requirementExtractionRateLimitService: new RequirementExtractionRateLimitService({
       redis: redis as never,

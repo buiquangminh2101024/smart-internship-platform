@@ -9,6 +9,7 @@ import type {
 } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
 import type { EmployerRepository } from "../employers/employer.repository";
+import type { EmployerIdentityCache } from "../employers/employer-identity-cache";
 import type { InterviewsRepository } from "../interviews/interviews.repository";
 import type { NotificationsService } from "../notifications/notifications.service";
 import { toEmployerApplicationListItem } from "./application.mapper";
@@ -52,6 +53,7 @@ export class ApplicationsService {
   private readonly prisma: PrismaClient;
   private readonly applicationsRepository: ApplicationsRepository;
   private readonly employerRepository: EmployerRepository;
+  private readonly employerIdentityCache: EmployerIdentityCache;
   private readonly notificationsService: NotificationsService;
   private readonly interviewsRepository: InterviewsRepository;
 
@@ -59,18 +61,21 @@ export class ApplicationsService {
     prisma,
     applicationsRepository,
     employerRepository,
+    employerIdentityCache,
     notificationsService,
     interviewsRepository,
   }: {
     prisma: PrismaClient;
     applicationsRepository: ApplicationsRepository;
     employerRepository: EmployerRepository;
+    employerIdentityCache: EmployerIdentityCache;
     notificationsService: NotificationsService;
     interviewsRepository: InterviewsRepository;
   }) {
     this.prisma = prisma;
     this.applicationsRepository = applicationsRepository;
     this.employerRepository = employerRepository;
+    this.employerIdentityCache = employerIdentityCache;
     this.notificationsService = notificationsService;
     this.interviewsRepository = interviewsRepository;
   }
@@ -185,12 +190,10 @@ export class ApplicationsService {
 
   // --- Employer ---
 
-  private async requireEmployer(userId: string) {
-    const employer = await this.prisma.employer.findUnique({ where: { userId } });
-    if (!employer) {
-      throw new AppError(404, "Employer profile not found");
-    }
-    return employer;
+  // AD-19: chỉ cần companyId (không đổi sau khi tạo Employer) ⇒ lấy từ cache,
+  // kể cả cho bulk đổi trạng thái (đọc ngoài transaction như trước).
+  private requireEmployer(userId: string) {
+    return this.employerIdentityCache.require(userId);
   }
 
   async listEmployerApplications(userId: string, jobId: string, status?: ApplicationStatus) {
