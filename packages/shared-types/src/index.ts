@@ -1349,6 +1349,92 @@ export interface EmployerApplicationView extends EmployerApplicationDetail {
   interviews: ApplicationInterview[];
 }
 
+/** `oldest`/`newest` theo ngày nộp; `skills`: khớp kỹ năng nhiều nhất (D10). */
+export type EmployerApplicationsSort = "oldest" | "newest" | "skills";
+
+/** GET /employer/applications — query. `sort` mặc định `oldest` khi `status=PENDING`, còn lại `newest`. */
+export interface EmployerApplicationsQuery {
+  status?: ApplicationStatus;
+  jobPostId?: string;
+  /** 2–100 ký tự, tìm trong tên hoặc email ứng viên. */
+  q?: string;
+  sort?: EmployerApplicationsSort;
+  page?: number;
+  /** 1–50, mặc định 20. */
+  pageSize?: number;
+}
+
+/** Kỹ năng của ứng viên trùng với kỹ năng của tin hồ sơ ứng tuyển (cùng `skillId`, không xét số năm). */
+export interface ApplicationSkillMatch {
+  requiredMatched: number;
+  /** 0 ⇒ tin chưa có kỹ năng bắt buộc. */
+  requiredTotal: number;
+  optionalMatched: number;
+  optionalTotal: number;
+}
+
+/** Một hàng của trang "Ứng viên" (mọi tin của công ty). */
+export interface EmployerApplicationListItem {
+  applicationId: string;
+  status: ApplicationStatus;
+  /** Lần nộp gần nhất: `reappliedAt`, không có thì `createdAt`. */
+  appliedAt: string;
+  candidate: { id: string; fullName: string | null; avatarUrl: string | null; universityName: string | null };
+  jobPost: { id: string; title: string; status: JobPostStatus };
+  /** SHORTLISTED, hoặc INTERVIEWING chưa có lịch SCHEDULED — cùng định nghĩa với `AwaitingScheduleApplication`. */
+  awaitingSchedule: boolean;
+  /** Lịch SCHEDULED gần nhất còn ở tương lai, nếu có. */
+  nextInterviewAt: string | null;
+  skillMatch: ApplicationSkillMatch;
+}
+
+/** Một tin có ít nhất một hồ sơ (theo `q`, không theo `status`), cho ô lọc theo tin. */
+export interface EmployerApplicationJobCount {
+  jobPostId: string;
+  title: string;
+  status: JobPostStatus;
+  count: number;
+}
+
+/**
+ * GET /employer/applications — phân trang theo số trang (ngoại lệ thứ hai của
+ * API_CONVENTIONS.md, như AwaitingSchedulePage).
+ */
+export interface EmployerApplicationsPage {
+  items: EmployerApplicationListItem[];
+  /** Số hồ sơ theo đủ bộ lọc hiện tại. */
+  total: number;
+  /** Trang thực sự trả về: yêu cầu vượt trang cuối thì là trang cuối. */
+  page: number;
+  pageSize: number;
+  /** Theo `jobPostId` và `q`, không theo `status` — số trên tab khớp danh sách khi bấm tab. */
+  statusCounts: Record<ApplicationStatus, number>;
+  /** Xếp theo tên tin. */
+  jobCounts: EmployerApplicationJobCount[];
+}
+
+/** Trạng thái đích được phép đổi hàng loạt (D4). "Được nhận" chỉ làm từng hồ sơ. */
+export type BulkApplicationTargetStatus = "REVIEWING" | "SHORTLISTED" | "REJECTED";
+
+/** POST /employer/applications/bulk-status — 1–50 id, không trùng. */
+export interface BulkUpdateApplicationStatusRequest {
+  applicationIds: string[];
+  status: BulkApplicationTargetStatus;
+}
+
+/**
+ * NOT_FOUND: không tồn tại hoặc thuộc công ty khác. INVALID_TRANSITION: trạng thái hiện
+ * tại không chuyển được sang đích. STATUS_CHANGED: trạng thái vừa bị người khác đổi.
+ */
+export type BulkStatusSkipReason = "NOT_FOUND" | "INVALID_TRANSITION" | "STATUS_CHANGED";
+
+/** Phản hồi 200, kể cả khi `updated` rỗng. Hồ sơ hợp lệ vẫn được đổi khi có hồ sơ bị bỏ qua. */
+export interface BulkUpdateApplicationStatusResult {
+  /** Theo thứ tự gửi lên. */
+  updated: string[];
+  skipped: Array<{ applicationId: string; reason: BulkStatusSkipReason }>;
+}
+
 // --- Messaging (Phase 9) -------------------------------------------------
 
 export interface Message {

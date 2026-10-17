@@ -1,13 +1,16 @@
 import type { NextFunction, Request, Response } from "express";
 import type {
   ApiResponse,
+  BulkUpdateApplicationStatusResult,
   CandidateApplicationSummary,
   EmployerApplicationDetail,
+  EmployerApplicationsPage,
   EmployerApplicationView,
   PaginatedResponse,
   ApplicationStatus,
 } from "@sip/shared-types";
 import { toApplicationInterview } from "../interviews/interview.mapper";
+import type { ListCompanyApplicationsQuery } from "./applications.dto";
 import type { ApplicationsService } from "./applications.service";
 import { toCandidateApplicationSummary, toEmployerApplicationDetail } from "./application.mapper";
 
@@ -68,6 +71,29 @@ export class ApplicationsController {
       const results = await this.applicationsService.listEmployerApplications(req.user!.id, req.params.jobId as string, status);
       const items = results.map(toEmployerApplicationDetail);
       const body: ApiResponse<PaginatedResponse<EmployerApplicationDetail>> = { success: true, data: { items, hasMore: false } };
+      res.json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  listCompany = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const data = await this.applicationsService.listCompanyApplications(
+        req.user!.id,
+        req.query as unknown as ListCompanyApplicationsQuery,
+      );
+      const body: ApiResponse<EmployerApplicationsPage> = { success: true, data };
+      res.json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  bulkUpdateStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const data = await this.applicationsService.bulkUpdateStatus(req.user!.id, req.body);
+      const body: ApiResponse<BulkUpdateApplicationStatusResult> = { success: true, data };
       res.json(body);
     } catch (error) {
       next(error);
