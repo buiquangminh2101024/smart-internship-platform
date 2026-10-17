@@ -2,7 +2,7 @@
 
 Nền tảng: AD-17 (khoá tài khoản), AD-18 (thu hồi mọi phiên). Tách khỏi `docs/06-backend/employer-identity-cache/PLAN.md` để commit, đo và hoàn tác riêng.
 
-**Trạng thái: CHỜ DUYỆT (2026-10-17).** Chưa code. Không đổi API, mã lỗi, khoá Redis, frontend. Không thêm dependency. Không cần AD mới (không đổi kiến trúc, chỉ đổi cách gọi 3 port có sẵn).
+**Trạng thái: ĐÃ DUYỆT và ĐÃ TRIỂN KHAI (2026-10-17); đã kiểm khu Employer và socket trên trình duyệt.** Xem "Ghi chú triển khai" ở cuối. Không đổi API, mã lỗi, khoá Redis, frontend. Không thêm dependency. Không cần AD mới (không đổi kiến trúc, chỉ đổi cách gọi 3 port có sẵn).
 
 ## Mục tiêu
 
@@ -77,6 +77,18 @@ Trả 2 file `authenticate.ts`, `socket/index.ts` về 3 lệnh tuần tự; xo�
 
 - *Port mới đọc cả 3 khoá bằng một `MGET`:* phải biết tên khoá của 3 adapter khác nhau, phá ranh giới AD-17/AD-18, mà không nhanh hơn đáng kể so với 3 lệnh gửi cùng lúc (H5).
 - *Bật `enableAutoPipelining` cho cả client ioredis:* ảnh hưởng mọi chỗ dùng Redis (rate-limit, OTP, khoá AI), quá rộng cho mục tiêu này.
+
+## Ghi chú triển khai (2026-10-17)
+
+- Đúng theo plan, không lệch: `checkAccessTokenState` trong `session-revocation.service.ts`; `authenticate.ts` và `socket/index.ts` gọi hàm này và map sang đúng thông báo/mã lỗi cũ, giữ `catch` cũ. Socket vẫn truyền `iat ?? 0` như trước.
+- Test mới `tests/unit/access-token-state.test.ts` (6 test), gồm test chứng minh 3 store được gọi trước khi store nào trả lời (bản tuần tự sẽ trượt test này). `tsc` sạch, toàn bộ test unit 210/210 xanh.
+- Đo với 3 adapter thật (script tạm, chỉ `GET` khoá không tồn tại, trung vị 25 lần × 2 lượt, đã xoá): tuần tự 97–98 ms, song song 33 ms; kết quả trùng nhau.
+- Kiểm qua `:8080` bằng `employer@match-demo.local`:
+  - Các trang Tổng quan, Lời mời, Tin tuyển dụng, Lịch phỏng vấn, Tin nhắn (mở hội thoại): mọi request API trả 200.
+  - Socket: mở kết nối Socket.IO thô bằng access token hiện tại ⇒ kết nối được; token sai ⇒ `Authentication error: Invalid token` như cũ.
+  - HTTP: token sai ⇒ 401 `Invalid or expired token`; thiếu token ⇒ 401 `Missing bearer token`, như cũ.
+  - Lúc mở lại trang sau khi để lâu, console có 1 cảnh báo `Socket connect_error … Invalid token`: socket thử bằng access token đã hết hạn trước khi trang làm mới token. Hành vi này có từ trước (code cũ cũng trả `Invalid token` khi `jwt.verify` lỗi), không do thay đổi này.
+  - Chưa kiểm: khu Candidate, Admin; các trường hợp token bị blacklist / tài khoản bị khoá / buộc đăng xuất trên giao diện (cần thao tác ghi). Thứ tự và thông báo các lỗi này dựa vào unit test.
 
 ## Phần 4 — Ghi chú của chủ dự án
 
