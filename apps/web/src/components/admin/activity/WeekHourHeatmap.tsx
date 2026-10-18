@@ -81,19 +81,24 @@ export function WeekHourHeatmap({
   return (
     <div className="grid gap-3">
       {/* Cuộn ngang trong khối khi hẹp; cột nhãn thứ dính bên trái. */}
-      <div className="overflow-x-auto pb-1">
-        <table className="w-full min-w-[820px] border-separate border-spacing-[2px] lg:min-w-[480px]">
+      {/* `relative`: nhãn giờ `sr-only` (absolute) phải bị khung cuộn cắt, nếu không chúng kéo rộng cả trang trên điện thoại. */}
+      <div className="relative overflow-x-auto pb-1">
+        <table className="w-full min-w-[820px] table-fixed border-separate border-spacing-[2px] lg:min-w-[300px]">
           <caption className="sr-only">
             Số sự kiện theo thứ và giờ. Dùng phím mũi tên để đi giữa các ô, Enter để lọc theo ô.
           </caption>
           <thead>
             <tr>
-              <th scope="col" className="sticky left-0 z-10 bg-surface-card">
+              <th scope="col" className="sticky left-0 z-10 w-9 bg-surface-card">
                 <span className="sr-only">Thứ</span>
               </th>
               {HOURS.map((hour) => (
-                <th key={hour} scope="col" className="h-6 text-center text-xs font-normal text-text-muted tabular-nums">
-                  {hour % 3 === 0 ? hour : <span className="sr-only">{hour}</span>}
+                <th
+                  key={hour}
+                  scope="col"
+                  className="h-6 overflow-visible text-left text-[13px] font-normal whitespace-nowrap text-text-muted tabular-nums"
+                >
+                  {hour % 6 === 0 ? `${hour}h` : <span className="sr-only">{hour}h</span>}
                 </th>
               ))}
             </tr>
@@ -129,7 +134,7 @@ export function WeekHourHeatmap({
                         onFocus={() => setFocus({ row, col })}
                         onKeyDown={(event) => handleKeyDown(event, row, col)}
                         onClick={() => onSelect(isSelected ? null : { dow: row + 1, hour: col })}
-                        className={`block h-8 w-full min-w-8 cursor-pointer rounded-[4px] lg:min-w-0 ${classOf(bucketOf(value, bounds), bounds.length)} ${
+                        className={`block h-8 w-full cursor-pointer rounded-[3px] lg:aspect-square lg:h-auto lg:max-h-7 ${classOf(bucketOf(value, bounds), bounds.length)} ${
                           isSelected ? "ring-2 ring-brand-700 ring-offset-1 ring-offset-surface-card" : "hover:ring-1 hover:ring-brand-400"
                         } focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-500`}
                       />

@@ -172,7 +172,9 @@ export function ActivityDayChart({
         style={{ height: HEIGHT }}
       >
         {width > 0 ? (
-          <svg width={width} height={HEIGHT} className="block touch-none select-none" aria-hidden>
+          // `absolute`: SVG đúng px không được tính vào bề rộng tối thiểu của khung,
+          // nếu không ô lưới không co lại được khi hẹp đi và biểu đồ tràn ra ngoài thẻ.
+          <svg width={width} height={HEIGHT} className="absolute inset-0 block touch-none select-none" aria-hidden>
             {ticks.map((tick) => (
               <g key={tick}>
                 <line

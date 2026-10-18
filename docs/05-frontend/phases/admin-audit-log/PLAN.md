@@ -4,7 +4,7 @@ Song song: `docs/06-backend/admin-audit-log/PLAN.md` (gọi tắt "plan BE"; cá
 Quy ước giao diện: `.claude/skills/sip-ui/SKILL.md`, cùng mục "Admin — bản D" trong `docs/05-frontend/phases/dashboard-employer-admin/PLAN.md`.
 Mẫu thử tham chiếu: `docs/temp/ui-compare/admin-nhat-ky-hoat-dong.html`, phương án C. File này chỉ có trên máy, không commit vì `docs/temp` bị gitignore. Mọi mô tả cần để code đều nằm trong tài liệu này, không phụ thuộc vào mẫu thử.
 
-**Trạng thái: ĐÃ ĐƯỢC CHỦ DỰ ÁN DUYỆT (2026-10-18), gồm QF1–QF4 theo khuyến nghị; plan BE cũng đã duyệt. Đợt 5 (FE-0..FE-8) xong code 2026-10-18:** typecheck và lint các file của trang đều sạch, chưa chạy thử trên trình duyệt. Còn đợt 6: FE-9 (kiểm toàn trang) cùng B10, B11 của plan BE. Các điểm làm khác hoặc chi tiết hơn plan nằm ở mục "Ghi chú triển khai" cuối Phần 3.
+**Trạng thái: ĐÃ ĐƯỢC CHỦ DỰ ÁN DUYỆT (2026-10-18), gồm QF1–QF4 theo khuyến nghị; plan BE cũng đã duyệt. Đợt 5 (FE-0..FE-8) xong code 2026-10-18:** typecheck và lint các file của trang đều sạch. **Đợt 6 xong 2026-10-18:** FE-9 đã kiểm trên trình duyệt (chủ dự án tự kiểm các luồng; Claude kiểm bố cục ở 375, 1024, 1280px và desktop, không cuộn ngang trang), sửa thêm các lỗi bố cục ghi ở "Ghi chú triển khai (đợt 6)"; `npm run lint --workspace web` còn 0 lỗi. B10, B11 xem plan BE. Các điểm làm khác hoặc chi tiết hơn plan nằm ở mục "Ghi chú triển khai" cuối Phần 3.
 
 ## Phạm vi
 
@@ -256,6 +256,19 @@ Những điểm plan chưa nói rõ, hoặc làm khác plan:
 - **`ActivityBarList`** là component riêng, không mở rộng `BarList`, vì `BarList` là `<dl>` chỉ để đọc.
 - **Lưới thứ × giờ:** 5 bậc `brand-100` → `brand-800` chia đều theo số lớn nhất, ô 0 dùng `surface-hover`. Bấm lại ô đang chọn thì bỏ lọc. Dưới `lg` ô rộng tối thiểu 32px và cuộn ngang trong khối.
 - **Sơ đồ dòng chảy tin:** bấm một nhánh thì thay bộ lọc hành động bằng đúng một hành động đó (kèm `resubmit` với hai nhánh gửi duyệt); bấm lại thì bỏ.
+
+### Ghi chú triển khai (đợt 6, 2026-10-18)
+
+Chủ dự án so ảnh chụp trang thật với mẫu thử và thấy khác. Phần khác do plan đã chọn thì giữ; phần do lỗi hoặc bố cục thì sửa:
+
+- **Giữ như plan (Phạm vi, Phần 1):** nền ngà, font Fraunces/JetBrains Mono và màu nhấn xanh navy là phong cách riêng của mẫu thử. Trang dùng token Admin hiện có (Plum, nền xám lạnh, số dùng font chữ thường), nên lưới thứ × giờ và thanh dùng thang `brand-*` thay cho thang xanh của mẫu. Nhãn vai trò theo `RoleBadge` của app ("Quản trị", "Doanh nghiệp", "Sinh viên"), không theo mẫu.
+- **Sửa lỗi lưới thứ × giờ:** bảng dùng `table-layout: auto` trong khi ô không có độ rộng riêng, nên chỉ những cột có nhãn giờ được chia chỗ, 16 cột còn lại co về 0. Đổi sang `table-fixed`, cột nhãn thứ rộng cố định, ô vuông (tối đa 28px) ở ≥ `lg`, nhãn giờ "0h, 6h, 12h, 18h" như mẫu. Bề rộng tối thiểu của bảng ở ≥ `lg` hạ từ 440px xuống 300px để khối 5/12 ở màn 1280px không phải cuộn ngang.
+- **Sửa lỗi biểu đồ "Theo ngày" tràn ra ngoài thẻ:** biểu đồ đo bề rộng khung rồi vẽ SVG đúng số px đó. SVG nằm trong luồng nên được tính vào bề rộng tối thiểu của ô lưới; khi khung hẹp lại (thanh cuộn dọc xuất hiện, đổi bố cục) ô không co được và SVG cũ tràn qua mép phải. SVG giờ đặt `absolute` trong khung có chiều cao cố định.
+- **Sửa lỗi trang bị kéo rộng tới 820px trên điện thoại khi mở "Thống kê":** nhãn giờ `sr-only` (định vị absolute) trong vùng cuộn ngang của lưới thứ × giờ lấy khối chứa ngoài vùng cuộn nên không bị cắt. Vùng cuộn thêm `relative`.
+- **Bố cục lưới thống kê theo mẫu thử** (đổi bảng ở mục Bố cục): ở ≥ 1280px, hàng 1 là "Theo ngày" cả hàng; hàng 2 là tỉ lệ nhóm · vai trò · top 5 người làm (mỗi khối 1/3); hàng 3 là thứ × giờ (5/12) cạnh dòng chảy tin (7/12). Từ 1024 đến 1279px xếp hai cột. Mẫu đặt thẻ cảnh báo cạnh "Theo ngày", còn trang giữ thanh cảnh báo phía trên vì trên màn hẹp nó phải đứng trước danh sách.
+- **Nút "Xem dạng bảng"** chuyển từ đầu khối xuống cuối khối: ở khối hẹp (1/3 hàng), nút ở đầu bị đẩy xuống một hàng riêng giữa tiêu đề và biểu đồ.
+- **Top 5 người làm:** thanh dài hết ngang như mẫu; vai trò và nút "Xem hành trình" chung một dòng dưới thanh.
+- **Kiểm trên trình duyệt:** lỗi hydration `fdprocessedid` trong console do tiện ích trình duyệt chèn thuộc tính vào nút, không do code.
 
 ## Phần 4 — Ghi chú của chủ dự án
 

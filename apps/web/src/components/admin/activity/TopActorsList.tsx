@@ -50,14 +50,12 @@ export function TopActorsList({
               )}
               <b className="text-sm text-text-strong tabular-nums">{formatNumber(actor.count)}</b>
             </div>
-            <div className="flex items-center gap-2 pl-6">
-              <span aria-hidden className="block h-2 flex-1 overflow-hidden rounded-full bg-surface-hover">
-                <span className="block h-full rounded-full bg-brand-500" style={{ width: `${(actor.count / max) * 100}%` }} />
-              </span>
-              <span className="w-24 text-right text-[13px] text-text-muted">{roleLabelOf(actor.actorRole)}</span>
-            </div>
-            <div className="pl-4">
-              <DashButton variant="ghost" size="sm" icon="route" onClick={() => onOpenJourney(actor)}>
+            <span aria-hidden className="ml-6 block h-2 overflow-hidden rounded-full bg-surface-hover">
+              <span className="block h-full rounded-full bg-brand-500" style={{ width: `${(actor.count / max) * 100}%` }} />
+            </span>
+            <div className="-my-1 flex items-center justify-between gap-2 pl-6">
+              <span className="text-[13px] text-text-muted">{roleLabelOf(actor.actorRole)}</span>
+              <DashButton variant="ghost" size="sm" icon="route" className="-mr-2" onClick={() => onOpenJourney(actor)}>
                 Xem hành trình<span className="sr-only"> của {actor.email ?? "tài khoản đã xoá"}</span>
               </DashButton>
             </div>

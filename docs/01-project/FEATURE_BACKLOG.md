@@ -43,7 +43,10 @@ Danh sách chức năng mà các nền tảng tuyển dụng thực tế (TopCV,
 | Báo cáo tin lừa đảo/vi phạm (người dùng báo, Admin xử lý) | 🔴 | Tin tuyển thực tập dễ bị lợi dụng. Luồng xử lý có thể dùng lại `TAKEN_DOWN` và `JobPostModerationAction` sẵn có. |
 | Màn hình Admin quản lý gói dịch vụ | 🟡 | Backend đã có `POST`/`PATCH /subscription-plans`, chỉ còn thiếu UI. |
 | Hoá đơn/biên lai cho giao dịch | 🟢 | |
-| 📌 Trang nhật ký hoạt động toàn hệ thống (audit log) cho Admin | 🟡 | Thêm 2026-10-11. Hiện chỉ dashboard Admin có khối "Hoạt động gần đây" (`ActivityTimeline`, lọc Quản trị viên / Tất cả), và chỉ hiện vài mục mới nhất. `/admin/users/[id]` chỉ có hoạt động của một người dùng. Chưa có trang riêng để xem toàn bộ. |
+| Khoá đăng nhập tạm thời khi sai mật khẩu nhiều lần | 🟡 | Thêm 2026-10-18. Hiện hệ thống chỉ **ghi** một dòng `AUTH_LOGIN_FAILED_REPEATED` vào nhật ký khi một tài khoản đăng nhập sai 5 lần trong 15 phút, chưa chặn. Cần chốt: khoá theo tài khoản hay theo IP, thời gian khoá, báo cho chủ tài khoản. Dùng lại bộ đếm Redis đã có. |
+| Nhật ký hoạt động: hướng mở rộng khi dữ liệu lớn | 🟢 | Thêm 2026-10-18. Chi tiết ở mục "Hướng mở rộng khi dữ liệu lớn" của `docs/06-backend/admin-audit-log/PLAN.md`, mỗi bước cần AD riêng: chia bảng theo tháng, read replica, BRIN trên `createdAt`, tách bảng thống kê gọn hơn, ghi bất đồng bộ qua outbox (trừ dòng kiểm duyệt và bảo mật), xuất CSV chạy nền khi vượt 5.000 dòng, kho chuyên cho log. |
+| Trang Kỹ năng và Danh mục học vấn nhận `?q=<tên>` để mở sẵn kết quả tìm | 🟢 | Thêm 2026-10-18 (QF4 của plan FE nhật ký hoạt động). Link từ nhật ký tới kỹ năng, trường hoặc ngành hiện chỉ mở trang danh sách. |
+| ✅ Trang nhật ký hoạt động toàn hệ thống (audit log) cho Admin | 🟡 | **Xong 2026-10-18** (`/admin/activity`, bản C "Bàn điều tra"; plan `docs/06-backend/admin-audit-log/PLAN.md`, `docs/05-frontend/phases/admin-audit-log/PLAN.md`, AD-20): bộ lọc trên URL, biểu đồ bấm để lọc, hành trình đối tượng và người làm, nhóm Bảo mật, xuất CSV, lưu trữ thay cho xoá. Thêm 2026-10-11. Hiện chỉ dashboard Admin có khối "Hoạt động gần đây" (`ActivityTimeline`, lọc Quản trị viên / Tất cả), và chỉ hiện vài mục mới nhất. `/admin/users/[id]` chỉ có hoạt động của một người dùng. Chưa có trang riêng để xem toàn bộ. |
 
 ## 3. Ứng viên
 

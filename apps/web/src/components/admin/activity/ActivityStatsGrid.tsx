@@ -34,7 +34,8 @@ function percentOf(value: number, total: number): string {
 
 /**
  * Một khối biểu đồ: tiêu đề, dòng phụ nói bấm vào thì lọc gì, nút "Xem dạng
- * bảng" bật/tắt bảng thay cho biểu đồ (màu không bao giờ là kênh duy nhất).
+ * bảng" ở cuối khối bật/tắt bảng thay cho biểu đồ (màu không bao giờ là kênh
+ * duy nhất). Nút để cuối khối vì ở khối hẹp, đặt ở đầu sẽ bị đẩy xuống một hàng riêng.
  */
 function StatPanel({
   id,
@@ -53,34 +54,32 @@ function StatPanel({
 }) {
   const [asTable, setAsTable] = useState(false);
   return (
-    <AdminPanel labelledBy={`${id}-title`} className={className}>
-      <AdminPanelHead
-        id={`${id}-title`}
-        title={title}
-        subtitle={subtitle}
-        actions={
-          <DashButton variant="ghost" size="sm" icon={asTable ? "chart-column" : "table-2"} onClick={() => setAsTable((value) => !value)}>
-            {asTable ? "Xem biểu đồ" : "Xem dạng bảng"}
-          </DashButton>
-        }
-      />
-      <div className="px-4 pb-4 @xl:px-5 @xl:pb-5">{asTable ? table() : chart}</div>
+    <AdminPanel labelledBy={`${id}-title`} className={`flex flex-col ${className}`}>
+      <AdminPanelHead id={`${id}-title`} title={title} subtitle={subtitle} />
+      <div className="flex-1 px-4 @xl:px-5">{asTable ? table() : chart}</div>
+      <div className="px-2 pt-1 pb-2 @xl:px-3">
+        <DashButton variant="ghost" size="sm" icon={asTable ? "chart-column" : "table-2"} onClick={() => setAsTable((value) => !value)}>
+          {asTable ? "Xem biểu đồ" : "Xem dạng bảng"}
+        </DashButton>
+      </div>
     </AdminPanel>
   );
 }
 
+// Theo mẫu thử bản C ở ≥ xl: theo ngày cả hàng; nhóm · vai trò · top người làm
+// chia ba; thứ × giờ (5/12) cạnh dòng chảy tin (7/12). Ở lg xếp hai cột.
 const PANEL_SPANS = {
-  day: "lg:col-span-12 xl:col-span-8",
+  day: "lg:col-span-12",
   groups: "lg:col-span-6 xl:col-span-4",
-  roles: "lg:col-span-6 xl:col-span-3",
-  actors: "lg:col-span-6 xl:col-span-3",
-  heatmap: "lg:col-span-6 xl:col-span-6",
-  flow: "lg:col-span-12",
+  roles: "lg:col-span-6 xl:col-span-4",
+  actors: "lg:col-span-6 xl:col-span-4",
+  heatmap: "lg:col-span-6 xl:col-span-5",
+  flow: "lg:col-span-12 xl:col-span-7",
 } as const;
 
 /**
- * Lưới thống kê của trang (hàng 1: theo ngày + tỉ lệ nhóm; hàng 2: vai trò, top
- * người làm, thứ × giờ; hàng 3: dòng chảy tin). Bấm vào biểu đồ thì đổi bộ lọc
+ * Lưới thống kê của trang (hàng 1: theo ngày; hàng 2: tỉ lệ nhóm, vai trò, top
+ * người làm; hàng 3: thứ × giờ, dòng chảy tin). Bấm vào biểu đồ thì đổi bộ lọc
  * qua `onChange`, nên URL luôn là nguồn sự thật.
  */
 export function ActivityStatsGrid({

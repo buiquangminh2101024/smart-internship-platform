@@ -4,7 +4,17 @@ Mục backlog: "📌 Trang nhật ký hoạt động toàn hệ thống (audit l
 
 Frontend: `docs/05-frontend/phases/admin-audit-log/PLAN.md`. Chủ dự án đã chọn **bản C "Bàn điều tra"** của mẫu thử `docs/temp/ui-compare/admin-nhat-ky-hoat-dong.html` (2026-10-18).
 
-**Trạng thái: ĐÃ ĐƯỢC CHỦ DỰ ÁN DUYỆT (2026-10-18), gồm lần sửa 3 và toàn bộ Q1–Q9 theo khuyến nghị. ĐANG TRIỂN KHAI theo đợt: đợt 1 (B0, B1, B1a, B2) xong code 2026-10-18; đợt 2 (B3, B4) xong 2026-10-18: đã đo lần 1, migration đã áp lên branch đo `perf-audit-log`; đợt 3 (B5, B5a, B6, B6a, B9) xong code 2026-10-18, đã kiểm trên branch đo; đợt 4 (B7, B8) xong 2026-10-18: đã chuyển lưu trữ và đo lần 2 trên branch đo.** Chủ dự án đã `db:deploy` migration này lên Neon chính (2026-10-18, `migrate status`: up to date). Q11 đã chốt (a) và đã làm. Đợt 5 (FE-0..FE-8 của plan FE) xong code 2026-10-18. Tiếp theo là đợt 6 (B10, B11, FE-9). Branch đo không còn cần cho BE; chủ dự án có thể xoá nó và bỏ `PERF_DATABASE_URL`.
+**Trạng thái: ĐÃ ĐƯỢC CHỦ DỰ ÁN DUYỆT (2026-10-18), gồm lần sửa 3 và toàn bộ Q1–Q9 theo khuyến nghị. ĐANG TRIỂN KHAI theo đợt: đợt 1 (B0, B1, B1a, B2) xong code 2026-10-18; đợt 2 (B3, B4) xong 2026-10-18: đã đo lần 1, migration đã áp lên branch đo `perf-audit-log`; đợt 3 (B5, B5a, B6, B6a, B9) xong code 2026-10-18, đã kiểm trên branch đo; đợt 4 (B7, B8) xong 2026-10-18: đã chuyển lưu trữ và đo lần 2 trên branch đo.** Chủ dự án đã `db:deploy` migration này lên Neon chính (2026-10-18, `migrate status`: up to date). Q11 đã chốt (a) và đã làm. Đợt 5 (FE-0..FE-8 của plan FE) xong code 2026-10-18. Đợt 6: B11 xong; B10 đã kiểm trên server thật 2026-10-18, gồm cả gửi lại tin bị từ chối (xem ghi chú đợt 6). Branch đo không còn cần cho BE; chủ dự án có thể xoá nó và bỏ `PERF_DATABASE_URL`.
+
+Ghi chú khi làm đợt 6 (2026-10-18), B10 trên server thật qua `:8080`, Neon chính:
+
+- **Đăng nhập sai:** gửi 6 lần mật khẩu sai (chuỗi ngẫu nhiên) vào tài khoản nhà tuyển dụng thử do chủ dự án chỉ định. Cả 6 lần trả 401 như thường. Nhật ký có đúng 1 dòng `AUTH_LOGIN_FAILED_REPEATED` (lần thứ 6 không ghi thêm): người làm là hệ thống, đối tượng là `User`, có IP, tóm tắt "Đăng nhập sai 5 lần trong 15 phút…". `/stats` báo `securityAlerts: 1`; thanh cảnh báo hiện trên trang, bấm "Xem cả 1 dòng" ra đúng 1 dòng.
+- **Bộ lọc và `/stats` (30 ngày, 16 sự kiện):** số theo từng nhóm, từng vai trò, 3 ô thứ × giờ có số và tổng theo ngày đều khớp với `total` của danh sách lọc tương ứng. Nhánh "Gửi duyệt lần đầu" (`action=JOB_POST_SUBMITTED&resubmit=false`) ra 1, khớp `jobPostFlow.submittedFirst`. `resubmit` không kèm `action` trả 400 như thiết kế.
+- **Hành trình một đối tượng:** hành trình của tài khoản bị dò (`entityType=User`, cũ trước) ra 2 dòng theo đúng thứ tự.
+- **Tải thêm:** trang 1 (10 dòng, `hasMore: true`) và trang 2 (6 dòng) ra đủ 16 dòng, không trùng.
+- **CSV:** `group=SECURITY` trong 2 ngày trả 200, `text/csv`, 2 dòng dữ liệu (khớp `total`), 10 cột.
+- **Gửi lại tin bị từ chối** (chủ dự án đồng ý và bật duyệt tin cho công ty thử): tạo tin nháp "[TEST B10] Tin thử gửi lại", gửi duyệt, Admin từ chối, gửi lại, rồi Admin từ chối lần nữa để tin về `DRAFT` và không nằm trong hàng chờ. Hành trình của tin ra đúng `SUBMITTED (resubmit: false)` → `REJECTED` → `SUBMITTED (resubmit: true)` → `REJECTED`. Lọc `resubmit=true` và `resubmit=false` mỗi bên ra đúng 1 dòng của tin thử; `jobPostFlow` báo `submittedFirst: 1`, `submittedResubmit: 1`, `rejected: 2`. Tin thử vẫn còn ở dạng nháp, chủ dự án tự xoá trên giao diện.
+- Script kiểm không in email, tên hay id.
 
 Ghi chú khi làm đợt 4 (2026-10-18):
 
