@@ -471,6 +471,34 @@ Kết quả có cache trùng hoàn toàn với không cache ở cả 3 trường
 
 **Ảnh hưởng:** `modules/employers` (lớp cache mới, 1 method `select` id ở `employer.repository.ts`), `container.ts` (đăng ký singleton), 8 service ở mục 5 (kèm 1 method `select` company ở `candidate-outreach.repository.ts`), test unit của các service đó và test mới cho cache. Không đổi schema, API hay frontend. Không thêm dependency.
 
+## AD-20 — Nhật ký kiểm toán: không bao giờ xoá, chuyển dòng cũ sang bảng lưu trữ, số liệu biểu đồ gộp theo giờ
+
+**Ngày:** 2026-10-18 · **Phase liên quan:** không thuộc phase đánh số, nối tiếp module `audit-log` của AD-16. Kế hoạch: `docs/06-backend/admin-audit-log/PLAN.md` (L16–L25), `docs/05-frontend/phases/admin-audit-log/PLAN.md`.
+
+> **Trạng thái: ĐÃ DUYỆT (2026-10-18), ĐANG TRIỂN KHAI.** Chủ dự án duyệt plan lần sửa 3 cùng Q1–Q9.
+
+**Bối cảnh:** trang nhật ký hoạt động của Admin cần lọc theo nhóm, ngày, người làm và vẽ biểu đồ theo ngày, nhóm, vai trò, lưới thứ × giờ. Bảng `audit_logs` chỉ thêm dòng, không bao giờ nhỏ đi. Nếu mỗi lần mở trang đều đếm lại toàn bảng thì trang chậm dần theo thời gian. Server dev không chạy liên tục, nên cron có thể lỡ nhiều lần chạy.
+
+**Quyết định:**
+
+1. **Nhật ký kiểm toán không bao giờ bị xoá.** Không có API sửa hay xoá dòng nhật ký. Retention chỉ **chuyển** dòng sang bảng `audit_logs_archive` (cùng cột, thêm `archivedAt`). Bảng lưu trữ giữ mãi. Muốn dọn bảng lưu trữ thì phải có AD riêng.
+2. **Chuyển dòng cũ bằng một câu lệnh** `WITH moved AS (DELETE … RETURNING *) INSERT INTO audit_logs_archive …`, mỗi lô 1.000 dòng cũ nhất. Xoá và chép cùng thành công hoặc cùng thất bại, không mất dòng.
+3. **Thời hạn giữ trong bảng chính:** env `AUDIT_RETENTION_DAYS`, mặc định 365, nhỏ nhất 30 (sai thì server không khởi động). Cron 03:00 giờ Việt Nam, mỗi lần tối đa 50 lô. Script tay dùng chung hàm, có `--dry-run`; chỉ cho `--days` nhỏ hơn 30 trên branch Neon đo hiệu năng.
+4. **Đọc bảng lưu trữ tách riêng** (`?archived=true`), không trộn hai bảng trong một danh sách. Riêng chỗ cần dòng cũ cho nghiệp vụ (lý do khoá tài khoản, AD-17) thì tìm thêm trong bảng lưu trữ khi bảng chính không có.
+5. **Bảng `audit_log_hourly_stats`** gộp số dòng theo giờ (UTC) × nhóm hành động × loại người làm × người làm. Không có unique key; mỗi giờ được tính lại bằng "xoá rồi ghi lại" trong một transaction, nên tính lại bao nhiêu lần cũng ra cùng kết quả. Bảng này không bị dọn theo retention.
+6. **Cron gộp số tự bù:** chạy một lần khi server khởi động, rồi phút 5 mỗi giờ. Mỗi lần tính lại giờ mới nhất đã có **lùi thêm 2 giờ**. Phần mới thì tính từ giờ của dòng nhật ký đầu tiên sau đó, tối đa 24 × 31 giờ mỗi lần, thiếu thì lần sau làm tiếp; nhảy qua quãng không có dòng nào nên luôn tiến lên, kể cả khi server tắt lâu. Bảng rỗng thì bắt đầu từ dòng cũ nhất. Không bao giờ tính giờ đang chạy dở, và không tính lại giờ đã chuyển sang lưu trữ: cron chỉ lùi 2 giờ, nên mốc chuyển lưu trữ (tối thiểu 30 ngày) cắt tròn theo giờ.
+7. **`/stats` cộng hai nguồn:** các giờ đã gộp đọc bảng thống kê, phần từ giờ gộp gần nhất tới hiện tại đếm trực tiếp trên `audit_logs`. Lúc ghi nhật ký không tốn thêm gì. Bảng thống kê chỉ gộp theo nhóm, nên khi lọc theo `action` (hoặc cờ gửi lại) thì đếm trực tiếp cả khoảng, nhờ index `(action, createdAt)`.
+8. **Thêm 2 index B-tree** trên `audit_logs`: `(actorId, createdAt)` và `(action, createdAt)`. Không dùng partial index (Prisma 6 không khai báo được) và không đổi index `createdAt` sang BRIN (truy vấn "50 dòng mới nhất" cần thứ tự).
+
+**Phương án không chọn:**
+
+- *Xoá dòng cũ theo thời hạn:* đơn giản nhất, nhưng mất dấu vết kiểm toán, và làm hỏng chỗ đọc "lý do khoá" của AD-17.
+- *Đếm trực tiếp trên `audit_logs` mỗi lần mở trang:* đúng tới từng giây nhưng chậm dần khi bảng lớn.
+- *Materialized view:* phải `REFRESH` toàn bộ, và Prisma không quản lý được view trong migration.
+- *Chia bảng theo tháng, read replica, kho log riêng:* chỉ cần khi bảng lên hàng chục triệu dòng; ghi ở mục "Hướng mở rộng" của plan, mỗi bước cần AD riêng.
+
+**Ảnh hưởng:** `schema.prisma` + 1 migration (2 index, 2 bảng mới), `modules/audit-log` (2 cron, hàm chuyển lưu trữ, `buildActivityWhere`, API `/stats`, `/export`, `/:id`), `main.ts` (khởi động cron), `shared/config/env.ts` (`AUDIT_RETENTION_DAYS`), script `audit-archive.ts`, `docs/03-database/DATABASE_DESIGN.md`. Cùng đợt nhưng không đổi kiến trúc: 4 hành động bảo mật ghi ở `auth.service` (đếm đăng nhập sai bằng `RateLimiter` sẵn có), `metadata.resubmit` cho `JOB_POST_SUBMITTED`. Không thêm dependency.
+
 ## Phần ghi chú của chủ dự án
 
 *(để trống)*
