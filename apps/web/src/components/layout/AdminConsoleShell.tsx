@@ -23,6 +23,7 @@ const NAV_ITEMS: SideNavItem[] = [
   { label: "Danh mục học vấn", icon: "graduation-cap", href: "/admin/education-catalog", matchNested: true },
   { label: "Người dùng", icon: "users", href: "/admin/users", matchNested: true },
   { label: "Báo cáo", icon: "flag", soon: true },
+  { label: "Nhật ký hoạt động", icon: "scroll-text", href: "/admin/activity" },
   { label: "Cài đặt", icon: "settings", href: "/admin/settings" },
 ];
 
@@ -34,6 +35,7 @@ const CRUMB_LABELS: Record<string, string> = {
   "education-catalog": "Danh mục học vấn",
   users: "Người dùng",
   notifications: "Thông báo",
+  activity: "Nhật ký hoạt động",
   settings: "Cài đặt",
 };
 

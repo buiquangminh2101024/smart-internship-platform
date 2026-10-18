@@ -122,6 +122,8 @@ export interface ResetPasswordRequest {
   email: string;
   otp: string;
   newPassword: string;
+  /** `change` khi đổi mật khẩu từ trang Cài đặt — chỉ đổi câu nhật ký (AD-20, L30). Mặc định `reset`. */
+  via?: "reset" | "change";
 }
 
 export interface RefreshRequest {

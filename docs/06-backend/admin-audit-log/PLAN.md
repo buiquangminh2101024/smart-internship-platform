@@ -4,7 +4,7 @@ Mục backlog: "📌 Trang nhật ký hoạt động toàn hệ thống (audit l
 
 Frontend: `docs/05-frontend/phases/admin-audit-log/PLAN.md`. Chủ dự án đã chọn **bản C "Bàn điều tra"** của mẫu thử `docs/temp/ui-compare/admin-nhat-ky-hoat-dong.html` (2026-10-18).
 
-**Trạng thái: ĐÃ ĐƯỢC CHỦ DỰ ÁN DUYỆT (2026-10-18), gồm lần sửa 3 và toàn bộ Q1–Q9 theo khuyến nghị. ĐANG TRIỂN KHAI theo đợt: đợt 1 (B0, B1, B1a, B2) xong code 2026-10-18; đợt 2 (B3, B4) xong 2026-10-18: đã đo lần 1, migration đã áp lên branch đo `perf-audit-log`; đợt 3 (B5, B5a, B6, B6a, B9) xong code 2026-10-18, đã kiểm trên branch đo; đợt 4 (B7, B8) xong 2026-10-18: đã chuyển lưu trữ và đo lần 2 trên branch đo.** Chủ dự án đã `db:deploy` migration này lên Neon chính (2026-10-18, `migrate status`: up to date). Q11 đã chốt (a) và đã làm. Tiếp theo là đợt 5 (FE-0..FE-8). Branch đo không còn cần cho BE; chủ dự án có thể xoá nó và bỏ `PERF_DATABASE_URL`.
+**Trạng thái: ĐÃ ĐƯỢC CHỦ DỰ ÁN DUYỆT (2026-10-18), gồm lần sửa 3 và toàn bộ Q1–Q9 theo khuyến nghị. ĐANG TRIỂN KHAI theo đợt: đợt 1 (B0, B1, B1a, B2) xong code 2026-10-18; đợt 2 (B3, B4) xong 2026-10-18: đã đo lần 1, migration đã áp lên branch đo `perf-audit-log`; đợt 3 (B5, B5a, B6, B6a, B9) xong code 2026-10-18, đã kiểm trên branch đo; đợt 4 (B7, B8) xong 2026-10-18: đã chuyển lưu trữ và đo lần 2 trên branch đo.** Chủ dự án đã `db:deploy` migration này lên Neon chính (2026-10-18, `migrate status`: up to date). Q11 đã chốt (a) và đã làm. Đợt 5 (FE-0..FE-8 của plan FE) xong code 2026-10-18. Tiếp theo là đợt 6 (B10, B11, FE-9). Branch đo không còn cần cho BE; chủ dự án có thể xoá nó và bỏ `PERF_DATABASE_URL`.
 
 Ghi chú khi làm đợt 4 (2026-10-18):
 

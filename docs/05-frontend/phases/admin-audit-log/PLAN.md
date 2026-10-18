@@ -4,7 +4,7 @@ Song song: `docs/06-backend/admin-audit-log/PLAN.md` (gọi tắt "plan BE"; cá
 Quy ước giao diện: `.claude/skills/sip-ui/SKILL.md`, cùng mục "Admin — bản D" trong `docs/05-frontend/phases/dashboard-employer-admin/PLAN.md`.
 Mẫu thử tham chiếu: `docs/temp/ui-compare/admin-nhat-ky-hoat-dong.html`, phương án C. File này chỉ có trên máy, không commit vì `docs/temp` bị gitignore. Mọi mô tả cần để code đều nằm trong tài liệu này, không phụ thuộc vào mẫu thử.
 
-**Trạng thái: ĐÃ ĐƯỢC CHỦ DỰ ÁN DUYỆT (2026-10-18), gồm QF1–QF4 theo khuyến nghị; plan BE cũng đã duyệt.** Chưa code. Phải có API của plan BE trước, xem cột "Cần BE" ở Phần 3.
+**Trạng thái: ĐÃ ĐƯỢC CHỦ DỰ ÁN DUYỆT (2026-10-18), gồm QF1–QF4 theo khuyến nghị; plan BE cũng đã duyệt. Đợt 5 (FE-0..FE-8) xong code 2026-10-18:** typecheck và lint các file của trang đều sạch, chưa chạy thử trên trình duyệt. Còn đợt 6: FE-9 (kiểm toàn trang) cùng B10, B11 của plan BE. Các điểm làm khác hoặc chi tiết hơn plan nằm ở mục "Ghi chú triển khai" cuối Phần 3.
 
 ## Phạm vi
 
@@ -239,6 +239,23 @@ Chủ dự án đồng ý cả bốn khuyến nghị.
 Tổng: **khoảng 23 giờ**.
 
 Thứ tự gợi ý: làm FE-1 → FE-3 ngay sau B5/B5a để có trang chạy được sớm, chỉ cần danh sách và chi tiết. Biểu đồ (FE-5, FE-6) làm sau B6/B6a. Bước nào chưa có API thì ẩn khối đó, không dựng dữ liệu giả trong code.
+
+### Ghi chú triển khai (đợt 5, 2026-10-18)
+
+Những điểm plan chưa nói rõ, hoặc làm khác plan:
+
+- **Khoảng mặc định khi lọc đối tượng hoặc xem lưu trữ.** Có `ent` (vd. link "Xem trong nhật ký") hoặc `archived` mà không chọn ngày thì lấy toàn bộ thời gian, không lấy 30 ngày. Với đối tượng là để không giấu các bước cũ hơn 30 ngày. Với lưu trữ là vì mọi dòng ở đó đều cũ hơn 30 ngày, lấy 30 ngày thì luôn rỗng. Riêng khi có thêm ô thứ × giờ thì vẫn dùng 30 ngày, vì server cần đủ khoảng ngày. Dòng phụ đầu trang ghi "toàn bộ thời gian"; nút "30 ngày" lúc này đặt ngày rõ trên URL.
+- **Nhảy từ hành trình đối tượng tới một dòng.** Dòng đã có trong danh sách thì đóng ngăn kéo, tô nổi và focus dòng đó. Chưa có thì bỏ các bộ lọc khác (giữ "xem lưu trữ"), đặt `ent`, tải thêm tới tối đa 4 lô (200 dòng, bằng giới hạn hành trình). Vẫn không thấy thì mở thẳng dòng đó trong ngăn kéo.
+- **Chọn một phiên ở "Hành trình người làm"** cũng bỏ các bộ lọc khác, để danh sách hiện đủ cả phiên.
+- **Khoảng của "Hành trình người làm".** Mở từ một dòng thì lấy ngày (giờ Việt Nam) của dòng đó. Mở từ "Top 5 người làm" thì lấy khoảng ngày của thống kê; ngăn kéo lúc này không có tab, chỉ có danh sách phiên. Dòng do hệ thống ghi (không có người làm) thì tab này chỉ có một câu giải thích.
+- **"Sao chép liên kết tới dòng này"** chép địa chỉ hiện tại (đã có `row`). Kết quả hiện ngay trên nút ("Đã sao chép liên kết"), không dùng toast, vì toast nằm dưới lớp phủ của ngăn kéo.
+- **`/stats` luôn được gọi**, kể cả trên màn hẹp khi mục "Thống kê" đang đóng, vì thanh cảnh báo bảo mật lấy `securityAlerts` từ đó và phải hiện ngay trên danh sách.
+- **"Còn chờ duyệt lúc này"** lấy `queues.jobPosts.total` của `useAdminDashboardOverview` thay cho `useAdminDashboardTasks`. Hai số là một, nhưng overview đã được shell gọi cho số chờ trên menu, nên dùng chung cache, không gọi thêm API.
+- **Email trong thanh cảnh báo** lấy từ câu `summary` của server ("… vào tài khoản <email>"), vì dòng đăng nhập sai không có người làm.
+- **Nhóm "Khác"** không có nút lọc (API không có nhóm `OTHER`). Thanh "Tỉ lệ theo nhóm" chỉ ghi số của nó bên dưới; dạng bảng thì có đủ.
+- **`ActivityBarList`** là component riêng, không mở rộng `BarList`, vì `BarList` là `<dl>` chỉ để đọc.
+- **Lưới thứ × giờ:** 5 bậc `brand-100` → `brand-800` chia đều theo số lớn nhất, ô 0 dùng `surface-hover`. Bấm lại ô đang chọn thì bỏ lọc. Dưới `lg` ô rộng tối thiểu 32px và cuộn ngang trong khối.
+- **Sơ đồ dòng chảy tin:** bấm một nhánh thì thay bộ lọc hành động bằng đúng một hành động đó (kèm `resubmit` với hai nhánh gửi duyệt); bấm lại thì bỏ.
 
 ## Phần 4 — Ghi chú của chủ dự án
 
