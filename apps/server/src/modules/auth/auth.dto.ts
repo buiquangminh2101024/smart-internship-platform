@@ -45,4 +45,6 @@ export const resetPasswordSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
   otp: z.string().length(6),
   newPassword: z.string().min(8, "Password must be at least 8 characters"),
+  // Chỉ để chọn câu nhật ký (AD-20 L30): trang Cài đặt gửi "change". Không đổi quyền gì.
+  via: z.enum(["reset", "change"]).default("reset"),
 });

@@ -360,7 +360,7 @@ Bắt buộc thêm khi gửi duyệt (áp dụng cho cả nhánh publish thẳng
 **Quyết định:**
 
 1. **Module `dashboard` chỉ đọc.** `apps/server/src/modules/dashboard/` gồm repository (SQL tổng hợp, `$queryRaw` cho nhóm theo ngày giờ Việt Nam), `employer-dashboard.service.ts`, `admin-dashboard.service.ts`, controller, routes, DTO. Module **không sở hữu tài nguyên nào và không ghi dữ liệu**; khi cần logic có sẵn thì gọi service của module chủ (`JobPostsService.ownStats/moderationStats`, `CandidateOutreachService.getDailyQuotaStatus`, `SubscriptionsService.getCompanySubscriptionAccess`, `MessagingService.getUnreadSummary`). Nhờ vậy không vi phạm quy tắc "không có module `admin` riêng" (`PROJECT_STRUCTURE.md` §5): đây là lớp truy vấn tổng hợp theo actor, không phải nơi đặt quyền Admin. Thao tác tại chỗ trên dashboard (đổi trạng thái hồ sơ, duyệt tin, xác minh công ty, duyệt danh mục) **gọi lại API hiện có** của module chủ, không có API thao tác riêng trong `dashboard`.
-2. **Module `audit-log`** (`AuditLogService.record(entry, tx?)` + repository đọc theo trang) là dịch vụ dùng chéo, đăng ký ở `*.routes.ts` giống `notificationsService`. Bảng `audit_logs` lưu `summary` là câu tiếng Việt **đã render lúc ghi** (snapshot, giống `Notification`), `action` là hằng số trong `audit-log.actions.ts`. Không thay thế `job_post_moderation_actions` (giữ nguyên). `GET /admin/activity` do `audit-log` hoặc `dashboard` phục vụ, chỉ đọc.
+2. **Module `audit-log`** (`AuditLogService.record(entry, tx?)` + repository đọc theo trang) là dịch vụ dùng chéo, đăng ký ở `*.routes.ts` giống `notificationsService`. Bảng `audit_logs` lưu `summary` là câu tiếng Việt **đã render lúc ghi** (snapshot, giống `Notification`), `action` là hằng số trong `audit-log.actions.ts`. Không thay thế `job_post_moderation_actions` (giữ nguyên). `GET /admin/activity` do `audit-log` hoặc `dashboard` phục vụ, chỉ đọc. *(Cập nhật 2026-10-18: trang Nhật ký hoạt động, nhóm Bảo mật, chuyển dòng cũ sang bảng lưu trữ thay cho xoá và số liệu biểu đồ gộp theo giờ: xem AD-20.)*
 3. **`ApplicationStatusHistory`, `JobPostDailyStat`, `AuditLog` ghi từ giờ trở đi** (D4). Hồ sơ hiện có được backfill đúng một dòng lịch sử ban đầu (`fromStatus = NULL`, `toStatus` = trạng thái hiện tại, `createdAt` = `applications.createdAt`, `actorId = NULL`) trong cùng file migration; `AuditLog` và `JobPostDailyStat` không backfill.
 4. **`Notification.dedupeKey String? @unique`** để tác vụ quét định kỳ (tin/gói sắp hết hạn, nhắc lịch phỏng vấn) mỗi đối tượng chỉ báo một lần dù cron chạy lặp; gặp vi phạm unique thì bỏ qua. Định dạng (mỗi người nhận là một dòng nên khoá luôn kèm `userId`): `JOB_POST_EXPIRING:{jobPostId}:{userId}`, `SUBSCRIPTION_EXPIRING:{subscriptionId}:{userId}`, `INTERVIEW_REMINDER:{interviewId}:{userId}:{scheduledAt epoch ms}` (kèm giờ hẹn để lịch bị dời sau khi đã nhắc vẫn được nhắc lại). Cron chạy 08:00 hằng ngày múi giờ `Asia/Ho_Chi_Minh`.
 5. **Hai luồng thông báo (D3).** *Thông báo* (đã xảy ra) lưu ở `notifications`, phân nhóm bằng ánh xạ `type → nhóm` trong code (`notification-groups.ts`), không thêm cột nhóm. *Việc cần làm* (đang chờ xử lý) tính trực tiếp từ trạng thái hiện tại, không lưu, để không lệch dữ liệu gốc. Email (qua outbox có sẵn) chỉ cho lịch phỏng vấn và gói sắp hết hạn.
@@ -435,6 +435,69 @@ Bắt buộc thêm khi gửi duyệt (áp dụng cho cả nhánh publish thẳng
 **Tương thích về sau:** khi chuyển refresh token sang cookie httpOnly, cơ chế giữ nguyên (chỉ đổi chỗ đọc token trong `refresh()` và xoá cookie khi trả `SESSION_REVOKED`). Nếu thêm quản lý phiên thì thay phần trong `SessionRevocationService`, giữ khoá Redis để chặn access token còn sống.
 
 **Ảnh hưởng:** `schema.prisma` + 1 migration (cột + 2 giá trị `NotificationType` của cùng đợt), `shared/config` (`duration.ts`, `env.ts`), `shared/ports/SessionRevocationStore.ts`, `infrastructure/redis-session-revocation-store.ts`, `container.ts`, `shared/middleware/authenticate.ts`, `infrastructure/socket/index.ts`, `modules/auth` (`refresh`, `resetPassword`, service mới), `modules/users`, `user.repository.ts`.
+
+## AD-19 — Cache `userId → {employerId, companyId}` trong bộ nhớ server (ngoại lệ của "cache dùng Redis")
+
+**Ngày:** 2026-10-17 · **Phase liên quan:** không thuộc phase đánh số, là việc tăng tốc sau trang Ứng viên. Kế hoạch: `docs/06-backend/employer-identity-cache/PLAN.md`.
+
+> **Trạng thái: ĐÃ DUYỆT (2026-10-17), ĐÃ TRIỂN KHAI (2026-10-17), đã kiểm trên trình duyệt.** Chủ dự án chốt trần 10.000 mục, thêm `dashboard` và `candidate-outreach` vào phạm vi. Chi tiết và số đo sau khi làm: `docs/06-backend/employer-identity-cache/PLAN.md`.
+
+**Bối cảnh:** gần như mọi API của Employer bắt đầu bằng việc tra `Employer` theo `userId` để lấy `companyId` hoặc `employerId`. Mỗi lần tra là 1 lượt đi về Neon. Riêng `findByUserId` có `include: company` nên Prisma chạy 2 câu, tức 2 lượt. Đo ngày 2026-10-17 trên Neon thật (máy dev, Neon và Redis ở Singapore, trung vị 25 lần, chỉ đọc):
+
+| Chức năng | Không cache | Cache thử | Giảm |
+|---|---|---|---|
+| Số tin nhắn chưa đọc (chuông, hỏi lại mỗi khi có tin mới hoặc 30 giây/lần khi mất socket) | 156–173 ms | 52–57 ms | ~110 ms |
+| Mở hội thoại, tải tin nhắn (cũng là đường kiểm quyền của mỗi tin gửi qua socket) | 517–575 ms | 414–459 ms | ~110 ms |
+| Trang Ứng viên, trang 1 | 116 ms | 58 ms | ~58 ms |
+
+Kết quả có cache trùng hoàn toàn với không cache ở cả 3 trường hợp.
+
+**Quyết định:**
+
+1. **Chỉ cache danh tính, không cache dữ liệu đổi được.** Giá trị là `{ userId, employerId, companyId }`. Không cache `isCompanyAdmin`, `title`, `phone` và mọi trường của `Company` (`verificationStatus`, `verifiedAt`, `name`…). Chỗ nào cần các trường đó vẫn đọc DB như hiện nay.
+2. **Lý do an toàn:** đọc code ngày 2026-10-17 thấy `Employer` chỉ được **tạo** (`employers.service.ts`: tạo công ty, vào công ty bằng mã mời) và sửa `title`/`phone` (`updateProfile`). Không có code đổi `companyId`, không có code xoá `Employer` hay xoá cứng `User`. Vì vậy, một khi đã tra được thì `employerId` và `companyId` không đổi.
+3. **Lưu trong bộ nhớ process, không qua Redis.** Map có TTL 10 phút (lưới an toàn) và trần 10.000 mục (~4,2 MB, đo 2026-10-17). Vượt trần thì dọn mục đã hết hạn trước, vẫn vượt mới bỏ mục cũ nhất còn hạn, kèm `logger.warn` tối đa 1 lần/phút. Vượt trần không gây lỗi hay sai dữ liệu, người bị bỏ chỉ tra DB lại như hiện nay. Không cache kết quả "không tìm thấy", vì Employer đang làm thủ tục sẽ có bản ghi ngay sau đó (AD-5). Không cache lỗi. Nhiều request cùng lúc thiếu cache thì chỉ chạy một câu DB (gộp promise).
+4. **Xoá cache chủ động:** có hàm `invalidate(userId)` và cơ chế thế hệ theo `userId` (cài bằng chính promise đang tra: `invalidate` xoá nó, lần tra cũ thấy mình không còn là promise hiện hành thì không lưu), để một lần đọc DB bắt đầu trước khi xoá không ghi đè giá trị cũ vào cache. **Hiện chưa có chỗ nào cần gọi** (mục 2). Quy tắc cho sau này: code nào đổi `Employer.companyId`, xoá `Employer`, hay xoá cứng `User` của Employer thì phải gọi `invalidate` **sau khi transaction commit**. Nếu quyền truy cập bị mất (rời công ty, bị gỡ khỏi công ty) thì gọi thêm thu hồi phiên AD-18. Không đưa việc xoá cache vào outbox, vì outbox chạy theo cron và chậm từ 1 đến 30 phút.
+5. **Phạm vi:** các service chỉ cần id: `messaging`, `applications` (phía employer), `interviews`, `job-posts`, `job-post-requirements`, `job-matching`. Thêm `dashboard`: id lấy từ cache, còn chỗ cần trường company thì **đọc company theo `companyId` từ DB** (vẫn mới nhất). `candidate-outreach` làm cùng kiểu với `dashboard`. Không đổi `subscriptions` (cần `isCompanyAdmin` mới nhất cho quyền mua gói) và `employers`.
+6. **Không đổi bảo mật:** khoá tài khoản (AD-17) và thu hồi phiên (AD-18) vẫn được `authenticate` kiểm ở mỗi request, không phụ thuộc cache này.
+
+**Phương án không chọn:**
+
+- *Cache trong Redis:* mỗi lần đọc vẫn mất 1 lượt Redis (đo được ~33 ms từ máy dev), và phải tự lo hạn sống và đồng bộ. Lợi duy nhất là dùng chung được cho nhiều instance, mà dự án đang chạy một instance (`INITIAL_ARCHITECTURE_PLAN.md` §5).
+- *Đưa `companyId` vào JWT:* không tốn lượt nào. Nhưng token cũ giữ `companyId` tới hết hạn, và phải sửa đăng nhập, làm mới token, các test token. Đổi công ty thì phải thu hồi phiên mới có hiệu lực.
+- *Chỉ bỏ `include: company` trong `findByUserId`:* bớt được 1 trong 2 lượt cho các module dùng hàm này, nhưng vẫn còn 1 lượt mỗi request. Phần này vẫn được làm như một phần của plan: lúc thiếu cache thì chỉ `select` id.
+
+**Hạn chế:** chạy nhiều instance thì `invalidate` chỉ xoá được cache của instance đang chạy. Khi đó phải thêm kênh xoá qua Redis pub/sub (Redis sẵn có), TTL vẫn là lưới an toàn. Hiện chưa có chỗ nào gọi `invalidate` nên hạn chế này chưa ảnh hưởng gì. Lợi về tốc độ phụ thuộc vào khoảng cách tới Neon: server đặt cùng vùng với DB thì mỗi lượt chỉ còn vài ms.
+
+**Ảnh hưởng:** `modules/employers` (lớp cache mới, 1 method `select` id ở `employer.repository.ts`), `container.ts` (đăng ký singleton), 8 service ở mục 5 (kèm 1 method `select` company ở `candidate-outreach.repository.ts`), test unit của các service đó và test mới cho cache. Không đổi schema, API hay frontend. Không thêm dependency.
+
+## AD-20 — Nhật ký kiểm toán: không bao giờ xoá, chuyển dòng cũ sang bảng lưu trữ, số liệu biểu đồ gộp theo giờ
+
+**Ngày:** 2026-10-18 · **Phase liên quan:** không thuộc phase đánh số, nối tiếp module `audit-log` của AD-16. Kế hoạch: `docs/06-backend/admin-audit-log/PLAN.md` (L16–L25), `docs/05-frontend/phases/admin-audit-log/PLAN.md`.
+
+> **Trạng thái: ĐÃ DUYỆT (2026-10-18), ĐANG TRIỂN KHAI.** Chủ dự án duyệt plan lần sửa 3 cùng Q1–Q9.
+
+**Bối cảnh:** trang nhật ký hoạt động của Admin cần lọc theo nhóm, ngày, người làm và vẽ biểu đồ theo ngày, nhóm, vai trò, lưới thứ × giờ. Bảng `audit_logs` chỉ thêm dòng, không bao giờ nhỏ đi. Nếu mỗi lần mở trang đều đếm lại toàn bảng thì trang chậm dần theo thời gian. Server dev không chạy liên tục, nên cron có thể lỡ nhiều lần chạy.
+
+**Quyết định:**
+
+1. **Nhật ký kiểm toán không bao giờ bị xoá.** Không có API sửa hay xoá dòng nhật ký. Retention chỉ **chuyển** dòng sang bảng `audit_logs_archive` (cùng cột, thêm `archivedAt`). Bảng lưu trữ giữ mãi. Muốn dọn bảng lưu trữ thì phải có AD riêng.
+2. **Chuyển dòng cũ bằng một câu lệnh** `WITH moved AS (DELETE … RETURNING *) INSERT INTO audit_logs_archive …`, mỗi lô 1.000 dòng cũ nhất. Xoá và chép cùng thành công hoặc cùng thất bại, không mất dòng.
+3. **Thời hạn giữ trong bảng chính:** env `AUDIT_RETENTION_DAYS`, mặc định 365, nhỏ nhất 30 (sai thì server không khởi động). Cron 03:00 giờ Việt Nam, mỗi lần tối đa 50 lô. Script tay dùng chung hàm, có `--dry-run`; chỉ cho `--days` nhỏ hơn 30 trên branch Neon đo hiệu năng. Mốc chuyển cắt tròn theo giờ, và không bao giờ vượt quá giờ mới nhất đã gộp số lùi 2 giờ (bảng thống kê rỗng thì không chuyển gì), để không giờ nào bị chuyển đi trước khi được gộp số.
+4. **Đọc bảng lưu trữ tách riêng** (`?archived=true`), không trộn hai bảng trong một danh sách. Riêng chỗ cần dòng cũ cho nghiệp vụ (lý do khoá tài khoản, AD-17) thì tìm thêm trong bảng lưu trữ khi bảng chính không có.
+5. **Bảng `audit_log_hourly_stats`** gộp số dòng theo giờ (UTC) × nhóm hành động × loại người làm × người làm. Không có unique key; mỗi giờ được tính lại bằng "xoá rồi ghi lại" trong một transaction, nên tính lại bao nhiêu lần cũng ra cùng kết quả. Bảng này không bị dọn theo retention.
+6. **Cron gộp số tự bù:** chạy một lần khi server khởi động, rồi phút 5 mỗi giờ. Mỗi lần tính lại giờ mới nhất đã có **lùi thêm 2 giờ**. Phần mới thì tính từ giờ của dòng nhật ký đầu tiên sau đó, tối đa 24 × 31 giờ mỗi lần, thiếu thì lần sau làm tiếp; nhảy qua quãng không có dòng nào nên luôn tiến lên, kể cả khi server tắt lâu. Bảng rỗng thì bắt đầu từ dòng cũ nhất. Không bao giờ tính giờ đang chạy dở, và không tính lại giờ đã chuyển sang lưu trữ: cron chỉ lùi 2 giờ, nên mốc chuyển lưu trữ (tối thiểu 30 ngày) cắt tròn theo giờ.
+7. **`/stats` cộng hai nguồn:** các giờ đã gộp đọc bảng thống kê, phần từ giờ gộp gần nhất tới hiện tại đếm trực tiếp trên `audit_logs`. Lúc ghi nhật ký không tốn thêm gì. Bảng thống kê chỉ gộp theo nhóm, nên khi lọc theo `action` (hoặc cờ gửi lại) thì đếm trực tiếp cả khoảng, nhờ index `(action, createdAt)`. Phần đếm trực tiếp đọc thêm `audit_logs_archive` khi khoảng của nó lấn qua dòng lưu trữ mới nhất (hai bảng không trùng dòng nên cộng thẳng).
+8. **Thêm 2 index B-tree** trên `audit_logs`: `(actorId, createdAt)` và `(action, createdAt)`. Không dùng partial index (Prisma 6 không khai báo được) và không đổi index `createdAt` sang BRIN (truy vấn "50 dòng mới nhất" cần thứ tự).
+
+**Phương án không chọn:**
+
+- *Xoá dòng cũ theo thời hạn:* đơn giản nhất, nhưng mất dấu vết kiểm toán, và làm hỏng chỗ đọc "lý do khoá" của AD-17.
+- *Đếm trực tiếp trên `audit_logs` mỗi lần mở trang:* đúng tới từng giây nhưng chậm dần khi bảng lớn.
+- *Materialized view:* phải `REFRESH` toàn bộ, và Prisma không quản lý được view trong migration.
+- *Chia bảng theo tháng, read replica, kho log riêng:* chỉ cần khi bảng lên hàng chục triệu dòng; ghi ở mục "Hướng mở rộng" của plan, mỗi bước cần AD riêng.
+
+**Ảnh hưởng:** `schema.prisma` + 1 migration (2 index, 2 bảng mới), `modules/audit-log` (2 cron, hàm chuyển lưu trữ, `buildActivityWhere`, API `/stats`, `/export`, `/:id`), `main.ts` (khởi động cron), `shared/config/env.ts` (`AUDIT_RETENTION_DAYS`), script `audit-archive.ts`, `docs/03-database/DATABASE_DESIGN.md`. Cùng đợt nhưng không đổi kiến trúc: 4 hành động bảo mật ghi ở `auth.service` (đếm đăng nhập sai bằng `RateLimiter` sẵn có), `metadata.resubmit` cho `JOB_POST_SUBMITTED`. Không thêm dependency.
 
 ## Phần ghi chú của chủ dự án
 

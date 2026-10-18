@@ -44,7 +44,7 @@ function invitation(
 function buildService(rows: InvitationWithRelations[] = []) {
   const calls: { filter?: CompanyInvitationFilter; take?: number } = {};
   const candidateOutreachRepository = {
-    findEmployerByUserId: async () => ME,
+    findOutreachCompany: async (companyId: string) => (companyId === ME.companyId ? ME.company : null),
     findJobPost: async (id: string) =>
       id === "job-other-co"
         ? { id, title: "Tin công ty khác", status: "PUBLISHED", employerId: "emp-x", companyId: "co-2" }
@@ -70,6 +70,7 @@ function buildService(rows: InvitationWithRelations[] = []) {
   };
   const service = new CandidateOutreachService({
     candidateOutreachRepository,
+    employerIdentityCache: { require: async () => ({ userId: "user-emp-me", employerId: ME.id, companyId: ME.companyId }) },
     subscriptionsService: { getCompanySubscriptionAccess: async () => ({ mode: "BLOCKED" }) },
     config: { JOB_MATCHER_MODE: "rule" },
   } as unknown as ConstructorParameters<typeof CandidateOutreachService>[0]);

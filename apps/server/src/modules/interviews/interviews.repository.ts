@@ -52,9 +52,10 @@ export type InterviewUpdateData = Partial<Pick<InterviewWriteData, "scheduledAt"
 
 /**
  * "Chờ đặt lịch" (F13): SHORTLISTED, hoặc INTERVIEWING mà chưa có lịch SCHEDULED
- * nào (chuyển tay qua PATCH status, hoặc mọi lịch đã bị huỷ).
+ * nào (chuyển tay qua PATCH status, hoặc mọi lịch đã bị huỷ). Bí danh `a` = applications;
+ * trang "Ứng viên" (module applications) dùng lại để hai nơi cùng một định nghĩa.
  */
-const AWAITING_SCHEDULE = Prisma.sql`(
+export const AWAITING_SCHEDULE = Prisma.sql`(
   a."status" = 'SHORTLISTED'
   OR (a."status" = 'INTERVIEWING' AND NOT EXISTS (
     SELECT 1 FROM interviews i WHERE i."applicationId" = a."id" AND i."status" = 'SCHEDULED'))

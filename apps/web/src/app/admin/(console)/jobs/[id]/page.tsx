@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { JobPost } from "@sip/shared-types";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { useAdminJobPost } from "@/hooks/useJobPosts";
+import { activityHrefForEntity } from "@/lib/audit-activity";
 import { JOB_STATUS_LABEL, formatDate } from "@/lib/job-post-display";
 import { JobPostContent, JobPostCompanyCard, JobPostHeaderCard } from "@/components/jobs/JobPostContent";
 import { JobPostStepper } from "@/components/jobs/JobPostStepper";
@@ -215,9 +216,14 @@ export default function AdminJobPostReviewPage({ params }: { params: Promise<{ i
 
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-4 px-6 py-12">
-      <Button as="a" href="/admin/jobs" variant="link" className="w-fit" icon="arrow-left">
-        Quản lý tin tuyển dụng
-      </Button>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Button as="a" href="/admin/jobs" variant="link" className="w-fit" icon="arrow-left">
+          Quản lý tin tuyển dụng
+        </Button>
+        <Button as="a" href={activityHrefForEntity("JobPost", job.id)} variant="link" className="w-fit" icon="scroll-text">
+          Xem trong nhật ký
+        </Button>
+      </div>
 
       <JobPostHeaderCard
         job={job}

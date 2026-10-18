@@ -6,11 +6,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EmployerDashboardService } from "../../src/modules/dashboard/employer-dashboard.service";
 
-const EMPLOYER = {
-  id: "emp-1",
-  companyId: "co-1",
-  company: { id: "co-1", name: "Công ty A", verificationStatus: "VERIFIED" },
-};
+const EMPLOYER = { userId: "user-emp-1", employerId: "emp-1", companyId: "co-1" };
+const COMPANY = { id: "co-1", name: "Công ty A", verificationStatus: "VERIFIED" };
 const WAIT = { under24h: 0, oneToTwoDays: 0, over2Days: 1 };
 
 function buildService() {
@@ -56,7 +53,8 @@ function buildService() {
   };
   return new EmployerDashboardService({
     dashboardRepository,
-    employerRepository: { findByUserId: async () => EMPLOYER },
+    employerIdentityCache: { require: async () => EMPLOYER },
+    companyRepository: { findById: async () => COMPANY },
     jobPostsService: { ownStats: async () => ({}) },
     candidateOutreachService: { getDailyQuotaStatus: async () => ({}) },
     // 3 hội thoại chưa đọc nhưng chỉ từ 2 ứng viên.

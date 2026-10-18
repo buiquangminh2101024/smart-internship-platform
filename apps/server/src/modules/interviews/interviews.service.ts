@@ -9,7 +9,7 @@ import type {
 } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
 import type { ApplicationsRepository } from "../applications/applications.repository";
-import type { EmployerRepository, EmployerWithCompany } from "../employers/employer.repository";
+import type { EmployerIdentity, EmployerIdentityCache } from "../employers/employer-identity-cache";
 import type { NotificationsService } from "../notifications/notifications.service";
 import { toAwaitingScheduleApplication, toCandidateInterview, toEmployerInterview } from "./interview.mapper";
 import type {
@@ -104,26 +104,26 @@ export class InterviewsService {
   private readonly prisma: PrismaClient;
   private readonly interviewsRepository: InterviewsRepository;
   private readonly applicationsRepository: ApplicationsRepository;
-  private readonly employerRepository: EmployerRepository;
+  private readonly employerIdentityCache: EmployerIdentityCache;
   private readonly notificationsService: NotificationsService;
 
   constructor({
     prisma,
     interviewsRepository,
     applicationsRepository,
-    employerRepository,
+    employerIdentityCache,
     notificationsService,
   }: {
     prisma: PrismaClient;
     interviewsRepository: InterviewsRepository;
     applicationsRepository: ApplicationsRepository;
-    employerRepository: EmployerRepository;
+    employerIdentityCache: EmployerIdentityCache;
     notificationsService: NotificationsService;
   }) {
     this.prisma = prisma;
     this.interviewsRepository = interviewsRepository;
     this.applicationsRepository = applicationsRepository;
-    this.employerRepository = employerRepository;
+    this.employerIdentityCache = employerIdentityCache;
     this.notificationsService = notificationsService;
   }
 
@@ -319,7 +319,7 @@ export class InterviewsService {
    * Hồ sơ SHORTLISTED chuyển sang INTERVIEWING (ghi history); ứng viên chỉ nhận
    * INTERVIEW_SCHEDULED, không kèm APPLICATION_STATUS_CHANGED (một việc, một email).
    */
-  private book(employer: EmployerWithCompany, slots: SlotRequest[], common: CommonFields): Promise<BookingResult> {
+  private book(employer: EmployerIdentity, slots: SlotRequest[], common: CommonFields): Promise<BookingResult> {
     const ids = slots.map((slot) => slot.applicationId);
     return this.prisma.$transaction(
       async (tx): Promise<BookingResult> => {
@@ -373,10 +373,9 @@ export class InterviewsService {
     return interview;
   }
 
-  private async requireEmployer(userId: string): Promise<EmployerWithCompany> {
-    const employer = await this.employerRepository.findByUserId(userId);
-    if (!employer) throw new AppError(404, "Employer profile not found");
-    return employer;
+  // AD-19: chỉ cần companyId, userId ⇒ lấy từ cache, không hỏi DB.
+  private requireEmployer(userId: string): Promise<EmployerIdentity> {
+    return this.employerIdentityCache.require(userId);
   }
 }
 

@@ -1,7 +1,6 @@
 import Link from "next/link";
 import type { EmployerDashboardOverview } from "@sip/shared-types";
 import { StatCard } from "@/components/ui/StatCard";
-import type { ToastData } from "@/components/ui/Toast";
 import { MESSAGES_HREF } from "@/lib/messaging";
 import {
   formatChange,
@@ -22,13 +21,7 @@ import { DashButton } from "../DashButton";
 export const PENDING_TASKS_ANCHOR = "viec-ho-so-cho";
 
 /** Sáu thẻ KPI của Employer (plan FE, mục "Employer"; hình theo mẫu bản C). */
-export function EmployerKpiGrid({
-  overview,
-  notify,
-}: {
-  overview: EmployerDashboardOverview;
-  notify: (tone: ToastData["tone"], message: string) => void;
-}) {
+export function EmployerKpiGrid({ overview }: { overview: EmployerDashboardOverview }) {
   const { jobs, applications, messages, outreach, interviews } = overview;
   const newApps = applications.newLast7Days;
   const next = interviews.next;
@@ -61,8 +54,8 @@ export function EmployerKpiGrid({
       <StatCard
         label="Hồ sơ mới trong 7 ngày"
         icon="inbox"
-        // Chưa có trang hồ sơ của cả công ty (F1) — tạm báo "đang cập nhật".
-        onClick={() => notify("info", "Trang quản lý hồ sơ đang được cập nhật, vui lòng quay lại sau.")}
+        // Trang "Ứng viên", tab Tất cả: mặc định mới nhất trước (chưa lọc được theo ngày).
+        href="/employer/applications"
         value={formatNumber(newApps.current)}
         unit="hồ sơ"
         delta={{ text: formatChange(newApps.current, newApps.previous), trend: trendOf(newApps.current, newApps.previous) }}

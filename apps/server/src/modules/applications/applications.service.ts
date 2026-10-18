@@ -1,18 +1,59 @@
-import type { CreateApplicationRequest, UpdateApplicationEvaluationRequest, UpdateApplicationStatusRequest } from "@sip/shared-types";
+import type {
+  BulkStatusSkipReason,
+  BulkUpdateApplicationStatusResult,
+  CreateApplicationRequest,
+  EmployerApplicationsPage,
+  EmployerApplicationsSort,
+  UpdateApplicationEvaluationRequest,
+  UpdateApplicationStatusRequest,
+} from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
 import type { EmployerRepository } from "../employers/employer.repository";
+import type { EmployerIdentityCache } from "../employers/employer-identity-cache";
 import type { InterviewsRepository } from "../interviews/interviews.repository";
 import type { NotificationsService } from "../notifications/notifications.service";
-import type { ApplicationsRepository } from "./applications.repository";
-import type { PrismaClient, ApplicationStatus } from "@prisma/client";
+import { toEmployerApplicationListItem } from "./application.mapper";
+import type { BulkUpdateApplicationStatusDto, ListCompanyApplicationsQuery } from "./applications.dto";
+import type { ApplicationsRepository, StatusChangeTarget } from "./applications.repository";
+import type { PrismaClient, Prisma, ApplicationStatus } from "@prisma/client";
 
 /** cancelReason của lịch bị huỷ tự động khi hồ sơ có kết quả (AD-16 M2). */
 const INTERVIEW_CANCEL_REASON_DECIDED = "Hồ sơ đã có kết quả";
+/** Lô 50 hồ sơ ghi vài trăm câu lệnh (trạng thái, history, thông báo, outbox), như đặt lịch hàng loạt. */
+const BULK_TRANSACTION_TIMEOUT_MS = 30_000;
+
+/** State machine hồ sơ phía employer. Không có chuyển ngược: mọi lần đổi đều không hoàn tác được. */
+const STATUS_TRANSITIONS: Record<ApplicationStatus, readonly ApplicationStatus[]> = {
+  PENDING: ["REVIEWING", "REJECTED"],
+  REVIEWING: ["SHORTLISTED", "REJECTED"],
+  SHORTLISTED: ["INTERVIEWING", "REJECTED"],
+  INTERVIEWING: ["ACCEPTED", "REJECTED"],
+  ACCEPTED: [],
+  REJECTED: [],
+  CANCELLED: [],
+};
+
+export function canTransition(from: ApplicationStatus, to: ApplicationStatus): boolean {
+  return STATUS_TRANSITIONS[from].includes(to);
+}
+
+/** Tab Chờ duyệt: hồ sơ chờ lâu nhất trước. Tab khác: mới nhất trước. */
+export function defaultSort(status: ApplicationStatus | undefined): EmployerApplicationsSort {
+  return status === "PENDING" ? "oldest" : "newest";
+}
+
+/** Đủ mọi trạng thái, trạng thái không có hồ sơ là 0. */
+function toStatusCounts(rows: Array<{ status: ApplicationStatus; count: number }>): Record<ApplicationStatus, number> {
+  const counts = Object.fromEntries(Object.keys(STATUS_TRANSITIONS).map((status) => [status, 0])) as Record<ApplicationStatus, number>;
+  for (const row of rows) counts[row.status] = row.count;
+  return counts;
+}
 
 export class ApplicationsService {
   private readonly prisma: PrismaClient;
   private readonly applicationsRepository: ApplicationsRepository;
   private readonly employerRepository: EmployerRepository;
+  private readonly employerIdentityCache: EmployerIdentityCache;
   private readonly notificationsService: NotificationsService;
   private readonly interviewsRepository: InterviewsRepository;
 
@@ -20,18 +61,21 @@ export class ApplicationsService {
     prisma,
     applicationsRepository,
     employerRepository,
+    employerIdentityCache,
     notificationsService,
     interviewsRepository,
   }: {
     prisma: PrismaClient;
     applicationsRepository: ApplicationsRepository;
     employerRepository: EmployerRepository;
+    employerIdentityCache: EmployerIdentityCache;
     notificationsService: NotificationsService;
     interviewsRepository: InterviewsRepository;
   }) {
     this.prisma = prisma;
     this.applicationsRepository = applicationsRepository;
     this.employerRepository = employerRepository;
+    this.employerIdentityCache = employerIdentityCache;
     this.notificationsService = notificationsService;
     this.interviewsRepository = interviewsRepository;
   }
@@ -146,12 +190,10 @@ export class ApplicationsService {
 
   // --- Employer ---
 
-  private async requireEmployer(userId: string) {
-    const employer = await this.prisma.employer.findUnique({ where: { userId } });
-    if (!employer) {
-      throw new AppError(404, "Employer profile not found");
-    }
-    return employer;
+  // AD-19: chỉ cần companyId (không đổi sau khi tạo Employer) ⇒ lấy từ cache,
+  // kể cả cho bulk đổi trạng thái (đọc ngoài transaction như trước).
+  private requireEmployer(userId: string) {
+    return this.employerIdentityCache.require(userId);
   }
 
   async listEmployerApplications(userId: string, jobId: string, status?: ApplicationStatus) {
@@ -177,54 +219,140 @@ export class ApplicationsService {
     return { app, interviews };
   }
 
+  /**
+   * Trang "Ứng viên" (mọi tin của công ty): phân trang theo số trang, `page` vượt trang
+   * cuối thì trả trang cuối (như D18). `total` lấy từ `statusCounts` nên không cần câu đếm riêng.
+   */
+  async listCompanyApplications(userId: string, query: ListCompanyApplicationsQuery): Promise<EmployerApplicationsPage> {
+    const { companyId } = await this.requireEmployer(userId);
+    const filter = { jobPostId: query.jobPostId, q: query.q };
+    const sort = query.sort ?? defaultSort(query.status);
+    const listPage = (page: number) =>
+      this.applicationsRepository.listForCompany(
+        companyId,
+        { ...filter, status: query.status },
+        { sort, offset: (page - 1) * query.pageSize, limit: query.pageSize },
+      );
+    // Lấy trang được hỏi cùng lúc với các số đếm để chỉ chờ DB một lượt. Tin của công ty khác
+    // thì trang rỗng (mọi câu đều lọc theo công ty) và vẫn trả 404 bên dưới.
+    const [ownsJobPost, statusRows, jobCounts, requestedRows] = await Promise.all([
+      query.jobPostId ? this.applicationsRepository.jobPostBelongsToCompany(query.jobPostId, companyId) : true,
+      this.applicationsRepository.countByStatus(companyId, filter),
+      this.applicationsRepository.countByJob(companyId, query.q),
+      listPage(query.page),
+    ]);
+    if (!ownsJobPost) throw new AppError(404, "Job post not found");
+
+    const statusCounts = toStatusCounts(statusRows);
+    const total = query.status
+      ? statusCounts[query.status]
+      : Object.values(statusCounts).reduce((sum, count) => sum + count, 0);
+    const lastPage = Math.max(1, Math.ceil(total / query.pageSize));
+    const page = Math.min(query.page, lastPage);
+    // Trang vượt trang cuối (sửa URL, hay hồ sơ vừa đổi trạng thái) thì lấy lại trang cuối.
+    const rows = page === query.page ? requestedRows : total === 0 ? [] : await listPage(page);
+    return {
+      items: rows.map(toEmployerApplicationListItem),
+      total,
+      page,
+      pageSize: query.pageSize,
+      statusCounts,
+      jobCounts,
+    };
+  }
+
   async updateApplicationStatus(userId: string, id: string, dto: UpdateApplicationStatusRequest) {
     const employer = await this.requireEmployer(userId);
     const app = await this.applicationsRepository.findEmployerApplicationById(id, employer.companyId);
     if (!app) throw new AppError(404, "Application not found");
 
-    const validTransitions: Record<ApplicationStatus, ApplicationStatus[]> = {
-      PENDING: ["REVIEWING", "REJECTED"],
-      REVIEWING: ["SHORTLISTED", "REJECTED"],
-      SHORTLISTED: ["INTERVIEWING", "REJECTED"],
-      INTERVIEWING: ["ACCEPTED", "REJECTED"],
-      ACCEPTED: [],
-      REJECTED: [],
-      CANCELLED: [],
-    };
-
-    if (!validTransitions[app.status as ApplicationStatus]?.includes(dto.status as ApplicationStatus)) {
+    if (!canTransition(app.status, dto.status)) {
       throw new AppError(400, "Cannot transition status to " + dto.status);
     }
 
-    // Đổi trạng thái + notification + outbox email ghi chung một transaction:
-    // ứng viên không bao giờ thấy trạng thái mới mà thiếu thông báo, và ngược lại.
-    await this.prisma.$transaction(async (tx) => {
-      await this.applicationsRepository.update(id, { status: dto.status }, tx);
-      await this.applicationsRepository.createStatusHistory(
-        { applicationId: id, fromStatus: app.status, toStatus: dto.status, actorId: userId },
-        tx,
-      );
-      // Hồ sơ có kết quả thì lịch phỏng vấn chưa diễn ra không còn ý nghĩa. Không
-      // gửi INTERVIEW_CANCELLED: ứng viên đã nhận APPLICATION_STATUS_CHANGED ngay dưới.
-      if (dto.status === "REJECTED" || dto.status === "ACCEPTED") {
-        await this.interviewsRepository.cancelUpcomingForApplication(id, INTERVIEW_CANCEL_REASON_DECIDED, tx);
-      }
-      await this.notificationsService.notify(
-        "APPLICATION_STATUS_CHANGED",
-        app.candidate.userId,
-        {
-          applicationId: app.id,
-          jobPostId: app.jobPostId,
-          jobPostTitle: app.jobPost.title,
-          companyName: app.jobPost.company.name,
-          oldStatus: app.status,
-          newStatus: dto.status,
-        },
-        tx,
-      );
-    });
+    const target: StatusChangeTarget = {
+      id: app.id,
+      status: app.status,
+      jobPostId: app.jobPostId,
+      jobPostTitle: app.jobPost.title,
+      companyName: app.jobPost.company.name,
+      candidateUserId: app.candidate.userId,
+    };
+    const changed = await this.prisma.$transaction((tx) => this.applyStatusChange(tx, target, dto.status, userId));
+    if (!changed) throw new AppError(409, "Trạng thái hồ sơ vừa được thay đổi. Tải lại để xem trạng thái mới.");
 
     return this.applicationsRepository.findEmployerApplicationById(id, employer.companyId);
+  }
+
+  /**
+   * Đổi trạng thái nhiều hồ sơ trong MỘT transaction (D4–D7). Hồ sơ không đổi được thì
+   * bỏ qua kèm lý do, hồ sơ khác vẫn được đổi. Ghi theo thứ tự id (khoá dòng cùng một
+   * thứ tự với đặt lịch hàng loạt, tránh khoá chéo); `updated` giữ thứ tự gửi lên.
+   */
+  async bulkUpdateStatus(userId: string, dto: BulkUpdateApplicationStatusDto): Promise<BulkUpdateApplicationStatusResult> {
+    const employer = await this.requireEmployer(userId);
+    return this.prisma.$transaction(
+      async (tx) => {
+        const applications = await this.applicationsRepository.findManyForStatusChange(dto.applicationIds, employer.companyId, tx);
+        const byId = new Map(applications.map((application) => [application.id, application]));
+        const reasons = new Map<string, BulkStatusSkipReason>();
+
+        for (const id of [...dto.applicationIds].sort()) {
+          const application = byId.get(id);
+          if (!application) reasons.set(id, "NOT_FOUND");
+          else if (!canTransition(application.status, dto.status)) reasons.set(id, "INVALID_TRANSITION");
+          else if (!(await this.applyStatusChange(tx, application, dto.status, userId))) reasons.set(id, "STATUS_CHANGED");
+        }
+
+        return {
+          updated: dto.applicationIds.filter((id) => !reasons.has(id)),
+          skipped: dto.applicationIds.flatMap((id) => {
+            const reason = reasons.get(id);
+            return reason ? [{ applicationId: id, reason }] : [];
+          }),
+        };
+      },
+      { timeout: BULK_TRANSACTION_TIMEOUT_MS },
+    );
+  }
+
+  /**
+   * Chuỗi ghi của một lần đổi trạng thái (AD-16), chạy trong transaction của nơi gọi:
+   * đổi có điều kiện, lịch sử, (có kết quả) huỷ lịch sắp tới, thông báo + outbox email.
+   * Ứng viên không bao giờ thấy trạng thái mới mà thiếu thông báo, và ngược lại.
+   * Trả false (không ghi gì) nếu trạng thái đã khác `app.status`.
+   */
+  private async applyStatusChange(
+    tx: Prisma.TransactionClient,
+    app: StatusChangeTarget,
+    to: ApplicationStatus,
+    actorId: string,
+  ): Promise<boolean> {
+    const count = await this.applicationsRepository.updateStatusIf(app.id, app.status, to, tx);
+    if (count === 0) return false;
+    await this.applicationsRepository.createStatusHistory(
+      { applicationId: app.id, fromStatus: app.status, toStatus: to, actorId },
+      tx,
+    );
+    // Hồ sơ có kết quả thì lịch phỏng vấn chưa diễn ra không còn ý nghĩa. Không
+    // gửi INTERVIEW_CANCELLED: ứng viên đã nhận APPLICATION_STATUS_CHANGED ngay dưới.
+    if (to === "REJECTED" || to === "ACCEPTED") {
+      await this.interviewsRepository.cancelUpcomingForApplication(app.id, INTERVIEW_CANCEL_REASON_DECIDED, tx);
+    }
+    await this.notificationsService.notify(
+      "APPLICATION_STATUS_CHANGED",
+      app.candidateUserId,
+      {
+        applicationId: app.id,
+        jobPostId: app.jobPostId,
+        jobPostTitle: app.jobPostTitle,
+        companyName: app.companyName,
+        oldStatus: app.status,
+        newStatus: to,
+      },
+      tx,
+    );
+    return true;
   }
 
   async updateApplicationEvaluation(userId: string, id: string, dto: UpdateApplicationEvaluationRequest) {

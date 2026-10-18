@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { AdminUserAccount, AdminUserDetail } from "@sip/shared-types";
 import { ApiError } from "@/lib/api-client";
 import { useAdminUserDetail } from "@/hooks/useAdminUsers";
+import { activityHrefForEntity } from "@/lib/audit-activity";
 import { formatVnDate } from "@/lib/dashboard-format";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
@@ -169,6 +170,11 @@ function DetailView({
                 {formatVnDate(account.createdAt)}
               </time>
             </span>
+          </div>
+          <div>
+            <DashButton href={activityHrefForEntity("User", account.id)} variant="ghost" size="sm" icon="scroll-text">
+              Xem trong nhật ký
+            </DashButton>
           </div>
         </div>
         <UserDetailActions account={account} onAction={onAction} />

@@ -16,10 +16,11 @@ import { SocketProvider } from "@/components/realtime/SocketProvider";
 
 // Bố cục theo ảnh mẫu `Screenshot 2026-09-12 134041.png` (panel 1 & 2): các mục
 // điều hướng + nút "Đăng tin mới" ghim đáy sidebar. "Tổng quan" là dashboard
-// AD-16 — số hồ sơ chờ xử lý hiện ngay trên mục này.
+// AD-16; số hồ sơ chờ duyệt hiện trên mục "Ứng viên" (employer-applications PLAN).
 const NAV_ITEMS: SideNavItem[] = [
   { label: "Tổng quan", icon: "layout-dashboard", href: "/employer/dashboard" },
   { label: "Tin tuyển dụng", icon: "briefcase", href: "/employer/jobs", matchNested: true },
+  { label: "Ứng viên", icon: "users", href: "/employer/applications", matchNested: true },
   { label: "Lịch phỏng vấn", icon: "calendar-days", href: "/employer/interviews" },
   { label: "Lời mời", icon: "send", href: "/employer/outreach" },
   { label: "Tin nhắn", icon: "messages-square", href: "/employer/messages", matchNested: true },
@@ -58,8 +59,8 @@ export function EmployerPortalShell({ children }: { children: ReactNode }) {
   const { data: overview } = useEmployerDashboardOverview(me?.stage === "ACTIVE");
   const pendingCount = overview?.applications.pendingCount ?? 0;
   const navItems = NAV_ITEMS.map((item) =>
-    item.href === "/employer/dashboard"
-      ? { ...item, badge: pendingCount, badgeLabel: `${pendingCount} hồ sơ chờ xử lý` }
+    item.href === "/employer/applications"
+      ? { ...item, badge: pendingCount, badgeLabel: `${pendingCount} hồ sơ chờ duyệt` }
       : item,
   );
 

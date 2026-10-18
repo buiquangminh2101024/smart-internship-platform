@@ -122,6 +122,8 @@ export interface ResetPasswordRequest {
   email: string;
   otp: string;
   newPassword: string;
+  /** `change` khi đổi mật khẩu từ trang Cài đặt — chỉ đổi câu nhật ký (AD-20, L30). Mặc định `reset`. */
+  via?: "reset" | "change";
 }
 
 export interface RefreshRequest {
@@ -1349,6 +1351,92 @@ export interface EmployerApplicationView extends EmployerApplicationDetail {
   interviews: ApplicationInterview[];
 }
 
+/** `oldest`/`newest` theo ngày nộp; `skills`: khớp kỹ năng nhiều nhất (D10). */
+export type EmployerApplicationsSort = "oldest" | "newest" | "skills";
+
+/** GET /employer/applications — query. `sort` mặc định `oldest` khi `status=PENDING`, còn lại `newest`. */
+export interface EmployerApplicationsQuery {
+  status?: ApplicationStatus;
+  jobPostId?: string;
+  /** 2–100 ký tự, tìm trong tên hoặc email ứng viên. */
+  q?: string;
+  sort?: EmployerApplicationsSort;
+  page?: number;
+  /** 1–50, mặc định 20. */
+  pageSize?: number;
+}
+
+/** Kỹ năng của ứng viên trùng với kỹ năng của tin hồ sơ ứng tuyển (cùng `skillId`, không xét số năm). */
+export interface ApplicationSkillMatch {
+  requiredMatched: number;
+  /** 0 ⇒ tin chưa có kỹ năng bắt buộc. */
+  requiredTotal: number;
+  optionalMatched: number;
+  optionalTotal: number;
+}
+
+/** Một hàng của trang "Ứng viên" (mọi tin của công ty). */
+export interface EmployerApplicationListItem {
+  applicationId: string;
+  status: ApplicationStatus;
+  /** Lần nộp gần nhất: `reappliedAt`, không có thì `createdAt`. */
+  appliedAt: string;
+  candidate: { id: string; fullName: string | null; avatarUrl: string | null; universityName: string | null };
+  jobPost: { id: string; title: string; status: JobPostStatus };
+  /** SHORTLISTED, hoặc INTERVIEWING chưa có lịch SCHEDULED — cùng định nghĩa với `AwaitingScheduleApplication`. */
+  awaitingSchedule: boolean;
+  /** Lịch SCHEDULED gần nhất còn ở tương lai, nếu có. */
+  nextInterviewAt: string | null;
+  skillMatch: ApplicationSkillMatch;
+}
+
+/** Một tin có ít nhất một hồ sơ (theo `q`, không theo `status`), cho ô lọc theo tin. */
+export interface EmployerApplicationJobCount {
+  jobPostId: string;
+  title: string;
+  status: JobPostStatus;
+  count: number;
+}
+
+/**
+ * GET /employer/applications — phân trang theo số trang (ngoại lệ thứ hai của
+ * API_CONVENTIONS.md, như AwaitingSchedulePage).
+ */
+export interface EmployerApplicationsPage {
+  items: EmployerApplicationListItem[];
+  /** Số hồ sơ theo đủ bộ lọc hiện tại. */
+  total: number;
+  /** Trang thực sự trả về: yêu cầu vượt trang cuối thì là trang cuối. */
+  page: number;
+  pageSize: number;
+  /** Theo `jobPostId` và `q`, không theo `status` — số trên tab khớp danh sách khi bấm tab. */
+  statusCounts: Record<ApplicationStatus, number>;
+  /** Xếp theo tên tin. */
+  jobCounts: EmployerApplicationJobCount[];
+}
+
+/** Trạng thái đích được phép đổi hàng loạt (D4). "Được nhận" chỉ làm từng hồ sơ. */
+export type BulkApplicationTargetStatus = "REVIEWING" | "SHORTLISTED" | "REJECTED";
+
+/** POST /employer/applications/bulk-status — 1–50 id, không trùng. */
+export interface BulkUpdateApplicationStatusRequest {
+  applicationIds: string[];
+  status: BulkApplicationTargetStatus;
+}
+
+/**
+ * NOT_FOUND: không tồn tại hoặc thuộc công ty khác. INVALID_TRANSITION: trạng thái hiện
+ * tại không chuyển được sang đích. STATUS_CHANGED: trạng thái vừa bị người khác đổi.
+ */
+export type BulkStatusSkipReason = "NOT_FOUND" | "INVALID_TRANSITION" | "STATUS_CHANGED";
+
+/** Phản hồi 200, kể cả khi `updated` rỗng. Hồ sơ hợp lệ vẫn được đổi khi có hồ sơ bị bỏ qua. */
+export interface BulkUpdateApplicationStatusResult {
+  /** Theo thứ tự gửi lên. */
+  updated: string[];
+  skipped: Array<{ applicationId: string; reason: BulkStatusSkipReason }>;
+}
+
 // --- Messaging (Phase 9) -------------------------------------------------
 
 export interface Message {
@@ -1840,4 +1928,94 @@ export interface AuditActivityItem {
   /** Lý do Admin nhập khi từ chối/gỡ tin hoặc từ chối công ty; null với thao tác khác. */
   reason: string | null;
   createdAt: string;
+  group: AuditActivityGroup;
+  /** IP lúc xảy ra sự kiện, chỉ có ở dòng nhóm Bảo mật. */
+  ip: string | null;
+  /**
+   * Chỉ có ở `JOB_POST_SUBMITTED`/`JOB_POST_AUTO_PUBLISHED`: `true` là gửi lại sau khi
+   * bị từ chối. Dòng cũ chưa có thông tin này trả `false`. Hành động khác: `null`.
+   */
+  resubmit: boolean | null;
+  /** Dòng thanh toán (`entityType = "Subscription"`): công ty mua gói, để dựng link. Dòng khác: `null`. */
+  companyId: string | null;
+}
+
+/** Nhóm hành động của nhật ký (AD-20); bộ lọc `group` và biểu đồ theo nhóm. */
+export type AuditActionGroup = "JOB_POST" | "COMPANY" | "CATALOG" | "PAYMENT" | "ACCOUNT" | "SECURITY";
+
+/** Nhóm của một dòng; `OTHER` khi hành động cũ không xếp được vào nhóm nào. */
+export type AuditActivityGroup = AuditActionGroup | "OTHER";
+
+/** Lọc theo vai trò người làm; `SYSTEM` là dòng không có người làm (thanh toán). */
+export type AuditActorRoleFilter = "ADMIN" | "EMPLOYER" | "CANDIDATE" | "SYSTEM";
+
+/**
+ * Tham số của `GET /admin/activity` (và `/export`, `/stats` — mỗi API bỏ các khoá không dùng).
+ * Ngày `from`/`to` dạng `YYYY-MM-DD` theo giờ Việt Nam; `since`/`until` là ISO datetime
+ * và không đi cùng `from`/`to`.
+ */
+export interface AuditActivityQuery {
+  cursor?: string;
+  limit?: number;
+  /** Tham số cũ của dashboard; tương đương `actorRole=ADMIN`. Không gửi cùng `actorRole`. */
+  actor?: ActivityActorFilter;
+  /** Một hoặc nhiều nhóm, gửi dạng `a,b`. */
+  group?: AuditActionGroup[];
+  /** Một hoặc nhiều mã hành động, gửi dạng `a,b` (tối đa 10). */
+  action?: string[];
+  /** Chỉ dùng khi `action` gồm `JOB_POST_SUBMITTED` và/hoặc `JOB_POST_AUTO_PUBLISHED`. */
+  resubmit?: boolean;
+  /** Một hoặc nhiều vai trò, gửi dạng `a,b`. */
+  actorRole?: AuditActorRoleFilter[];
+  actorId?: string;
+  from?: string;
+  to?: string;
+  since?: string;
+  until?: string;
+  /** 1 = Thứ Hai … 7 = Chủ Nhật, giờ Việt Nam; đi cùng `hour`. */
+  dow?: number;
+  /** 0–23, giờ Việt Nam; đi cùng `dow`. */
+  hour?: number;
+  /** Email (2–100 ký tự): khớp người làm hoặc đối tượng là người dùng. */
+  q?: string;
+  entityType?: string;
+  entityId?: string;
+  /** `asc` chỉ dùng được khi có lọc đối tượng hoặc `actorId`. */
+  order?: "asc" | "desc";
+  /** Đọc bảng lưu trữ thay cho bảng chính. */
+  archived?: boolean;
+}
+
+export interface AuditActivityPage extends PaginatedResponse<AuditActivityItem> {
+  /** Tổng số dòng khớp bộ lọc; chỉ có ở trang đầu (không gửi `cursor`). */
+  total?: number;
+  /** `q` khớp hơn 200 người dùng, kết quả chỉ tính 200 người đầu. */
+  searchTruncated?: boolean;
+}
+
+/** `GET /admin/activity/stats` — số liệu cho biểu đồ, cùng bộ lọc với danh sách. */
+export interface AuditActivityStats {
+  /** Khoảng ngày đã dùng (`YYYY-MM-DD`, giờ Việt Nam); mặc định 30 ngày gần nhất. */
+  from: string;
+  to: string;
+  /** Đủ mọi ngày trong khoảng, kể cả ngày không có dòng nào. */
+  byDay: Array<{ date: string; counts: Partial<Record<AuditActivityGroup, number>>; total: number }>;
+  /** Bỏ qua bộ lọc `group` để vẫn thấy mọi nhóm. */
+  byGroup: Array<{ group: AuditActivityGroup; count: number }>;
+  /** Bỏ qua bộ lọc `actorRole`. */
+  byRole: Array<{ role: AuditActorRoleFilter; count: number }>;
+  topActors: Array<{ actorId: string; actorRole: Role | null; email: string | null; count: number }>;
+  /** 7 hàng (Thứ Hai … Chủ Nhật) × 24 cột giờ, giờ Việt Nam. Bỏ qua bộ lọc `dow`/`hour`. */
+  heatmap: number[][];
+  /** Số dòng `AUTH_LOGIN_FAILED_REPEATED` khớp bộ lọc. */
+  securityAlerts: number;
+  /** Dòng chảy tin trong khoảng ngày; không áp `group`/`action`/`resubmit`. */
+  jobPostFlow: {
+    submittedFirst: number;
+    submittedResubmit: number;
+    autoPublished: number;
+    approved: number;
+    rejected: number;
+    retracted: number;
+  };
 }

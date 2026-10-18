@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import type { ApiResponse } from "@sip/shared-types";
-import type { AuthService, AuthTokens } from "./auth.service";
+import type { AuthService, AuthTokens, PasswordChangeVia } from "./auth.service";
 
 export class AuthController {
   private readonly authService: AuthService;
@@ -45,7 +45,7 @@ export class AuthController {
   login = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { email, password } = req.body as { email: string; password: string };
-      const tokens = await this.authService.login(email, password);
+      const tokens = await this.authService.login(email, password, req.ip ?? "unknown");
       const body: ApiResponse<AuthTokens> = { success: true, data: tokens };
       res.json(body);
     } catch (error) {
@@ -56,7 +56,7 @@ export class AuthController {
   google = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { idToken, role } = req.body as { idToken: string; role: "CANDIDATE" | "EMPLOYER" };
-      const tokens = await this.authService.loginOrRegisterWithGoogle(idToken, role);
+      const tokens = await this.authService.loginOrRegisterWithGoogle(idToken, role, req.ip ?? "unknown");
       const body: ApiResponse<AuthTokens> = { success: true, data: tokens };
       res.json(body);
     } catch (error) {
@@ -77,8 +77,13 @@ export class AuthController {
 
   resetPassword = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { email, otp, newPassword } = req.body as { email: string; otp: string; newPassword: string };
-      await this.authService.resetPassword(email, otp, newPassword);
+      const { email, otp, newPassword, via } = req.body as {
+        email: string;
+        otp: string;
+        newPassword: string;
+        via: PasswordChangeVia;
+      };
+      await this.authService.resetPassword(email, otp, newPassword, { ip: req.ip ?? "unknown", via });
       const body: ApiResponse = { success: true, message: "Password updated" };
       res.json(body);
     } catch (error) {

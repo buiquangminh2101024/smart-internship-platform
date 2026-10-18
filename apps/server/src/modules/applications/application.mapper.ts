@@ -1,5 +1,5 @@
-﻿import type { CandidateApplicationSummary, EmployerApplicationDetail, CvRecord } from "@sip/shared-types";
-import type { ApplicationWithCandidateRelations, ApplicationWithEmployerRelations } from "./applications.repository";
+﻿import type { CandidateApplicationSummary, EmployerApplicationDetail, EmployerApplicationListItem, CvRecord } from "@sip/shared-types";
+import type { ApplicationWithCandidateRelations, ApplicationWithEmployerRelations, CompanyApplicationRow } from "./applications.repository";
 import { toJobPostDto } from "../job-posts/job-post.mapper";
 
 function toCvRecord(cv: any): CvRecord {
@@ -54,5 +54,28 @@ export function toEmployerApplicationDetail(app: ApplicationWithEmployerRelation
         emailVerifiedAt: app.candidate.user.emailVerifiedAt?.toISOString() ?? null,
       }
     } as any,
+  };
+}
+
+export function toEmployerApplicationListItem(row: CompanyApplicationRow): EmployerApplicationListItem {
+  return {
+    applicationId: row.applicationId,
+    status: row.status,
+    appliedAt: row.appliedAt.toISOString(),
+    candidate: {
+      id: row.candidateId,
+      fullName: row.candidateName,
+      avatarUrl: row.candidateAvatarUrl,
+      universityName: row.universityName,
+    },
+    jobPost: { id: row.jobPostId, title: row.jobPostTitle, status: row.jobPostStatus },
+    awaitingSchedule: row.awaitingSchedule,
+    nextInterviewAt: row.nextInterviewAt?.toISOString() ?? null,
+    skillMatch: {
+      requiredMatched: row.requiredMatched,
+      requiredTotal: row.requiredTotal,
+      optionalMatched: row.optionalMatched,
+      optionalTotal: row.optionalTotal,
+    },
   };
 }

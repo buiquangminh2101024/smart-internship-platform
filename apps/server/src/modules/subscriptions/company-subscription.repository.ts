@@ -37,6 +37,16 @@ export class CompanySubscriptionRepository {
     return db.companySubscription.findUnique({ where: { id }, include: { plan: true } });
   }
 
+  /** id gói ⇒ công ty mua gói (AD-20 L34: link của dòng thanh toán trên nhật ký). */
+  async findCompanyIdsByIds(ids: string[]): Promise<Map<string, string>> {
+    if (ids.length === 0) return new Map();
+    const rows = await this.prisma.companySubscription.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, companyId: true },
+    });
+    return new Map(rows.map((row) => [row.id, row.companyId]));
+  }
+
   async listByCompany(
     companyId: string,
     cursor: string | undefined,

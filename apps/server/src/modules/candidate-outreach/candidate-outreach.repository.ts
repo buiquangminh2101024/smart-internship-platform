@@ -111,11 +111,10 @@ export class CandidateOutreachRepository {
 
   // ─── Chủ thể ──────────────────────────────────────────────────────────────
 
-  findEmployerByUserId(userId: string): Promise<OutreachEmployer | null> {
-    return this.prisma.employer.findUnique({
-      where: { userId },
-      select: { id: true, companyId: true, company: { select: { id: true, name: true, verifiedAt: true } } },
-    });
+  // AD-19: id/companyId của employer lấy từ EmployerIdentityCache; company đọc riêng
+  // (mới nhất) cho các API cần hạn mức theo gói hoặc tên công ty.
+  findOutreachCompany(companyId: string): Promise<OutreachEmployer["company"] | null> {
+    return this.prisma.company.findUnique({ where: { id: companyId }, select: { id: true, name: true, verifiedAt: true } });
   }
 
   findJobPost(jobPostId: string): Promise<OutreachJobPost | null> {

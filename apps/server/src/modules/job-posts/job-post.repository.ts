@@ -263,6 +263,11 @@ export class JobPostRepository {
     return db.jobPostModerationAction.create({ data });
   }
 
+  /** Số dòng `action` đã có của một tin — `SUBMITTED` ≥ 1 nghĩa là lần gửi tới là gửi lại (L28, AD-20). */
+  countModerationActions(jobPostId: string, action: ModerationActionType, db: Db = this.prisma): Promise<number> {
+    return db.jobPostModerationAction.count({ where: { jobPostId, action } });
+  }
+
   /**
    * Tăng tổng `viewCount` và lượt xem của ngày hôm nay (giờ Việt Nam) trong
    * `job_post_daily_stats` (AD-16) cùng một transaction. Upsert viết bằng SQL

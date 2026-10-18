@@ -44,12 +44,16 @@ export default function EmployerProfilePage() {
     if (data && !data.hasEmployerProfile) router.replace("/employer/hoan-tat-thu-tuc");
   }, [data, router]);
 
-  useEffect(() => {
+  // Điền lại form mỗi khi `data` đổi (tải xong, lưu xong): so với bản đã đồng bộ
+  // ngay trong lúc render thay cho effect, để không vẽ trước một khung form rỗng.
+  const [syncedData, setSyncedData] = useState<typeof data>(undefined);
+  if (data !== syncedData) {
+    setSyncedData(data);
     if (data?.employer) {
       setTitle(data.employer.title ?? "");
       setPhone(data.employer.phone ?? "");
     }
-  }, [data]);
+  }
 
   useEffect(() => {
     if (secondsLeft <= 0) return;
