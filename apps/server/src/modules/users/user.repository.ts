@@ -152,6 +152,17 @@ export class UserRepository {
     return new Map(rows.map((row) => [row.id, row.email]));
   }
 
+  /** id của tối đa `take` người dùng có email chứa `q`, không phân biệt hoa thường (AD-20 L8). */
+  async findIdsByEmailContains(q: string, take: number): Promise<string[]> {
+    const rows = await this.prisma.user.findMany({
+      where: { email: { contains: q, mode: "insensitive" } },
+      select: { id: true },
+      orderBy: { email: "asc" },
+      take,
+    });
+    return rows.map((row) => row.id);
+  }
+
   /**
    * AD-16 (D14) — tên hiển thị của người đề xuất mục danh mục: ứng viên lấy họ
    * tên, nhà tuyển dụng lấy tên công ty, Admin để null. Dùng chung cho hàng chờ
@@ -283,8 +294,9 @@ export class UserRepository {
     });
   }
 
-  linkGoogleId(id: string, googleId: string): Promise<User> {
-    return this.prisma.user.update({ where: { id }, data: { googleId } });
+  linkGoogleId(id: string, googleId: string, tx?: Prisma.TransactionClient): Promise<User> {
+    const db = tx ?? this.prisma;
+    return db.user.update({ where: { id }, data: { googleId } });
   }
 
   /**
@@ -294,12 +306,13 @@ export class UserRepository {
    * Chỉ đổi khi vẫn PENDING_VERIFICATION; trạng thái vừa đổi (vd. bị khoá) thì
    * chỉ liên kết, không kích hoạt.
    */
-  async linkGoogleToUnverified(id: string, googleId: string): Promise<User> {
-    const { count } = await this.prisma.user.updateMany({
+  async linkGoogleToUnverified(id: string, googleId: string, tx?: Prisma.TransactionClient): Promise<User> {
+    const db = tx ?? this.prisma;
+    const { count } = await db.user.updateMany({
       where: { id, status: "PENDING_VERIFICATION" },
       data: { googleId, status: "ACTIVE", emailVerifiedAt: new Date(), passwordHash: null },
     });
-    return count === 1 ? this.prisma.user.findUniqueOrThrow({ where: { id } }) : this.linkGoogleId(id, googleId);
+    return count === 1 ? db.user.findUniqueOrThrow({ where: { id } }) : this.linkGoogleId(id, googleId, tx);
   }
 
   /**

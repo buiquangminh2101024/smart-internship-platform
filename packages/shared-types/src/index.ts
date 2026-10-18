@@ -1926,4 +1926,94 @@ export interface AuditActivityItem {
   /** Lý do Admin nhập khi từ chối/gỡ tin hoặc từ chối công ty; null với thao tác khác. */
   reason: string | null;
   createdAt: string;
+  group: AuditActivityGroup;
+  /** IP lúc xảy ra sự kiện, chỉ có ở dòng nhóm Bảo mật. */
+  ip: string | null;
+  /**
+   * Chỉ có ở `JOB_POST_SUBMITTED`/`JOB_POST_AUTO_PUBLISHED`: `true` là gửi lại sau khi
+   * bị từ chối. Dòng cũ chưa có thông tin này trả `false`. Hành động khác: `null`.
+   */
+  resubmit: boolean | null;
+  /** Dòng thanh toán (`entityType = "Subscription"`): công ty mua gói, để dựng link. Dòng khác: `null`. */
+  companyId: string | null;
+}
+
+/** Nhóm hành động của nhật ký (AD-20); bộ lọc `group` và biểu đồ theo nhóm. */
+export type AuditActionGroup = "JOB_POST" | "COMPANY" | "CATALOG" | "PAYMENT" | "ACCOUNT" | "SECURITY";
+
+/** Nhóm của một dòng; `OTHER` khi hành động cũ không xếp được vào nhóm nào. */
+export type AuditActivityGroup = AuditActionGroup | "OTHER";
+
+/** Lọc theo vai trò người làm; `SYSTEM` là dòng không có người làm (thanh toán). */
+export type AuditActorRoleFilter = "ADMIN" | "EMPLOYER" | "CANDIDATE" | "SYSTEM";
+
+/**
+ * Tham số của `GET /admin/activity` (và `/export`, `/stats` — mỗi API bỏ các khoá không dùng).
+ * Ngày `from`/`to` dạng `YYYY-MM-DD` theo giờ Việt Nam; `since`/`until` là ISO datetime
+ * và không đi cùng `from`/`to`.
+ */
+export interface AuditActivityQuery {
+  cursor?: string;
+  limit?: number;
+  /** Tham số cũ của dashboard; tương đương `actorRole=ADMIN`. Không gửi cùng `actorRole`. */
+  actor?: ActivityActorFilter;
+  /** Một hoặc nhiều nhóm, gửi dạng `a,b`. */
+  group?: AuditActionGroup[];
+  /** Một hoặc nhiều mã hành động, gửi dạng `a,b` (tối đa 10). */
+  action?: string[];
+  /** Chỉ dùng khi `action` gồm `JOB_POST_SUBMITTED` và/hoặc `JOB_POST_AUTO_PUBLISHED`. */
+  resubmit?: boolean;
+  /** Một hoặc nhiều vai trò, gửi dạng `a,b`. */
+  actorRole?: AuditActorRoleFilter[];
+  actorId?: string;
+  from?: string;
+  to?: string;
+  since?: string;
+  until?: string;
+  /** 1 = Thứ Hai … 7 = Chủ Nhật, giờ Việt Nam; đi cùng `hour`. */
+  dow?: number;
+  /** 0–23, giờ Việt Nam; đi cùng `dow`. */
+  hour?: number;
+  /** Email (2–100 ký tự): khớp người làm hoặc đối tượng là người dùng. */
+  q?: string;
+  entityType?: string;
+  entityId?: string;
+  /** `asc` chỉ dùng được khi có lọc đối tượng hoặc `actorId`. */
+  order?: "asc" | "desc";
+  /** Đọc bảng lưu trữ thay cho bảng chính. */
+  archived?: boolean;
+}
+
+export interface AuditActivityPage extends PaginatedResponse<AuditActivityItem> {
+  /** Tổng số dòng khớp bộ lọc; chỉ có ở trang đầu (không gửi `cursor`). */
+  total?: number;
+  /** `q` khớp hơn 200 người dùng, kết quả chỉ tính 200 người đầu. */
+  searchTruncated?: boolean;
+}
+
+/** `GET /admin/activity/stats` — số liệu cho biểu đồ, cùng bộ lọc với danh sách. */
+export interface AuditActivityStats {
+  /** Khoảng ngày đã dùng (`YYYY-MM-DD`, giờ Việt Nam); mặc định 30 ngày gần nhất. */
+  from: string;
+  to: string;
+  /** Đủ mọi ngày trong khoảng, kể cả ngày không có dòng nào. */
+  byDay: Array<{ date: string; counts: Partial<Record<AuditActivityGroup, number>>; total: number }>;
+  /** Bỏ qua bộ lọc `group` để vẫn thấy mọi nhóm. */
+  byGroup: Array<{ group: AuditActivityGroup; count: number }>;
+  /** Bỏ qua bộ lọc `actorRole`. */
+  byRole: Array<{ role: AuditActorRoleFilter; count: number }>;
+  topActors: Array<{ actorId: string; actorRole: Role | null; email: string | null; count: number }>;
+  /** 7 hàng (Thứ Hai … Chủ Nhật) × 24 cột giờ, giờ Việt Nam. Bỏ qua bộ lọc `dow`/`hour`. */
+  heatmap: number[][];
+  /** Số dòng `AUTH_LOGIN_FAILED_REPEATED` khớp bộ lọc. */
+  securityAlerts: number;
+  /** Dòng chảy tin trong khoảng ngày; không áp `group`/`action`/`resubmit`. */
+  jobPostFlow: {
+    submittedFirst: number;
+    submittedResubmit: number;
+    autoPublished: number;
+    approved: number;
+    rejected: number;
+    retracted: number;
+  };
 }

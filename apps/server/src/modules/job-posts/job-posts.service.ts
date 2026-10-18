@@ -207,6 +207,9 @@ export class JobPostsService {
 
     const autoPublished = !company.requiresApproval;
     const updated = await this.prisma.$transaction(async (tx) => {
+      // L28: đếm trước khi thêm dòng SUBMITTED mới. Tin bị từ chối quay về DRAFT
+      // nên trạng thái không cho biết đây là lần gửi đầu hay gửi lại.
+      const resubmit = (await this.jobPostRepository.countModerationActions(id, "SUBMITTED", tx)) > 0;
       await this.jobPostRepository.createModerationAction({ jobPostId: id, action: "SUBMITTED", actorId: userId }, tx);
       if (!autoPublished) {
         const pending = await this.jobPostRepository.update(id, { status: "PENDING" }, tx);
@@ -226,6 +229,7 @@ export class JobPostsService {
             entityType: "JobPost",
             entityId: id,
             summary: `${company.name} gửi duyệt tin "${jobPost.title}"`,
+            metadata: { resubmit },
           },
           tx,
         );
@@ -240,6 +244,7 @@ export class JobPostsService {
           entityType: "JobPost",
           entityId: id,
           summary: `${company.name} đăng tin "${jobPost.title}" (công ty không cần duyệt tin)`,
+          metadata: { resubmit },
         },
         tx,
       );

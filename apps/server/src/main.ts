@@ -45,6 +45,8 @@ import type { OutboxRepository } from "./modules/notifications/outbox/outbox.rep
 import type { NotificationsService } from "./modules/notifications/notifications.service";
 import type { EmailSender } from "./shared/ports/EmailSender";
 import { auditLogRouter } from "./modules/audit-log/audit-log.routes";
+import { startAuditLogStatsJob } from "./modules/audit-log/audit-log-stats.job";
+import type { AuditLogRepository } from "./modules/audit-log/audit-log.repository";
 import { dashboardRouter } from "./modules/dashboard/dashboard.routes";
 import { supportRouter } from "./modules/support/support.routes";
 import { startJobPostExpiringNoticeJob } from "./modules/job-posts/job-post-expiring-notice.job";
@@ -155,6 +157,12 @@ startSubscriptionExpiringNoticeJob({
 startInterviewReminderJob({
   interviewsRepository: container.resolve<InterviewsRepository>("interviewsRepository"),
   notificationsService: container.resolve<NotificationsService>("notificationsService"),
+  logger,
+});
+// Gộp số nhật ký theo giờ cho biểu đồ của trang nhật ký (AD-20) — chạy bù khi
+// khởi động, rồi phút 5 mỗi giờ.
+startAuditLogStatsJob({
+  auditLogRepository: container.resolve<AuditLogRepository>("auditLogRepository"),
   logger,
 });
 // Transactional Outbox cho email notification — quét mỗi phút (AD-8).
