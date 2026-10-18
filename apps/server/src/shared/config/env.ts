@@ -134,6 +134,11 @@ const baseSchema = z.object({
   OPENROUTER_API_KEY: z.string().optional(),
   OPENROUTER_MODEL: z.string().min(1).default("google/gemma-4-26b-a4b-it:free,dots-studio/dots-3-note-preview:free,qwen/qwen3.8-27b:free"),
   TESSERACT_CACHE_DIR: z.string().optional(),
+
+  // Nhật ký hoạt động (AD-20, docs/06-backend/admin-audit-log/PLAN.md L21): dòng cũ hơn
+  // số ngày này được cron 03:00 chuyển sang bảng lưu trữ (không xoá). Nhỏ nhất 30 để
+  // một lỗi cấu hình không chuyển hết nhật ký mới; sai thì server không khởi động.
+  AUDIT_RETENTION_DAYS: z.coerce.number().int().min(30, "AUDIT_RETENTION_DAYS must be at least 30").default(365),
 });
 
 // Resend/Google chỉ optional khi OTP_HARDCODE=true hoặc DEV_SKIP_EMAIL_SENDING=true

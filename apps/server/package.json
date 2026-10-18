@@ -19,7 +19,8 @@
     "seed-education-catalog": "dotenv -e ../../.env -- tsx scripts/seed-education-catalog.ts",
     "seed-match-demo": "dotenv -e ../../.env -- tsx scripts/seed-match-demo.ts",
     "eval-job-matching": "dotenv -e ../../.env -- tsx scripts/eval-job-matching.ts",
-    "audit:backfill-resubmit": "dotenv -e ../../.env -- tsx scripts/audit-backfill-resubmit.ts",
+    "audit:archive": "dotenv -e ../../.env -- tsx scripts/audit-archive.ts",
+    "audit:backfill-resubmit":"dotenv -e ../../.env -- tsx scripts/audit-backfill-resubmit.ts",
     "perf:audit-seed": "dotenv -e ../../.env -- tsx scripts/perf-audit-log-seed.ts",
     "perf:audit-measure": "dotenv -e ../../.env -- tsx scripts/perf-audit-log-measure.ts"
   },

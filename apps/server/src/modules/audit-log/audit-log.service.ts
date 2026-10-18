@@ -195,14 +195,18 @@ export class AuditLogService {
    * `audit_logs`. Có `action`/`resubmit` thì đếm thẳng cả khoảng, vì bảng thống
    * kê chỉ gộp theo nhóm (index `(action, createdAt)` giữ phần này nhẹ).
    * `q` ở đây chỉ khớp người làm, trừ `securityAlerts` (khớp như danh sách).
+   * Phần đếm thẳng đọc thêm bảng lưu trữ khi khoảng của nó lấn qua mốc lưu trữ (Q11).
    */
   async getStats(query: ActivityStatsQuery, now: Date = new Date()): Promise<AuditActivityStats> {
     const { from, to } = statsDateRange(query, now);
     const range = { gte: vnDayStart(from), lt: new Date(vnDayStart(to).getTime() + DAY_MS) };
-    const [{ filter }, latest] = await Promise.all([
+    const [{ filter }, latest, archivedUntil] = await Promise.all([
       this.toFilter({ ...query, from, to }),
       filterNeedsRaw(query) ? Promise.resolve(null) : this.auditLogRepository.findLatestStatBucket(),
+      this.auditLogRepository.findLatestArchivedAt(),
     ]);
+    // Khoảng bắt đầu từ `gte` có dòng nằm trong bảng lưu trữ không.
+    const reachesArchive = (gte: Date) => archivedUntil !== null && archivedUntil >= gte;
 
     // Bảng thống kê phủ [range.gte, split); đếm thẳng phủ [split, range.lt).
     const rawFrom = latest && !filterNeedsRaw(query) ? new Date(latest.getTime() + HOUR_MS) : range.gte;
@@ -217,17 +221,41 @@ export class AuditLogService {
     );
     const flowWhere = buildActivityWhere(filter, { omit: ["group", "action", "resubmit"], qMatch: "actor" });
 
+    // Hai bảng không trùng dòng nào (chuyển là xoá khỏi bảng chính), nên cộng thẳng.
+    const archiveRange = reachesArchive(range.gte);
+    const countBoth = async (where: Prisma.AuditLogWhereInput) => {
+      const [main, archived] = await Promise.all([
+        this.auditLogRepository.count(where),
+        archiveRange ? this.auditLogRepository.count(where, true) : 0,
+      ]);
+      return main + archived;
+    };
+    const countByActionBoth = async (where: Prisma.AuditLogWhereInput) => {
+      const [main, archived] = await Promise.all([
+        this.auditLogRepository.countByAction(where),
+        archiveRange ? this.auditLogRepository.countByAction(where, true) : new Map<string, number>(),
+      ]);
+      for (const [action, count] of archived) main.set(action, (main.get(action) ?? 0) + count);
+      return main;
+    };
+    const readRawRows = async () => {
+      if (split >= range.lt) return [];
+      const [main, archived] = await Promise.all([
+        this.auditLogRepository.findStatRows(rawWhere),
+        reachesArchive(split) ? this.auditLogRepository.findStatRows(rawWhere, true) : [],
+      ]);
+      return [...main, ...archived];
+    };
+
     const [rawRows, dayGroup, groups, roles, heat, securityAlerts, flow, resubmitted] = await Promise.all([
-      split < range.lt ? this.auditLogRepository.findStatRows(rawWhere) : Promise.resolve([]),
+      readRawRows(),
       statsWindow ? this.auditLogRepository.sumStats(statsWhere(), ["day", "group"]) : Promise.resolve([]),
       statsWindow ? this.auditLogRepository.sumStats(statsWhere(["group"]), ["group"]) : Promise.resolve([]),
       statsWindow ? this.auditLogRepository.sumStats(statsWhere(["actorRole"]), ["role"]) : Promise.resolve([]),
       statsWindow ? this.auditLogRepository.sumStats(statsWhere(["slot"]), ["dow", "hour"]) : Promise.resolve([]),
-      this.auditLogRepository.count({
-        AND: [buildActivityWhere(filter), { action: "AUTH_LOGIN_FAILED_REPEATED" }],
-      }),
-      this.auditLogRepository.countByAction({ AND: [flowWhere, { action: { in: JOB_POST_FLOW_ACTIONS } }] }),
-      this.auditLogRepository.count({
+      countBoth({ AND: [buildActivityWhere(filter), { action: "AUTH_LOGIN_FAILED_REPEATED" }] }),
+      countByActionBoth({ AND: [flowWhere, { action: { in: JOB_POST_FLOW_ACTIONS } }] }),
+      countBoth({
         AND: [flowWhere, { action: "JOB_POST_SUBMITTED" }, { metadata: { path: ["resubmit"], equals: true } }],
       }),
     ]);

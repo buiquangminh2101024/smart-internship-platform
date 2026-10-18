@@ -142,18 +142,36 @@ export class AuditLogRepository {
       : this.prisma.auditLog.findMany({ ...args, where });
   }
 
-  /** Các cột đủ để gộp số (L18): phần chưa gộp, hoặc cả khoảng khi lọc theo `action`. */
-  findStatRows(where: Prisma.AuditLogWhereInput): Promise<StatSourceRow[]> {
-    return this.prisma.auditLog.findMany({
-      where,
-      select: { createdAt: true, action: true, entityType: true, actorRole: true, actorId: true },
-    });
+  /**
+   * Các cột đủ để gộp số (L18): phần chưa gộp, hoặc cả khoảng khi lọc theo `action`.
+   * `archived` đọc bảng lưu trữ, cho phần khoảng ngày lấn qua mốc lưu trữ (Q11).
+   */
+  findStatRows(where: Prisma.AuditLogWhereInput, archived = false): Promise<StatSourceRow[]> {
+    const select = { createdAt: true, action: true, entityType: true, actorRole: true, actorId: true } as const;
+    return archived
+      ? this.prisma.auditLogArchive.findMany({ where: where as Prisma.AuditLogArchiveWhereInput, select })
+      : this.prisma.auditLog.findMany({ where, select });
   }
 
-  /** Số dòng theo `action` (L32: dòng chảy tin). */
-  async countByAction(where: Prisma.AuditLogWhereInput): Promise<Map<string, number>> {
-    const rows = await this.prisma.auditLog.groupBy({ by: ["action"], where, _count: { _all: true } });
+  /** Số dòng theo `action` (L32: dòng chảy tin); `archived` đọc bảng lưu trữ. */
+  async countByAction(where: Prisma.AuditLogWhereInput, archived = false): Promise<Map<string, number>> {
+    const rows = archived
+      ? await this.prisma.auditLogArchive.groupBy({
+          by: ["action"],
+          where: where as Prisma.AuditLogArchiveWhereInput,
+          _count: { _all: true },
+        })
+      : await this.prisma.auditLog.groupBy({ by: ["action"], where, _count: { _all: true } });
     return new Map(rows.map((row) => [row.action, row._count._all]));
+  }
+
+  /**
+   * `createdAt` của dòng mới nhất trong bảng lưu trữ; null khi chưa chuyển dòng nào.
+   * Dòng được chuyển theo thứ tự cũ nhất trước, nên dòng mới hơn mốc này chỉ có ở bảng chính.
+   */
+  async findLatestArchivedAt(): Promise<Date | null> {
+    const result = await this.prisma.auditLogArchive.aggregate({ _max: { createdAt: true } });
+    return result._max.createdAt;
   }
 
   // ─── Bảng thống kê theo giờ (AD-20, L16–L19) ───────────────────────────
@@ -217,7 +235,42 @@ export class AuditLogRepository {
     `;
   }
 
-  /** `limit` dòng mới nhất của một entity kèm tổng số (AD-18: lịch sử trên trang chi tiết người dùng). */
+  // ─── Lưu trữ (AD-20, L20–L22) ──────────────────────────────────────────
+
+  /**
+   * Chuyển tối đa `batchSize` dòng cũ nhất có `createdAt < cutoff` sang
+   * `audit_logs_archive` bằng một câu lệnh (L20): xoá và chép cùng thành công
+   * hoặc cùng thất bại. Trả số dòng đã chuyển.
+   */
+  archiveBatch(cutoff: Date, batchSize: number, archivedAt: Date): Promise<number> {
+    return this.prisma.$executeRaw`
+      WITH moved AS (
+        DELETE FROM audit_logs
+        WHERE "id" IN (
+          SELECT "id" FROM audit_logs
+          WHERE "createdAt" < ${utcSql(cutoff)}
+          ORDER BY "createdAt", "id"
+          LIMIT ${batchSize}
+        )
+        RETURNING *
+      )
+      INSERT INTO audit_logs_archive
+        ("id", "actorId", "actorRole", "action", "entityType", "entityId", "summary", "metadata", "createdAt", "archivedAt")
+      SELECT "id", "actorId", "actorRole", "action", "entityType", "entityId", "summary", "metadata", "createdAt",
+             ${utcSql(archivedAt)}
+      FROM moved
+    `;
+  }
+
+  /** Số dòng sẽ chuyển với mốc `cutoff` (cho `--dry-run`, L22). */
+  countOlderThan(cutoff: Date): Promise<number> {
+    return this.prisma.auditLog.count({ where: { createdAt: { lt: cutoff } } });
+  }
+
+  /**
+   * `limit` dòng mới nhất của một entity kèm tổng số (AD-18: lịch sử trên trang chi tiết người dùng).
+   * Chỉ đọc bảng chính (L24): lịch sử cũ hơn `AUDIT_RETENTION_DAYS` ngày nằm ở nhật ký đã lưu trữ.
+   */
   async listByEntity(
     entityType: AuditEntityType,
     entityId: string,
@@ -233,8 +286,9 @@ export class AuditLogRepository {
 
   /**
    * Dòng mới nhất của `action` cho từng entity, trong một truy vấn (AD-17: lý do,
-   * người khoá, thời điểm khoá trên danh sách người dùng). Entity chưa có dòng
-   * nào thì không có trong Map.
+   * người khoá, thời điểm khoá trên danh sách người dùng). Entity không có dòng
+   * nào trong bảng chính thì tìm thêm trong bảng lưu trữ (L24); không có ở cả
+   * hai thì không có trong Map.
    */
   async findLatestByEntities(
     entityType: AuditEntityType,
@@ -250,6 +304,20 @@ export class AuditLogRepository {
         AND "entityId" IN (${Prisma.join(entityIds)})
       ORDER BY "entityId", "createdAt" DESC
     `;
-    return new Map(rows.map((row) => [row.entityId, row]));
+    const latest = new Map(rows.map((row) => [row.entityId, row]));
+
+    const missing = entityIds.filter((id) => !latest.has(id));
+    if (missing.length === 0) return latest;
+    const archived = await this.prisma.$queryRaw<AuditLog[]>`
+      SELECT DISTINCT ON ("entityId")
+             "id", "actorId", "actorRole", "action", "entityType", "entityId", "summary", "metadata", "createdAt"
+      FROM audit_logs_archive
+      WHERE "entityType" = ${entityType}
+        AND "action" = ${action}
+        AND "entityId" IN (${Prisma.join(missing)})
+      ORDER BY "entityId", "createdAt" DESC
+    `;
+    for (const row of archived) latest.set(row.entityId, row);
+    return latest;
   }
 }

@@ -156,29 +156,39 @@ function statsService(options: {
   latest: Date | null;
   rawRows: RawRow[];
   sums?: (keys: string[], sql: string) => Array<Record<string, unknown>>;
+  /** Bảng lưu trữ: `createdAt` mới nhất và các dòng (số đếm của bảng này cố định trong bản giả). */
+  archivedUntil?: Date;
+  archivedRows?: RawRow[];
 }) {
   const calls: Array<{ method: string; args: unknown[] }> = [];
   const auditLogRepository = {
     findLatestStatBucket: async () => options.latest,
-    findStatRows: async (where: unknown) => {
-      calls.push({ method: "findStatRows", args: [where] });
-      return options.rawRows;
+    findLatestArchivedAt: async () => options.archivedUntil ?? null,
+    findStatRows: async (where: unknown, archived = false) => {
+      calls.push({ method: archived ? "findStatRows:archive" : "findStatRows", args: [where] });
+      return archived ? (options.archivedRows ?? []) : options.rawRows;
     },
     sumStats: async (where: { sql: string }, keys: string[], limit?: number) => {
       calls.push({ method: "sumStats", args: [where.sql, keys, limit] });
       return options.sums?.(keys, where.sql) ?? [];
     },
-    count: async (where: unknown) => {
+    count: async (where: unknown, archived = false) => {
+      if (archived) calls.push({ method: "count:archive", args: [where] });
       const text = JSON.stringify(where);
-      if (text.includes("AUTH_LOGIN_FAILED_REPEATED")) return 4;
-      return text.includes("resubmit") ? 3 : 0;
+      if (text.includes("AUTH_LOGIN_FAILED_REPEATED")) return archived ? 2 : 4;
+      return text.includes("resubmit") ? (archived ? 1 : 3) : 0;
     },
-    countByAction: async () =>
-      new Map([
-        ["JOB_POST_SUBMITTED", 10],
-        ["JOB_POST_AUTO_PUBLISHED", 2],
-        ["JOB_POST_APPROVED", 6],
-      ]),
+    countByAction: async (_where: unknown, archived = false) =>
+      archived
+        ? new Map([
+            ["JOB_POST_SUBMITTED", 2],
+            ["JOB_POST_APPROVED", 1],
+          ])
+        : new Map([
+            ["JOB_POST_SUBMITTED", 10],
+            ["JOB_POST_AUTO_PUBLISHED", 2],
+            ["JOB_POST_APPROVED", 6],
+          ]),
   };
   const service = new AuditLogService({
     auditLogRepository,
@@ -295,4 +305,54 @@ test("có lọc action thì không đọc bảng thống kê, đếm thẳng c�
   await service.getStats(activityStatsQuerySchema.parse({ action: "JOB_POST_SUBMITTED", resubmit: "true" }), NOW);
   assert.equal(calls.filter((call) => call.method === "sumStats").length, 0);
   assert.match(JSON.stringify(calls[0]?.args[0]), /2026-09-18T17:00:00.000Z/);
+});
+
+test("khoảng lấn qua mốc lưu trữ: cảnh báo và dòng chảy tin cộng thêm bảng lưu trữ (Q11)", async () => {
+  // Mặc định 30 ngày bắt đầu 2026-09-18T17:00Z; bảng lưu trữ có dòng tới 2026-09-20.
+  const { service, calls } = statsService({
+    latest: at("2026-10-18T00:00:00Z"),
+    rawRows: [],
+    archivedUntil: at("2026-09-20T00:00:00Z"),
+  });
+  const stats = await service.getStats(activityStatsQuerySchema.parse({}), NOW);
+  assert.equal(stats.securityAlerts, 6);
+  assert.deepEqual(stats.jobPostFlow, {
+    submittedFirst: 8,
+    submittedResubmit: 4,
+    autoPublished: 2,
+    approved: 7,
+    rejected: 0,
+    retracted: 0,
+  });
+  // Phần đếm thẳng bắt đầu sau giờ đã gộp, mới hơn mốc lưu trữ ⇒ không đọc dòng lưu trữ.
+  assert.equal(calls.filter((call) => call.method === "findStatRows:archive").length, 0);
+});
+
+test("lọc action và khoảng lấn qua mốc lưu trữ: biểu đồ gồm cả dòng đã lưu trữ (Q11)", async () => {
+  const { service, calls } = statsService({
+    latest: at("2026-10-18T00:00:00Z"),
+    rawRows: [row("2026-10-18T02:06:00Z", "JOB_POST_SUBMITTED", "emp-1", "EMPLOYER")],
+    archivedUntil: at("2026-09-20T00:00:00Z"),
+    archivedRows: [row("2026-09-19T03:00:00Z", "JOB_POST_SUBMITTED", "emp-1", "EMPLOYER")],
+  });
+  const stats = await service.getStats(activityStatsQuerySchema.parse({ action: "JOB_POST_SUBMITTED" }), NOW);
+  assert.deepEqual(stats.byDay[0], { date: "2026-09-19", counts: { JOB_POST: 1 }, total: 1 });
+  assert.equal(stats.byDay[29]!.total, 1);
+  assert.deepEqual(stats.topActors.map((actor) => [actor.actorId, actor.count]), [["emp-1", 2]]);
+  // Cùng một where cho hai bảng.
+  const [main, archive] = ["findStatRows", "findStatRows:archive"].map((method) =>
+    JSON.stringify(calls.find((call) => call.method === method)?.args[0]),
+  );
+  assert.equal(archive, main);
+});
+
+test("mốc lưu trữ cũ hơn khoảng ngày: không đọc bảng lưu trữ", async () => {
+  const { service, calls } = statsService({
+    latest: null,
+    rawRows: [],
+    archivedUntil: at("2026-09-01T00:00:00Z"),
+  });
+  const stats = await service.getStats(activityStatsQuerySchema.parse({ action: "JOB_POST_SUBMITTED" }), NOW);
+  assert.equal(stats.securityAlerts, 4);
+  assert.equal(calls.filter((call) => call.method.endsWith(":archive")).length, 0);
 });

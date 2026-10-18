@@ -4,7 +4,18 @@ Mục backlog: "📌 Trang nhật ký hoạt động toàn hệ thống (audit l
 
 Frontend: `docs/05-frontend/phases/admin-audit-log/PLAN.md`. Chủ dự án đã chọn **bản C "Bàn điều tra"** của mẫu thử `docs/temp/ui-compare/admin-nhat-ky-hoat-dong.html` (2026-10-18).
 
-**Trạng thái: ĐÃ ĐƯỢC CHỦ DỰ ÁN DUYỆT (2026-10-18), gồm lần sửa 3 và toàn bộ Q1–Q9 theo khuyến nghị. ĐANG TRIỂN KHAI theo đợt: đợt 1 (B0, B1, B1a, B2) xong code 2026-10-18; đợt 2 (B3, B4) xong 2026-10-18: đã đo lần 1, migration đã áp lên branch đo `perf-audit-log`; đợt 3 (B5, B5a, B6, B6a, B9) xong code 2026-10-18, đã kiểm trên branch đo.** Chủ dự án đã `db:deploy` migration này lên Neon chính (2026-10-18, `migrate status`: up to date). Tiếp theo là đợt 4 (B7, B8).
+**Trạng thái: ĐÃ ĐƯỢC CHỦ DỰ ÁN DUYỆT (2026-10-18), gồm lần sửa 3 và toàn bộ Q1–Q9 theo khuyến nghị. ĐANG TRIỂN KHAI theo đợt: đợt 1 (B0, B1, B1a, B2) xong code 2026-10-18; đợt 2 (B3, B4) xong 2026-10-18: đã đo lần 1, migration đã áp lên branch đo `perf-audit-log`; đợt 3 (B5, B5a, B6, B6a, B9) xong code 2026-10-18, đã kiểm trên branch đo; đợt 4 (B7, B8) xong 2026-10-18: đã chuyển lưu trữ và đo lần 2 trên branch đo.** Chủ dự án đã `db:deploy` migration này lên Neon chính (2026-10-18, `migrate status`: up to date). Q11 đã chốt (a) và đã làm. Tiếp theo là đợt 5 (FE-0..FE-8). Branch đo không còn cần cho BE; chủ dự án có thể xoá nó và bỏ `PERF_DATABASE_URL`.
+
+Ghi chú khi làm đợt 4 (2026-10-18):
+
+- Chạy tay: `npm run audit:archive --workspace server -- --days=N [--dry-run] [--perf]`.
+  - `--perf` chạy trên branch đo. Chỉ khi có `--perf` mới được `--days` nhỏ hơn 30 (nhỏ nhất 1).
+  - Script không giới hạn số lô như cron mà chạy tới khi hết dòng cũ hơn mốc.
+  - Cron 03:00 không chạy bù lúc khởi động, khác cron gộp số. Lỡ một đêm thì đêm sau làm tiếp.
+- **Thêm chốt chặn cho mốc chuyển:** mốc không vượt quá giờ mới nhất đã gộp số lùi 2 giờ. Nếu bảng thống kê còn rỗng thì không chuyển gì. Lý do: chuyển dòng của giờ chưa gộp thì biểu đồ mất số của giờ đó vĩnh viễn, vì cron gộp số chỉ đọc bảng chính. Với thời hạn ≥ 30 ngày, chốt chặn này gần như không bao giờ có tác dụng. Đã ghi vào AD-20 mục 3.
+- `archivedAt` được ghi tường minh theo giờ UTC từ ứng dụng, không dựa vào `DEFAULT CURRENT_TIMESTAMP` (giá trị mặc định này phụ thuộc TimeZone của phiên).
+- `listByEntity` không đổi; chỉ thêm ghi chú trong code. Câu "Lịch sử cũ hơn N ngày nằm ở nhật ký đã lưu trữ" sẽ hiển thị trên giao diện ở đợt FE.
+- `AUDIT_RETENTION_DAYS` nhỏ hơn 30 thì server không khởi động, báo `AUDIT_RETENTION_DAYS must be at least 30`.
 
 Ghi chú khi làm đợt 3 (2026-10-18):
 
@@ -181,6 +192,7 @@ Mọi tham số mới đi qua `buildActivityWhere`, nên danh sách, `total`, CS
 | Q8 | ~~Đánh dấu "gửi lại" bằng `metadata.resubmit` hay bằng action mới `JOB_POST_RESUBMITTED`?~~ | **Đã chốt 2026-10-18: dùng `metadata`** (L28). |
 | Q9 | ~~Có chạy script bổ sung `resubmit` cho dòng cũ không?~~ | **Đã chốt 2026-10-18: có.** Dữ liệu thật mới có từ tháng 9/2026 nên số dòng ít. Chạy `--dry-run` trên branch đo trước. Trên Neon chính, **chủ dự án tự chạy**. Không chạy thì dòng cũ hiện là "gửi lần đầu". |
 | Q10 | ~~Phát sinh khi làm B2.~~ Dòng `AUTH_LOGIN_FAILED_REPEATED` ghi ai là **người làm**? L2 đang ghi là chính chủ tài khoản. Nhưng người gõ sai mật khẩu có thể là người khác đang dò mật khẩu, còn chủ tài khoản là **nạn nhân**. Ghi như hiện tại thì nạn nhân hiện là người làm ở các chỗ sau:<br>- top người làm;<br>- lọc theo vai trò (dòng được tính cho Ứng viên hoặc Nhà tuyển dụng);<br>- hành trình người làm (L33).<br>Hai cách:<br>(A) **Khuyến nghị:** `actorId = null`, `actorRole = null`, tức "Hệ thống phát hiện" (`actorKind = SYSTEM` trong bảng thống kê). Đối tượng (`entityType = "User"`, `entityId`) vẫn là tài khoản bị dò. Tìm theo email vẫn ra dòng này, vì `q` khớp cả đối tượng (L8). Chỉ sửa một chỗ trong `trackFailedLogin` và test tương ứng.<br>(B) Giữ như hiện tại: đơn giản, nhưng số liệu "ai làm gì" bị lệch như đã nói. | **Đã chốt 2026-10-18: (A)** "Hệ thống phát hiện". Đã sửa `trackFailedLogin` và test. Dòng thật ghi trước khi sửa không có (tính năng chưa chạy trên server thật). Dữ liệu giả trên branch đo vẫn để người làm là chủ tài khoản; không ảnh hưởng số đo. |
+| Q11 | ~~Phát sinh khi làm B8.~~ **Đã chốt 2026-10-18: chọn (a), đã làm.** Mỗi lần gọi `/stats` hỏi thêm `createdAt` mới nhất của bảng lưu trữ. Nếu khoảng của phần đếm thẳng bắt đầu không muộn hơn mốc đó thì đọc cả hai bảng với cùng `where` rồi cộng lại; hai bảng không trùng dòng nên cộng thẳng được. Câu hỏi gốc: Phần đếm thẳng của `/stats` chỉ đọc bảng chính, gồm cảnh báo bảo mật, dòng chảy tin và cả bốn biểu đồ khi lọc `action`/`resubmit`. Vì vậy khi khoảng ngày lấn qua mốc lưu trữ thì phần lấn qua bị thiếu. Với thời hạn 365 ngày, phần thiếu chỉ khoảng 1 ngày (trên branch đo là 4/5.371 cảnh báo), nhưng nếu đặt thời hạn 30 ngày thì thiếu nhiều. Xử lý thế nào? | **Khuyến nghị: đếm thêm trong bảng lưu trữ, chỉ khi khoảng ngày lấn qua mốc.** Dòng lưu trữ mới nhất cho biết mốc. Làm như vậy thêm 1–3 truy vấn trên `audit_logs_archive`, chỉ ở những lần gọi có lấn qua mốc, khoảng 1 giờ code và test. Phương án khác: (b) giữ nguyên, giao diện ghi "Cảnh báo và dòng chảy tin chỉ tính nhật ký trong N ngày gần nhất"; (c) giới hạn `from` của `/stats` không cũ hơn mốc khi có lọc `action`. |
 
 ## Phần 1 — Công nghệ / kiến trúc sử dụng
 
@@ -278,22 +290,22 @@ Chạy sau mỗi bước: `tsc` của server, unit test liên quan (`node --impo
 
 | Truy vấn | Lần 1: trước migration (B3) | Chỉ thêm index, sau B4 | Lần 2: sau gộp số và lưu trữ (B8) |
 | --- | --- | --- | --- |
-| 1. 50 dòng mới nhất | 0,15 ms · Index Scan `createdAt` | 0,15 ms · như cũ | |
-| 2. Nhóm Bảo mật, 30 ngày | 0,47 ms · Index Scan `createdAt` | 0,47 ms · như cũ | |
-| 3a. Một người làm (Admin làm nhiều) | 0,39 ms · Index Scan `createdAt`, lọc dần | 0,16 ms · Index Scan `(actorId, createdAt)` | |
-| 3b. Một người làm (nhà tuyển dụng làm ít) | **25,9 ms · Seq Scan cả bảng** (4.361 buffer) | **0,34 ms** · Bitmap `(actorId, createdAt)` (177 buffer) | |
-| 4. Hành trình một tin (cũ trước) | 0,10 ms · Index Scan `(entityType, entityId)` | 0,09 ms · như cũ | |
-| 5. `/stats` 30 ngày, đếm trực tiếp | 23,0 ms · Bitmap Heap Scan (4.320 buffer) | 16,3 ms · Index Only Scan `(action, createdAt)` (256 buffer) | |
-| 5'. `/stats` 30 ngày, đọc bảng thống kê | (chưa có bảng) | (bảng rỗng) | |
-| 6a. `total`, không lọc | 38,9 ms · Seq Scan | 39,9 ms · Index Only Scan | |
-| 6b. `total`, nhóm Tin tuyển dụng 90 ngày | 21,7 ms · Bitmap Heap Scan | 5,0 ms · Index Only Scan `(action, createdAt)` | |
+| 1. 50 dòng mới nhất | 0,15 ms · Index Scan `createdAt` | 0,15 ms · như cũ | 0,15 ms · như cũ |
+| 2. Nhóm Bảo mật, 30 ngày | 0,47 ms · Index Scan `createdAt` | 0,47 ms · như cũ | 0,48 ms · như cũ |
+| 3a. Một người làm (Admin làm nhiều) | 0,39 ms · Index Scan `createdAt`, lọc dần | 0,16 ms · Index Scan `(actorId, createdAt)` | 0,15 ms · như cũ |
+| 3b. Một người làm (nhà tuyển dụng làm ít) | **25,9 ms · Seq Scan cả bảng** (4.361 buffer) | **0,34 ms** · Bitmap `(actorId, createdAt)` (177 buffer) | 0,28 ms · như cũ (156 buffer) |
+| 4. Hành trình một tin (cũ trước) | 0,10 ms · Index Scan `(entityType, entityId)` | 0,09 ms · như cũ | 0,09 ms · như cũ |
+| 5. `/stats` 30 ngày, đếm trực tiếp | 23,0 ms · Bitmap Heap Scan (4.320 buffer) | 16,3 ms · Index Only Scan `(action, createdAt)` (256 buffer) | 16,7 ms · như cũ (264 buffer) |
+| 5'. `/stats` 30 ngày, đọc bảng thống kê | (chưa có bảng) | (bảng rỗng) | 17,5 ms · Index Scan `bucketStart` (14.380 dòng thống kê; xem nhận xét) |
+| 6a. `total`, không lọc | 38,9 ms · Seq Scan | 39,9 ms · Index Only Scan | 35,9 ms · Index Only Scan (178.931 dòng) |
+| 6b. `total`, nhóm Tin tuyển dụng 90 ngày | 21,7 ms · Bitmap Heap Scan | 5,0 ms · Index Only Scan `(action, createdAt)` | 5,0 ms · như cũ |
 
 ### Ghi
 
 | Phép đo | Lần 1 | Chỉ thêm index | Lần 2 |
 | --- | --- | --- | --- |
-| Chèn 10.000 dòng một lần (phía Postgres, ROLLBACK) | 94,5 ms | 165,6 ms | |
-| Ghi từng dòng như `record` (200 lần, có mạng): trung vị / p95 | 62,4 / 66,1 ms | 51,2 / 54,6 ms | |
+| Chèn 10.000 dòng một lần (phía Postgres, ROLLBACK) | 94,5 ms | 165,6 ms | 176,4 ms |
+| Ghi từng dòng như `record` (200 lần, có mạng): trung vị / p95 | 62,4 / 66,1 ms | 51,2 / 54,6 ms | 58,2 / 64,9 ms |
 
 Nhận xét sau lần 1 và sau khi thêm index:
 
@@ -302,6 +314,41 @@ Nhận xét sau lần 1 và sau khi thêm index:
 - `total` khi không lọc vẫn phải đếm cả bảng (khoảng 40 ms ở 200.000 dòng). Lưu trữ (L20) giữ bảng chính nhỏ lại, nên số này sẽ được đo lại ở lần 2.
 - `/stats` đếm trực tiếp 30 ngày mất 16–23 ms; đọc bảng thống kê thì đo ở lần 2, khi bảng đã có dữ liệu.
 
+Nhận xét sau lần 2 (2026-10-18, sau khi chuyển lưu trữ với `--days=365`, bảng thống kê đã gộp đủ 18 tháng):
+
+- **Chuyển lưu trữ** 21.083 dòng (cũ hơn 11:00 ngày 18/10/2025 giờ Việt Nam) trong 22 lô, mất 2,4 giây tính cả mạng, khoảng 110 ms mỗi lô. Bảng chính còn 178.931 dòng. Đã kiểm sau khi chuyển:
+  - Tổng hai bảng vẫn 200.014.
+  - Không id nào nằm ở cả hai bảng.
+  - Ranh giới đúng đầu giờ: dòng mới nhất trong lưu trữ lúc 03:59:58 UTC, dòng cũ nhất còn trong bảng chính lúc 04:00:25 UTC.
+  - Tổng bảng thống kê vẫn 200.014, cả sau khi chuyển lẫn sau một lần gộp số.
+  - `findLatestByEntities` tìm ra đủ 20/20 người chỉ còn dòng khoá trong bảng lưu trữ.
+- Truy vấn danh sách (1–4, 6b) không đổi, vì chúng đi index và chỉ đọc vài chục dòng, nên kích thước bảng không ảnh hưởng. `total` không lọc giảm theo số dòng: 39,9 → 35,9 ms, khoảng −10% ứng với −11% dòng. Lợi ích của lưu trữ chỉ rõ khi bảng lớn hơn nhiều. Với dữ liệu thật (có từ tháng 9/2026) và thời hạn 365 ngày, tới tháng 9/2027 cron mới chuyển dòng đầu tiên.
+- **Ở mức SQL, đọc bảng thống kê (5') không nhanh hơn đếm trực tiếp (5).** 30 ngày có 14.380 dòng thống kê, so với 21.540 dòng thô.
+  - Lý do: dữ liệu giả có 3.379 người làm trải đều, nên gần như mỗi tổ hợp giờ × nhóm × người làm chỉ có 1 dòng. Bảng thống kê vì vậy chỉ gọn hơn bảng thô khoảng 1,4 lần. Bỏ chiều người làm thì còn 63.951 dòng, gọn hơn 3,1 lần.
+  - 12.803 buffer là số lần chạm trang đã có trong bộ nhớ đệm, không phải đọc đĩa: Index Scan chạm lại cùng trang cho mỗi dòng, và correlation của `bucketStart` là 0,99. Còn 5 chỉ đọc index `(action, createdAt)` (Index Only Scan).
+- **Cái lợi của bảng thống kê nằm ở đường đi của ứng dụng.** Đếm trực tiếp phải kéo từng dòng về Node để chia theo ngày, nhóm, vai trò và ô giờ. Đọc bảng thống kê thì Postgres cộng sẵn. Đo `AuditLogService.getStats` từ máy dev (gồm mạng):
+
+  | Khoảng | Thời gian |
+  | --- | --- |
+  | 30 ngày | 0,45 giây |
+  | 366 ngày | 1,1 giây (đợt 3, đếm trực tiếp: 4,0 giây) |
+  | 366 ngày, lọc `action` (đếm thẳng qua index) | 0,58 giây |
+
+- Khi cần bảng thống kê gọn hơn: xem mục "Hướng mở rộng".
+- **Giới hạn phát hiện ở B8 (Q11):** phần đếm thẳng của `/stats` chỉ đọc bảng chính. Phần này gồm cảnh báo bảo mật, dòng chảy tin, và cả bốn biểu đồ khi lọc theo `action`/`resubmit`. Các biểu đồ đọc bảng thống kê thì vẫn đủ, vì bảng thống kê không bị dọn.
+  - Với khoảng 366 ngày và thời hạn 365 ngày, phần thiếu là dòng của khoảng 1 ngày đầu khoảng. Trên branch đo, phần đó là 65 dòng, trong đó 4 cảnh báo bảo mật: `securityAlerts` ra 5.367, đúng ra là 5.371.
+  - Nếu đặt `AUDIT_RETENTION_DAYS` nhỏ (ví dụ 30), phần thiếu lớn hơn nhiều.
+  - **Đã sửa theo Q11 (a), cùng ngày.** Kiểm lại trên branch đo với khoảng 366 ngày, so `/stats` với số đếm trực tiếp trên cả hai bảng. Cả bốn phép so đều khớp:
+
+    | Phép so | `/stats` | Đếm trên cả hai bảng |
+    | --- | --- | --- |
+    | `securityAlerts` | 5.371 | 5.371 |
+    | Tin được duyệt | 24.970 | 24.970 |
+    | Tổng không lọc | 178.996 | 178.996 |
+    | Tổng khi lọc `action` | 35.819 | 35.819 |
+
+    Thời gian đọc thêm bảng lưu trữ (đo xen kẽ có và không, trung vị 7 lần): không lọc 1,25 so với 1,12 giây; lọc `action` 1,09 so với 1,05 giây. Lượt hỏi mốc lưu trữ chạy song song với lượt hỏi giờ đã gộp, nên không thêm lượt chờ nào. Phần tăng có thể do 3–4 truy vấn trên bảng lưu trữ chạy cùng lúc với khoảng 8 truy vấn khác, nên phải chờ kết nối trống trong pool của Prisma; điều này chưa đo để xác nhận. Với khoảng mặc định 30 ngày, khoảng ngày không chạm tới phần đã lưu trữ, nên không có truy vấn nào thêm ngoài lượt hỏi mốc. Các số đo trong lần kiểm này đều cao hơn số đo `getStats` ở trên, do mạng trong phiên đo này chậm hơn.
+
 ## Hướng mở rộng khi dữ liệu lớn (chưa làm)
 
 Đây là các bước tiếp theo nếu `audit_logs` lên hàng chục triệu dòng. Mỗi bước cần AD riêng.
@@ -309,6 +356,7 @@ Nhận xét sau lần 1 và sau khi thêm index:
 - **Chia bảng theo tháng** (Postgres declarative partitioning): dòng mới chỉ ghi vào bảng của tháng hiện tại, nên index nhỏ và ghi nhanh. Lọc theo khoảng ngày chỉ đọc các tháng liên quan. Retention thành `DETACH PARTITION` thay cho chuyển từng lô. Cái giá: Prisma không tự quản lý partition, phải viết migration SQL tay và có cron tạo sẵn bảng cho tháng tới.
 - **Read replica**: trang nhật ký và xuất CSV đọc từ bản sao, bảng chính chỉ lo ghi. Cần kiểm gói Neon có hỗ trợ không.
 - **BRIN trên `createdAt`** cho bảng lưu trữ, hoặc cho từng partition: rất nhỏ, hợp với dữ liệu chỉ thêm và chỉ lọc theo khoảng.
+- **Bảng thống kê gọn hơn** (phát hiện ở B8): tách thành hai bảng. Bảng thứ nhất gộp giờ × nhóm × loại người làm (không có người làm), dùng cho bốn biểu đồ. Bảng thứ hai gộp ngày × người làm, dùng cho top người làm. Trên dữ liệu đo, bảng thứ nhất gọn hơn bảng thô khoảng 3 lần, trong khi bảng hiện tại chỉ gọn hơn 1,4 lần. Cần migration.
 - **Ghi bất đồng bộ qua outbox** (AD-8) cho các sự kiện nhiều mà ít quan trọng. **Không** áp cho dòng kiểm duyệt và bảo mật, vì những dòng đó phải ghi cùng transaction với thao tác.
 - **Xuất CSV chạy nền** (job tạo file, xong thì báo) khi cần vượt 5.000 dòng.
 - **Kho chuyên cho log** (ClickHouse, OpenSearch): chỉ khi lượng sự kiện vượt xa khả năng của Postgres.

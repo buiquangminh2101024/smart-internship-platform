@@ -46,6 +46,7 @@ import type { NotificationsService } from "./modules/notifications/notifications
 import type { EmailSender } from "./shared/ports/EmailSender";
 import { auditLogRouter } from "./modules/audit-log/audit-log.routes";
 import { startAuditLogStatsJob } from "./modules/audit-log/audit-log-stats.job";
+import { startAuditLogRetentionJob } from "./modules/audit-log/audit-log-retention.job";
 import type { AuditLogRepository } from "./modules/audit-log/audit-log.repository";
 import { dashboardRouter } from "./modules/dashboard/dashboard.routes";
 import { supportRouter } from "./modules/support/support.routes";
@@ -164,6 +165,13 @@ startInterviewReminderJob({
 startAuditLogStatsJob({
   auditLogRepository: container.resolve<AuditLogRepository>("auditLogRepository"),
   logger,
+});
+// Chuyển nhật ký cũ hơn AUDIT_RETENTION_DAYS sang bảng lưu trữ — 03:00 giờ Việt
+// Nam, mỗi lần tối đa 50 lô (AD-20).
+startAuditLogRetentionJob({
+  auditLogRepository: container.resolve<AuditLogRepository>("auditLogRepository"),
+  logger,
+  retentionDays: config.AUDIT_RETENTION_DAYS,
 });
 // Transactional Outbox cho email notification — quét mỗi phút (AD-8).
 startOutboxJob(
