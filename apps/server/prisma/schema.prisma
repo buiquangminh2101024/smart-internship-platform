@@ -986,7 +986,44 @@ model AuditLog {
 
   @@index([createdAt])
   @@index([entityType, entityId])
+  // AD-20: lọc theo người làm / top người làm, và lọc theo nhóm (`action IN (...)`).
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
   @@map("audit_logs")
+}
+
+/// AD-20 — Số dòng nhật ký gộp theo giờ cho biểu đồ `/admin/activity/stats`. Mỗi giờ được
+/// tính lại bằng "xoá rồi ghi lại" trong một transaction nên không có unique key (actorId
+/// có thể null). Không bị dọn theo retention.
+model AuditLogHourlyStat {
+  id          String   @id @default(cuid())
+  bucketStart DateTime // đầu giờ, UTC
+  actionGroup String // nhóm trong AUDIT_ACTION_GROUPS hoặc "OTHER"
+  actorKind   String // "ADMIN" | "EMPLOYER" | "CANDIDATE" | "SYSTEM" (SYSTEM = actorId null)
+  actorId     String?
+  count       Int
+
+  @@index([bucketStart])
+  @@map("audit_log_hourly_stats")
+}
+
+/// AD-20 — Dòng nhật ký cũ hơn AUDIT_RETENTION_DAYS, chuyển từ `audit_logs` (giữ nguyên id).
+/// Không bao giờ bị xoá.
+model AuditLogArchive {
+  id         String   @id
+  actorId    String?
+  actorRole  Role?
+  action     String
+  entityType String
+  entityId   String
+  summary    String
+  metadata   Json?
+  createdAt  DateTime
+  archivedAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs_archive")
 }
 
 // ─── messaging ──────────────────────────────────────────────────────────

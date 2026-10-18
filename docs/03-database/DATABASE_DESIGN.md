@@ -74,6 +74,12 @@ Database: PostgreSQL (Neon.tech, managed), truy cập qua Prisma Client. Đã á
 - `NotificationType` thêm `INTERVIEW_SCHEDULED`, `INTERVIEW_RESCHEDULED`, `INTERVIEW_CANCELLED`, `INTERVIEW_REMINDER`.
 - **`Company.verificationSubmittedAt`** (D13) — lần nộp/nộp lại hồ sơ xác minh gần nhất, mốc chờ của hàng đợi xác minh; migration backfill cho công ty `PENDING`.
 
+### Nhật ký hoạt động: thống kê và lưu trữ (AD-20, migration `20261018120000_add_audit_log_stats_and_archive`)
+
+- **`audit_logs`** thêm index `(actorId, createdAt)` (lọc theo người làm, top người làm) và `(action, createdAt)` (lọc theo nhóm = `action IN (...)`, dòng bảo mật). Giữ index `createdAt` cho "50 dòng mới nhất".
+- **`AuditLogHourlyStat`** (`audit_log_hourly_stats`) — số dòng nhật ký gộp theo giờ cho biểu đồ: `bucketStart` (đầu giờ, UTC), `actionGroup` (nhóm trong `AUDIT_ACTION_GROUPS` hoặc `OTHER`), `actorKind` (`ADMIN` | `EMPLOYER` | `CANDIDATE` | `SYSTEM`), `actorId?`, `count`. Không có unique key: cron tính lại từng giờ bằng "xoá rồi ghi lại" trong một transaction. Index `(bucketStart)`. Không bị dọn theo retention.
+- **`AuditLogArchive`** (`audit_logs_archive`) — cùng cột với `audit_logs` (giữ nguyên `id`, `createdAt` không có default), thêm `archivedAt`. Dòng cũ hơn `AUDIT_RETENTION_DAYS` được chuyển sang bằng một câu `WITH moved AS (DELETE … RETURNING *) INSERT …`; không bao giờ bị xoá. Index `(createdAt)`, `(entityType, entityId)`.
+
 ## Quy ước chung
 
 - Khoá chính: `String @id @default(cuid())` cho mọi entity.
