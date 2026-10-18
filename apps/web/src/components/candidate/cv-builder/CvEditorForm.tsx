@@ -36,7 +36,7 @@ export function CvEditorForm({ data, onChange, config, onConfigChange, activeTem
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const uploadImage = useUploadCvBuilderImage();
 
-  const updateSection = (sectionKey: keyof CvBuilderData, value: any) => {
+  const updateSection = <K extends keyof CvBuilderData>(sectionKey: K, value: CvBuilderData[K]) => {
     onChange({ ...data, [sectionKey]: value });
   };
 

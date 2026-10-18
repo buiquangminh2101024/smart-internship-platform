@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { useCandidateFullProfile, useSaveBuilderCv, useCvList } from "@/hooks/useCvs";
@@ -55,7 +55,9 @@ export function CvEditorClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTemplateId, TemplateComponent, debouncedBuilderData, templateConfig]);
 
-  useEffect(() => {
+  // Nạp dữ liệu ban đầu ngay trong lúc render (khi builderData còn null) thay vì
+  // trong effect: React render lại ngay, không vẽ trước một khung trống.
+  if (!builderData) {
     if (cvId && cvs) {
       const existingCv = cvs.find(c => c.id === cvId);
       if (existingCv && !builderData) {
@@ -64,7 +66,7 @@ export function CvEditorClient() {
         }
         if (existingCv.builderData) {
           // Add fallback to avoid undefined crashes
-          const parsed = existingCv.builderData as any;
+          const parsed = existingCv.builderData as { profile?: Partial<CvBuilderData>; config?: CvBuilderConfig };
           const loadedProfile = parsed.profile || {};
           const safeData: CvBuilderData = {
             personal: {
@@ -103,7 +105,7 @@ export function CvEditorClient() {
         setCvName(`CV - ${initProfile.fullName}`);
       }
     }
-  }, [cvId, cvs, profile, builderData, activeTemplate.defaultConfig, sourceParam]);
+  }
 
   if (isLoadingProfile || (cvId && isLoadingCvs)) {
     return <div className="p-10 text-center text-text-muted flex justify-center items-center h-screen"><Icon name="loader-circle" size={32} className="animate-spin" /></div>;
@@ -156,15 +158,13 @@ export function CvEditorClient() {
 
       const fullBuilderData = { profile: builderData, config: templateConfig };
 
-      const payload: any = {
+      await saveMutation.mutateAsync({
+        ...(cvId ? { cvId } : {}),
         templateId: activeTemplateId,
         builderData: fullBuilderData,
         cvName: finalFileName,
         file
-      };
-      if (cvId) payload.cvId = cvId;
-
-      await saveMutation.mutateAsync(payload);
+      });
       
       setIsDirty(false);
       router.push("/cv");

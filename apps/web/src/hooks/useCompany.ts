@@ -11,12 +11,21 @@ export function usePublicCompany(companyId: string) {
   });
 }
 
+/** Một dòng của GET /companies/public. */
+export interface PublicCompanyListItem {
+  id: string;
+  name: string;
+  logoUrl: string | null;
+  city: string | null;
+  jobCount: number;
+}
+
 export function usePublicCompaniesList(searchQuery?: string) {
   return useQuery({
     queryKey: ["publicCompanies", searchQuery],
     queryFn: () => {
       const qs = searchQuery ? `?q=${encodeURIComponent(searchQuery)}` : "";
-      return publicFetch<any[]>(`/companies/public${qs}`);
+      return publicFetch<PublicCompanyListItem[]>(`/companies/public${qs}`);
     },
     staleTime: 5 * 60 * 1000,
   });
