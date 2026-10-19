@@ -2,7 +2,7 @@
 
 Song song với `docs/06-backend/support-chatbot/PLAN.md` (pipeline, API, SSE, quyết định D1–D13 — **không chép lại ở đây**). Quyết định kiến trúc: bản nháp AD-21 ở cuối plan backend.
 
-**Trạng thái (2026-10-19): PLAN — chưa triển khai.**
+**Trạng thái (2026-10-20): ĐÃ TRIỂN KHAI (đợt D) — chờ chủ dự án kiểm trên trình duyệt theo checklist.**
 
 ## Quyết định phía frontend
 
@@ -148,6 +148,31 @@ Thứ tự bên trong đợt (gộp FE-1 + FE-2 + FE-3 cũ, không cần trang t
 3. Điều kiện xong: `tsc`, `npm run lint --workspace web`, `next build` sạch. **Dừng, chủ dự án kiểm trên trình duyệt** ở 375px và ≥ 1280px theo checklist dưới.
 
 GĐ2 (tool) **không cần sửa frontend** ngoài việc câu trả lời có thể dài hơn — giao diện đã hiển thị theo luồng chữ chung.
+
+## Kết quả đợt D (2026-10-20)
+
+`tsc --noEmit`, `npm run lint --workspace web` (0 lỗi; 23 cảnh báo đều có từ trước, không cái nào ở file mới) và `next build` sạch. Kiểm trên Chrome với `SUPPORT_CHAT_LLM_PROVIDER=fake`, qua nginx (`:8080`). Phiên Candidate/Employer là token ký tạm cho user id giả (không có trong DB) gắn vào auth store của trình duyệt.
+
+Đã kiểm:
+- Khách ở `/`: 6 chip gợi ý, bấm chip trả lời ngay kèm "Nguồn"; định dạng đúng (đậm, gạch đầu dòng, link nội bộ bằng `next/link`); câu tự do chữ chạy dần, có 3 chấm khi chờ, nút Gửi thành "Dừng".
+- Ngoài phạm vi ⇒ câu từ chối + "Liên hệ hỗ trợ". Dừng giữa chừng ⇒ giữ chữ + "Đã dừng". `#fake-fail-after` ⇒ "Câu trả lời bị gián đoạn." + "Thử lại" (thử lại thay lượt hỏng, không nhân đôi tin); lịch sử gửi lên chỉ gồm cặp hỏi–đáp đã xong.
+- Giả lập bằng cách chặn `fetch` trong trang: mất mạng ⇒ thông báo + "Thử lại"; 429 ⇒ "Bạn gửi hơi nhanh…"; câu trả lời chứa `<script>`/`<img onerror>` ⇒ hiện nguyên văn, không chạy; `tỉnh/thành` và `[link](https://…)` không thành link.
+- F5 ⇒ lịch sử còn. Candidate có key riêng và câu gợi ý riêng, không thấy hội thoại khách; bấm "Đăng xuất" ⇒ key Candidate bị xoá; key của user cũ / khu vực lạ bị quét khi tải lại; phiên bị SessionSync xoá ⇒ key cũng bị xoá.
+- Token hết hạn lúc gửi (401, refresh hỏng) ⇒ không chuyển trang, hiện dòng "Phiên đăng nhập đã hết hạn…", gửi lại như khách và nhận được câu trả lời.
+- Employer ở `/employer`: nút và panel màu Indigo, câu gợi ý của Employer. Esc đóng panel, focus về nút mở; mở panel thì focus vào ô nhập.
+- Ẩn ở `/support`, `/admin*`; `/messages`, `/employer/messages`, `/cv/editor`, `/employer/subscription/return/*` kiểm qua hàm `isSupportChatHiddenAt` (trang thật cần tài khoản thật nên bị chuyển hướng).
+- 375px (nhúng iframe vì cửa sổ Chrome không thu nhỏ được): panel toàn màn hình, modal, khoá cuộn trang. `/jobs/[id]` không có thanh "Ứng tuyển" cố định ở đáy nên nút mở không đè.
+
+Chưa kiểm được (cần chủ dự án kiểm bằng tài khoản thật / điện thoại thật): bàn phím ảo trên điện thoại, đăng xuất khi đang ở trang ẩn widget, các trang cần đăng nhập thật.
+
+Khác so với plan:
+- State hội thoại nằm trong một đối tượng `SupportChatSession` ngoài React (đọc qua `useSyncExternalStore`), sống cùng `SupportChatRoot`: đóng panel hay sang trang ẩn widget khi đang stream vẫn nhận nốt. Đổi khu vực/đăng xuất khi đang stream ⇒ huỷ lượt đó.
+- Panel là `<dialog>` gốc: `show()` trên desktop (không modal), `showModal()` dưới 640px (trình duyệt lo bẫy focus).
+- Token hết hạn giữa hội thoại: hội thoại đang hiển thị đi tiếp dưới key khách (ghi đè hội thoại khách cũ của tab đó, nếu có), key của user cũ bị xoá như đăng xuất.
+- Lượt hỏng trước mẩu chữ đầu (mất mạng, 429…) không lưu vào sessionStorage, kể cả câu hỏi, để F5 không hiện câu hỏi không có trả lời. Lưu tối đa 50 tin.
+- Đổi user trong cùng khu vực (không qua đăng xuất) cũng xoá lịch sử của user cũ.
+- Lấy câu gợi ý khi token hết hạn: gửi như khách nhưng không xoá phiên (việc đó để `SessionSync`).
+- Thêm file `lib/support-chat-routes.ts` như plan; không thêm thư viện; ngoài `app/provider.tsx` không sửa file sẵn có.
 
 ## Checklist kiểm trên trình duyệt
 

@@ -4,7 +4,7 @@ Hướng gốc: `docs/temp/AI_APPLICATION_DIRECTIONS.md` mục F1 (không commit
 
 Song song: `docs/05-frontend/phases/support-chatbot/PLAN.md`.
 
-**Trạng thái (2026-10-19): ĐÃ DUYỆT — xong đợt C (LLM streaming, pipeline, HTTP), chờ chủ dự án kiểm trước khi sang đợt D.**
+**Trạng thái (2026-10-20): ĐÃ DUYỆT — xong đợt D (frontend, xem plan frontend), chờ chủ dự án kiểm trên trình duyệt trước khi sang GĐ2 (đợt E).**
 
 ## Phạm vi — hai giai đoạn
 
@@ -373,7 +373,7 @@ Cần chủ dự án quyết:
 
 **Dừng, chủ dự án kiểm.**
 
-**Đợt D — Frontend** (xem plan frontend, gộp FE-1 + FE-2 + FE-3). **Dừng, chủ dự án kiểm trên trình duyệt theo checklist.**
+**Đợt D — Frontend** (xem plan frontend, gộp FE-1 + FE-2 + FE-3). Đã xong 2026-10-20 — kết quả ở mục "Kết quả đợt D" của plan frontend. **Dừng, chủ dự án kiểm trên trình duyệt theo checklist.**
 
 ### GĐ2
 
