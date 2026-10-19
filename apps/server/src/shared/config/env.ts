@@ -135,6 +135,21 @@ const baseSchema = z.object({
   OPENROUTER_MODEL: z.string().min(1).default("google/gemma-4-26b-a4b-it:free,dots-studio/dots-3-note-preview:free,qwen/qwen3.8-27b:free"),
   TESSERACT_CACHE_DIR: z.string().optional(),
 
+  // Chatbot hỗ trợ (AD-21, docs/06-backend/support-chatbot/PLAN.md mục "Biến env mới").
+  // false ⇒ cả 2 route /support/chat trả 503, widget tự ẩn.
+  SUPPORT_CHAT_ENABLED: z.preprocess(
+    (value) => (typeof value === "string" ? value === "true" : value),
+    z.boolean().default(true),
+  ),
+  // fake = adapter giả cho test tải (không gọi LLM); superRefine bên dưới cấm ở production.
+  SUPPORT_CHAT_LLM_PROVIDER: z.enum(["gemini", "fake"]).default("gemini"),
+  // Tầng chính của chatbot; bỏ trống ⇒ dùng GEMINI_FALLBACK_MODEL (flash-lite, quota free
+  // rộng hơn). Tầng 2 là GEMINI_MODEL, tầng 3 là OpenRouter.
+  SUPPORT_CHAT_MODEL: z.string().optional(),
+  // Chỉ đếm lượt rơi xuống bậc 4 (gọi LLM), mọi tầng cộng chung.
+  SUPPORT_CHAT_DAILY_LLM_LIMIT_GLOBAL: z.coerce.number().int().min(0).default(500),
+  SUPPORT_CHAT_FAKE_DELAY_MS: z.coerce.number().int().min(0).default(40),
+
   // Nhật ký hoạt động (AD-20, docs/06-backend/admin-audit-log/PLAN.md L21): dòng cũ hơn
   // số ngày này được cron 03:00 chuyển sang bảng lưu trữ (không xoá). Nhỏ nhất 30 để
   // một lỗi cấu hình không chuyển hết nhật ký mới; sai thì server không khởi động.
@@ -202,6 +217,13 @@ const envSchema = baseSchema.superRefine((data, ctx) => {
       code: "custom",
       path: ["DEV_SKIP_EMAIL_SENDING"],
       message: "DEV_SKIP_EMAIL_SENDING must be false in production",
+    });
+  }
+  if (data.NODE_ENV === "production" && data.SUPPORT_CHAT_LLM_PROVIDER === "fake") {
+    ctx.addIssue({
+      code: "custom",
+      path: ["SUPPORT_CHAT_LLM_PROVIDER"],
+      message: "SUPPORT_CHAT_LLM_PROVIDER must not be fake in production",
     });
   }
 });

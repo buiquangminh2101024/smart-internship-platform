@@ -28,3 +28,34 @@ export const DIRECT_THRESHOLD_WITH_HISTORY = 0.92;
 export const OUT_OF_SCOPE_THRESHOLD = 0.475;
 /** Số mục FAQ đưa vào prompt ở bậc 4 (xếp theo contextRankOf trong faq-knowledge-base.ts). */
 export const RAG_TOP_K = 3;
+
+// ─── Request (D3) ────────────────────────────────────────────────────────
+export const MESSAGE_MAX_LENGTH = 500;
+export const HISTORY_MAX_MESSAGES = 10;
+export const HISTORY_MESSAGE_MAX_LENGTH = 1000;
+
+// ─── Rate-limit (PLAN mục "Rate-limit và hạn mức") ───────────────────────
+export const RATE_LIMIT_WINDOW_SECONDS = 10 * 60;
+export const RATE_LIMIT_GUEST_PER_WINDOW = 20;
+export const RATE_LIMIT_USER_PER_WINDOW = 40;
+
+// ─── Cache câu trả lời bậc 3 (D8) ────────────────────────────────────────
+export const ANSWER_CACHE_MAX_ENTRIES = 500;
+export const ANSWER_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Câu gợi ý khi hội thoại trống (GET /support/chat/suggestions) — câu hỏi mẫu đầu tiên của
+ * từng mục. Mục không tồn tại hoặc người hỏi không được thấy thì bị bỏ (kèm cảnh báo log).
+ */
+export const SUGGESTED_FAQ_IDS = {
+  guest: ["about-internhub", "account-register", "job-search", "job-apply", "jobpost-create", "subscription-plans"],
+  candidate: ["cv-upload", "job-apply", "application-status", "recommended-jobs", "candidate-interviews", "profile-insight"],
+  employer: [
+    "jobpost-create",
+    "jobpost-approval",
+    "subscription-plans",
+    "employer-applications",
+    "employer-interviews",
+    "company-verification",
+  ],
+} as const;

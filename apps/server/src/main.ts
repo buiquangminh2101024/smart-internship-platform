@@ -50,6 +50,7 @@ import { startAuditLogRetentionJob } from "./modules/audit-log/audit-log-retenti
 import type { AuditLogRepository } from "./modules/audit-log/audit-log.repository";
 import { dashboardRouter } from "./modules/dashboard/dashboard.routes";
 import { supportRouter } from "./modules/support/support.routes";
+import { supportChatRouter } from "./modules/support-chat/support-chat.routes";
 import { startJobPostExpiringNoticeJob } from "./modules/job-posts/job-post-expiring-notice.job";
 import { startSubscriptionExpiringNoticeJob } from "./modules/subscriptions/subscription-expiring-notice.job";
 import type { EmployerRepository } from "./modules/employers/employer.repository";
@@ -122,6 +123,8 @@ app.use("/api", auditLogRouter(container));
 app.use("/api", dashboardRouter(container));
 // Trang hỗ trợ bản A (AD-17) — công khai; notificationsService resolve lúc có request.
 app.use("/api", supportRouter(container));
+// Chatbot hỗ trợ (AD-21) — sau jobMatchingRouter vì dùng embeddingProvider do router đó đăng ký.
+app.use("/api", supportChatRouter(container));
 
 app.use(errorHandler);
 

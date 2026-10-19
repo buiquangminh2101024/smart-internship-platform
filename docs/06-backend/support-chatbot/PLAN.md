@@ -4,7 +4,7 @@ Hướng gốc: `docs/temp/AI_APPLICATION_DIRECTIONS.md` mục F1 (không commit
 
 Song song: `docs/05-frontend/phases/support-chatbot/PLAN.md`.
 
-**Trạng thái (2026-10-19): ĐÃ DUYỆT — xong đợt B lần 2 (thêm câu hỏi mẫu, xử lý câu gõ không dấu, `account-register` thành `all`), chờ chủ dự án xem kết quả eval trước khi sang đợt C.**
+**Trạng thái (2026-10-19): ĐÃ DUYỆT — xong đợt C (LLM streaming, pipeline, HTTP), chờ chủ dự án kiểm trước khi sang đợt D.**
 
 ## Phạm vi — hai giai đoạn
 
@@ -116,6 +116,7 @@ Nội dung trả lời (markdown đơn giản: đoạn văn, danh sách, **đậ
 
 ```ts
 export interface SupportChatResponderInput {
+  viewer: "guest" | "candidate" | "employer"; // thêm ở đợt C: prompt nói rõ ai đang hỏi
   question: string;
   history: Array<{ role: "user" | "model"; text: string }>;
   contextChunks: Array<{ faqId: string; title: string; content: string }>;
@@ -351,6 +352,24 @@ Kiểm bằng `curl -N` qua nginx:
 - Provider `fake` chạy đúng; ngắt `curl` giữa chừng ⇒ request LLM bị huỷ (xem log).
 - Tầng 1 lỗi trước mẩu đầu ⇒ tầng 2 trả lời; cả 2 tầng Gemini lỗi (đặt model không tồn tại) ⇒ OpenRouter trả lời; lỗi sau mẩu đầu ⇒ sự kiện `error`.
 - Thiếu `OPENROUTER_API_KEY` ⇒ chuỗi còn 2 tầng, không lỗi khởi động; thiếu `GEMINI_API_KEY` và OpenRouter ⇒ bậc 4 trả câu mẫu.
+
+*Kết quả đợt C (2026-10-19)* — kiểm bằng `curl -N` qua nginx (`sip-nginx`, cổng 8080), token Candidate/Employer ký tạm bằng `JWT_ACCESS_SECRET` cho user id giả:
+- Đủ 6 nhãn `source`. Chữ về dần qua nginx (adapter giả: các mẩu cách nhau ~45 ms, đúng `SUPPORT_CHAT_FAKE_DELAY_MS`). Cache trả lần hỏi thứ hai trong 8 ms.
+- Không token ⇒ khách; token hỏng ⇒ 401; tin thứ 21 trong 10 phút của khách ⇒ 429 (`SUPPORT_CHAT_RATE_LIMITED`); `SUPPORT_CHAT_ENABLED=false` ⇒ 503 cả 2 route. Trường lạ, `role` lạ, tin > 500 ký tự ⇒ 400.
+- `faqId` của vai trò khác (Employer gửi `cv-upload`, Candidate gửi `about-internhub`) bị bỏ qua, xử lý như câu thường.
+- Ngắt `curl` giữa chừng ⇒ log `source: 'aborted'`, không thử tầng sau.
+- Chuỗi tầng: tầng 1 quá 15 s ⇒ tầng 2 trả lời; đặt cả 2 model Gemini không tồn tại ⇒ OpenRouter trả lời; lỗi sau mẩu đầu (mã `#fake-fail-after` của adapter giả) ⇒ sự kiện `error`; thiếu `OPENROUTER_API_KEY` ⇒ khởi động với 2 tầng; thiếu cả hai key ⇒ bậc 4 trả câu mẫu (`unavailable`).
+- Prompt injection kèm lịch sử giả ("model" đã đồng ý in hướng dẫn hệ thống) ⇒ LLM từ chối.
+
+Khác so với plan, phát hiện khi chạy thật:
+- **Token "suy nghĩ" ăn hết `maxOutputTokens 600`.** `gemini-3.6-flash` mặc định nghĩ ~570 token rồi bị cắt (`MAX_TOKENS`); model free trên OpenRouter cũng vậy (chỉ trả `delta.reasoning`, `content` rỗng). Đã đặt `thinkingLevel: MINIMAL` (Gemini) và `reasoning: { enabled: false }` (OpenRouter).
+- **`suggestSupport`** bật khi câu trả lời nhắc `/support` hoặc có cụm "chưa có thông tin"/"chỉ hỗ trợ" (model không phải lúc nào cũng nhắc `/support` như prompt dặn). Chỉ cụm sau mới bỏ `sources`, để một câu trả lời đúng có kèm ghi chú "/support" vẫn hiện nguồn.
+- **Model embedding không dùng được** ⇒ bậc 4 trả câu mẫu luôn, không gọi LLM khi không có đoạn FAQ nào (prompt bắt chỉ trả lời theo tài liệu).
+- Dựng chuỗi tầng và nạp FAQ ngay lúc mount (log tầng hiện lúc khởi động, FAQ sai định dạng làm hỏng khởi động); vector và model embedding vẫn nạp lười.
+- Log mỗi lượt (`source`, `topScore`, `durationMs`) không ghi nội dung câu hỏi, kể cả của khách.
+
+Cần chủ dự án quyết:
+- **Độ trễ của `gemini-3.5-flash-lite` hôm kiểm rất cao:** 8–17 s tới mẩu đầu, có lượt quá 15 s nên rơi xuống tầng 2. Gọi thẳng cùng prompt: flash-lite 10–17 s, `gemini-3.6-flash` (thinking MINIMAL) ~2 s. Muốn ưu tiên tốc độ thì đặt `SUPPORT_CHAT_MODEL=gemini-3.6-flash` trong `.env` (không phải sửa code), đổi lại tốn quota của model chính mà các tính năng AI khác cũng dùng.
 
 **Dừng, chủ dự án kiểm.**
 
