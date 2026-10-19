@@ -499,6 +499,36 @@ Kết quả có cache trùng hoàn toàn với không cache ở cả 3 trường
 
 **Ảnh hưởng:** `schema.prisma` + 1 migration (2 index, 2 bảng mới), `modules/audit-log` (2 cron, hàm chuyển lưu trữ, `buildActivityWhere`, API `/stats`, `/export`, `/:id`), `main.ts` (khởi động cron), `shared/config/env.ts` (`AUDIT_RETENTION_DAYS`), script `audit-archive.ts`, `docs/03-database/DATABASE_DESIGN.md`. Cùng đợt nhưng không đổi kiến trúc: 4 hành động bảo mật ghi ở `auth.service` (đếm đăng nhập sai bằng `RateLimiter` sẵn có), `metadata.resubmit` cho `JOB_POST_SUBMITTED`. Không thêm dependency.
 
+## AD-21 — Chatbot hỗ trợ (F1): lịch sử ở client, FAQ trong bộ nhớ, pipeline nhiều bậc trước khi gọi LLM
+
+**Ngày:** 2026-10-19 · **Phase liên quan:** không thuộc phase đánh số, là tính năng AI F1. Kế hoạch: `docs/06-backend/support-chatbot/PLAN.md`, `docs/05-frontend/phases/support-chatbot/PLAN.md`.
+
+> **Trạng thái: ĐÃ DUYỆT (2026-10-19), CHƯA TRIỂN KHAI.** Chủ dự án duyệt cùng plan backend/frontend (D1–D13, quyết định frontend 1–11, tầng OpenRouter).
+
+**Bối cảnh:** cần trợ lý trả lời câu hỏi về nền tảng cho cả khách và người đã đăng nhập. Hệ thống sắp được test tải, trong khi quota Gemini miễn phí có hạn, Redis chỉ có 30 MB (đang giữ khoá auth, OTP, rate-limit) và Neon có 500 MB.
+
+**Quyết định:**
+
+1. **Server không lưu hội thoại.** Lịch sử nằm ở `sessionStorage` của trình duyệt, mỗi request gửi kèm tối đa 10 tin gần nhất. Server coi lịch sử là input không tin cậy: chỉ nhận text, `role ∈ {user, model}`, mỗi tin ≤ 1.000 ký tự; không bao giờ nhận system prompt hay kết quả tool từ client.
+2. **FAQ là file markdown trong repo** (`apps/server/content/support-faq/`). Index embedding (model local của AD-9/AD-13) được tính sẵn bằng script, commit kèm, và giữ trong bộ nhớ process. Không dùng pgvector, không truy vấn DB nào cho chatbot.
+3. **Câu hỏi đi qua bậc 0–3 trước khi tới LLM:** kiểm tra và rate-limit, câu xã giao, so khớp FAQ bằng embedding local (đủ chắc thì trả thẳng đáp án, quá xa thì từ chối là ngoài phạm vi), cache câu trả lời trong bộ nhớ (LRU, cùng lập luận AD-19). Mỗi câu trả lời gắn nhãn nguồn (`faq`, `smalltalk`, `out_of_scope`, `cache`, `llm`, `unavailable`). Ngưỡng so khớp chốt bằng bộ eval, ưu tiên độ chính xác khi trả thẳng.
+4. **Streaming SSE trên `POST`.** Chuỗi tầng LLM: Gemini flash-lite → Gemini (`GEMINI_MODEL`) → OpenRouter. Chỉ chuyển tầng khi chưa gửi mẩu chữ nào. OpenRouter chỉ trả lời dựa trên FAQ, không nhận dữ liệu cá nhân. Mọi tầng lỗi thì trả câu mẫu kèm link `/support`; bậc 0–3 vẫn chạy khi không có LLM.
+5. **GĐ2 — tool chỉ đọc**, phạm vi lấy từ `userId` của JWT, không nhận id người dùng hay đối tượng từ LLM. Tool chỉ chạy qua 2 tầng Gemini.
+6. **Có adapter LLM giả** (`SUPPORT_CHAT_LLM_PROVIDER=fake`) cho test tải. Server từ chối khởi động nếu bật nó ở production.
+
+**Lý do:** không thêm tải ghi vào Neon, không có nguy cơ làm đầy Redis đang giữ khoá auth; phần lớn câu hỏi không tốn token; server không giữ trạng thái hội thoại nên chịu tải tốt; quyền truy cập dữ liệu không phụ thuộc vào việc LLM "nghe lời".
+
+**Phương án không chọn:**
+
+- *Lưu lịch sử trong Redis:* mỗi hội thoại vài KB, dưới tải dễ chạm 30 MB; lúc đó hoặc Redis xoá bớt key (có thể mất khoá auth), hoặc từ chối ghi (lỗi toàn hệ thống).
+- *Lưu lịch sử trong Neon:* thêm tải ghi mỗi tin nhắn, bảng phình theo thời gian, phải có cơ chế dọn.
+- *FAQ trong bảng pgvector:* cần migration và truy vấn DB cho mỗi câu hỏi, trong khi kho chỉ ~40 mục (~200 vector) so sánh trong bộ nhớ mất dưới 1 ms.
+- *Xoay vòng nhiều key/tài khoản Gemini:* vi phạm điều khoản dịch vụ. Dùng tầng OpenRouter và pipeline bậc 0–3 thay thế.
+
+**Đánh đổi:** đóng tab là mất lịch sử; sửa FAQ phải qua commit và chạy lại script index; cache và index nằm theo từng process (chạy nhiều instance thì mỗi instance một bản, chấp nhận được với quy mô đồ án). Không có 👍/👎 vì không có chỗ ghi.
+
+**Ảnh hưởng:** module mới `modules/support-chat`, port `SupportChatResponder` + 4 adapter + prompt ở `infrastructure/`, middleware mới `optional-authenticate.ts` (bọc `authenticate`, không sửa file cũ), 2 script (`support-chat:index`, `support-chat:eval`). Sửa thêm (chỉ thêm, không đổi hành vi cũ): `packages/shared-types`, `shared/config/env.ts` (5 biến `SUPPORT_CHAT_*`), `main.ts`, `apps/server/package.json`, `infra/nginx/nginx.conf` (block `/api/support/chat` tắt buffering). Frontend: thư mục `components/support-chat/` và gắn một dòng vào `app/provider.tsx`. Không đổi schema, không thêm dependency.
+
 ## Phần ghi chú của chủ dự án
 
 *(để trống)*

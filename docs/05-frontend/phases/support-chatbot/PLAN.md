@@ -139,11 +139,13 @@ interface SupportChatState {
 
 ## Các bước thực hiện
 
-Bắt đầu **sau** bước 5 của backend GĐ1 (đã có API thật). Có thể làm FE-1 sớm hơn với `SUPPORT_CHAT_LLM_PROVIDER=fake`.
+Toàn bộ frontend là **một đợt (đợt D** trong plan backend), bắt đầu **sau** đợt C của backend (đã có API thật qua nginx). Kiểm bằng `SUPPORT_CHAT_LLM_PROVIDER=fake` để không tốn quota.
 
-1. **FE-1 — lớp dữ liệu:** `support-chat-stream.ts`, `support-chat-storage.ts`, `useSupportChat`, `useSupportChatSuggestions`. Kiểm bằng một trang tạm hoặc console: nhận đủ `meta`/`delta`/`done`, dừng giữa chừng, 401 → refresh → gửi lại, 429.
-2. **FE-2 — giao diện:** launcher, panel, message, suggestions, formatter; gắn vào `provider.tsx`; danh sách ẩn; `data-role`; lắng nghe auth store và quét khi khởi động (quyết định 5).
-3. **FE-3 — kiểm tra:** `tsc`, `npm run lint --workspace web`, `next build`; xem trên trình duyệt ở 375px và ≥ 1280px theo checklist dưới.
+Thứ tự bên trong đợt (gộp FE-1 + FE-2 + FE-3 cũ, không cần trang tạm để thử lớp dữ liệu):
+
+1. Lớp dữ liệu: `support-chat-stream.ts`, `support-chat-storage.ts`, `useSupportChat`, `useSupportChatSuggestions`.
+2. Giao diện: launcher, panel, message, suggestions, formatter; gắn vào `provider.tsx`; danh sách ẩn; `data-role`; lắng nghe auth store và quét khi khởi động (quyết định 5).
+3. Điều kiện xong: `tsc`, `npm run lint --workspace web`, `next build` sạch. **Dừng, chủ dự án kiểm trên trình duyệt** ở 375px và ≥ 1280px theo checklist dưới.
 
 GĐ2 (tool) **không cần sửa frontend** ngoài việc câu trả lời có thể dài hơn — giao diện đã hiển thị theo luồng chữ chung.
 
