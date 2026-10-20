@@ -143,8 +143,8 @@ const baseSchema = z.object({
   ),
   // fake = adapter giả cho test tải (không gọi LLM); superRefine bên dưới cấm ở production.
   SUPPORT_CHAT_LLM_PROVIDER: z.enum(["gemini", "fake"]).default("gemini"),
-  // Tầng chính của chatbot; bỏ trống ⇒ dùng GEMINI_FALLBACK_MODEL (flash-lite, quota free
-  // rộng hơn). Tầng 2 là GEMINI_MODEL, tầng 3 là OpenRouter.
+  // Tầng chính của chatbot; bỏ trống ⇒ dùng GEMINI_MODEL (chốt trước đợt E: flash-lite quá
+  // chậm). Tầng 2 là model còn lại trong GEMINI_MODEL/GEMINI_FALLBACK_MODEL, tầng 3 là OpenRouter.
   SUPPORT_CHAT_MODEL: z.string().optional(),
   // Chỉ đếm lượt rơi xuống bậc 4 (gọi LLM), mọi tầng cộng chung.
   SUPPORT_CHAT_DAILY_LLM_LIMIT_GLOBAL: z.coerce.number().int().min(0).default(500),

@@ -15,7 +15,30 @@ export interface SupportChatResponderInput {
   history: Array<{ role: "user" | "model"; text: string }>;
   /** Top-RAG_TOP_K mục FAQ — LLM chỉ được trả lời dựa trên phần này. */
   contextChunks: SupportChatContextChunk[];
-  // GĐ2: tools?: SupportChatTool[]; toolExecutor?: (...) => Promise<unknown>
+  /** GĐ2 — chỉ có khi người hỏi đã đăng nhập và vai trò có tool. Chỉ adapter Gemini dùng. */
+  tools?: SupportChatToolbox | undefined;
+}
+
+/** Khai báo một tool chỉ đọc cho LLM. `parameters`: JSON Schema của object tham số (bỏ trống ⇒ không tham số). */
+export interface SupportChatToolDeclaration {
+  name: string;
+  description: string;
+  parameters?: Record<string, unknown> | undefined;
+}
+
+/**
+ * Bộ tool của đúng người đang hỏi (D12): userId đã gắn sẵn lúc dựng, lấy từ JWT — LLM chỉ
+ * chọn được tên tool và tham số lọc, không truyền được id người dùng hay đối tượng nào.
+ */
+export interface SupportChatToolbox {
+  declarations: SupportChatToolDeclaration[];
+  /** Không ném lỗi: tool lạ, tham số sai, lỗi DB đều trả `{ error }` để model báo lại cho người dùng. */
+  execute(name: string, args: unknown): Promise<Record<string, unknown>>;
+  /**
+   * Câu hỏi về dữ liệu của chính người hỏi ⇒ tầng không gọi được tool (OpenRouter) phải bỏ
+   * qua thay vì trả lời chung chung (PLAN mục "Tầng OpenRouter").
+   */
+  required: boolean;
 }
 
 export interface SupportChatResponder {

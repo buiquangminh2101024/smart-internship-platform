@@ -59,3 +59,19 @@ export const SUGGESTED_FAQ_IDS = {
     "company-verification",
   ],
 } as const;
+
+// ─── GĐ2 — câu hỏi về dữ liệu của chính người hỏi ─────────────────────────
+
+/**
+ * Chủ đề dữ liệu theo vai trò (viết không dấu) cho asksAboutOwnData. Vai trò không có ở đây
+ * thì câu hỏi không bao giờ bị coi là hỏi về dữ liệu riêng. Employer thêm ở đợt F.
+ */
+export const OWN_DATA_TOPICS: Partial<Record<"guest" | "candidate" | "employer", RegExp>> = {
+  candidate: /\b(?:don|ung tuyen|nop|ho so|phong van|lich|cv)\b/,
+};
+
+/** Câu hỏi về dữ liệu mà không tầng Gemini nào trả lời được ⇒ chỉ trang xem trực tiếp. */
+export const OWN_DATA_UNAVAILABLE_REPLY: Partial<Record<"guest" | "candidate" | "employer", string>> = {
+  candidate:
+    "Trợ lý chưa tra được dữ liệu của bạn lúc này. Bạn xem trực tiếp đơn ứng tuyển và lịch phỏng vấn ở /applications, độ hoàn thiện hồ sơ ở /profile nhé.",
+};

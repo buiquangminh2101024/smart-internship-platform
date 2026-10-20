@@ -19,6 +19,7 @@ import { SupportChatRateLimitService } from "./support-chat-rate-limit.service";
 import { SupportChatController } from "./support-chat.controller";
 import { supportChatRequestSchema } from "./support-chat.dto";
 import { SupportChatService } from "./support-chat.service";
+import { SupportChatToolRegistry } from "./tools/support-chat-tool-registry";
 
 // Chatbot hỗ trợ (AD-21, docs/06-backend/support-chatbot/PLAN.md). Module riêng, không đụng
 // module `support` (/support/contact).
@@ -35,30 +36,47 @@ export function supportChatRouter(container: AwilixContainer): Router {
           logger.warn("Support chat uses the FAKE LLM responder (SUPPORT_CHAT_LLM_PROVIDER=fake)");
           return new FakeSupportChatResponder({ config });
         }
-        // SUPPORT_CHAT_MODEL (mặc định bản flash-lite) → GEMINI_MODEL → OpenRouter. Thiếu key
-        // của tầng nào thì bỏ tầng đó, như chuỗi tầng của candidate-insights.
+        // SUPPORT_CHAT_MODEL (mặc định GEMINI_MODEL) → model Gemini còn lại trong GEMINI_MODEL /
+        // GEMINI_FALLBACK_MODEL → OpenRouter. Thiếu key của tầng nào thì bỏ tầng đó, như chuỗi tầng
+        // của candidate-insights. Chủ dự án chọn gemini-3.6-flash làm tầng chính trước đợt E:
+        // flash-lite chậm 8–17 s tới mẩu đầu, vòng gọi tool còn cộng dồn độ trễ.
         const tiers: SupportChatResponderTier[] = [];
-        const primaryModel = config.SUPPORT_CHAT_MODEL || config.GEMINI_FALLBACK_MODEL || config.GEMINI_MODEL;
+        const primaryModel = config.SUPPORT_CHAT_MODEL || config.GEMINI_MODEL;
+        const secondaryModel = [config.GEMINI_MODEL, config.GEMINI_FALLBACK_MODEL].find(
+          (model) => model && model !== primaryModel,
+        );
         if (config.GEMINI_API_KEY) {
-          tiers.push({ name: "gemini-primary", responder: new GeminiSupportChatResponder({ config, logger }, primaryModel) });
-          if (config.GEMINI_MODEL !== primaryModel) {
+          tiers.push({
+            name: "gemini-primary",
+            responder: new GeminiSupportChatResponder({ config, logger }, primaryModel),
+            supportsTools: true,
+          });
+          if (secondaryModel) {
             tiers.push({
               name: "gemini-secondary",
-              responder: new GeminiSupportChatResponder({ config, logger }, config.GEMINI_MODEL),
+              responder: new GeminiSupportChatResponder({ config, logger }, secondaryModel),
+              supportsTools: true,
             });
           }
         }
         if (config.OPENROUTER_API_KEY) {
-          tiers.push({ name: "openrouter", responder: new OpenRouterSupportChatResponder({ config, logger }) });
+          tiers.push({
+            name: "openrouter",
+            responder: new OpenRouterSupportChatResponder({ config, logger }),
+            supportsTools: false,
+          });
         }
         if (tiers.length === 0) {
           logger.warn("Support chat has no LLM tier configured — tier 4 will always answer with the fallback message");
           return null;
         }
-        logger.info("Support chat LLM tiers", { tiers: tiers.map((tier) => tier.name), primaryModel });
+        logger.info("Support chat LLM tiers", { tiers: tiers.map((tier) => tier.name), primaryModel, secondaryModel });
         return new FallbackSupportChatResponder({ tiers, logger });
       },
     ).singleton(),
+    // GĐ2 — applicationsService, interviewsService, candidateInsightsRepository,
+    // candidateMatchProfileLoader do các router mount trước trong main.ts đăng ký.
+    supportChatToolRegistry: asClass(SupportChatToolRegistry).singleton(),
     supportChatService: asClass(SupportChatService).singleton(),
     supportChatController: asClass(SupportChatController).singleton(),
   });

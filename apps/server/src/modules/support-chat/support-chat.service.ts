@@ -11,15 +11,19 @@ import type { SupportChatResponder } from "../../shared/ports/SupportChatRespond
 import { isAccentFree, type FaqKnowledgeBase, type FaqViewer } from "./faq-knowledge-base";
 import type { FaqItem } from "./faq-markdown.util";
 import type { SupportChatAnswerCache } from "./support-chat-answer-cache";
+import { asksAboutOwnData } from "./support-chat-own-data.util";
 import type { SupportChatRateLimitService, SupportChatRequester } from "./support-chat-rate-limit.service";
 import { smallTalkReplyOf } from "./support-chat-small-talk.util";
 import {
   DIRECT_THRESHOLD,
   DIRECT_THRESHOLD_WITH_HISTORY,
   OUT_OF_SCOPE_THRESHOLD,
+  OWN_DATA_TOPICS,
+  OWN_DATA_UNAVAILABLE_REPLY,
   RAG_TOP_K,
   SUGGESTED_FAQ_IDS,
 } from "./support-chat.config";
+import type { SupportChatToolRegistry } from "./tools/support-chat-tool-registry";
 
 export interface SupportChatTurn {
   message: string;
@@ -40,14 +44,18 @@ const SUPPORT_PAGE_LINK = /(?:^|[^\w/])\/support(?![\w/-])/;
 /**
  * LLM nói không trả lời được (quy tắc 2–3 của prompt) ⇒ không gắn nguồn, vì các mục đưa vào
  * prompt không trả lời câu này. Prompt dặn nhắc /support khi đó, nhưng model không phải lúc
- * nào cũng làm theo nên cụm này cũng bật nút "Liên hệ hỗ trợ".
+ * nào cũng làm theo nên cụm này cũng bật nút "Liên hệ hỗ trợ". Hai cụm sau: từ chối xem dữ
+ * liệu của người khác (GĐ2, quy tắc 10 của prompt) — model diễn đạt nhiều kiểu.
  */
-const CANNOT_ANSWER = /chưa có thông tin|chỉ hỗ trợ/i;
+const CANNOT_ANSWER = /chưa có thông tin|chỉ hỗ trợ|xem được dữ liệu|của (?:người|tài khoản) khác/i;
 
 /** Ghi log cuối mỗi lượt — không ghi nội dung câu hỏi (PLAN mục "Ghi chú cho test tải"). */
 interface TurnTrace {
   source: SupportChatSource | "aborted" | "interrupted";
   topScore?: number;
+  /** GĐ2 — câu hỏi về dữ liệu của chính người hỏi, và tên các tool đã chạy (không ghi kết quả). */
+  ownData?: boolean;
+  toolCalls?: string[] | undefined;
 }
 
 /**
@@ -60,6 +68,7 @@ export class SupportChatService {
   private readonly answerCache: SupportChatAnswerCache;
   private readonly rateLimit: SupportChatRateLimitService;
   private readonly responder: SupportChatResponder | null;
+  private readonly toolRegistry: SupportChatToolRegistry;
   private readonly logger: Logger;
   private readonly suggestionsByViewer = new Map<FaqViewer, SupportChatSuggestion[]>();
 
@@ -69,6 +78,7 @@ export class SupportChatService {
     supportChatAnswerCache,
     supportChatRateLimitService,
     supportChatResponder,
+    supportChatToolRegistry,
     logger,
   }: {
     faqKnowledgeBase: FaqKnowledgeBase;
@@ -77,6 +87,7 @@ export class SupportChatService {
     supportChatRateLimitService: SupportChatRateLimitService;
     /** null khi không tầng LLM nào có key — bậc 4 luôn trả câu mẫu (D13). */
     supportChatResponder: SupportChatResponder | null;
+    supportChatToolRegistry: SupportChatToolRegistry;
     logger: Logger;
   }) {
     this.faqKnowledgeBase = faqKnowledgeBase;
@@ -84,6 +95,7 @@ export class SupportChatService {
     this.answerCache = supportChatAnswerCache;
     this.rateLimit = supportChatRateLimitService;
     this.responder = supportChatResponder;
+    this.toolRegistry = supportChatToolRegistry;
     this.logger = logger;
   }
 
@@ -118,6 +130,8 @@ export class SupportChatService {
         viewer: turn.viewer,
         hasHistory: turn.history.length > 0,
         ...(trace.topScore === undefined ? {} : { topScore: Number(trace.topScore.toFixed(3)) }),
+        ...(trace.ownData ? { ownData: true } : {}),
+        ...(trace.toolCalls?.length ? { toolCalls: trace.toolCalls } : {}),
         durationMs: Date.now() - startedAt,
       });
     }
@@ -125,6 +139,12 @@ export class SupportChatService {
 
   private async *answer(turn: SupportChatTurn, signal: AbortSignal, trace: TurnTrace): AsyncGenerator<SupportChatEvent> {
     const hasHistory = turn.history.length > 0;
+    // GĐ2 — hỏi về dữ liệu của chính mình ("đơn của tôi đang thế nào?") thì đáp án FAQ chung
+    // không đúng ý ⇒ bỏ qua trả thẳng, chặn ngoài phạm vi và cache, đi thẳng tới LLM có tool.
+    const ownDataTopics = OWN_DATA_TOPICS[turn.viewer];
+    const ownData =
+      turn.requester.kind === "user" && ownDataTopics !== undefined && asksAboutOwnData(turn.message, ownDataTopics);
+    if (ownData) trace.ownData = true;
 
     // Bậc 0b — bấm câu gợi ý. faqId lạ hoặc của vai trò khác thì bỏ qua, xử lý như câu thường.
     const suggested = turn.faqId ? this.visibleItem(turn.faqId, turn.viewer) : undefined;
@@ -148,7 +168,7 @@ export class SupportChatService {
     const top = vector ? (await this.faqKnowledgeBase.score(vector, turn.viewer, { accentFree }))?.[0] : undefined;
     if (top) trace.topScore = top.questionScore;
     // Câu gõ không dấu: không trả thẳng, không chặn (PLAN, quyết định sau đợt B).
-    if (top && !accentFree) {
+    if (top && !accentFree && !ownData) {
       const direct = hasHistory ? DIRECT_THRESHOLD_WITH_HISTORY : DIRECT_THRESHOLD;
       const item = top.questionScore >= direct ? this.faqKnowledgeBase.getById(top.faqId) : undefined;
       if (item) {
@@ -165,22 +185,27 @@ export class SupportChatService {
 
     // Bậc 3 — cache, chỉ câu hỏi độc lập.
     const faqVersion = this.faqKnowledgeBase.version;
-    const cached = hasHistory ? null : this.answerCache.get(faqVersion, turn.viewer, turn.message);
+    const cached = hasHistory || ownData ? null : this.answerCache.get(faqVersion, turn.viewer, turn.message);
     if (cached) {
       trace.source = "cache";
       yield* fixedAnswer("cache", cached.text, cached.sources, cached.suggestSupport);
       return;
     }
 
-    // Bậc 4 — LLM (RAG).
+    // Bậc 4 — LLM (RAG). Người đã đăng nhập mà vai trò có tool thì luôn kèm tool (model tự quyết
+    // có gọi không); `required` chỉ bật với câu hỏi về dữ liệu của chính họ.
+    const unavailableReply = (ownData && OWN_DATA_UNAVAILABLE_REPLY[turn.viewer]) || UNAVAILABLE_REPLY;
+    const toolSession =
+      turn.requester.kind === "user" ? this.toolRegistry.openSession(turn.viewer, turn.requester.userId, ownData) : null;
     const contextChunks = await this.contextFor(turn, vector);
     if (!this.responder || !contextChunks) {
-      yield* fixedAnswer("unavailable", UNAVAILABLE_REPLY, [], true);
+      yield* fixedAnswer("unavailable", unavailableReply, [], true);
       return;
     }
+    // Một câu hỏi tính một lượt, dù qua mấy vòng gọi tool hay mấy tầng.
     if (!(await this.rateLimit.tryConsumeDailyLlmCall())) {
       this.logger.warn("Support chat daily LLM limit reached");
-      yield* fixedAnswer("unavailable", UNAVAILABLE_REPLY, [], true);
+      yield* fixedAnswer("unavailable", unavailableReply, [], true);
       return;
     }
 
@@ -192,6 +217,7 @@ export class SupportChatService {
           question: turn.message,
           history: turn.history,
           contextChunks: contextChunks.map((item) => ({ faqId: item.id, title: item.title, content: item.answer })),
+          tools: toolSession?.toolbox,
         },
         signal,
       );
@@ -201,6 +227,7 @@ export class SupportChatService {
         yield { type: "delta", text: chunk };
       }
     } catch (error) {
+      trace.toolCalls = toolSession?.calls;
       if (signal.aborted) {
         trace.source = "aborted";
         return;
@@ -212,20 +239,26 @@ export class SupportChatService {
         return;
       }
       // Mọi tầng đều lỗi trước mẩu chữ đầu — Fallback đã log từng tầng.
-      yield* fixedAnswer("unavailable", UNAVAILABLE_REPLY, [], true);
+      yield* fixedAnswer("unavailable", unavailableReply, [], true);
       return;
     }
+    trace.toolCalls = toolSession?.calls;
     if (!text) {
-      yield* fixedAnswer("unavailable", UNAVAILABLE_REPLY, [], true);
+      yield* fixedAnswer("unavailable", unavailableReply, [], true);
       return;
     }
 
     trace.source = "llm";
+    // Có tool chạy ⇒ câu trả lời dựa trên dữ liệu của người hỏi: không gắn nguồn FAQ, không cache
+    // (cache dùng chung cho mọi người cùng vai trò).
+    const usedTools = (toolSession?.calls.length ?? 0) > 0;
     const cannotAnswer = CANNOT_ANSWER.test(text);
     const suggestSupport = cannotAnswer || SUPPORT_PAGE_LINK.test(text);
-    const sources = cannotAnswer ? [] : contextChunks.map(sourceRefOf);
+    const sources = cannotAnswer || usedTools ? [] : contextChunks.map(sourceRefOf);
     yield { type: "done", source: "llm", sources, suggestSupport };
-    if (!hasHistory) this.answerCache.set(faqVersion, turn.viewer, turn.message, { text, sources, suggestSupport });
+    if (!hasHistory && !ownData && !usedTools) {
+      this.answerCache.set(faqVersion, turn.viewer, turn.message, { text, sources, suggestSupport });
+    }
   }
 
   /**
