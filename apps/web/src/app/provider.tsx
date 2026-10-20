@@ -8,6 +8,7 @@ import { usePathname } from 'next/navigation'
 import { SessionSync } from '@/components/auth/SessionSync'
 import { EmployerStageSync } from '@/components/auth/EmployerStageSync'
 import { SocketProvider } from '@/components/realtime/SocketProvider'
+import { SupportChatRoot } from '@/components/support-chat/SupportChatRoot'
 
 // Socket ứng viên đặt ở gốc để nhận thông báo realtime cả trên trang công khai
 // (/, /jobs...) và giữ 1 kết nối liên tục khi chuyển trang. Tab đang ở khu
@@ -33,6 +34,8 @@ export function Providers ({children}: {children: ReactNode}) {
             <SessionSync area="admin" />
             <EmployerStageSync />
             <CandidateSocketRoot>{children}</CandidateSocketRoot>
+            {/* Luôn gắn (kể cả trang ẩn widget) để còn lắng nghe đăng xuất — xem SupportChatRoot. */}
+            <SupportChatRoot />
             <ReactQueryDevtools initialIsOpen={false} />
         </QueryClientProvider>
     )

@@ -2019,3 +2019,49 @@ export interface AuditActivityStats {
     retracted: number;
   };
 }
+
+// ─── Chatbot hỗ trợ (F1, AD-21) ──────────────────────────────────────────
+// docs/06-backend/support-chatbot/PLAN.md. Server không lưu lịch sử (D2): client
+// gửi kèm tối đa 10 tin gần nhất, server coi là dữ liệu không tin cậy (D3).
+
+export interface SupportChatHistoryItem {
+  role: "user" | "model";
+  /** ≤ 1.000 ký tự. */
+  text: string;
+}
+
+export interface SupportChatRequest {
+  /** 1–500 ký tự sau trim. */
+  message: string;
+  /** ≤ 10 tin, cũ trước mới sau. */
+  history: SupportChatHistoryItem[];
+  /** Có khi người dùng bấm câu gợi ý ⇒ trả thẳng đáp án mục đó. */
+  faqId?: string;
+}
+
+/**
+ * Bậc của pipeline đã trả lời: faq (bậc 0b/2), smalltalk (bậc 1), out_of_scope (bậc 2),
+ * cache (bậc 3), llm (bậc 4), unavailable (bậc 4 không gọi được LLM hoặc hết hạn mức ngày).
+ */
+export type SupportChatSource = "faq" | "smalltalk" | "out_of_scope" | "cache" | "llm" | "unavailable";
+
+export interface SupportChatSourceRef {
+  faqId: string;
+  title: string;
+}
+
+/** Một câu gợi ý của GET /support/chat/suggestions — bấm thì gửi kèm `faqId`. */
+export interface SupportChatSuggestion {
+  faqId: string;
+  question: string;
+}
+
+/**
+ * Sự kiện SSE của POST /support/chat: `event: <type>`, `data:` là phần còn lại (không có
+ * `type`). Thứ tự: meta → delta… → done, hoặc meta → delta… → error khi LLM đứt giữa chừng.
+ */
+export type SupportChatEvent =
+  | { type: "meta"; source: SupportChatSource }
+  | { type: "delta"; text: string }
+  | { type: "done"; source: SupportChatSource; sources: SupportChatSourceRef[]; suggestSupport: boolean }
+  | { type: "error"; code: "LLM_INTERRUPTED"; message: string };

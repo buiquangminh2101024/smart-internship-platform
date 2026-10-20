@@ -308,6 +308,20 @@ export class ApplicationsRepository {
     `);
   }
 
+  /**
+   * Số hồ sơ theo trạng thái, chỉ trên các tin đang hiển thị (PUBLISHED) — cho trợ lý hỗ trợ
+   * (F1, tool `getApplicationsSummary`). Khác `countByStatus` (trang "Ứng viên", đếm mọi tin):
+   * viết riêng để không đụng `companyWhere`, và không join ứng viên vì chỉ cần con số.
+   */
+  async countByStatusOnOpenJobs(companyId: string): Promise<Array<{ status: ApplicationStatus; count: number }>> {
+    const rows = await this.prisma.application.groupBy({
+      by: ["status"],
+      where: { jobPost: { companyId, status: "PUBLISHED" } },
+      _count: { _all: true },
+    });
+    return rows.map((row) => ({ status: row.status, count: row._count._all }));
+  }
+
   /** Hồ sơ trong `ids` thuộc công ty; id không thuộc công ty thì không có trong kết quả. */
   async findManyForStatusChange(ids: string[], companyId: string, db: Db = this.prisma): Promise<StatusChangeTarget[]> {
     const rows = await db.application.findMany({

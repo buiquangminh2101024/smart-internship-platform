@@ -261,6 +261,23 @@ export class ApplicationsService {
     };
   }
 
+  /**
+   * Tóm tắt hồ sơ trên các tin đang hiển thị, cho trợ lý hỗ trợ (F1, tool
+   * `getApplicationsSummary`): số hồ sơ theo trạng thái và số hồ sơ của từng tin (kể cả đã huỷ,
+   * như số trên tab ở trang "Ứng viên").
+   */
+  async summarizeOpenJobApplications(userId: string) {
+    const { companyId } = await this.requireEmployer(userId);
+    const [statusRows, jobCounts] = await Promise.all([
+      this.applicationsRepository.countByStatusOnOpenJobs(companyId),
+      this.applicationsRepository.countByJob(companyId, undefined),
+    ]);
+    return {
+      statusCounts: toStatusCounts(statusRows),
+      openJobs: jobCounts.filter((job) => job.status === "PUBLISHED"),
+    };
+  }
+
   async updateApplicationStatus(userId: string, id: string, dto: UpdateApplicationStatusRequest) {
     const employer = await this.requireEmployer(userId);
     const app = await this.applicationsRepository.findEmployerApplicationById(id, employer.companyId);

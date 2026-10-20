@@ -2,7 +2,7 @@ import axios, { type Method } from "axios";
 import type { ApiResponse, RefreshResponse } from "@sip/shared-types";
 import type { AuthArea } from "./auth-area";
 import { AREA_HOME, areaForPath } from "./auth-area";
-import { authStoreForArea } from "@/stores/auth-store";
+import { authStoreForArea, latestRefreshToken } from "@/stores/auth-store";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
 
@@ -90,20 +90,35 @@ export async function publicFetch<T = void>(path: string, init: RequestInit = {}
 // AD-4, docs/02-architecture/ARCHITECTURE_DECISIONS.md).
 const refreshPromises = new Map<AuthArea, Promise<string | null>>();
 
-async function refreshAccessToken(area: AuthArea): Promise<string | null> {
-  const store = authStoreForArea(area);
-  const refreshToken = store.getState().refreshToken;
-  if (!refreshToken) return null;
-
+async function requestAccessToken(refreshToken: string): Promise<string | null> {
   try {
     const res = await httpClient.post<ApiResponse<RefreshResponse>>("/auth/refresh", { refreshToken });
     if (res.status < 200 || res.status >= 300 || !res.data.success || !res.data.data) return null;
-
-    store.getState().setAccessToken(res.data.data.accessToken);
     return res.data.data.accessToken;
   } catch {
     return null;
   }
+}
+
+/**
+ * Refresh bằng refresh token mới nhất trong localStorage (AD-22). Nếu trong lúc
+ * chờ server mà tab khác đổi phiên (đăng nhập lại) thì bỏ kết quả và refresh
+ * lại bằng phiên mới — không ghi access token của phiên cũ đè lên phiên mới,
+ * và không trả null (khiến `endSession` xoá phiên mới dùng chung mọi tab).
+ */
+async function refreshAccessToken(area: AuthArea): Promise<string | null> {
+  let refreshToken = latestRefreshToken(area);
+  for (let attempt = 0; attempt < 2 && refreshToken; attempt++) {
+    const accessToken = await requestAccessToken(refreshToken);
+    const latest = latestRefreshToken(area);
+    if (latest !== refreshToken) {
+      refreshToken = latest;
+      continue;
+    }
+    if (accessToken) authStoreForArea(area).getState().setAccessToken(accessToken);
+    return accessToken;
+  }
+  return null;
 }
 
 /**

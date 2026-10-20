@@ -499,6 +499,92 @@ Kết quả có cache trùng hoàn toàn với không cache ở cả 3 trường
 
 **Ảnh hưởng:** `schema.prisma` + 1 migration (2 index, 2 bảng mới), `modules/audit-log` (2 cron, hàm chuyển lưu trữ, `buildActivityWhere`, API `/stats`, `/export`, `/:id`), `main.ts` (khởi động cron), `shared/config/env.ts` (`AUDIT_RETENTION_DAYS`), script `audit-archive.ts`, `docs/03-database/DATABASE_DESIGN.md`. Cùng đợt nhưng không đổi kiến trúc: 4 hành động bảo mật ghi ở `auth.service` (đếm đăng nhập sai bằng `RateLimiter` sẵn có), `metadata.resubmit` cho `JOB_POST_SUBMITTED`. Không thêm dependency.
 
+## AD-21 — Chatbot hỗ trợ (F1): lịch sử ở client, FAQ trong bộ nhớ, pipeline nhiều bậc trước khi gọi LLM
+
+**Ngày:** 2026-10-19 · **Phase liên quan:** không thuộc phase đánh số, là tính năng AI F1. Kế hoạch: `docs/06-backend/support-chatbot/PLAN.md`, `docs/05-frontend/phases/support-chatbot/PLAN.md`.
+
+> **Trạng thái: ĐÃ DUYỆT (2026-10-19), ĐÃ TRIỂN KHAI ĐỦ ĐỢT A–F (2026-10-20); đợt F chờ chủ dự án kiểm.** Chủ dự án duyệt cùng plan backend/frontend (D1–D13, quyết định frontend 1–11, tầng OpenRouter).
+
+**Bối cảnh:** cần trợ lý trả lời câu hỏi về nền tảng cho cả khách và người đã đăng nhập. Hệ thống sắp được test tải, trong khi quota Gemini miễn phí có hạn, Redis chỉ có 30 MB (đang giữ khoá auth, OTP, rate-limit) và Neon có 500 MB.
+
+**Quyết định:**
+
+1. **Server không lưu hội thoại.** Lịch sử nằm ở `sessionStorage` của trình duyệt, mỗi request gửi kèm tối đa 10 tin gần nhất. Server coi lịch sử là input không tin cậy: chỉ nhận text, `role ∈ {user, model}`, mỗi tin ≤ 1.000 ký tự; không bao giờ nhận system prompt hay kết quả tool từ client.
+2. **FAQ là file markdown trong repo** (`apps/server/content/support-faq/`). Index embedding (model local của AD-9/AD-13) được tính sẵn bằng script, commit kèm, và giữ trong bộ nhớ process. Không dùng pgvector, không truy vấn DB nào cho chatbot.
+3. **Câu hỏi đi qua bậc 0–3 trước khi tới LLM:** kiểm tra và rate-limit, câu xã giao, so khớp FAQ bằng embedding local (đủ chắc thì trả thẳng đáp án, quá xa thì từ chối là ngoài phạm vi), cache câu trả lời trong bộ nhớ (LRU, cùng lập luận AD-19). Mỗi câu trả lời gắn nhãn nguồn (`faq`, `smalltalk`, `out_of_scope`, `cache`, `llm`, `unavailable`). Ngưỡng so khớp chốt bằng bộ eval, ưu tiên độ chính xác khi trả thẳng.
+4. **Streaming SSE trên `POST`.** Chuỗi tầng LLM: Gemini (`GEMINI_MODEL`, gemini-3.6-flash) → Gemini flash-lite (`GEMINI_FALLBACK_MODEL`) → OpenRouter. Thứ tự hai tầng Gemini đổi trước đợt E (2026-10-20): flash-lite chậm 8–17 s tới mẩu chữ đầu, vòng gọi tool còn cộng dồn độ trễ. Chỉ chuyển tầng khi chưa gửi mẩu chữ nào. OpenRouter chỉ trả lời dựa trên FAQ, không nhận dữ liệu cá nhân. Mọi tầng lỗi thì trả câu mẫu kèm link `/support`; bậc 0–3 vẫn chạy khi không có LLM.
+5. **GĐ2 — tool chỉ đọc**, phạm vi lấy từ `userId` của JWT, không nhận id người dùng hay đối tượng từ LLM. Tool chỉ chạy qua 2 tầng Gemini. Người đã đăng nhập luôn được kèm tool ở bậc 4; câu hỏi về dữ liệu của chính họ (nhận ra bằng luật trên bản bỏ dấu) bỏ qua trả thẳng FAQ, chặn ngoài phạm vi và cache, và không rơi xuống OpenRouter. Mỗi vai trò 3 tool: Candidate (đơn ứng tuyển, lịch phỏng vấn, độ hoàn thiện hồ sơ — đợt E) và Employer (tin tuyển dụng, tóm tắt hồ sơ trên tin đang hiển thị, gói dịch vụ — đợt F). Khách và Admin không có tool.
+6. **Có adapter LLM giả** (`SUPPORT_CHAT_LLM_PROVIDER=fake`) cho test tải. Server từ chối khởi động nếu bật nó ở production.
+
+**Lý do:** không thêm tải ghi vào Neon, không có nguy cơ làm đầy Redis đang giữ khoá auth; phần lớn câu hỏi không tốn token; server không giữ trạng thái hội thoại nên chịu tải tốt; quyền truy cập dữ liệu không phụ thuộc vào việc LLM "nghe lời".
+
+**Phương án không chọn:**
+
+- *Lưu lịch sử trong Redis:* mỗi hội thoại vài KB, dưới tải dễ chạm 30 MB; lúc đó hoặc Redis xoá bớt key (có thể mất khoá auth), hoặc từ chối ghi (lỗi toàn hệ thống).
+- *Lưu lịch sử trong Neon:* thêm tải ghi mỗi tin nhắn, bảng phình theo thời gian, phải có cơ chế dọn.
+- *FAQ trong bảng pgvector:* cần migration và truy vấn DB cho mỗi câu hỏi, trong khi kho chỉ ~40 mục (~200 vector) so sánh trong bộ nhớ mất dưới 1 ms.
+- *Xoay vòng nhiều key/tài khoản Gemini:* vi phạm điều khoản dịch vụ. Dùng tầng OpenRouter và pipeline bậc 0–3 thay thế.
+
+**Đánh đổi:** đóng tab là mất lịch sử; sửa FAQ phải qua commit và chạy lại script index; cache và index nằm theo từng process (chạy nhiều instance thì mỗi instance một bản, chấp nhận được với quy mô đồ án). Không có 👍/👎 vì không có chỗ ghi.
+
+**Ảnh hưởng:** module mới `modules/support-chat`, port `SupportChatResponder` + 4 adapter + prompt ở `infrastructure/`, middleware mới `optional-authenticate.ts` (bọc `authenticate`, không sửa file cũ), 2 script (`support-chat:index`, `support-chat:eval`). Sửa thêm (chỉ thêm, không đổi hành vi cũ): `packages/shared-types`, `shared/config/env.ts` (5 biến `SUPPORT_CHAT_*`), `main.ts`, `apps/server/package.json`, `infra/nginx/nginx.conf` (block `/api/support/chat` tắt buffering). GĐ2 dùng lại hàm đọc sẵn có của các module; chỉ thêm một hàm đọc mới cho tool Employer `getApplicationsSummary` (đợt F): `ApplicationsRepository.countByStatusOnOpenJobs` + `ApplicationsService.summarizeOpenJobApplications`, viết riêng để không đụng truy vấn của trang "Ứng viên". Frontend: thư mục `components/support-chat/` và gắn một dòng vào `app/provider.tsx`. Không đổi schema, không thêm dependency.
+
+---
+
+## AD-22 — Đồng bộ phiên đăng nhập giữa các tab cùng trình duyệt (bổ sung AD-4)
+
+**Ngày:** 2026-10-20 · **Phase liên quan:** sửa lỗi của 05-frontend Phase 2 (AD-4), phát hiện khi kiểm chatbot đợt D.
+
+> **Trạng thái: ĐÃ DUYỆT (2026-10-20), ĐÃ TRIỂN KHAI, CHỜ KIỂM LẠI TRÊN TRÌNH DUYỆT.** Chủ dự án duyệt hướng sửa 3 mục sau khi tự tái hiện được lỗi (Test 1, Test 2 bên dưới).
+
+**Triệu chứng:** mở Candidate và Employer ở 2 tab cùng một Chrome. Sau một lúc (để máy tắt màn hình rồi quay lại), một tab vẫn hiện "đã đăng nhập" nhưng bấm menu quản lý hoặc sidebar thì không vào được, hoặc bị đưa về trang chủ của khu vực (`/` hoặc `/employer`). Chỉ nút Đăng xuất còn chạy. Đăng nhập lại thì hết. Tải lại tab kia thì thấy nó cũng đã bị đăng xuất. Console của tab bị kẹt cho `sip_session_<khu vực>` không còn và `localStorage["sip-auth-<khu vực>"]` rỗng, trong khi giao diện vẫn hiện tên người dùng.
+
+**Nguyên nhân (code cũ của AD-4, không phải code chatbot):**
+
+1. localStorage (`sip-auth-*`) và cookie (`sip_session_*`) dùng chung cho **mọi tab** cùng trình duyệt. Còn store zustand trong bộ nhớ thì **mỗi tab một bản**, chụp từ localStorage lúc tab tải trang. Trước AD-22, các tab không báo cho nhau khi phiên đổi.
+2. Mỗi tab chạy `SessionSync` cho **cả 3 khu vực** (`app/provider.tsx`), kể cả khu vực tab đó không hiển thị. TanStack Query gọi lại `/users/me` mỗi khi tab được focus.
+3. Tab A đăng xuất rồi đăng nhập lại ⇒ phiên cũ bị server thu hồi. Tab B vẫn giữ bản sao phiên cũ trong bộ nhớ.
+4. Tab B được focus lại (vd. bật màn hình lên) ⇒ gọi `/users/me` bằng token cũ ⇒ 401 ⇒ refresh bằng refresh token cũ ⇒ thất bại ⇒ `endSession` gọi `clear()` ⇒ xoá **cookie và localStorage dùng chung** ⇒ phiên **mới** của tab A cũng mất.
+5. Tab A thành tab "nửa sống": bộ nhớ vẫn có token hợp lệ (gọi API vẫn được, nút Đăng xuất chạy), nhưng `proxy.ts` chỉ nhìn cookie nên chặn mọi trang cần đăng nhập và đưa về trang chủ khu vực ⇒ trông như bấm không phản ứng. Tải lại trang thì đọc localStorage rỗng ⇒ thấy đã bị đăng xuất.
+
+Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.ts`, đợt D) cũng gọi `clear()` nên cũng có thể tạo tab "nửa sống" theo cùng cơ chế; sửa ở dưới đã che luôn đường này.
+
+**Quyết định:**
+
+1. **Các tab đồng bộ phiên qua sự kiện `storage`** (`stores/auth-store.ts`, `syncFromOtherTab`). Tab nào ghi `sip-auth-<khu vực>` (đăng nhập, đăng xuất, refresh access token) thì các tab khác nạp lại bản đó vào bộ nhớ ngay. Nếu phiên kết thúc hoặc đổi sang tài khoản khác mà tab đang ở đúng khu vực đó thì tab về trang chủ khu vực (tải lại trang, giống `endSession`), để không còn hiện dữ liệu của phiên cũ. Tab ở khu vực khác chỉ cập nhật âm thầm.
+2. **Refresh luôn dùng refresh token mới nhất trong localStorage** (`latestRefreshToken` + `refreshAccessToken` trong `lib/api-client.ts`), không dùng bản tab đang giữ. Nếu trong lúc chờ server mà tab khác đổi phiên thì bỏ kết quả, refresh lại bằng phiên mới (tối đa 2 lần). Vì vậy refresh chỉ trả `null` (và `endSession` chỉ xoá phiên) khi **phiên mới nhất** thật sự hết hạn. Mọi chỗ gọi `refreshAccessTokenShared` (apiFetch/apiDownload/apiUpload, socket, chatbot) đều được hưởng.
+3. **Tự chữa cookie** (`components/auth/SessionSync.tsx`): `/users/me` thành công ⇒ ghi lại `sip_session_<khu vực>`. Đồng thời bỏ qua kết quả `/users/me` nếu nó thuộc tài khoản khác với tài khoản đang lưu (phiên đã đổi trong lúc request chưa về), để không ghi user cũ đè lên phiên mới.
+
+**Hành vi sau khi sửa — cần nhớ khi đọc lại:**
+
+- **Hai tab khác khu vực** (Candidate và Employer): hoàn toàn độc lập như AD-4. Đăng xuất Candidate không ảnh hưởng Employer.
+- **Hai tab cùng khu vực** (hai tab Candidate): **dùng chung một phiên**, như Gmail/Facebook. Đăng xuất ở tab này thì tab kia cũng thành chưa đăng nhập; đăng nhập tài khoản khác ở tab này thì tab kia chuyển theo. Đây là giới hạn của trình duyệt (localStorage/cookie dùng chung theo trang web), không phải lỗi.
+- **Muốn dùng 2 tài khoản cùng vai trò cùng lúc** (vd. test ứng viên A và B): dùng một cửa sổ thường + một cửa sổ ẩn danh, hoặc 2 Chrome profile, hoặc 2 trình duyệt khác nhau.
+
+**Phương án không chọn:**
+
+- *Mỗi tab một phiên riêng (`sessionStorage`):* mở link sang tab mới hay mở tab mới là phải đăng nhập lại; cookie cho `proxy.ts` vẫn dùng chung nên phải thiết kế lại cách chặn route; đổi chiến lược lưu token của AD-2/AD-4 mà người dùng thật không cần.
+- *`BroadcastChannel`:* sự kiện `storage` đã đủ (mọi thay đổi phiên đều đi qua localStorage) và không cần thêm kênh riêng.
+- *Sửa phía server:* server làm đúng (token cũ bị thu hồi thì phải từ chối); lỗi nằm ở việc client xoá nhầm phiên dùng chung.
+
+**Cách kiểm (chạy ở cửa sổ ẩn danh, mỗi lần kiểm dán vào Console của từng tab):**
+
+```js
+["candidate","employer"].map(a => ({ area: a,
+  cookie: document.cookie.includes(`sip_session_${a}=1`),
+  storedUserId: JSON.parse(localStorage.getItem(`sip-auth-${a}`) || "null")?.state?.user?.id ?? null }))
+```
+
+| Test | Các bước | Trước AD-22 | Kỳ vọng sau AD-22 |
+|---|---|---|---|
+| 1 | Tab 1 đăng nhập Candidate → tab 2 đăng nhập Employer → tab 1 đăng xuất rồi đăng nhập lại Candidate → bấm sang tab 2 rồi quay về tab 1 → bấm menu tài khoản | Kẹt; tab 1 `cookie: false`, `storedUserId: null` cho candidate | Vào được trang quản lý; cả 2 khu vực `cookie: true`, đúng user id |
+| 2 | Như Test 1, đổi vai (Employer đăng xuất/đăng nhập lại) → bấm sidebar | Bị đưa về `/employer` | Vào được trang trong portal |
+| 3 | Đăng nhập 2 tab, không đăng xuất lần nào, để yên ~20 phút | (đối chứng) không kẹt | Không kẹt; access token 15 phút tự refresh |
+| 4 | Hai tab **cùng là Candidate**; đăng xuất ở tab 1 | Tab 2 vẫn hiện đã đăng nhập | Tab 2 tự về `/`, hiện chưa đăng nhập |
+| 5 | Tab 1 Candidate, tab 2 Employer; đăng xuất Candidate ở tab 1, rồi F5 tab 2 | — | Tab 2 vẫn đăng nhập Employer |
+
+**Ảnh hưởng:** chỉ frontend: `stores/auth-store.ts` (listener `storage`, `syncFromOtherTab`, `latestRefreshToken`; kiểu `AuthStore` thêm API `persist`), `lib/api-client.ts` (`refreshAccessToken`), `components/auth/SessionSync.tsx`. Server, `proxy.ts`, cách lưu token (AD-2/AD-4) không đổi. Không thêm dependency. Việc còn lại (chưa làm, ghi ở `docs/01-project/FEATURE_BACKLOG.md` §1): refresh thất bại vì **mất mạng/server lỗi 5xx** hiện vẫn bị coi như phiên hết hạn và xoá phiên; client Redis phía server chưa đặt timeout.
+
 ## Phần ghi chú của chủ dự án
 
 *(để trống)*
