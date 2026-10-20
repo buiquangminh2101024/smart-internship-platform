@@ -529,6 +529,62 @@ Kết quả có cache trùng hoàn toàn với không cache ở cả 3 trường
 
 **Ảnh hưởng:** module mới `modules/support-chat`, port `SupportChatResponder` + 4 adapter + prompt ở `infrastructure/`, middleware mới `optional-authenticate.ts` (bọc `authenticate`, không sửa file cũ), 2 script (`support-chat:index`, `support-chat:eval`). Sửa thêm (chỉ thêm, không đổi hành vi cũ): `packages/shared-types`, `shared/config/env.ts` (5 biến `SUPPORT_CHAT_*`), `main.ts`, `apps/server/package.json`, `infra/nginx/nginx.conf` (block `/api/support/chat` tắt buffering). Frontend: thư mục `components/support-chat/` và gắn một dòng vào `app/provider.tsx`. Không đổi schema, không thêm dependency.
 
+---
+
+## AD-22 — Đồng bộ phiên đăng nhập giữa các tab cùng trình duyệt (bổ sung AD-4)
+
+**Ngày:** 2026-10-20 · **Phase liên quan:** sửa lỗi của 05-frontend Phase 2 (AD-4), phát hiện khi kiểm chatbot đợt D.
+
+> **Trạng thái: ĐÃ DUYỆT (2026-10-20), ĐÃ TRIỂN KHAI, CHỜ KIỂM LẠI TRÊN TRÌNH DUYỆT.** Chủ dự án duyệt hướng sửa 3 mục sau khi tự tái hiện được lỗi (Test 1, Test 2 bên dưới).
+
+**Triệu chứng:** mở Candidate và Employer ở 2 tab cùng một Chrome. Sau một lúc (để máy tắt màn hình rồi quay lại), một tab vẫn hiện "đã đăng nhập" nhưng bấm menu quản lý hoặc sidebar thì không vào được, hoặc bị đưa về trang chủ của khu vực (`/` hoặc `/employer`). Chỉ nút Đăng xuất còn chạy. Đăng nhập lại thì hết. Tải lại tab kia thì thấy nó cũng đã bị đăng xuất. Console của tab bị kẹt cho `sip_session_<khu vực>` không còn và `localStorage["sip-auth-<khu vực>"]` rỗng, trong khi giao diện vẫn hiện tên người dùng.
+
+**Nguyên nhân (code cũ của AD-4, không phải code chatbot):**
+
+1. localStorage (`sip-auth-*`) và cookie (`sip_session_*`) dùng chung cho **mọi tab** cùng trình duyệt. Còn store zustand trong bộ nhớ thì **mỗi tab một bản**, chụp từ localStorage lúc tab tải trang. Trước AD-22, các tab không báo cho nhau khi phiên đổi.
+2. Mỗi tab chạy `SessionSync` cho **cả 3 khu vực** (`app/provider.tsx`), kể cả khu vực tab đó không hiển thị. TanStack Query gọi lại `/users/me` mỗi khi tab được focus.
+3. Tab A đăng xuất rồi đăng nhập lại ⇒ phiên cũ bị server thu hồi. Tab B vẫn giữ bản sao phiên cũ trong bộ nhớ.
+4. Tab B được focus lại (vd. bật màn hình lên) ⇒ gọi `/users/me` bằng token cũ ⇒ 401 ⇒ refresh bằng refresh token cũ ⇒ thất bại ⇒ `endSession` gọi `clear()` ⇒ xoá **cookie và localStorage dùng chung** ⇒ phiên **mới** của tab A cũng mất.
+5. Tab A thành tab "nửa sống": bộ nhớ vẫn có token hợp lệ (gọi API vẫn được, nút Đăng xuất chạy), nhưng `proxy.ts` chỉ nhìn cookie nên chặn mọi trang cần đăng nhập và đưa về trang chủ khu vực ⇒ trông như bấm không phản ứng. Tải lại trang thì đọc localStorage rỗng ⇒ thấy đã bị đăng xuất.
+
+Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.ts`, đợt D) cũng gọi `clear()` nên cũng có thể tạo tab "nửa sống" theo cùng cơ chế; sửa ở dưới đã che luôn đường này.
+
+**Quyết định:**
+
+1. **Các tab đồng bộ phiên qua sự kiện `storage`** (`stores/auth-store.ts`, `syncFromOtherTab`). Tab nào ghi `sip-auth-<khu vực>` (đăng nhập, đăng xuất, refresh access token) thì các tab khác nạp lại bản đó vào bộ nhớ ngay. Nếu phiên kết thúc hoặc đổi sang tài khoản khác mà tab đang ở đúng khu vực đó thì tab về trang chủ khu vực (tải lại trang, giống `endSession`), để không còn hiện dữ liệu của phiên cũ. Tab ở khu vực khác chỉ cập nhật âm thầm.
+2. **Refresh luôn dùng refresh token mới nhất trong localStorage** (`latestRefreshToken` + `refreshAccessToken` trong `lib/api-client.ts`), không dùng bản tab đang giữ. Nếu trong lúc chờ server mà tab khác đổi phiên thì bỏ kết quả, refresh lại bằng phiên mới (tối đa 2 lần). Vì vậy refresh chỉ trả `null` (và `endSession` chỉ xoá phiên) khi **phiên mới nhất** thật sự hết hạn. Mọi chỗ gọi `refreshAccessTokenShared` (apiFetch/apiDownload/apiUpload, socket, chatbot) đều được hưởng.
+3. **Tự chữa cookie** (`components/auth/SessionSync.tsx`): `/users/me` thành công ⇒ ghi lại `sip_session_<khu vực>`. Đồng thời bỏ qua kết quả `/users/me` nếu nó thuộc tài khoản khác với tài khoản đang lưu (phiên đã đổi trong lúc request chưa về), để không ghi user cũ đè lên phiên mới.
+
+**Hành vi sau khi sửa — cần nhớ khi đọc lại:**
+
+- **Hai tab khác khu vực** (Candidate và Employer): hoàn toàn độc lập như AD-4. Đăng xuất Candidate không ảnh hưởng Employer.
+- **Hai tab cùng khu vực** (hai tab Candidate): **dùng chung một phiên**, như Gmail/Facebook. Đăng xuất ở tab này thì tab kia cũng thành chưa đăng nhập; đăng nhập tài khoản khác ở tab này thì tab kia chuyển theo. Đây là giới hạn của trình duyệt (localStorage/cookie dùng chung theo trang web), không phải lỗi.
+- **Muốn dùng 2 tài khoản cùng vai trò cùng lúc** (vd. test ứng viên A và B): dùng một cửa sổ thường + một cửa sổ ẩn danh, hoặc 2 Chrome profile, hoặc 2 trình duyệt khác nhau.
+
+**Phương án không chọn:**
+
+- *Mỗi tab một phiên riêng (`sessionStorage`):* mở link sang tab mới hay mở tab mới là phải đăng nhập lại; cookie cho `proxy.ts` vẫn dùng chung nên phải thiết kế lại cách chặn route; đổi chiến lược lưu token của AD-2/AD-4 mà người dùng thật không cần.
+- *`BroadcastChannel`:* sự kiện `storage` đã đủ (mọi thay đổi phiên đều đi qua localStorage) và không cần thêm kênh riêng.
+- *Sửa phía server:* server làm đúng (token cũ bị thu hồi thì phải từ chối); lỗi nằm ở việc client xoá nhầm phiên dùng chung.
+
+**Cách kiểm (chạy ở cửa sổ ẩn danh, mỗi lần kiểm dán vào Console của từng tab):**
+
+```js
+["candidate","employer"].map(a => ({ area: a,
+  cookie: document.cookie.includes(`sip_session_${a}=1`),
+  storedUserId: JSON.parse(localStorage.getItem(`sip-auth-${a}`) || "null")?.state?.user?.id ?? null }))
+```
+
+| Test | Các bước | Trước AD-22 | Kỳ vọng sau AD-22 |
+|---|---|---|---|
+| 1 | Tab 1 đăng nhập Candidate → tab 2 đăng nhập Employer → tab 1 đăng xuất rồi đăng nhập lại Candidate → bấm sang tab 2 rồi quay về tab 1 → bấm menu tài khoản | Kẹt; tab 1 `cookie: false`, `storedUserId: null` cho candidate | Vào được trang quản lý; cả 2 khu vực `cookie: true`, đúng user id |
+| 2 | Như Test 1, đổi vai (Employer đăng xuất/đăng nhập lại) → bấm sidebar | Bị đưa về `/employer` | Vào được trang trong portal |
+| 3 | Đăng nhập 2 tab, không đăng xuất lần nào, để yên ~20 phút | (đối chứng) không kẹt | Không kẹt; access token 15 phút tự refresh |
+| 4 | Hai tab **cùng là Candidate**; đăng xuất ở tab 1 | Tab 2 vẫn hiện đã đăng nhập | Tab 2 tự về `/`, hiện chưa đăng nhập |
+| 5 | Tab 1 Candidate, tab 2 Employer; đăng xuất Candidate ở tab 1, rồi F5 tab 2 | — | Tab 2 vẫn đăng nhập Employer |
+
+**Ảnh hưởng:** chỉ frontend: `stores/auth-store.ts` (listener `storage`, `syncFromOtherTab`, `latestRefreshToken`; kiểu `AuthStore` thêm API `persist`), `lib/api-client.ts` (`refreshAccessToken`), `components/auth/SessionSync.tsx`. Server, `proxy.ts`, cách lưu token (AD-2/AD-4) không đổi. Không thêm dependency. Việc còn lại (chưa làm, ghi ở `docs/01-project/FEATURE_BACKLOG.md` §1): refresh thất bại vì **mất mạng/server lỗi 5xx** hiện vẫn bị coi như phiên hết hạn và xoá phiên; client Redis phía server chưa đặt timeout.
+
 ## Phần ghi chú của chủ dự án
 
 *(để trống)*
