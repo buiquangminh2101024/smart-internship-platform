@@ -503,7 +503,7 @@ Kết quả có cache trùng hoàn toàn với không cache ở cả 3 trường
 
 **Ngày:** 2026-10-19 · **Phase liên quan:** không thuộc phase đánh số, là tính năng AI F1. Kế hoạch: `docs/06-backend/support-chatbot/PLAN.md`, `docs/05-frontend/phases/support-chatbot/PLAN.md`.
 
-> **Trạng thái: ĐÃ DUYỆT (2026-10-19), CHƯA TRIỂN KHAI.** Chủ dự án duyệt cùng plan backend/frontend (D1–D13, quyết định frontend 1–11, tầng OpenRouter).
+> **Trạng thái: ĐÃ DUYỆT (2026-10-19), ĐÃ TRIỂN KHAI ĐỦ ĐỢT A–F (2026-10-20); đợt F chờ chủ dự án kiểm.** Chủ dự án duyệt cùng plan backend/frontend (D1–D13, quyết định frontend 1–11, tầng OpenRouter).
 
 **Bối cảnh:** cần trợ lý trả lời câu hỏi về nền tảng cho cả khách và người đã đăng nhập. Hệ thống sắp được test tải, trong khi quota Gemini miễn phí có hạn, Redis chỉ có 30 MB (đang giữ khoá auth, OTP, rate-limit) và Neon có 500 MB.
 
@@ -513,7 +513,7 @@ Kết quả có cache trùng hoàn toàn với không cache ở cả 3 trường
 2. **FAQ là file markdown trong repo** (`apps/server/content/support-faq/`). Index embedding (model local của AD-9/AD-13) được tính sẵn bằng script, commit kèm, và giữ trong bộ nhớ process. Không dùng pgvector, không truy vấn DB nào cho chatbot.
 3. **Câu hỏi đi qua bậc 0–3 trước khi tới LLM:** kiểm tra và rate-limit, câu xã giao, so khớp FAQ bằng embedding local (đủ chắc thì trả thẳng đáp án, quá xa thì từ chối là ngoài phạm vi), cache câu trả lời trong bộ nhớ (LRU, cùng lập luận AD-19). Mỗi câu trả lời gắn nhãn nguồn (`faq`, `smalltalk`, `out_of_scope`, `cache`, `llm`, `unavailable`). Ngưỡng so khớp chốt bằng bộ eval, ưu tiên độ chính xác khi trả thẳng.
 4. **Streaming SSE trên `POST`.** Chuỗi tầng LLM: Gemini (`GEMINI_MODEL`, gemini-3.6-flash) → Gemini flash-lite (`GEMINI_FALLBACK_MODEL`) → OpenRouter. Thứ tự hai tầng Gemini đổi trước đợt E (2026-10-20): flash-lite chậm 8–17 s tới mẩu chữ đầu, vòng gọi tool còn cộng dồn độ trễ. Chỉ chuyển tầng khi chưa gửi mẩu chữ nào. OpenRouter chỉ trả lời dựa trên FAQ, không nhận dữ liệu cá nhân. Mọi tầng lỗi thì trả câu mẫu kèm link `/support`; bậc 0–3 vẫn chạy khi không có LLM.
-5. **GĐ2 — tool chỉ đọc**, phạm vi lấy từ `userId` của JWT, không nhận id người dùng hay đối tượng từ LLM. Tool chỉ chạy qua 2 tầng Gemini. Người đã đăng nhập luôn được kèm tool ở bậc 4; câu hỏi về dữ liệu của chính họ (nhận ra bằng luật trên bản bỏ dấu) bỏ qua trả thẳng FAQ, chặn ngoài phạm vi và cache, và không rơi xuống OpenRouter.
+5. **GĐ2 — tool chỉ đọc**, phạm vi lấy từ `userId` của JWT, không nhận id người dùng hay đối tượng từ LLM. Tool chỉ chạy qua 2 tầng Gemini. Người đã đăng nhập luôn được kèm tool ở bậc 4; câu hỏi về dữ liệu của chính họ (nhận ra bằng luật trên bản bỏ dấu) bỏ qua trả thẳng FAQ, chặn ngoài phạm vi và cache, và không rơi xuống OpenRouter. Mỗi vai trò 3 tool: Candidate (đơn ứng tuyển, lịch phỏng vấn, độ hoàn thiện hồ sơ — đợt E) và Employer (tin tuyển dụng, tóm tắt hồ sơ trên tin đang hiển thị, gói dịch vụ — đợt F). Khách và Admin không có tool.
 6. **Có adapter LLM giả** (`SUPPORT_CHAT_LLM_PROVIDER=fake`) cho test tải. Server từ chối khởi động nếu bật nó ở production.
 
 **Lý do:** không thêm tải ghi vào Neon, không có nguy cơ làm đầy Redis đang giữ khoá auth; phần lớn câu hỏi không tốn token; server không giữ trạng thái hội thoại nên chịu tải tốt; quyền truy cập dữ liệu không phụ thuộc vào việc LLM "nghe lời".
@@ -527,7 +527,7 @@ Kết quả có cache trùng hoàn toàn với không cache ở cả 3 trường
 
 **Đánh đổi:** đóng tab là mất lịch sử; sửa FAQ phải qua commit và chạy lại script index; cache và index nằm theo từng process (chạy nhiều instance thì mỗi instance một bản, chấp nhận được với quy mô đồ án). Không có 👍/👎 vì không có chỗ ghi.
 
-**Ảnh hưởng:** module mới `modules/support-chat`, port `SupportChatResponder` + 4 adapter + prompt ở `infrastructure/`, middleware mới `optional-authenticate.ts` (bọc `authenticate`, không sửa file cũ), 2 script (`support-chat:index`, `support-chat:eval`). Sửa thêm (chỉ thêm, không đổi hành vi cũ): `packages/shared-types`, `shared/config/env.ts` (5 biến `SUPPORT_CHAT_*`), `main.ts`, `apps/server/package.json`, `infra/nginx/nginx.conf` (block `/api/support/chat` tắt buffering). Frontend: thư mục `components/support-chat/` và gắn một dòng vào `app/provider.tsx`. Không đổi schema, không thêm dependency.
+**Ảnh hưởng:** module mới `modules/support-chat`, port `SupportChatResponder` + 4 adapter + prompt ở `infrastructure/`, middleware mới `optional-authenticate.ts` (bọc `authenticate`, không sửa file cũ), 2 script (`support-chat:index`, `support-chat:eval`). Sửa thêm (chỉ thêm, không đổi hành vi cũ): `packages/shared-types`, `shared/config/env.ts` (5 biến `SUPPORT_CHAT_*`), `main.ts`, `apps/server/package.json`, `infra/nginx/nginx.conf` (block `/api/support/chat` tắt buffering). GĐ2 dùng lại hàm đọc sẵn có của các module; chỉ thêm một hàm đọc mới cho tool Employer `getApplicationsSummary` (đợt F): `ApplicationsRepository.countByStatusOnOpenJobs` + `ApplicationsService.summarizeOpenJobApplications`, viết riêng để không đụng truy vấn của trang "Ứng viên". Frontend: thư mục `components/support-chat/` và gắn một dòng vào `app/provider.tsx`. Không đổi schema, không thêm dependency.
 
 ---
 

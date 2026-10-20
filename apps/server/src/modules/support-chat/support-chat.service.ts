@@ -47,7 +47,7 @@ const SUPPORT_PAGE_LINK = /(?:^|[^\w/])\/support(?![\w/-])/;
  * nào cũng làm theo nên cụm này cũng bật nút "Liên hệ hỗ trợ". Hai cụm sau: từ chối xem dữ
  * liệu của người khác (GĐ2, quy tắc 10 của prompt) — model diễn đạt nhiều kiểu.
  */
-const CANNOT_ANSWER = /chưa có thông tin|chỉ hỗ trợ|xem được dữ liệu|của (?:người|tài khoản) khác/i;
+const CANNOT_ANSWER = /chưa có thông tin|chỉ hỗ trợ|xem được dữ liệu|của (?:người|tài khoản|công ty) khác/i;
 
 /** Ghi log cuối mỗi lượt — không ghi nội dung câu hỏi (PLAN mục "Ghi chú cho test tải"). */
 interface TurnTrace {

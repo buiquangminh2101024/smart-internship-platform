@@ -7,28 +7,15 @@ import { computeCompletenessScore } from "../../candidate-insights/profile-sugge
 import type { InterviewsService } from "../../interviews/interviews.service";
 import type { CandidateMatchProfileLoader } from "../../job-matching/candidate-match-profile.loader";
 import { defineSupportChatTool, type SupportChatTool } from "./support-chat-tool";
+import { APPLICATION_STATUS_LABEL, DATE_FORMAT, DATE_TIME_FORMAT, excerpt, LIST_LIMIT } from "./support-chat-tool-format";
 
 // 3 tool Candidate của GĐ2 (docs/06-backend/support-chatbot/PLAN.md mục "GĐ2 — Tool chỉ đọc").
 // Mỗi tool bọc một hàm đọc sẵn có, chỉ trả các trường cần để trả lời (không SĐT, email, nội
 // dung CV, ghi chú của nhà tuyển dụng). Nhãn trạng thái khớp FAQ `application-status`.
 
-/** Số mục tối đa trả cho model trong một danh sách (D12). */
-const LIST_LIMIT = 10;
-/** Chữ tự do do người khác nhập (tiêu đề tin, địa điểm, lý do huỷ) — cắt ngắn trước khi đưa vào prompt. */
-const FREE_TEXT_MAX_LENGTH = 200;
-
 const APPLICATIONS_PAGE = "/applications";
 const PROFILE_PAGE = "/profile";
 
-const APPLICATION_STATUS_LABEL: Record<ApplicationStatus, string> = {
-  PENDING: "Chờ duyệt",
-  REVIEWING: "Đang xem xét",
-  SHORTLISTED: "Vào danh sách rút gọn",
-  INTERVIEWING: "Mời phỏng vấn",
-  ACCEPTED: "Được nhận",
-  REJECTED: "Bị từ chối",
-  CANCELLED: "Đã huỷ",
-};
 const APPLICATION_STATUSES = Object.keys(APPLICATION_STATUS_LABEL) as [ApplicationStatus, ...ApplicationStatus[]];
 
 const INTERVIEW_MODE_LABEL: Record<InterviewMode, string> = { ONLINE: "Trực tuyến", ONSITE: "Trực tiếp" };
@@ -40,27 +27,6 @@ const COMPLETENESS_LABEL: Record<keyof typeof COMPLETENESS_WEIGHTS, string> = {
   hasEducation: "Học vấn",
   hasHeadlineOrBio: "Tiêu đề hoặc phần giới thiệu bản thân",
 };
-
-const DATE_FORMAT = new Intl.DateTimeFormat("vi-VN", {
-  timeZone: "Asia/Ho_Chi_Minh",
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-});
-const DATE_TIME_FORMAT = new Intl.DateTimeFormat("vi-VN", {
-  timeZone: "Asia/Ho_Chi_Minh",
-  weekday: "long",
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
-function excerpt(value: string): string {
-  const text = value.replace(/\s+/g, " ").trim();
-  return text.length > FREE_TEXT_MAX_LENGTH ? `${text.slice(0, FREE_TEXT_MAX_LENGTH - 1).trimEnd()}…` : text;
-}
 
 export function candidateSupportChatTools({
   applicationsService,

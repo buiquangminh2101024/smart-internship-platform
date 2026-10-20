@@ -4,8 +4,11 @@ import type { ApplicationsService } from "../../applications/applications.servic
 import type { CandidateInsightsRepository } from "../../candidate-insights/candidate-insights.repository";
 import type { InterviewsService } from "../../interviews/interviews.service";
 import type { CandidateMatchProfileLoader } from "../../job-matching/candidate-match-profile.loader";
+import type { JobPostsService } from "../../job-posts/job-posts.service";
+import type { SubscriptionsService } from "../../subscriptions/subscriptions.service";
 import type { FaqViewer } from "../faq-knowledge-base";
 import { candidateSupportChatTools } from "./candidate-support-chat-tools";
+import { employerSupportChatTools } from "./employer-support-chat-tools";
 import type { SupportChatTool } from "./support-chat-tool";
 
 /** Bộ tool của một lượt hỏi, kèm danh sách tool đã chạy. */
@@ -16,8 +19,8 @@ export interface SupportChatToolSession {
 }
 
 /**
- * Tool theo vai trò (GĐ2). Khách và Admin (được xử lý như khách) không có tool. Employer có
- * tool từ đợt F.
+ * Tool theo vai trò (GĐ2): Candidate từ đợt E, Employer từ đợt F. Khách và Admin (được xử lý
+ * như khách) không có tool.
  */
 export class SupportChatToolRegistry {
   private readonly toolsByViewer: Partial<Record<FaqViewer, ReadonlyMap<string, SupportChatTool>>>;
@@ -28,12 +31,16 @@ export class SupportChatToolRegistry {
     interviewsService,
     candidateInsightsRepository,
     candidateMatchProfileLoader,
+    jobPostsService,
+    subscriptionsService,
     logger,
   }: {
     applicationsService: ApplicationsService;
     interviewsService: InterviewsService;
     candidateInsightsRepository: CandidateInsightsRepository;
     candidateMatchProfileLoader: CandidateMatchProfileLoader;
+    jobPostsService: JobPostsService;
+    subscriptionsService: SubscriptionsService;
     logger: Logger;
   }) {
     const byName = (tools: SupportChatTool[]) => new Map(tools.map((tool) => [tool.declaration.name, tool]));
@@ -46,6 +53,7 @@ export class SupportChatToolRegistry {
           candidateMatchProfileLoader,
         }),
       ),
+      employer: byName(employerSupportChatTools({ jobPostsService, applicationsService, subscriptionsService })),
     };
     this.logger = logger;
   }

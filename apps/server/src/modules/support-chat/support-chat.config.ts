@@ -64,14 +64,19 @@ export const SUGGESTED_FAQ_IDS = {
 
 /**
  * Chủ đề dữ liệu theo vai trò (viết không dấu) cho asksAboutOwnData. Vai trò không có ở đây
- * thì câu hỏi không bao giờ bị coi là hỏi về dữ liệu riêng. Employer thêm ở đợt F.
+ * thì câu hỏi không bao giờ bị coi là hỏi về dữ liệu riêng. Ngôi thứ nhất "chúng tôi", "bên
+ * mình", "công ty mình" đã khớp sẵn qua `tôi`/`mình`. "tin" của Employer không tính "tin nhắn",
+ * "thông tin".
  */
 export const OWN_DATA_TOPICS: Partial<Record<"guest" | "candidate" | "employer", RegExp>> = {
   candidate: /\b(?:don|ung tuyen|nop|ho so|phong van|lich|cv)\b/,
+  employer: /\b(?:(?<!thong )tin(?! nhan)|ho so|ung vien|don|goi|dung thu|han muc|luot|het han)\b/,
 };
 
 /** Câu hỏi về dữ liệu mà không tầng Gemini nào trả lời được ⇒ chỉ trang xem trực tiếp. */
 export const OWN_DATA_UNAVAILABLE_REPLY: Partial<Record<"guest" | "candidate" | "employer", string>> = {
   candidate:
     "Trợ lý chưa tra được dữ liệu của bạn lúc này. Bạn xem trực tiếp đơn ứng tuyển và lịch phỏng vấn ở /applications, độ hoàn thiện hồ sơ ở /profile nhé.",
+  employer:
+    "Trợ lý chưa tra được dữ liệu của công ty bạn lúc này. Bạn xem trực tiếp tin tuyển dụng ở /employer/jobs, hồ sơ ứng tuyển ở /employer/applications, gói dịch vụ ở /employer/subscription nhé.",
 };

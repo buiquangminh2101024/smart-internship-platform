@@ -75,7 +75,8 @@ export function supportChatRouter(container: AwilixContainer): Router {
       },
     ).singleton(),
     // GĐ2 — applicationsService, interviewsService, candidateInsightsRepository,
-    // candidateMatchProfileLoader do các router mount trước trong main.ts đăng ký.
+    // candidateMatchProfileLoader, jobPostsService, subscriptionsService do các router mount
+    // trước trong main.ts đăng ký.
     supportChatToolRegistry: asClass(SupportChatToolRegistry).singleton(),
     supportChatService: asClass(SupportChatService).singleton(),
     supportChatController: asClass(SupportChatController).singleton(),
