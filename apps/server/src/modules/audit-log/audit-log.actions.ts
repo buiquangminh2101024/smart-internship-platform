@@ -27,8 +27,20 @@ export const AUDIT_ACTIONS = [
   "USER_SESSIONS_REVOKED",
   "USER_ACTIVATED",
   "USER_PASSWORD_RESET_GUIDE_SENT",
+  // Báo cáo tin vi phạm
+  "JOB_REPORT_RESOLVED",
+  "JOB_REPORT_REJECTED",
+  "JOB_REPORT_ACTION_EXECUTED",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
-export type AuditEntityType = "JobPost" | "Company" | "Skill" | "University" | "Major" | "Subscription" | "User";
+export type AuditEntityType =
+  | "JobPost"
+  | "Company"
+  | "Skill"
+  | "University"
+  | "Major"
+  | "Subscription"
+  | "User"
+  | "JobReport";

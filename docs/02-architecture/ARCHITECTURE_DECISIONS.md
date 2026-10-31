@@ -439,3 +439,60 @@ Bắt buộc thêm khi gửi duyệt (áp dụng cho cả nhánh publish thẳng
 ## Phần ghi chú của chủ dự án
 
 *(để trống)*
+
+---
+
+## AD-19 — Module Báo cáo tin vi phạm (`job-reports`)
+
+**Ngày:** 2026-10-31 · **Phase liên quan:** Job Reports Feature
+
+> **Trạng thái: ĐÃ TRIỂN KHAI (2026-10-31).**
+
+**Bối cảnh:** Hệ thống cần cơ chế để Candidate báo cáo tin tuyển dụng vi phạm (lừa đảo, thu phí bất hợp pháp, nội dung không phù hợp, ...) và Admin xem xét, xử lý báo cáo đó.
+
+**Quyết định:**
+
+1. **Module độc lập `job-reports`** (không đặt trong `job-posts`). Lý do: quan hệ N-N giữa Job và User (reporter), vòng đời riêng (PENDING → RESOLVED/REJECTED), và Admin action logic tách biệt với CRUD job thông thường.
+
+2. **Schema DB:**
+   - Enum `ReportReason`: `SCAM | CHARGING_FEE | INAPPROPRIATE | MISLEADING | OTHER`
+   - Enum `ReportStatus`: `PENDING | RESOLVED | REJECTED`
+   - Model `JobReport` với `jobId`, `reporterId`, `reason`, `description?`, `evidenceUrls String[]`, `status`, `adminNote?`
+   - Index trên `(jobId, reporterId, status)` để kiểm tra duplicate pending nhanh.
+
+3. **Chống báo cáo trùng lặp:** Server kiểm tra `PENDING` report từ cùng `reporterId` + `jobId` trước khi tạo mới. Trả `400` nếu đã tồn tại. Khi report trước đã `RESOLVED`/`REJECTED`, Candidate có thể gửi lại.
+
+4. **Ảnh minh chứng:** Tái sử dụng port `MediaStorage` (Cloudinary) có sẵn — upload qua endpoint riêng `POST /api/job-reports/upload-evidence` (multer, max 5 ảnh, 5 MB/ảnh). URL lưu vào `evidenceUrls String[]`.
+
+5. **Admin actions (tinh gọn thành 2 loại quyết định rõ ràng):**
+   - `TAKE_DOWN_JOB` — Gỡ tin tuyển dụng (`JobPost.status = TAKEN_DOWN`), đánh dấu `JobReport.status = RESOLVED`, lưu `adminNote`.
+   - `DISMISS_REPORT` — Bỏ qua báo cáo và giữ lại tin đăng (xác nhận tin hợp lệ / báo cáo sai sự thật), đánh dấu `JobReport.status = REJECTED`, lưu `adminNote`.
+   *(Lưu ý: Hành động khóa tài khoản Nhà tuyển dụng không thực hiện trong modal xử lý báo cáo đơn lẻ để tránh lạm quyền/sai sót; Admin thực hiện tại trang Quản lý Người dùng).*
+
+6. **Audit Log:** Mọi hành động Admin ghi `AuditLog` với action `JOB_REPORT_RESOLVED | JOB_REPORT_REJECTED | JOB_REPORT_ACTION_EXECUTED`. Entity type `"JobReport"` đã thêm vào `AuditEntityType`.
+
+7. **Không gửi notification cho reporter** theo thiết kế hiện tại (có thể mở rộng sau bằng `NotificationService` có sẵn).
+
+8. **Route structure:**
+   - Candidate: `POST /api/jobs/:jobId/reports`, `GET /api/jobs/:jobId/reports/check`, `POST /api/job-reports/upload-evidence`
+   - Admin: `GET /api/admin/job-reports/stats`, `GET /api/admin/job-reports`, `GET /api/admin/job-reports/:id`, `PATCH /api/admin/job-reports/:id`, `POST /api/admin/job-reports/:id/action`
+
+9. **DI:** `JobReportRepository` và `JobReportsService` đăng ký `singleton` trong `job-reports.routes.ts`, inject vào `JobReportsController`. Không thêm vào global `container.ts`.
+
+**Phương án không chọn:**
+- *Đặt trong module `job-posts`*: làm phức tạp service và repository của job-posts, khó maintain.
+- *Dùng lại `JobPostModerationAction`*: `ModerationAction` gắn với moderation flow của Employer submit, không phù hợp với flow Candidate report → Admin review.
+
+**Ảnh hưởng:**
+- `schema.prisma` (2 enum mới, 1 model mới, 2 relation mới)
+- Migration `20261031120000_add_job_reports`
+- `packages/shared-types` (6 type/interface mới)
+- `apps/server/src/modules/job-reports/` (4 file mới)
+- `apps/server/src/modules/audit-log/audit-log.actions.ts` (3 action mới, 1 entity type mới)
+- `apps/server/src/main.ts` (mount router)
+- `apps/web/src/hooks/useJobReports.ts`, `useAdminJobReports.ts`
+- `apps/web/src/components/jobs/ReportJobModal.tsx`
+- `apps/web/src/components/admin/AdminJobReportDetailModal.tsx`
+- `apps/web/src/app/jobs/[id]/page.tsx` (thêm nút Báo cáo)
+- `apps/web/src/app/admin/(console)/job-reports/page.tsx` (trang Admin mới)
+- `apps/web/src/components/layout/AdminConsoleShell.tsx` (thêm nav item)

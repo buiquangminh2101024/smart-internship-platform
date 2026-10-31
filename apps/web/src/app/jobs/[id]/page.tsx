@@ -1,24 +1,29 @@
 "use client";
 
-import { use } from "react";
+import { use, useState, useCallback } from "react";
 import { usePublicJobPost } from "@/hooks/useJobPosts";
 import { useSavedJobCheck, useSaveJob, useUnsaveJob } from "@/hooks/useSavedJobs";
 import { useJobApplicationStatus } from "@/hooks/useApplications";
 import { useCandidateJobMatch } from "@/hooks/useJobMatch";
+import { useCheckJobReport } from "@/hooks/useJobReports";
 import { JobMatchCard, JobMatchCardSkeleton } from "@/components/jobs/JobMatchCard";
 import { JobPostContent, JobPostCompanyCard, JobPostHeaderCard } from "@/components/jobs/JobPostContent";
+import { ReportJobModal } from "@/components/jobs/ReportJobModal";
 import { SimilarJobsSection } from "@/components/jobs/SimilarJobsSection";
 import { CandidateHomeHeader } from "@/components/marketing/CandidateHomeHeader";
 import { SiteFooter } from "@/components/marketing/SiteFooter";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { ToastViewport, type ToastData } from "@/components/ui/Toast";
 import { useCandidateAuthStore } from "@/stores/auth-store";
+
+let toastCounter = 0;
 
 export default function PublicJobDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { data: job, isLoading, isError } = usePublicJobPost(id);
 
-  // Chỉ CANDIDATE đăng nhập mới có thể lưu tin — kiểm tra cả token lẫn role.
+  // Chỉ CANDIDATE đăng nhập mới có thể lưu tin / báo cáo tin
   const user = useCandidateAuthStore((state) => state.user);
   const isLoggedIn = useCandidateAuthStore((state) => !!state.accessToken);
   const isCandidate = isLoggedIn && user?.role === "CANDIDATE";
@@ -26,6 +31,10 @@ export default function PublicJobDetailPage({ params }: { params: Promise<{ id: 
   // Lấy trạng thái lưu từ backend — chỉ gọi khi là CANDIDATE.
   const { data: checkResult } = useSavedJobCheck(id, isCandidate);
   const saved = checkResult?.saved ?? false;
+
+  // Kiểm tra xem ứng viên đã gửi báo cáo cho tin này chưa
+  const { data: reportCheck } = useCheckJobReport(id, isCandidate);
+  const hasPendingReport = reportCheck?.hasPendingReport ?? false;
 
   // Kiểm tra trạng thái đơn ứng tuyển hiện tại cho job này
   const { status: appStatus } = useJobApplicationStatus(id, isCandidate);
@@ -36,6 +45,18 @@ export default function PublicJobDetailPage({ params }: { params: Promise<{ id: 
   const saveMutation = useSaveJob();
   const unsaveMutation = useUnsaveJob();
   const saving = saveMutation.isPending || unsaveMutation.isPending;
+
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [toasts, setToasts] = useState<ToastData[]>([]);
+
+  const pushToast = useCallback((tone: ToastData["tone"], message: string) => {
+    const toastId = ++toastCounter;
+    setToasts((prev) => [...prev, { id: toastId, tone, message }]);
+  }, []);
+
+  const dismissToast = useCallback((idToDismiss: number) => {
+    setToasts((prev) => prev.filter((t) => t.id !== idToDismiss));
+  }, []);
 
   async function toggleSave() {
     if (!isCandidate) {
@@ -50,8 +71,20 @@ export default function PublicJobDetailPage({ params }: { params: Promise<{ id: 
         await saveMutation.mutateAsync(id);
       }
     } catch {
-      // Lỗi được phản ánh qua mutation state — không cần xử lý thêm ở đây.
+      // Lỗi được phản ánh qua mutation state
     }
+  }
+
+  function handleReportClick() {
+    if (!isLoggedIn || !isCandidate) {
+      pushToast("info", "Vui lòng đăng nhập tài khoản Ứng viên để gửi báo cáo vi phạm.");
+      return;
+    }
+    if (hasPendingReport) {
+      pushToast("info", "Bạn đã gửi báo cáo cho tin tuyển dụng này và đang chờ Ban quản trị xử lý.");
+      return;
+    }
+    setIsReportModalOpen(true);
   }
 
   // Xác định trạng thái nút ứng tuyển
@@ -94,7 +127,7 @@ export default function PublicJobDetailPage({ params }: { params: Promise<{ id: 
             <JobPostHeaderCard
               job={job}
               action={
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {isApplied ? (
                     <Button
                       type="button"
@@ -121,6 +154,19 @@ export default function PublicJobDetailPage({ params }: { params: Promise<{ id: 
                     onClick={() => void toggleSave()}
                   >
                     {saved ? "Đã lưu" : "Lưu tin"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    icon="flag"
+                    className={
+                      hasPendingReport
+                        ? "text-amber-700 bg-amber-50 hover:bg-amber-100"
+                        : "text-text-muted hover:text-red-600 hover:bg-red-50"
+                    }
+                    onClick={handleReportClick}
+                  >
+                    {hasPendingReport ? "Đã báo cáo" : "Báo cáo"}
                   </Button>
                 </div>
               }
@@ -153,12 +199,22 @@ export default function PublicJobDetailPage({ params }: { params: Promise<{ id: 
               }
             />
             <SimilarJobsSection jobId={job.id} />
+
+            {job ? (
+              <ReportJobModal
+                open={isReportModalOpen}
+                onClose={() => setIsReportModalOpen(false)}
+                jobId={job.id}
+                jobTitle={job.title}
+                onSuccessToast={(msg) => pushToast("success", msg)}
+              />
+            ) : null}
           </>
         )}
       </main>
 
+      <ToastViewport toasts={toasts} onDismiss={dismissToast} />
       <SiteFooter />
     </div>
   );
 }
-

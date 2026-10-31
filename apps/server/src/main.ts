@@ -47,6 +47,7 @@ import type { EmailSender } from "./shared/ports/EmailSender";
 import { auditLogRouter } from "./modules/audit-log/audit-log.routes";
 import { dashboardRouter } from "./modules/dashboard/dashboard.routes";
 import { supportRouter } from "./modules/support/support.routes";
+import { jobReportsRouter } from "./modules/job-reports/job-reports.routes";
 import { startJobPostExpiringNoticeJob } from "./modules/job-posts/job-post-expiring-notice.job";
 import { startSubscriptionExpiringNoticeJob } from "./modules/subscriptions/subscription-expiring-notice.job";
 import type { EmployerRepository } from "./modules/employers/employer.repository";
@@ -119,6 +120,7 @@ app.use("/api", auditLogRouter(container));
 app.use("/api", dashboardRouter(container));
 // Trang hỗ trợ bản A (AD-17) — công khai; notificationsService resolve lúc có request.
 app.use("/api", supportRouter(container));
+app.use("/api", jobReportsRouter(container));
 
 app.use(errorHandler);
 
