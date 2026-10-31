@@ -48,6 +48,28 @@ export function useEmployerJobPosts(query: OptionalQuery<EmployerJobPostListQuer
   });
 }
 
+/** Trần số trang khi tải mọi tin cho ô lọc (20 tin mỗi trang). */
+const JOB_OPTIONS_MAX_PAGES = 20;
+
+/** Mọi tin của công ty (id + tên, mới nhất trước), tải lần lượt từng trang — cho ô lọc theo tin. */
+export function useEmployerJobPostOptions() {
+  return useQuery({
+    queryKey: ["employerJobPosts", "options"],
+    queryFn: async () => {
+      const options: { id: string; title: string }[] = [];
+      let cursor: string | undefined;
+      for (let page = 0; page < JOB_OPTIONS_MAX_PAGES; page++) {
+        const res = await apiFetch<PaginatedResponse<JobPost>>("employer", `/employer/job-posts${toQueryString({ cursor })}`);
+        options.push(...res.items.map((job) => ({ id: job.id, title: job.title })));
+        if (!res.hasMore || !res.nextCursor) break;
+        cursor = res.nextCursor;
+      }
+      return options;
+    },
+    staleTime: 5 * 60_000,
+  });
+}
+
 export function useEmployerJobPostStats() {
   return useQuery({
     queryKey: ["employerJobPostStats"],

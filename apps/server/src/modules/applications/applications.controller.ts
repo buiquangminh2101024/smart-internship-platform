@@ -1,5 +1,16 @@
 import type { NextFunction, Request, Response } from "express";
-import type { ApiResponse, CandidateApplicationSummary, EmployerApplicationDetail, PaginatedResponse, ApplicationStatus } from "@sip/shared-types";
+import type {
+  ApiResponse,
+  BulkUpdateApplicationStatusResult,
+  CandidateApplicationSummary,
+  EmployerApplicationDetail,
+  EmployerApplicationsPage,
+  EmployerApplicationView,
+  PaginatedResponse,
+  ApplicationStatus,
+} from "@sip/shared-types";
+import { toApplicationInterview } from "../interviews/interview.mapper";
+import type { ListCompanyApplicationsQuery } from "./applications.dto";
 import type { ApplicationsService } from "./applications.service";
 import { toCandidateApplicationSummary, toEmployerApplicationDetail } from "./application.mapper";
 
@@ -66,10 +77,36 @@ export class ApplicationsController {
     }
   };
 
+  listCompany = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const data = await this.applicationsService.listCompanyApplications(
+        req.user!.id,
+        req.query as unknown as ListCompanyApplicationsQuery,
+      );
+      const body: ApiResponse<EmployerApplicationsPage> = { success: true, data };
+      res.json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  bulkUpdateStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const data = await this.applicationsService.bulkUpdateStatus(req.user!.id, req.body);
+      const body: ApiResponse<BulkUpdateApplicationStatusResult> = { success: true, data };
+      res.json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
+
   getEmployerDetail = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const result = await this.applicationsService.getEmployerApplicationDetail(req.user!.id, req.params.id as string);
-      const body: ApiResponse<EmployerApplicationDetail> = { success: true, data: toEmployerApplicationDetail(result) };
+      const { app, interviews } = await this.applicationsService.getEmployerApplicationDetail(req.user!.id, req.params.id as string);
+      const body: ApiResponse<EmployerApplicationView> = {
+        success: true,
+        data: { ...toEmployerApplicationDetail(app), interviews: interviews.map(toApplicationInterview) },
+      };
       res.json(body);
     } catch (error) {
       next(error);

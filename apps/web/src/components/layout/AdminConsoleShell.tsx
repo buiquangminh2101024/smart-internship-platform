@@ -7,7 +7,8 @@ import { useAdminDashboardOverview } from "@/hooks/useAdminDashboard";
 import { useAdminJobReportStats } from "@/hooks/useAdminJobReports";
 import { useAdminAuthStore, useCurrentUser } from "@/stores/auth-store";
 import { Icon } from "@/components/ui/Icon";
-import { SideNav, type SideNavItem } from "./SideNav";
+import { MobileNavDrawer, useMobileNav } from "./MobileNavDrawer";
+import { SideNav, pendingBadgeTone, type SideNavItem } from "./SideNav";
 import { PortalTopbar, buildCrumbs } from "./PortalTopbar";
 import { SocketProvider } from "@/components/realtime/SocketProvider";
 
@@ -23,6 +24,8 @@ const NAV_ITEMS: SideNavItem[] = [
   { label: "Danh mục học vấn", icon: "graduation-cap", href: "/admin/education-catalog", matchNested: true },
   { label: "Người dùng", icon: "users", href: "/admin/users", matchNested: true },
   { label: "Báo cáo vi phạm", icon: "flag", href: "/admin/job-reports", matchNested: true },
+  { label: "Báo cáo", icon: "flag", soon: true },
+  { label: "Nhật ký hoạt động", icon: "scroll-text", href: "/admin/activity" },
   { label: "Cài đặt", icon: "settings", href: "/admin/settings" },
 ];
 
@@ -35,6 +38,7 @@ const CRUMB_LABELS: Record<string, string> = {
   users: "Người dùng",
   "job-reports": "Báo cáo vi phạm",
   notifications: "Thông báo",
+  activity: "Nhật ký hoạt động",
   settings: "Cài đặt",
 };
 
@@ -75,6 +79,8 @@ export function AdminConsoleShell({ children }: { children: ReactNode }) {
       : item;
   });
 
+  const mobileNav = useMobileNav();
+
   async function handleLogout() {
     const refreshToken = useAdminAuthStore.getState().refreshToken ?? undefined;
     try {
@@ -87,36 +93,57 @@ export function AdminConsoleShell({ children }: { children: ReactNode }) {
     }
   }
 
+  const header = (
+    <div className="flex items-center gap-2">
+      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500 text-white">
+        <Icon name="shield-check" size={16} />
+      </span>
+      <span className="grid">
+        <span className="text-sm font-semibold text-brand-700">Admin Panel</span>
+        <span className="text-xs text-text-muted">System Control</span>
+      </span>
+    </div>
+  );
+
   return (
     <SocketProvider area="admin">
       <div data-role="admin" className="flex min-h-screen flex-col bg-surface-page">
-        <PortalTopbar
-          area="admin"
+        {/* Ngăn kéo mở ⇒ topbar và nội dung phía sau `inert` (mobile-shell PLAN). */}
+        <div inert={mobileNav.open} className="flex flex-1 flex-col">
+          <PortalTopbar
+            area="admin"
+            roleLabel="Quản trị"
+            homeHref="/admin/dashboard"
+            crumbs={buildCrumbs(pathname, { label: "Admin Panel", href: "/admin" }, CRUMB_LABELS)}
+            userEmail={user?.email}
+            onLogout={handleLogout}
+            menu={{
+              open: mobileNav.open,
+              onOpen: mobileNav.show,
+              controlsId: mobileNav.drawerId,
+              pendingTone: pendingBadgeTone(navItems),
+            }}
+            menuButtonRef={mobileNav.buttonRef}
+          />
+
+          <div className="flex flex-1 items-stretch">
+            <SideNav items={navItems} header={header} />
+
+            <main className="min-w-0 flex-1">{children}</main>
+          </div>
+        </div>
+
+        <MobileNavDrawer
+          id={mobileNav.drawerId}
+          open={mobileNav.open}
+          onClose={mobileNav.close}
+          items={navItems}
+          header={header}
           roleLabel="Quản trị"
           homeHref="/admin/dashboard"
-          crumbs={buildCrumbs(pathname, { label: "Admin Panel", href: "/admin" }, CRUMB_LABELS)}
           userEmail={user?.email}
           onLogout={handleLogout}
         />
-
-        <div className="flex flex-1 items-stretch">
-          <SideNav
-            items={navItems}
-            header={
-              <div className="flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500 text-white">
-                  <Icon name="shield-check" size={16} />
-                </span>
-                <span className="grid">
-                  <span className="text-sm font-semibold text-brand-700">Admin Panel</span>
-                  <span className="text-xs text-text-muted">System Control</span>
-                </span>
-              </div>
-            }
-          />
-
-          <main className="min-w-0 flex-1">{children}</main>
-        </div>
       </div>
     </SocketProvider>
   );

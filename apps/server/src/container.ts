@@ -21,6 +21,7 @@ import { GeminiCatalogMatchVerifier } from "./infrastructure/gemini-catalog-matc
 import { UserRepository } from "./modules/users/user.repository";
 import { CompanyRepository } from "./modules/companies/company.repository";
 import { EmployerRepository } from "./modules/employers/employer.repository";
+import { EmployerIdentityCache } from "./modules/employers/employer-identity-cache";
 import { SessionRevocationService } from "./modules/auth/session-revocation.service";
 import { CatalogRateLimitService } from "./modules/shared/catalog-rate-limit.service";
 import { CatalogSuggestionNotifier } from "./modules/shared/catalog-suggestion-notifier.service";
@@ -72,6 +73,9 @@ export interface Cradle {
   // isCompanyAdmin lúc checkout, xem employer.repository.ts) — cùng lý do
   // CompanyRepository đã được đăng ký tập trung ở đây từ Phase 4.
   employerRepository: EmployerRepository;
+  // AD-19: userId → {employerId, companyId} trong bộ nhớ cho requireEmployer của
+  // các service phía Employer. Bắt buộc singleton (scoped thì mỗi request một Map rỗng).
+  employerIdentityCache: EmployerIdentityCache;
   vnpayGatewayAdapter: PaymentGatewayAdapter;
   momoGatewayAdapter: PaymentGatewayAdapter;
   paymentGatewayAdapters: Record<PaymentProvider, PaymentGatewayAdapter>;
@@ -111,6 +115,7 @@ export function buildContainer(): AwilixContainer<Cradle> {
     userRepository: asClass(UserRepository).singleton(),
     companyRepository: asClass(CompanyRepository).singleton(),
     employerRepository: asClass(EmployerRepository).singleton(),
+    employerIdentityCache: asClass(EmployerIdentityCache).singleton(),
     vnpayGatewayAdapter: asClass(VnpayGatewayAdapter).singleton(),
     momoGatewayAdapter: asClass(MomoGatewayAdapter).singleton(),
     paymentGatewayAdapters: asFunction(

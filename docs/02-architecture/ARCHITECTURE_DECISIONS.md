@@ -360,7 +360,7 @@ Bắt buộc thêm khi gửi duyệt (áp dụng cho cả nhánh publish thẳng
 **Quyết định:**
 
 1. **Module `dashboard` chỉ đọc.** `apps/server/src/modules/dashboard/` gồm repository (SQL tổng hợp, `$queryRaw` cho nhóm theo ngày giờ Việt Nam), `employer-dashboard.service.ts`, `admin-dashboard.service.ts`, controller, routes, DTO. Module **không sở hữu tài nguyên nào và không ghi dữ liệu**; khi cần logic có sẵn thì gọi service của module chủ (`JobPostsService.ownStats/moderationStats`, `CandidateOutreachService.getDailyQuotaStatus`, `SubscriptionsService.getCompanySubscriptionAccess`, `MessagingService.getUnreadSummary`). Nhờ vậy không vi phạm quy tắc "không có module `admin` riêng" (`PROJECT_STRUCTURE.md` §5): đây là lớp truy vấn tổng hợp theo actor, không phải nơi đặt quyền Admin. Thao tác tại chỗ trên dashboard (đổi trạng thái hồ sơ, duyệt tin, xác minh công ty, duyệt danh mục) **gọi lại API hiện có** của module chủ, không có API thao tác riêng trong `dashboard`.
-2. **Module `audit-log`** (`AuditLogService.record(entry, tx?)` + repository đọc theo trang) là dịch vụ dùng chéo, đăng ký ở `*.routes.ts` giống `notificationsService`. Bảng `audit_logs` lưu `summary` là câu tiếng Việt **đã render lúc ghi** (snapshot, giống `Notification`), `action` là hằng số trong `audit-log.actions.ts`. Không thay thế `job_post_moderation_actions` (giữ nguyên). `GET /admin/activity` do `audit-log` hoặc `dashboard` phục vụ, chỉ đọc.
+2. **Module `audit-log`** (`AuditLogService.record(entry, tx?)` + repository đọc theo trang) là dịch vụ dùng chéo, đăng ký ở `*.routes.ts` giống `notificationsService`. Bảng `audit_logs` lưu `summary` là câu tiếng Việt **đã render lúc ghi** (snapshot, giống `Notification`), `action` là hằng số trong `audit-log.actions.ts`. Không thay thế `job_post_moderation_actions` (giữ nguyên). `GET /admin/activity` do `audit-log` hoặc `dashboard` phục vụ, chỉ đọc. *(Cập nhật 2026-10-18: trang Nhật ký hoạt động, nhóm Bảo mật, chuyển dòng cũ sang bảng lưu trữ thay cho xoá và số liệu biểu đồ gộp theo giờ: xem AD-20.)*
 3. **`ApplicationStatusHistory`, `JobPostDailyStat`, `AuditLog` ghi từ giờ trở đi** (D4). Hồ sơ hiện có được backfill đúng một dòng lịch sử ban đầu (`fromStatus = NULL`, `toStatus` = trạng thái hiện tại, `createdAt` = `applications.createdAt`, `actorId = NULL`) trong cùng file migration; `AuditLog` và `JobPostDailyStat` không backfill.
 4. **`Notification.dedupeKey String? @unique`** để tác vụ quét định kỳ (tin/gói sắp hết hạn, nhắc lịch phỏng vấn) mỗi đối tượng chỉ báo một lần dù cron chạy lặp; gặp vi phạm unique thì bỏ qua. Định dạng (mỗi người nhận là một dòng nên khoá luôn kèm `userId`): `JOB_POST_EXPIRING:{jobPostId}:{userId}`, `SUBSCRIPTION_EXPIRING:{subscriptionId}:{userId}`, `INTERVIEW_REMINDER:{interviewId}:{userId}:{scheduledAt epoch ms}` (kèm giờ hẹn để lịch bị dời sau khi đã nhắc vẫn được nhắc lại). Cron chạy 08:00 hằng ngày múi giờ `Asia/Ho_Chi_Minh`.
 5. **Hai luồng thông báo (D3).** *Thông báo* (đã xảy ra) lưu ở `notifications`, phân nhóm bằng ánh xạ `type → nhóm` trong code (`notification-groups.ts`), không thêm cột nhóm. *Việc cần làm* (đang chờ xử lý) tính trực tiếp từ trạng thái hiện tại, không lưu, để không lệch dữ liệu gốc. Email (qua outbox có sẵn) chỉ cho lịch phỏng vấn và gói sắp hết hạn.
@@ -435,6 +435,155 @@ Bắt buộc thêm khi gửi duyệt (áp dụng cho cả nhánh publish thẳng
 **Tương thích về sau:** khi chuyển refresh token sang cookie httpOnly, cơ chế giữ nguyên (chỉ đổi chỗ đọc token trong `refresh()` và xoá cookie khi trả `SESSION_REVOKED`). Nếu thêm quản lý phiên thì thay phần trong `SessionRevocationService`, giữ khoá Redis để chặn access token còn sống.
 
 **Ảnh hưởng:** `schema.prisma` + 1 migration (cột + 2 giá trị `NotificationType` của cùng đợt), `shared/config` (`duration.ts`, `env.ts`), `shared/ports/SessionRevocationStore.ts`, `infrastructure/redis-session-revocation-store.ts`, `container.ts`, `shared/middleware/authenticate.ts`, `infrastructure/socket/index.ts`, `modules/auth` (`refresh`, `resetPassword`, service mới), `modules/users`, `user.repository.ts`.
+
+## AD-19 — Cache `userId → {employerId, companyId}` trong bộ nhớ server (ngoại lệ của "cache dùng Redis")
+
+**Ngày:** 2026-10-17 · **Phase liên quan:** không thuộc phase đánh số, là việc tăng tốc sau trang Ứng viên. Kế hoạch: `docs/06-backend/employer-identity-cache/PLAN.md`.
+
+> **Trạng thái: ĐÃ DUYỆT (2026-10-17), ĐÃ TRIỂN KHAI (2026-10-17), đã kiểm trên trình duyệt.** Chủ dự án chốt trần 10.000 mục, thêm `dashboard` và `candidate-outreach` vào phạm vi. Chi tiết và số đo sau khi làm: `docs/06-backend/employer-identity-cache/PLAN.md`.
+
+**Bối cảnh:** gần như mọi API của Employer bắt đầu bằng việc tra `Employer` theo `userId` để lấy `companyId` hoặc `employerId`. Mỗi lần tra là 1 lượt đi về Neon. Riêng `findByUserId` có `include: company` nên Prisma chạy 2 câu, tức 2 lượt. Đo ngày 2026-10-17 trên Neon thật (máy dev, Neon và Redis ở Singapore, trung vị 25 lần, chỉ đọc):
+
+| Chức năng | Không cache | Cache thử | Giảm |
+|---|---|---|---|
+| Số tin nhắn chưa đọc (chuông, hỏi lại mỗi khi có tin mới hoặc 30 giây/lần khi mất socket) | 156–173 ms | 52–57 ms | ~110 ms |
+| Mở hội thoại, tải tin nhắn (cũng là đường kiểm quyền của mỗi tin gửi qua socket) | 517–575 ms | 414–459 ms | ~110 ms |
+| Trang Ứng viên, trang 1 | 116 ms | 58 ms | ~58 ms |
+
+Kết quả có cache trùng hoàn toàn với không cache ở cả 3 trường hợp.
+
+**Quyết định:**
+
+1. **Chỉ cache danh tính, không cache dữ liệu đổi được.** Giá trị là `{ userId, employerId, companyId }`. Không cache `isCompanyAdmin`, `title`, `phone` và mọi trường của `Company` (`verificationStatus`, `verifiedAt`, `name`…). Chỗ nào cần các trường đó vẫn đọc DB như hiện nay.
+2. **Lý do an toàn:** đọc code ngày 2026-10-17 thấy `Employer` chỉ được **tạo** (`employers.service.ts`: tạo công ty, vào công ty bằng mã mời) và sửa `title`/`phone` (`updateProfile`). Không có code đổi `companyId`, không có code xoá `Employer` hay xoá cứng `User`. Vì vậy, một khi đã tra được thì `employerId` và `companyId` không đổi.
+3. **Lưu trong bộ nhớ process, không qua Redis.** Map có TTL 10 phút (lưới an toàn) và trần 10.000 mục (~4,2 MB, đo 2026-10-17). Vượt trần thì dọn mục đã hết hạn trước, vẫn vượt mới bỏ mục cũ nhất còn hạn, kèm `logger.warn` tối đa 1 lần/phút. Vượt trần không gây lỗi hay sai dữ liệu, người bị bỏ chỉ tra DB lại như hiện nay. Không cache kết quả "không tìm thấy", vì Employer đang làm thủ tục sẽ có bản ghi ngay sau đó (AD-5). Không cache lỗi. Nhiều request cùng lúc thiếu cache thì chỉ chạy một câu DB (gộp promise).
+4. **Xoá cache chủ động:** có hàm `invalidate(userId)` và cơ chế thế hệ theo `userId` (cài bằng chính promise đang tra: `invalidate` xoá nó, lần tra cũ thấy mình không còn là promise hiện hành thì không lưu), để một lần đọc DB bắt đầu trước khi xoá không ghi đè giá trị cũ vào cache. **Hiện chưa có chỗ nào cần gọi** (mục 2). Quy tắc cho sau này: code nào đổi `Employer.companyId`, xoá `Employer`, hay xoá cứng `User` của Employer thì phải gọi `invalidate` **sau khi transaction commit**. Nếu quyền truy cập bị mất (rời công ty, bị gỡ khỏi công ty) thì gọi thêm thu hồi phiên AD-18. Không đưa việc xoá cache vào outbox, vì outbox chạy theo cron và chậm từ 1 đến 30 phút.
+5. **Phạm vi:** các service chỉ cần id: `messaging`, `applications` (phía employer), `interviews`, `job-posts`, `job-post-requirements`, `job-matching`. Thêm `dashboard`: id lấy từ cache, còn chỗ cần trường company thì **đọc company theo `companyId` từ DB** (vẫn mới nhất). `candidate-outreach` làm cùng kiểu với `dashboard`. Không đổi `subscriptions` (cần `isCompanyAdmin` mới nhất cho quyền mua gói) và `employers`.
+6. **Không đổi bảo mật:** khoá tài khoản (AD-17) và thu hồi phiên (AD-18) vẫn được `authenticate` kiểm ở mỗi request, không phụ thuộc cache này.
+
+**Phương án không chọn:**
+
+- *Cache trong Redis:* mỗi lần đọc vẫn mất 1 lượt Redis (đo được ~33 ms từ máy dev), và phải tự lo hạn sống và đồng bộ. Lợi duy nhất là dùng chung được cho nhiều instance, mà dự án đang chạy một instance (`INITIAL_ARCHITECTURE_PLAN.md` §5).
+- *Đưa `companyId` vào JWT:* không tốn lượt nào. Nhưng token cũ giữ `companyId` tới hết hạn, và phải sửa đăng nhập, làm mới token, các test token. Đổi công ty thì phải thu hồi phiên mới có hiệu lực.
+- *Chỉ bỏ `include: company` trong `findByUserId`:* bớt được 1 trong 2 lượt cho các module dùng hàm này, nhưng vẫn còn 1 lượt mỗi request. Phần này vẫn được làm như một phần của plan: lúc thiếu cache thì chỉ `select` id.
+
+**Hạn chế:** chạy nhiều instance thì `invalidate` chỉ xoá được cache của instance đang chạy. Khi đó phải thêm kênh xoá qua Redis pub/sub (Redis sẵn có), TTL vẫn là lưới an toàn. Hiện chưa có chỗ nào gọi `invalidate` nên hạn chế này chưa ảnh hưởng gì. Lợi về tốc độ phụ thuộc vào khoảng cách tới Neon: server đặt cùng vùng với DB thì mỗi lượt chỉ còn vài ms.
+
+**Ảnh hưởng:** `modules/employers` (lớp cache mới, 1 method `select` id ở `employer.repository.ts`), `container.ts` (đăng ký singleton), 8 service ở mục 5 (kèm 1 method `select` company ở `candidate-outreach.repository.ts`), test unit của các service đó và test mới cho cache. Không đổi schema, API hay frontend. Không thêm dependency.
+
+## AD-20 — Nhật ký kiểm toán: không bao giờ xoá, chuyển dòng cũ sang bảng lưu trữ, số liệu biểu đồ gộp theo giờ
+
+**Ngày:** 2026-10-18 · **Phase liên quan:** không thuộc phase đánh số, nối tiếp module `audit-log` của AD-16. Kế hoạch: `docs/06-backend/admin-audit-log/PLAN.md` (L16–L25), `docs/05-frontend/phases/admin-audit-log/PLAN.md`.
+
+> **Trạng thái: ĐÃ DUYỆT (2026-10-18), ĐANG TRIỂN KHAI.** Chủ dự án duyệt plan lần sửa 3 cùng Q1–Q9.
+
+**Bối cảnh:** trang nhật ký hoạt động của Admin cần lọc theo nhóm, ngày, người làm và vẽ biểu đồ theo ngày, nhóm, vai trò, lưới thứ × giờ. Bảng `audit_logs` chỉ thêm dòng, không bao giờ nhỏ đi. Nếu mỗi lần mở trang đều đếm lại toàn bảng thì trang chậm dần theo thời gian. Server dev không chạy liên tục, nên cron có thể lỡ nhiều lần chạy.
+
+**Quyết định:**
+
+1. **Nhật ký kiểm toán không bao giờ bị xoá.** Không có API sửa hay xoá dòng nhật ký. Retention chỉ **chuyển** dòng sang bảng `audit_logs_archive` (cùng cột, thêm `archivedAt`). Bảng lưu trữ giữ mãi. Muốn dọn bảng lưu trữ thì phải có AD riêng.
+2. **Chuyển dòng cũ bằng một câu lệnh** `WITH moved AS (DELETE … RETURNING *) INSERT INTO audit_logs_archive …`, mỗi lô 1.000 dòng cũ nhất. Xoá và chép cùng thành công hoặc cùng thất bại, không mất dòng.
+3. **Thời hạn giữ trong bảng chính:** env `AUDIT_RETENTION_DAYS`, mặc định 365, nhỏ nhất 30 (sai thì server không khởi động). Cron 03:00 giờ Việt Nam, mỗi lần tối đa 50 lô. Script tay dùng chung hàm, có `--dry-run`; chỉ cho `--days` nhỏ hơn 30 trên branch Neon đo hiệu năng. Mốc chuyển cắt tròn theo giờ, và không bao giờ vượt quá giờ mới nhất đã gộp số lùi 2 giờ (bảng thống kê rỗng thì không chuyển gì), để không giờ nào bị chuyển đi trước khi được gộp số.
+4. **Đọc bảng lưu trữ tách riêng** (`?archived=true`), không trộn hai bảng trong một danh sách. Riêng chỗ cần dòng cũ cho nghiệp vụ (lý do khoá tài khoản, AD-17) thì tìm thêm trong bảng lưu trữ khi bảng chính không có.
+5. **Bảng `audit_log_hourly_stats`** gộp số dòng theo giờ (UTC) × nhóm hành động × loại người làm × người làm. Không có unique key; mỗi giờ được tính lại bằng "xoá rồi ghi lại" trong một transaction, nên tính lại bao nhiêu lần cũng ra cùng kết quả. Bảng này không bị dọn theo retention.
+6. **Cron gộp số tự bù:** chạy một lần khi server khởi động, rồi phút 5 mỗi giờ. Mỗi lần tính lại giờ mới nhất đã có **lùi thêm 2 giờ**. Phần mới thì tính từ giờ của dòng nhật ký đầu tiên sau đó, tối đa 24 × 31 giờ mỗi lần, thiếu thì lần sau làm tiếp; nhảy qua quãng không có dòng nào nên luôn tiến lên, kể cả khi server tắt lâu. Bảng rỗng thì bắt đầu từ dòng cũ nhất. Không bao giờ tính giờ đang chạy dở, và không tính lại giờ đã chuyển sang lưu trữ: cron chỉ lùi 2 giờ, nên mốc chuyển lưu trữ (tối thiểu 30 ngày) cắt tròn theo giờ.
+7. **`/stats` cộng hai nguồn:** các giờ đã gộp đọc bảng thống kê, phần từ giờ gộp gần nhất tới hiện tại đếm trực tiếp trên `audit_logs`. Lúc ghi nhật ký không tốn thêm gì. Bảng thống kê chỉ gộp theo nhóm, nên khi lọc theo `action` (hoặc cờ gửi lại) thì đếm trực tiếp cả khoảng, nhờ index `(action, createdAt)`. Phần đếm trực tiếp đọc thêm `audit_logs_archive` khi khoảng của nó lấn qua dòng lưu trữ mới nhất (hai bảng không trùng dòng nên cộng thẳng).
+8. **Thêm 2 index B-tree** trên `audit_logs`: `(actorId, createdAt)` và `(action, createdAt)`. Không dùng partial index (Prisma 6 không khai báo được) và không đổi index `createdAt` sang BRIN (truy vấn "50 dòng mới nhất" cần thứ tự).
+
+**Phương án không chọn:**
+
+- *Xoá dòng cũ theo thời hạn:* đơn giản nhất, nhưng mất dấu vết kiểm toán, và làm hỏng chỗ đọc "lý do khoá" của AD-17.
+- *Đếm trực tiếp trên `audit_logs` mỗi lần mở trang:* đúng tới từng giây nhưng chậm dần khi bảng lớn.
+- *Materialized view:* phải `REFRESH` toàn bộ, và Prisma không quản lý được view trong migration.
+- *Chia bảng theo tháng, read replica, kho log riêng:* chỉ cần khi bảng lên hàng chục triệu dòng; ghi ở mục "Hướng mở rộng" của plan, mỗi bước cần AD riêng.
+
+**Ảnh hưởng:** `schema.prisma` + 1 migration (2 index, 2 bảng mới), `modules/audit-log` (2 cron, hàm chuyển lưu trữ, `buildActivityWhere`, API `/stats`, `/export`, `/:id`), `main.ts` (khởi động cron), `shared/config/env.ts` (`AUDIT_RETENTION_DAYS`), script `audit-archive.ts`, `docs/03-database/DATABASE_DESIGN.md`. Cùng đợt nhưng không đổi kiến trúc: 4 hành động bảo mật ghi ở `auth.service` (đếm đăng nhập sai bằng `RateLimiter` sẵn có), `metadata.resubmit` cho `JOB_POST_SUBMITTED`. Không thêm dependency.
+
+## AD-21 — Chatbot hỗ trợ (F1): lịch sử ở client, FAQ trong bộ nhớ, pipeline nhiều bậc trước khi gọi LLM
+
+**Ngày:** 2026-10-19 · **Phase liên quan:** không thuộc phase đánh số, là tính năng AI F1. Kế hoạch: `docs/06-backend/support-chatbot/PLAN.md`, `docs/05-frontend/phases/support-chatbot/PLAN.md`.
+
+> **Trạng thái: ĐÃ DUYỆT (2026-10-19), ĐÃ TRIỂN KHAI ĐỦ ĐỢT A–F (2026-10-20); đợt F chờ chủ dự án kiểm.** Chủ dự án duyệt cùng plan backend/frontend (D1–D13, quyết định frontend 1–11, tầng OpenRouter).
+
+**Bối cảnh:** cần trợ lý trả lời câu hỏi về nền tảng cho cả khách và người đã đăng nhập. Hệ thống sắp được test tải, trong khi quota Gemini miễn phí có hạn, Redis chỉ có 30 MB (đang giữ khoá auth, OTP, rate-limit) và Neon có 500 MB.
+
+**Quyết định:**
+
+1. **Server không lưu hội thoại.** Lịch sử nằm ở `sessionStorage` của trình duyệt, mỗi request gửi kèm tối đa 10 tin gần nhất. Server coi lịch sử là input không tin cậy: chỉ nhận text, `role ∈ {user, model}`, mỗi tin ≤ 1.000 ký tự; không bao giờ nhận system prompt hay kết quả tool từ client.
+2. **FAQ là file markdown trong repo** (`apps/server/content/support-faq/`). Index embedding (model local của AD-9/AD-13) được tính sẵn bằng script, commit kèm, và giữ trong bộ nhớ process. Không dùng pgvector, không truy vấn DB nào cho chatbot.
+3. **Câu hỏi đi qua bậc 0–3 trước khi tới LLM:** kiểm tra và rate-limit, câu xã giao, so khớp FAQ bằng embedding local (đủ chắc thì trả thẳng đáp án, quá xa thì từ chối là ngoài phạm vi), cache câu trả lời trong bộ nhớ (LRU, cùng lập luận AD-19). Mỗi câu trả lời gắn nhãn nguồn (`faq`, `smalltalk`, `out_of_scope`, `cache`, `llm`, `unavailable`). Ngưỡng so khớp chốt bằng bộ eval, ưu tiên độ chính xác khi trả thẳng.
+4. **Streaming SSE trên `POST`.** Chuỗi tầng LLM: Gemini (`GEMINI_MODEL`, gemini-3.6-flash) → Gemini flash-lite (`GEMINI_FALLBACK_MODEL`) → OpenRouter. Thứ tự hai tầng Gemini đổi trước đợt E (2026-10-20): flash-lite chậm 8–17 s tới mẩu chữ đầu, vòng gọi tool còn cộng dồn độ trễ. Chỉ chuyển tầng khi chưa gửi mẩu chữ nào. OpenRouter chỉ trả lời dựa trên FAQ, không nhận dữ liệu cá nhân. Mọi tầng lỗi thì trả câu mẫu kèm link `/support`; bậc 0–3 vẫn chạy khi không có LLM.
+5. **GĐ2 — tool chỉ đọc**, phạm vi lấy từ `userId` của JWT, không nhận id người dùng hay đối tượng từ LLM. Tool chỉ chạy qua 2 tầng Gemini. Người đã đăng nhập luôn được kèm tool ở bậc 4; câu hỏi về dữ liệu của chính họ (nhận ra bằng luật trên bản bỏ dấu) bỏ qua trả thẳng FAQ, chặn ngoài phạm vi và cache, và không rơi xuống OpenRouter. Mỗi vai trò 3 tool: Candidate (đơn ứng tuyển, lịch phỏng vấn, độ hoàn thiện hồ sơ — đợt E) và Employer (tin tuyển dụng, tóm tắt hồ sơ trên tin đang hiển thị, gói dịch vụ — đợt F). Khách và Admin không có tool.
+6. **Có adapter LLM giả** (`SUPPORT_CHAT_LLM_PROVIDER=fake`) cho test tải. Server từ chối khởi động nếu bật nó ở production.
+
+**Lý do:** không thêm tải ghi vào Neon, không có nguy cơ làm đầy Redis đang giữ khoá auth; phần lớn câu hỏi không tốn token; server không giữ trạng thái hội thoại nên chịu tải tốt; quyền truy cập dữ liệu không phụ thuộc vào việc LLM "nghe lời".
+
+**Phương án không chọn:**
+
+- *Lưu lịch sử trong Redis:* mỗi hội thoại vài KB, dưới tải dễ chạm 30 MB; lúc đó hoặc Redis xoá bớt key (có thể mất khoá auth), hoặc từ chối ghi (lỗi toàn hệ thống).
+- *Lưu lịch sử trong Neon:* thêm tải ghi mỗi tin nhắn, bảng phình theo thời gian, phải có cơ chế dọn.
+- *FAQ trong bảng pgvector:* cần migration và truy vấn DB cho mỗi câu hỏi, trong khi kho chỉ ~40 mục (~200 vector) so sánh trong bộ nhớ mất dưới 1 ms.
+- *Xoay vòng nhiều key/tài khoản Gemini:* vi phạm điều khoản dịch vụ. Dùng tầng OpenRouter và pipeline bậc 0–3 thay thế.
+
+**Đánh đổi:** đóng tab là mất lịch sử; sửa FAQ phải qua commit và chạy lại script index; cache và index nằm theo từng process (chạy nhiều instance thì mỗi instance một bản, chấp nhận được với quy mô đồ án). Không có 👍/👎 vì không có chỗ ghi.
+
+**Ảnh hưởng:** module mới `modules/support-chat`, port `SupportChatResponder` + 4 adapter + prompt ở `infrastructure/`, middleware mới `optional-authenticate.ts` (bọc `authenticate`, không sửa file cũ), 2 script (`support-chat:index`, `support-chat:eval`). Sửa thêm (chỉ thêm, không đổi hành vi cũ): `packages/shared-types`, `shared/config/env.ts` (5 biến `SUPPORT_CHAT_*`), `main.ts`, `apps/server/package.json`, `infra/nginx/nginx.conf` (block `/api/support/chat` tắt buffering). GĐ2 dùng lại hàm đọc sẵn có của các module; chỉ thêm một hàm đọc mới cho tool Employer `getApplicationsSummary` (đợt F): `ApplicationsRepository.countByStatusOnOpenJobs` + `ApplicationsService.summarizeOpenJobApplications`, viết riêng để không đụng truy vấn của trang "Ứng viên". Frontend: thư mục `components/support-chat/` và gắn một dòng vào `app/provider.tsx`. Không đổi schema, không thêm dependency.
+
+---
+
+## AD-22 — Đồng bộ phiên đăng nhập giữa các tab cùng trình duyệt (bổ sung AD-4)
+
+**Ngày:** 2026-10-20 · **Phase liên quan:** sửa lỗi của 05-frontend Phase 2 (AD-4), phát hiện khi kiểm chatbot đợt D.
+
+> **Trạng thái: ĐÃ DUYỆT (2026-10-20), ĐÃ TRIỂN KHAI, CHỜ KIỂM LẠI TRÊN TRÌNH DUYỆT.** Chủ dự án duyệt hướng sửa 3 mục sau khi tự tái hiện được lỗi (Test 1, Test 2 bên dưới).
+
+**Triệu chứng:** mở Candidate và Employer ở 2 tab cùng một Chrome. Sau một lúc (để máy tắt màn hình rồi quay lại), một tab vẫn hiện "đã đăng nhập" nhưng bấm menu quản lý hoặc sidebar thì không vào được, hoặc bị đưa về trang chủ của khu vực (`/` hoặc `/employer`). Chỉ nút Đăng xuất còn chạy. Đăng nhập lại thì hết. Tải lại tab kia thì thấy nó cũng đã bị đăng xuất. Console của tab bị kẹt cho `sip_session_<khu vực>` không còn và `localStorage["sip-auth-<khu vực>"]` rỗng, trong khi giao diện vẫn hiện tên người dùng.
+
+**Nguyên nhân (code cũ của AD-4, không phải code chatbot):**
+
+1. localStorage (`sip-auth-*`) và cookie (`sip_session_*`) dùng chung cho **mọi tab** cùng trình duyệt. Còn store zustand trong bộ nhớ thì **mỗi tab một bản**, chụp từ localStorage lúc tab tải trang. Trước AD-22, các tab không báo cho nhau khi phiên đổi.
+2. Mỗi tab chạy `SessionSync` cho **cả 3 khu vực** (`app/provider.tsx`), kể cả khu vực tab đó không hiển thị. TanStack Query gọi lại `/users/me` mỗi khi tab được focus.
+3. Tab A đăng xuất rồi đăng nhập lại ⇒ phiên cũ bị server thu hồi. Tab B vẫn giữ bản sao phiên cũ trong bộ nhớ.
+4. Tab B được focus lại (vd. bật màn hình lên) ⇒ gọi `/users/me` bằng token cũ ⇒ 401 ⇒ refresh bằng refresh token cũ ⇒ thất bại ⇒ `endSession` gọi `clear()` ⇒ xoá **cookie và localStorage dùng chung** ⇒ phiên **mới** của tab A cũng mất.
+5. Tab A thành tab "nửa sống": bộ nhớ vẫn có token hợp lệ (gọi API vẫn được, nút Đăng xuất chạy), nhưng `proxy.ts` chỉ nhìn cookie nên chặn mọi trang cần đăng nhập và đưa về trang chủ khu vực ⇒ trông như bấm không phản ứng. Tải lại trang thì đọc localStorage rỗng ⇒ thấy đã bị đăng xuất.
+
+Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.ts`, đợt D) cũng gọi `clear()` nên cũng có thể tạo tab "nửa sống" theo cùng cơ chế; sửa ở dưới đã che luôn đường này.
+
+**Quyết định:**
+
+1. **Các tab đồng bộ phiên qua sự kiện `storage`** (`stores/auth-store.ts`, `syncFromOtherTab`). Tab nào ghi `sip-auth-<khu vực>` (đăng nhập, đăng xuất, refresh access token) thì các tab khác nạp lại bản đó vào bộ nhớ ngay. Nếu phiên kết thúc hoặc đổi sang tài khoản khác mà tab đang ở đúng khu vực đó thì tab về trang chủ khu vực (tải lại trang, giống `endSession`), để không còn hiện dữ liệu của phiên cũ. Tab ở khu vực khác chỉ cập nhật âm thầm.
+2. **Refresh luôn dùng refresh token mới nhất trong localStorage** (`latestRefreshToken` + `refreshAccessToken` trong `lib/api-client.ts`), không dùng bản tab đang giữ. Nếu trong lúc chờ server mà tab khác đổi phiên thì bỏ kết quả, refresh lại bằng phiên mới (tối đa 2 lần). Vì vậy refresh chỉ trả `null` (và `endSession` chỉ xoá phiên) khi **phiên mới nhất** thật sự hết hạn. Mọi chỗ gọi `refreshAccessTokenShared` (apiFetch/apiDownload/apiUpload, socket, chatbot) đều được hưởng.
+3. **Tự chữa cookie** (`components/auth/SessionSync.tsx`): `/users/me` thành công ⇒ ghi lại `sip_session_<khu vực>`. Đồng thời bỏ qua kết quả `/users/me` nếu nó thuộc tài khoản khác với tài khoản đang lưu (phiên đã đổi trong lúc request chưa về), để không ghi user cũ đè lên phiên mới.
+
+**Hành vi sau khi sửa — cần nhớ khi đọc lại:**
+
+- **Hai tab khác khu vực** (Candidate và Employer): hoàn toàn độc lập như AD-4. Đăng xuất Candidate không ảnh hưởng Employer.
+- **Hai tab cùng khu vực** (hai tab Candidate): **dùng chung một phiên**, như Gmail/Facebook. Đăng xuất ở tab này thì tab kia cũng thành chưa đăng nhập; đăng nhập tài khoản khác ở tab này thì tab kia chuyển theo. Đây là giới hạn của trình duyệt (localStorage/cookie dùng chung theo trang web), không phải lỗi.
+- **Muốn dùng 2 tài khoản cùng vai trò cùng lúc** (vd. test ứng viên A và B): dùng một cửa sổ thường + một cửa sổ ẩn danh, hoặc 2 Chrome profile, hoặc 2 trình duyệt khác nhau.
+
+**Phương án không chọn:**
+
+- *Mỗi tab một phiên riêng (`sessionStorage`):* mở link sang tab mới hay mở tab mới là phải đăng nhập lại; cookie cho `proxy.ts` vẫn dùng chung nên phải thiết kế lại cách chặn route; đổi chiến lược lưu token của AD-2/AD-4 mà người dùng thật không cần.
+- *`BroadcastChannel`:* sự kiện `storage` đã đủ (mọi thay đổi phiên đều đi qua localStorage) và không cần thêm kênh riêng.
+- *Sửa phía server:* server làm đúng (token cũ bị thu hồi thì phải từ chối); lỗi nằm ở việc client xoá nhầm phiên dùng chung.
+
+**Cách kiểm (chạy ở cửa sổ ẩn danh, mỗi lần kiểm dán vào Console của từng tab):**
+
+```js
+["candidate","employer"].map(a => ({ area: a,
+  cookie: document.cookie.includes(`sip_session_${a}=1`),
+  storedUserId: JSON.parse(localStorage.getItem(`sip-auth-${a}`) || "null")?.state?.user?.id ?? null }))
+```
+
+| Test | Các bước | Trước AD-22 | Kỳ vọng sau AD-22 |
+|---|---|---|---|
+| 1 | Tab 1 đăng nhập Candidate → tab 2 đăng nhập Employer → tab 1 đăng xuất rồi đăng nhập lại Candidate → bấm sang tab 2 rồi quay về tab 1 → bấm menu tài khoản | Kẹt; tab 1 `cookie: false`, `storedUserId: null` cho candidate | Vào được trang quản lý; cả 2 khu vực `cookie: true`, đúng user id |
+| 2 | Như Test 1, đổi vai (Employer đăng xuất/đăng nhập lại) → bấm sidebar | Bị đưa về `/employer` | Vào được trang trong portal |
+| 3 | Đăng nhập 2 tab, không đăng xuất lần nào, để yên ~20 phút | (đối chứng) không kẹt | Không kẹt; access token 15 phút tự refresh |
+| 4 | Hai tab **cùng là Candidate**; đăng xuất ở tab 1 | Tab 2 vẫn hiện đã đăng nhập | Tab 2 tự về `/`, hiện chưa đăng nhập |
+| 5 | Tab 1 Candidate, tab 2 Employer; đăng xuất Candidate ở tab 1, rồi F5 tab 2 | — | Tab 2 vẫn đăng nhập Employer |
+
+**Ảnh hưởng:** chỉ frontend: `stores/auth-store.ts` (listener `storage`, `syncFromOtherTab`, `latestRefreshToken`; kiểu `AuthStore` thêm API `persist`), `lib/api-client.ts` (`refreshAccessToken`), `components/auth/SessionSync.tsx`. Server, `proxy.ts`, cách lưu token (AD-2/AD-4) không đổi. Không thêm dependency. Việc còn lại (chưa làm, ghi ở `docs/01-project/FEATURE_BACKLOG.md` §1): refresh thất bại vì **mất mạng/server lỗi 5xx** hiện vẫn bị coi như phiên hết hạn và xoá phiên; client Redis phía server chưa đặt timeout.
 
 ## Phần ghi chú của chủ dự án
 

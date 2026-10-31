@@ -6,7 +6,7 @@ import type { JwtService } from "../../modules/auth/jwt.service";
 import type { TokenBlacklist } from "../ports/TokenBlacklist";
 import type { AccountSuspensionStore } from "../ports/AccountSuspensionStore";
 import type { SessionRevocationStore } from "../ports/SessionRevocationStore";
-import { isIssuedBeforeRevocation } from "../../modules/auth/session-revocation.service";
+import { checkAccessTokenState } from "../../modules/auth/session-revocation.service";
 
 export interface AuthenticatedUser {
   id: string;
@@ -43,20 +43,20 @@ export function authenticate(container: AwilixContainer): RequestHandler {
 
         const payload = jwtService.verifyAccessToken(header.slice(7));
 
-        if (await tokenBlacklist.isRevoked(payload.jti)) {
+        // Blacklist jti → Admin khoá tài khoản (AD-17) → "đăng xuất mọi thiết
+        // bị" (AD-18; không có mốc trong Redis ⇒ không hỏi lại DB). 3 khoá hỏi
+        // cùng lúc, xét theo đúng thứ tự này.
+        const rejection = await checkAccessTokenState(
+          { tokenBlacklist, accountSuspensionStore, sessionRevocationStore },
+          payload,
+        );
+        if (rejection === "TOKEN_REVOKED") {
           throw new AppError(401, "Token has been revoked");
         }
-
-        // Admin khoá tài khoản ⇒ chặn ngay cả khi access token còn hạn (AD-17).
-        if (await accountSuspensionStore.isSuspended(payload.sub)) {
+        if (rejection === "ACCOUNT_SUSPENDED") {
           throw new AppError(401, "Account is suspended", "ACCOUNT_SUSPENDED");
         }
-
-        // Bị "đăng xuất mọi thiết bị" (Admin bấm, hoặc đặt lại mật khẩu) ⇒ chặn
-        // token cấp trước mốc. Không có mốc trong Redis ⇒ không có gì cần chặn,
-        // không hỏi lại DB (AD-18).
-        const revokedAtSec = await sessionRevocationStore.getRevokedAt(payload.sub);
-        if (isIssuedBeforeRevocation(payload.iat, revokedAtSec)) {
+        if (rejection === "SESSION_REVOKED") {
           throw new AppError(401, "Session has been revoked", "SESSION_REVOKED");
         }
 

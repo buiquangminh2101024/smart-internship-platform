@@ -14,6 +14,8 @@ export interface ResetPasswordFormProps {
   onSuccess: () => void;
   /** Có thì hiện nút "Đổi email" (trang `/forgot-password`; trang Cài đặt không có). */
   onChangeEmail?: () => void;
+  /** `change`: đổi mật khẩu từ trang Cài đặt, để nhật ký ghi "đổi mật khẩu" (L30). */
+  via?: "reset" | "change";
 }
 
 interface FieldErrors {
@@ -27,7 +29,7 @@ interface FieldErrors {
  * Dùng chung cho `/forgot-password` và thẻ "Mật khẩu" ở Cài đặt. Mã vừa được
  * gửi khi form hiện ra, nên "Gửi lại mã" bắt đầu đếm ngược ngay.
  */
-export function ResetPasswordForm({ email, onSuccess, onChangeEmail }: ResetPasswordFormProps) {
+export function ResetPasswordForm({ email, onSuccess, onChangeEmail, via = "reset" }: ResetPasswordFormProps) {
   const reset = useResetPassword();
   const resend = useForgotPassword();
   const [otp, setOtp] = useState("");
@@ -73,7 +75,7 @@ export function ResetPasswordForm({ email, onSuccess, onChangeEmail }: ResetPass
     }
 
     try {
-      await reset.mutateAsync({ email, otp, newPassword: password });
+      await reset.mutateAsync({ email, otp, newPassword: password, via });
       onSuccess();
     } catch (err) {
       if (err instanceof ApiError && err.status === 400) {

@@ -54,6 +54,8 @@ export function EmployerKpiGrid({ overview }: { overview: EmployerDashboardOverv
       <StatCard
         label="Hồ sơ mới trong 7 ngày"
         icon="inbox"
+        // Trang "Ứng viên", tab Tất cả: mặc định mới nhất trước (chưa lọc được theo ngày).
+        href="/employer/applications"
         value={formatNumber(newApps.current)}
         unit="hồ sơ"
         delta={{ text: formatChange(newApps.current, newApps.previous), trend: trendOf(newApps.current, newApps.previous) }}
@@ -93,6 +95,7 @@ export function EmployerKpiGrid({ overview }: { overview: EmployerDashboardOverv
       <StatCard
         label="Lịch phỏng vấn sắp tới"
         icon="calendar"
+        href="/employer/interviews"
         value={formatNumber(interviews.upcomingCount)}
         unit="lịch"
         hint={
@@ -179,6 +182,7 @@ function OutreachKpi({ outreach }: { outreach: EmployerDashboardOverview["outrea
     <StatCard
       label="Lời mời còn lại hôm nay"
       icon="send"
+      href="/employer/outreach"
       value={formatNumber(quota.remainingToday)}
       unit={`/ ${formatNumber(quota.dailyQuota)} lời mời`}
       hint={quota.mode === "TRIAL" ? "Đang dùng thử, đặt lại lúc 07:00 mỗi ngày" : "Đặt lại lúc 07:00 mỗi ngày"}

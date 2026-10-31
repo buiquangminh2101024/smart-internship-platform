@@ -118,9 +118,14 @@ export default function EmployerCandidateSearchPage() {
 
   return (
     <div className="mx-auto grid w-full max-w-4xl gap-5 px-6 py-12">
-      <Button as="a" href={`/employer/jobs/${jobId}`} variant="link" className="w-fit" icon="arrow-left">
-        Về chi tiết tin
-      </Button>
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+        <Button as="a" href={`/employer/jobs/${jobId}`} variant="link" className="w-fit" icon="arrow-left">
+          Về chi tiết tin
+        </Button>
+        <Button as="a" href="/employer/outreach" variant="link" className="w-fit" icon="send">
+          Tất cả lời mời
+        </Button>
+      </div>
 
       <div className="grid gap-1">
         <h1 className="text-2xl font-semibold text-text-strong">Tìm ứng viên phù hợp</h1>

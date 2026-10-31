@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CompanyDetail, CompanyVerificationStatus } from "@sip/shared-types";
 import { apiFetch, ApiError } from "@/lib/api-client";
+import { activityHrefForEntity } from "@/lib/audit-activity";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -93,13 +94,18 @@ export default function AdminCompanyDetailPage({ params }: { params: Promise<{ i
 
   return (
     <div className="mx-auto grid w-full max-w-3xl gap-6 px-6 py-12">
-      <button
-        type="button"
-        onClick={() => router.push("/admin/companies")}
-        className="text-left text-sm text-text-muted hover:text-text-strong"
-      >
-        ← Quay lại danh sách
-      </button>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => router.push("/admin/companies")}
+          className="text-left text-sm text-text-muted hover:text-text-strong"
+        >
+          ← Quay lại danh sách
+        </button>
+        <Button as="a" href={activityHrefForEntity("Company", company.id)} variant="link" icon="scroll-text">
+          Xem trong nhật ký
+        </Button>
+      </div>
 
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-text-strong">{company.name}</h1>

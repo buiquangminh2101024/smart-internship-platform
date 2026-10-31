@@ -26,6 +26,8 @@ export interface StatCardProps {
   footer?: ReactNode;
   /** Trang chi tiết — nhãn thẻ thành liên kết. */
   href?: string;
+  /** Thay cho `href` khi chưa có trang đích — nhãn thẻ thành nút (vd. báo "đang cập nhật"). */
+  onClick?: () => void;
 }
 
 const deltaIcon: Record<StatCardDelta["trend"], string> = {
@@ -37,11 +39,17 @@ const deltaIcon: Record<StatCardDelta["trend"], string> = {
 /**
  * Hai bố cục: ngang gọn (các trang `jobs`, `admin/jobs` — chỉ label/value/unit/icon)
  * và thẻ KPI của dashboard (số 36px, nhãn tăng giảm, minh hoạ) khi có
- * `delta`/`hint`/`tone`/`footer`/`href`.
+ * `delta`/`hint`/`tone`/`footer`/`href`/`onClick`.
  */
 export function StatCard(props: StatCardProps) {
-  const { label, value, unit, icon, className = "", delta, hint, tone, footer, href } = props;
-  const isKpi = delta !== undefined || hint !== undefined || tone !== undefined || footer !== undefined || href !== undefined;
+  const { label, value, unit, icon, className = "", delta, hint, tone, footer, href, onClick } = props;
+  const isKpi =
+    delta !== undefined ||
+    hint !== undefined ||
+    tone !== undefined ||
+    footer !== undefined ||
+    href !== undefined ||
+    onClick !== undefined;
 
   if (!isKpi) {
     return (
@@ -92,6 +100,14 @@ export function StatCard(props: StatCardProps) {
             <Link href={href} className="transition-colors hover:text-brand-700 hover:underline">
               {label}
             </Link>
+          ) : onClick ? (
+            <button
+              type="button"
+              onClick={onClick}
+              className="cursor-pointer text-left transition-colors hover:text-brand-700 hover:underline"
+            >
+              {label}
+            </button>
           ) : (
             label
           )}

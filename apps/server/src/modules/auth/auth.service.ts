@@ -9,6 +9,7 @@ import type { TokenBlacklist } from "../../shared/ports/TokenBlacklist";
 import type { OtpStore, OtpPurpose } from "../../shared/ports/OtpStore";
 import type { EmailSender } from "../../shared/ports/EmailSender";
 import type { GoogleAuthClient } from "../../infrastructure/google-auth-client";
+import type { AuditLogService } from "../audit-log/audit-log.service";
 import type { UserRepository } from "../users/user.repository";
 import type { JwtService } from "./jwt.service";
 import { isIssuedBeforeRevocation, toRevokedAtSec, type SessionRevocationService } from "./session-revocation.service";
@@ -18,8 +19,15 @@ const OTP_RESEND_COOLDOWN_SECONDS = 60;
 const OTP_MAX_PER_EMAIL_PER_HOUR = 20;
 const OTP_MAX_PER_IP_PER_HOUR = 1000;
 const ONE_HOUR_SECONDS = 60 * 60;
+// Nhật ký bảo mật (AD-20, docs/06-backend/admin-audit-log/PLAN.md L4): sai mật khẩu
+// lần thứ 5 trong 15 phút với email có tài khoản ⇒ ghi một dòng.
+const LOGIN_FAIL_THRESHOLD = 5;
+const LOGIN_FAIL_WINDOW_MINUTES = 15;
 
 export type AuthTokens = AuthTokensResponse;
+
+/** `change`: đổi mật khẩu ở trang Cài đặt; `reset`: trang quên mật khẩu. Cùng luồng OTP (E9). */
+export type PasswordChangeVia = "reset" | "change";
 
 interface OtpConfig {
   OTP_HARDCODE: boolean;
@@ -36,6 +44,7 @@ export class AuthService {
   private readonly googleAuthClient: GoogleAuthClient;
   private readonly tokenBlacklist: TokenBlacklist;
   private readonly sessionRevocationService: SessionRevocationService;
+  private readonly auditLogService: AuditLogService;
   private readonly logger: Logger;
   private readonly otpConfig: OtpConfig;
 
@@ -49,6 +58,7 @@ export class AuthService {
     googleAuthClient,
     tokenBlacklist,
     sessionRevocationService,
+    auditLogService,
     logger,
     config,
   }: {
@@ -61,6 +71,7 @@ export class AuthService {
     googleAuthClient: GoogleAuthClient;
     tokenBlacklist: TokenBlacklist;
     sessionRevocationService: SessionRevocationService;
+    auditLogService: AuditLogService;
     logger: Logger;
     config: OtpConfig;
   }) {
@@ -73,6 +84,7 @@ export class AuthService {
     this.googleAuthClient = googleAuthClient;
     this.tokenBlacklist = tokenBlacklist;
     this.sessionRevocationService = sessionRevocationService;
+    this.auditLogService = auditLogService;
     this.logger = logger;
     this.otpConfig = config;
   }
@@ -110,7 +122,7 @@ export class AuthService {
     return this.issueTokens(verified);
   }
 
-  async login(email: string, password: string): Promise<AuthTokens> {
+  async login(email: string, password: string, ip: string): Promise<AuthTokens> {
     const user = await this.userRepository.findByEmail(email);
     if (!user?.passwordHash) {
       throw new AppError(401, "Invalid email or password");
@@ -118,6 +130,7 @@ export class AuthService {
 
     const matches = await bcrypt.compare(password, user.passwordHash);
     if (!matches) {
+      await this.trackFailedLogin(user, ip);
       throw new AppError(401, "Invalid email or password");
     }
 
@@ -128,10 +141,23 @@ export class AuthService {
       throw new AppError(403, "Account is suspended", "ACCOUNT_SUSPENDED");
     }
 
+    // L3: chỉ ghi đăng nhập của Admin. Không có tx ⇒ lỗi ghi chỉ được log, không chặn đăng nhập.
+    if (user.role === "ADMIN") {
+      await this.auditLogService.record({
+        actorId: user.id,
+        actorRole: user.role,
+        action: "AUTH_LOGIN_SUCCEEDED",
+        entityType: "User",
+        entityId: user.id,
+        summary: `${user.email} đăng nhập`,
+        metadata: { ip },
+      });
+    }
+
     return this.issueTokens(user);
   }
 
-  async loginOrRegisterWithGoogle(idToken: string, role: "CANDIDATE" | "EMPLOYER"): Promise<AuthTokens> {
+  async loginOrRegisterWithGoogle(idToken: string, role: "CANDIDATE" | "EMPLOYER", ip: string): Promise<AuthTokens> {
     const profile = await this.googleAuthClient.verifyIdToken(idToken);
 
     let user = await this.userRepository.findByGoogleId(profile.googleId);
@@ -145,10 +171,27 @@ export class AuthService {
         }
         // G1 (AD-17): Google đã xác thực email ⇒ tài khoản chờ xác thực được kích hoạt
         // (kèm xoá mật khẩu chưa xác thực). SUSPENDED chỉ liên kết, vẫn bị chặn bên dưới.
-        user =
-          existingByEmail.status === "PENDING_VERIFICATION"
-            ? await this.userRepository.linkGoogleToUnverified(existingByEmail.id, profile.googleId)
-            : await this.userRepository.linkGoogleId(existingByEmail.id, profile.googleId);
+        // Nhật ký AUTH_GOOGLE_LINKED ghi cùng transaction (L5).
+        const pending = existingByEmail.status === "PENDING_VERIFICATION";
+        user = await this.prisma.$transaction(async (tx) => {
+          const linked = pending
+            ? await this.userRepository.linkGoogleToUnverified(existingByEmail.id, profile.googleId, tx)
+            : await this.userRepository.linkGoogleId(existingByEmail.id, profile.googleId, tx);
+          const activated = pending && linked.status === "ACTIVE";
+          await this.auditLogService.record(
+            {
+              actorId: linked.id,
+              actorRole: linked.role,
+              action: "AUTH_GOOGLE_LINKED",
+              entityType: "User",
+              entityId: linked.id,
+              summary: `${linked.email} liên kết tài khoản Google${activated ? " và kích hoạt tài khoản" : ""}`,
+              metadata: activated ? { ip, activated: true } : { ip },
+            },
+            tx,
+          );
+          return linked;
+        });
       } else {
         user = await this.userRepository.createWithGoogle({
           email: profile.email,
@@ -175,7 +218,12 @@ export class AuthService {
     await this.sendOtp("reset-password", user.email, ip);
   }
 
-  async resetPassword(email: string, otp: string, newPassword: string): Promise<void> {
+  async resetPassword(
+    email: string,
+    otp: string,
+    newPassword: string,
+    context: { ip: string; via: PasswordChangeVia },
+  ): Promise<void> {
     const user = await this.userRepository.findByEmail(email);
     if (!user) {
       // P2 (AD-18): trả lỗi giống sai mã thay vì 404, để trang /forgot-password
@@ -189,6 +237,18 @@ export class AuthService {
     // phiên của kẻ gian cũng mất. Mật khẩu và mốc thu hồi ghi cùng transaction.
     const revokedAtSec = await this.prisma.$transaction(async (tx) => {
       await this.userRepository.updatePassword(user.id, passwordHash, tx);
+      await this.auditLogService.record(
+        {
+          actorId: user.id,
+          actorRole: user.role,
+          action: "AUTH_PASSWORD_RESET",
+          entityType: "User",
+          entityId: user.id,
+          summary: `${user.email} ${context.via === "change" ? "đổi mật khẩu" : "đặt lại mật khẩu"}`,
+          metadata: { ip: context.ip, via: context.via },
+        },
+        tx,
+      );
       return this.sessionRevocationService.revokeInTx(user.id, tx);
     });
     await this.sessionRevocationService.propagate(user.id, revokedAtSec);
@@ -228,6 +288,35 @@ export class AuthService {
       await this.tokenBlacklist.revoke(payload.jti, payload.exp - now);
     } catch {
       // Refresh token không hợp lệ/đã hết hạn — không cần blacklist thêm.
+    }
+  }
+
+  /**
+   * L4: đếm lần sai mật khẩu theo tài khoản (cửa sổ cố định 15 phút). Lần thứ 5
+   * ghi một dòng `AUTH_LOGIN_FAILED_REPEATED`; khoá `alerted` giữ cho các lần sau
+   * trong 15 phút kế tiếp không ghi thêm. Mọi lỗi ở đây chỉ được log: người dùng
+   * vẫn phải nhận 401 như bình thường.
+   */
+  private async trackFailedLogin(user: User, ip: string): Promise<void> {
+    const windowSeconds = LOGIN_FAIL_WINDOW_MINUTES * 60;
+    try {
+      const belowThreshold = await this.rateLimiter.consume(`login-fail:${user.id}`, LOGIN_FAIL_THRESHOLD - 1, windowSeconds);
+      if (belowThreshold) return;
+      const firstAlert = await this.rateLimiter.consume(`login-fail:alerted:${user.id}`, 1, windowSeconds);
+      if (!firstAlert) return;
+      // Q10: người gõ sai có thể là kẻ dò mật khẩu ⇒ người làm là hệ thống (null),
+      // tài khoản bị dò chỉ là đối tượng, không hiện trong top người làm.
+      await this.auditLogService.record({
+        actorId: null,
+        actorRole: null,
+        action: "AUTH_LOGIN_FAILED_REPEATED",
+        entityType: "User",
+        entityId: user.id,
+        summary: `Đăng nhập sai ${LOGIN_FAIL_THRESHOLD} lần trong ${LOGIN_FAIL_WINDOW_MINUTES} phút vào tài khoản ${user.email}`,
+        metadata: { attempts: LOGIN_FAIL_THRESHOLD, windowMinutes: LOGIN_FAIL_WINDOW_MINUTES, ip },
+      });
+    } catch (error) {
+      this.logger.error("Không đếm được lần đăng nhập sai", { error, userId: user.id });
     }
   }
 

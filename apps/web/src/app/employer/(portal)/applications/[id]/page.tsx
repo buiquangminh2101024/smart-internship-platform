@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEmployerApplication, useUpdateApplicationStatus, useUpdateApplicationEvaluation } from "@/hooks/useApplications";
 import { useEmployerApplicationMatch } from "@/hooks/useJobMatch";
 import { JobMatchCard, JobMatchCardSkeleton } from "@/components/jobs/JobMatchCard";
+import { ApplicationInterviewsCard } from "@/components/interviews/ApplicationInterviewsCard";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -110,6 +111,8 @@ export default function EmployerApplicationDetailPage() {
         </div>
 
         <div className="space-y-6">
+          <ApplicationInterviewsCard application={application} />
+
           <Card padding="md">
             <h3 className="font-bold mb-4">Chuyển trạng thái</h3>
             <div className="grid grid-cols-1 gap-2">

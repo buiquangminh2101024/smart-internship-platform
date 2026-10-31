@@ -7,7 +7,8 @@ import type {
 } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
 import type { CandidateOutreachService } from "../candidate-outreach/candidate-outreach.service";
-import type { EmployerRepository, EmployerWithCompany } from "../employers/employer.repository";
+import type { CompanyRepository } from "../companies/company.repository";
+import type { EmployerIdentityCache } from "../employers/employer-identity-cache";
 import type { InterviewsService } from "../interviews/interviews.service";
 import type { JobPostsService } from "../job-posts/job-posts.service";
 import type { MessagingService } from "../messaging/messaging.service";
@@ -25,7 +26,8 @@ const EXPIRING_WINDOW_DAYS = 7;
  */
 export class EmployerDashboardService {
   private readonly dashboardRepository: DashboardRepository;
-  private readonly employerRepository: EmployerRepository;
+  private readonly employerIdentityCache: EmployerIdentityCache;
+  private readonly companyRepository: CompanyRepository;
   private readonly jobPostsService: JobPostsService;
   private readonly candidateOutreachService: CandidateOutreachService;
   private readonly messagingService: MessagingService;
@@ -33,21 +35,24 @@ export class EmployerDashboardService {
 
   constructor({
     dashboardRepository,
-    employerRepository,
+    employerIdentityCache,
+    companyRepository,
     jobPostsService,
     candidateOutreachService,
     messagingService,
     interviewsService,
   }: {
     dashboardRepository: DashboardRepository;
-    employerRepository: EmployerRepository;
+    employerIdentityCache: EmployerIdentityCache;
+    companyRepository: CompanyRepository;
     jobPostsService: JobPostsService;
     candidateOutreachService: CandidateOutreachService;
     messagingService: MessagingService;
     interviewsService: InterviewsService;
   }) {
     this.dashboardRepository = dashboardRepository;
-    this.employerRepository = employerRepository;
+    this.employerIdentityCache = employerIdentityCache;
+    this.companyRepository = companyRepository;
     this.jobPostsService = jobPostsService;
     this.candidateOutreachService = candidateOutreachService;
     this.messagingService = messagingService;
@@ -55,8 +60,10 @@ export class EmployerDashboardService {
   }
 
   async overview(userId: string): Promise<EmployerDashboardOverview> {
-    const employer = await this.requireEmployer(userId);
-    const { companyId } = employer;
+    const { employerId, companyId } = await this.requireEmployer(userId);
+    // AD-19: id từ cache; company (tên, trạng thái xác minh, gói) vẫn đọc mới nhất.
+    const company = await this.companyRepository.findById(companyId);
+    if (!company) throw new AppError(404, "Employer profile not found");
     const [
       stats,
       expiringCount,
@@ -76,9 +83,9 @@ export class EmployerDashboardService {
       this.dashboardRepository.findTopPublishedJob(companyId),
       this.dashboardRepository.applicationSummary(companyId),
       this.messagingService.getUnreadSummary(userId, "EMPLOYER"),
-      this.dashboardRepository.countUnreadCandidates(employer.id, userId),
-      this.dashboardRepository.listUnreadConversations(employer.id, userId, RECENT_CONVERSATION_LIMIT),
-      this.candidateOutreachService.getDailyQuotaStatus(employer),
+      this.dashboardRepository.countUnreadCandidates(employerId, userId),
+      this.dashboardRepository.listUnreadConversations(employerId, userId, RECENT_CONVERSATION_LIMIT),
+      this.candidateOutreachService.getDailyQuotaStatus({ companyId, company }),
       this.dashboardRepository.outreachLast30Days(companyId),
       this.dashboardRepository.interviewsNext7Days(companyId),
       this.interviewsService.upcomingForCompany(companyId, 0),
@@ -87,9 +94,9 @@ export class EmployerDashboardService {
 
     return {
       company: {
-        id: employer.company.id,
-        name: employer.company.name,
-        verificationStatus: employer.company.verificationStatus,
+        id: company.id,
+        name: company.name,
+        verificationStatus: company.verificationStatus,
       },
       jobs: { ...stats, expiringIn7Days: expiringCount, topJob },
       applications: {
@@ -186,9 +193,8 @@ export class EmployerDashboardService {
     return { range, applicationsDaily, viewsDaily, funnel, firstResponse };
   }
 
-  private async requireEmployer(userId: string): Promise<EmployerWithCompany> {
-    const employer = await this.employerRepository.findByUserId(userId);
-    if (!employer) throw new AppError(404, "Employer profile not found");
-    return employer;
+  // AD-19: tasks/analytics chỉ cần companyId ⇒ không hỏi DB.
+  private requireEmployer(userId: string) {
+    return this.employerIdentityCache.require(userId);
   }
 }

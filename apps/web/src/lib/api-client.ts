@@ -2,7 +2,7 @@ import axios, { type Method } from "axios";
 import type { ApiResponse, RefreshResponse } from "@sip/shared-types";
 import type { AuthArea } from "./auth-area";
 import { AREA_HOME, areaForPath } from "./auth-area";
-import { authStoreForArea } from "@/stores/auth-store";
+import { authStoreForArea, latestRefreshToken } from "@/stores/auth-store";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
 
@@ -90,20 +90,35 @@ export async function publicFetch<T = void>(path: string, init: RequestInit = {}
 // AD-4, docs/02-architecture/ARCHITECTURE_DECISIONS.md).
 const refreshPromises = new Map<AuthArea, Promise<string | null>>();
 
-async function refreshAccessToken(area: AuthArea): Promise<string | null> {
-  const store = authStoreForArea(area);
-  const refreshToken = store.getState().refreshToken;
-  if (!refreshToken) return null;
-
+async function requestAccessToken(refreshToken: string): Promise<string | null> {
   try {
     const res = await httpClient.post<ApiResponse<RefreshResponse>>("/auth/refresh", { refreshToken });
     if (res.status < 200 || res.status >= 300 || !res.data.success || !res.data.data) return null;
-
-    store.getState().setAccessToken(res.data.data.accessToken);
     return res.data.data.accessToken;
   } catch {
     return null;
   }
+}
+
+/**
+ * Refresh bằng refresh token mới nhất trong localStorage (AD-22). Nếu trong lúc
+ * chờ server mà tab khác đổi phiên (đăng nhập lại) thì bỏ kết quả và refresh
+ * lại bằng phiên mới — không ghi access token của phiên cũ đè lên phiên mới,
+ * và không trả null (khiến `endSession` xoá phiên mới dùng chung mọi tab).
+ */
+async function refreshAccessToken(area: AuthArea): Promise<string | null> {
+  let refreshToken = latestRefreshToken(area);
+  for (let attempt = 0; attempt < 2 && refreshToken; attempt++) {
+    const accessToken = await requestAccessToken(refreshToken);
+    const latest = latestRefreshToken(area);
+    if (latest !== refreshToken) {
+      refreshToken = latest;
+      continue;
+    }
+    if (accessToken) authStoreForArea(area).getState().setAccessToken(accessToken);
+    return accessToken;
+  }
+  return null;
 }
 
 /**
@@ -158,6 +173,74 @@ export async function apiFetch<T = void>(area: AuthArea, path: string, init: Req
   }
 
   return parseBody<T>(res);
+}
+
+export interface DownloadedFile {
+  blob: Blob;
+  /** Tên file lấy từ `Content-Disposition`; server không gửi thì là null. */
+  fileName: string | null;
+}
+
+/** `attachment; filename="nhat-ky-20261018.csv"` (hoặc `filename*=UTF-8''…`) → tên file. */
+function fileNameOf(disposition: unknown): string | null {
+  if (typeof disposition !== "string") return null;
+  const encoded = /filename\*=UTF-8''([^;]+)/i.exec(disposition);
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded[1]!.trim());
+    } catch {
+      // Chuỗi mã hoá hỏng ⇒ thử dạng `filename="…"`.
+    }
+  }
+  return /filename="?([^";]+)"?/i.exec(disposition)?.[1]?.trim() ?? null;
+}
+
+/**
+ * Biến thể của apiFetch cho endpoint trả file (vd. CSV nhật ký, AD-20 L13): đọc
+ * body thành `Blob` thay vì JSON, cùng cách làm mới token khi 401. Lỗi thì body
+ * vẫn là JSON `ApiResponse` ⇒ đọc lại để ném `ApiError` có `status` và `code`.
+ */
+export async function apiDownload(area: AuthArea, path: string): Promise<DownloadedFile> {
+  const store = authStoreForArea(area);
+
+  async function send(bearer: string | null) {
+    try {
+      const res = await httpClient.request<Blob>({
+        url: path,
+        method: "GET",
+        responseType: "blob",
+        headers: bearer ? { Authorization: `Bearer ${bearer}` } : {},
+      });
+      return { status: res.status, data: res.data ?? null, disposition: res.headers["content-disposition"] };
+    } catch {
+      return { status: 0, data: null, disposition: undefined };
+    }
+  }
+
+  const initialToken = store.getState().accessToken;
+  let res = await send(initialToken);
+
+  if (res.status === 401 && initialToken) {
+    const newToken = await refreshAccessTokenShared(area);
+
+    if (newToken) {
+      res = await send(newToken);
+    } else {
+      endSession(area);
+    }
+  }
+
+  if (res.status >= 200 && res.status < 300 && res.data) {
+    return { blob: res.data, fileName: fileNameOf(res.disposition) };
+  }
+
+  let body: ApiResponse<unknown> | null = null;
+  try {
+    body = res.data ? (JSON.parse(await res.data.text()) as ApiResponse<unknown>) : null;
+  } catch {
+    body = null;
+  }
+  return parseBody<never>({ status: res.status >= 200 && res.status < 300 ? 500 : res.status, body: body as ApiResponse<never> | null });
 }
 
 /**

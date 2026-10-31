@@ -1,7 +1,9 @@
 import type { Prisma } from "@prisma/client";
 import type { Logger } from "../../shared/logger";
+import type { AccountSuspensionStore } from "../../shared/ports/AccountSuspensionStore";
 import type { RealtimeNotifier } from "../../shared/ports/RealtimeNotifier";
 import type { SessionRevocationStore } from "../../shared/ports/SessionRevocationStore";
+import type { TokenBlacklist } from "../../shared/ports/TokenBlacklist";
 import type { UserRepository } from "../users/user.repository";
 
 /**
@@ -11,6 +13,33 @@ import type { UserRepository } from "../users/user.repository";
  */
 export function isIssuedBeforeRevocation(iat: number, revokedAtSec: number | null): boolean {
   return revokedAtSec !== null && iat <= revokedAtSec;
+}
+
+export type AccessTokenRejection = "TOKEN_REVOKED" | "ACCOUNT_SUSPENDED" | "SESSION_REVOKED";
+
+/**
+ * Kiểm access token còn dùng được không (blacklist `jti`, AD-17, AD-18). Dùng
+ * chung cho authenticate và handshake Socket.IO. Hỏi 3 khoá Redis cùng lúc —
+ * ioredis gửi cả 3 lệnh trong một lượt mạng — rồi xét đúng thứ tự cũ để lỗi trả
+ * về không đổi khi nhiều điều kiện cùng đúng. Lỗi Redis ném ra cho nơi gọi.
+ */
+export async function checkAccessTokenState(
+  stores: {
+    tokenBlacklist: TokenBlacklist;
+    accountSuspensionStore: AccountSuspensionStore;
+    sessionRevocationStore: SessionRevocationStore;
+  },
+  token: { jti: string; sub: string; iat: number },
+): Promise<AccessTokenRejection | null> {
+  const [revoked, suspended, revokedAtSec] = await Promise.all([
+    stores.tokenBlacklist.isRevoked(token.jti),
+    stores.accountSuspensionStore.isSuspended(token.sub),
+    stores.sessionRevocationStore.getRevokedAt(token.sub),
+  ]);
+  if (revoked) return "TOKEN_REVOKED";
+  if (suspended) return "ACCOUNT_SUSPENDED";
+  if (isIssuedBeforeRevocation(token.iat, revokedAtSec)) return "SESSION_REVOKED";
+  return null;
 }
 
 /** Đổi cột `User.sessionsRevokedAt` ra epoch giây để so với `iat`. */

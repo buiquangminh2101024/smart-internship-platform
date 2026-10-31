@@ -6,7 +6,8 @@ import { useAdminActivity } from "@/hooks/useAdminDashboard";
 import { formatRelativeTime } from "@/lib/notifications";
 import { Icon } from "@/components/ui/Icon";
 import { BlockError, BlockSkeleton } from "../BlockState";
-import { AdminPanel, AdminPanelHead, SegmentedControl, type SegmentedOption } from "./AdminPanel";
+import { DashButton } from "../DashButton";
+import { AdminPanel, AdminPanelFoot, AdminPanelHead, SegmentedControl, type SegmentedOption } from "./AdminPanel";
 
 const ACTOR_OPTIONS: SegmentedOption<ActivityActorFilter>[] = [
   { value: "admin", label: "Quản trị viên" },
@@ -121,6 +122,16 @@ export function ActivityTimeline() {
           })}
         </ul>
       )}
+      <AdminPanelFoot>
+        <DashButton
+          variant="ghost"
+          size="sm"
+          iconAfter="arrow-right"
+          href={actor === "admin" ? "/admin/activity?actorRole=ADMIN" : "/admin/activity"}
+        >
+          Xem tất cả
+        </DashButton>
+      </AdminPanelFoot>
     </AdminPanel>
   );
 }

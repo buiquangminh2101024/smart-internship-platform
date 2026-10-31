@@ -77,7 +77,7 @@ export default function EmployerCandidateProfilePage() {
             <Icon name="sparkles" size={18} className="text-pine-600" /> Kỹ năng
           </h3>
           <div className="flex flex-wrap gap-2">
-            {profile.skills.map((s: any) => (
+            {profile.skills.map((s) => (
               <Badge key={s.skill.id} tone="brand">
                 {s.skill.name} {s.yearsOfExperience > 0 ? `· ${s.yearsOfExperience} năm` : ""}
               </Badge>
@@ -92,7 +92,7 @@ export default function EmployerCandidateProfilePage() {
             <Icon name="briefcase" size={18} className="text-pine-600" /> Kinh nghiệm làm việc
           </h3>
           <div className="space-y-6">
-            {profile.workExperiences.map((exp: any) => (
+            {profile.workExperiences.map((exp) => (
               <div key={exp.id} className="grid gap-1">
                 <h4 className="font-bold text-text-strong">{exp.position} tại {exp.company}</h4>
                 <p className="text-sm text-text-muted">
@@ -111,7 +111,7 @@ export default function EmployerCandidateProfilePage() {
             <Icon name="graduation-cap" size={18} className="text-pine-600" /> Học vấn
           </h3>
           <div className="space-y-6">
-            {profile.educations.map((edu: any) => (
+            {profile.educations.map((edu) => (
               <div key={edu.id} className="grid gap-1">
                 <h4 className="font-bold text-text-strong">{edu.university?.name || "Trường khác"}</h4>
                 <p className="text-sm font-medium">{edu.major?.name || "Ngành khác"} {edu.degree ? `· ${edu.degree}` : ""}</p>
@@ -131,7 +131,7 @@ export default function EmployerCandidateProfilePage() {
             <Icon name="folder-git-2" size={18} className="text-pine-600" /> Dự án
           </h3>
           <div className="space-y-6">
-            {profile.projects.map((proj: any) => (
+            {profile.projects.map((proj) => (
               <div key={proj.id} className="grid gap-1">
                 <h4 className="font-bold text-text-strong">
                   {proj.name}
@@ -159,7 +159,7 @@ export default function EmployerCandidateProfilePage() {
           
           {profile.certificates && profile.certificates.length > 0 && (
             <div className="space-y-4 mb-6">
-              {profile.certificates.map((cert: any) => (
+              {profile.certificates.map((cert) => (
                 <div key={cert.id}>
                   <h4 className="font-bold">{cert.name}</h4>
                   <p className="text-sm text-text-muted">{cert.issuer} · {cert.issueDate ? new Date(cert.issueDate).toLocaleDateString("vi-VN") : ""}</p>
@@ -170,7 +170,7 @@ export default function EmployerCandidateProfilePage() {
           
           {profile.awards && profile.awards.length > 0 && (
             <div className="space-y-4">
-              {profile.awards.map((award: any) => (
+              {profile.awards.map((award) => (
                 <div key={award.id}>
                   <h4 className="font-bold">{award.name}</h4>
                   <p className="text-sm text-text-muted">{award.issuer} · {award.date ? new Date(award.date).toLocaleDateString("vi-VN") : ""}</p>

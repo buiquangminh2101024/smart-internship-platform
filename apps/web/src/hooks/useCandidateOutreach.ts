@@ -1,9 +1,13 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   CandidateOutreachInvitationDto,
   CandidateSearchResultDto,
+  CompanyOutreachInvitationDto,
+  EmployerOutreachSummary,
   OutreachInvitationAction,
+  OutreachInvitationStatus,
   OutreachSettings,
+  PaginatedResponse,
   RespondOutreachInvitationResponse,
   SentOutreachInvitationDto,
 } from "@sip/shared-types";
@@ -13,6 +17,8 @@ import { apiFetch } from "@/lib/api-client";
 
 const searchKey = (jobId: string) => ["employer", "job-posts", jobId, "candidate-search"] as const;
 const sentKey = (jobId: string) => ["employer", "job-posts", jobId, "outreach-invitations"] as const;
+/** Mọi key của trang "Lời mời" bắt đầu bằng key này (SocketProvider invalidate theo nó). */
+export const OUTREACH_KEY = ["employer", "outreach"] as const;
 const INBOX_KEY = ["candidate", "outreach-invitations"] as const;
 const SETTINGS_KEY = ["candidate", "outreach-settings"] as const;
 
@@ -63,7 +69,49 @@ export function useSendOutreachInvitation(jobId: string) {
       queryClient.setQueryData<SentOutreachInvitationDto[]>(sentKey(jobId), (current) =>
         current ? [sent, ...current.filter((item) => item.invitationId !== sent.invitationId)] : [sent],
       );
+      // Trang "Lời mời" và thẻ hạn mức trên dashboard đã cũ (thêm 1 dòng, bớt 1 lượt).
+      void queryClient.invalidateQueries({ queryKey: OUTREACH_KEY });
+      void queryClient.invalidateQueries({ queryKey: ["employer", "dashboard", "overview"] });
     },
+  });
+}
+
+// ─── Employer — trang "Lời mời" cấp công ty (docs/05-frontend/phases/outreach-hub/PLAN.md) ──
+
+export interface CompanyInvitationFilter {
+  status: OutreachInvitationStatus | null;
+  jobPostId: string | null;
+  /** Chỉ lời mời do người xem gửi. */
+  mine: boolean;
+}
+
+export function useOutreachSummary() {
+  return useQuery({
+    queryKey: [...OUTREACH_KEY, "summary"],
+    queryFn: () => apiFetch<EmployerOutreachSummary>("employer", "/employer/outreach/summary"),
+    retry: 1,
+  });
+}
+
+/** 20 dòng mỗi lần, "Tải thêm" theo cursor. */
+export function useCompanyOutreachInvitations(filter: CompanyInvitationFilter) {
+  return useInfiniteQuery({
+    queryKey: [...OUTREACH_KEY, "invitations", filter.status, filter.jobPostId, filter.mine],
+    queryFn: ({ pageParam }) => {
+      const params = new URLSearchParams();
+      if (filter.status) params.set("status", filter.status);
+      if (filter.jobPostId) params.set("jobPostId", filter.jobPostId);
+      if (filter.mine) params.set("mine", "true");
+      if (pageParam) params.set("cursor", pageParam);
+      const query = params.toString();
+      return apiFetch<PaginatedResponse<CompanyOutreachInvitationDto>>(
+        "employer",
+        `/employer/outreach/invitations${query ? `?${query}` : ""}`,
+      );
+    },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => (last.hasMore ? last.nextCursor : undefined),
+    retry: 1,
   });
 }
 

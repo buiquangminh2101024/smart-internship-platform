@@ -8,7 +8,7 @@ import type { MessagingService } from "../../modules/messaging/messaging.service
 import type { TokenBlacklist } from "../../shared/ports/TokenBlacklist";
 import type { AccountSuspensionStore } from "../../shared/ports/AccountSuspensionStore";
 import type { SessionRevocationStore } from "../../shared/ports/SessionRevocationStore";
-import { isIssuedBeforeRevocation } from "../../modules/auth/session-revocation.service";
+import { checkAccessTokenState } from "../../modules/auth/session-revocation.service";
 
 export function setupSocketIo(httpServer: HttpServer, container: AwilixContainer) {
   const io = new SocketIOServer(httpServer, {
@@ -33,23 +33,24 @@ export function setupSocketIo(httpServer: HttpServer, container: AwilixContainer
       const decoded = jwt.verify(tokenString, config.JWT_ACCESS_SECRET) as any;
       const jti = decoded.jti;
 
-      const tokenBlacklist = container.resolve<TokenBlacklist>("tokenBlacklist");
-      const isBlacklisted = await tokenBlacklist.isRevoked(jti);
-      
-      if (isBlacklisted) {
+      // Token bị thu hồi, tài khoản bị khoá (AD-17), token cấp trước mốc "đăng
+      // xuất mọi thiết bị" (AD-18) đều không được mở kết nối mới. Cùng hàm với
+      // authenticate: 3 khoá hỏi cùng lúc, xét theo đúng thứ tự cũ.
+      const rejection = await checkAccessTokenState(
+        {
+          tokenBlacklist: container.resolve<TokenBlacklist>("tokenBlacklist"),
+          accountSuspensionStore: container.resolve<AccountSuspensionStore>("accountSuspensionStore"),
+          sessionRevocationStore: container.resolve<SessionRevocationStore>("sessionRevocationStore"),
+        },
+        { jti, sub: decoded.sub, iat: decoded.iat ?? 0 },
+      );
+      if (rejection === "TOKEN_REVOKED") {
         return next(new Error("Authentication error: Token revoked"));
       }
-
-      // Tài khoản bị khoá không được mở kết nối mới (AD-17).
-      const accountSuspensionStore = container.resolve<AccountSuspensionStore>("accountSuspensionStore");
-      if (await accountSuspensionStore.isSuspended(decoded.sub)) {
+      if (rejection === "ACCOUNT_SUSPENDED") {
         return next(new Error("Authentication error: Account suspended"));
       }
-
-      // Token cấp trước mốc "đăng xuất mọi thiết bị" không được mở kết nối mới (AD-18).
-      const sessionRevocationStore = container.resolve<SessionRevocationStore>("sessionRevocationStore");
-      const revokedAtSec = await sessionRevocationStore.getRevokedAt(decoded.sub);
-      if (isIssuedBeforeRevocation(decoded.iat ?? 0, revokedAtSec)) {
+      if (rejection === "SESSION_REVOKED") {
         return next(new Error("Authentication error: Session revoked"));
       }
 

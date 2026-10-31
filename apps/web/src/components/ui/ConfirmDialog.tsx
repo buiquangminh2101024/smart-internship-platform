@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "./Button";
 import { Card } from "./Card";
 import { Icon } from "./Icon";
+
+const subscribeNoop = () => () => {};
 
 export interface ConfirmDialogProps {
   isOpen: boolean;
@@ -36,11 +38,8 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const dismiss = onDismiss ?? onCancel;
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // Chỉ portal vào document.body khi đã ở phía client (server snapshot = false).
+  const mounted = useSyncExternalStore(subscribeNoop, () => true, () => false);
 
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {

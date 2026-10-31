@@ -63,18 +63,48 @@ export const batchScheduleInterviewsSchema = z.object({
 });
 export type BatchScheduleInterviewsDto = z.infer<typeof batchScheduleInterviewsSchema>;
 
+/** "Chờ đặt lịch": 50 hồ sơ mỗi trang, tối đa 100 (D18). */
+export const AWAITING_PAGE_DEFAULT = 50;
+export const AWAITING_PAGE_MAX = 100;
+
 // Query string luôn là chuỗi.
-export const listEmployerInterviewsQuerySchema = z.object({
-  from: isoDateTime.optional(),
-  to: isoDateTime.optional(),
-  includeCancelled: z
-    .enum(["true", "false"])
-    .default("false")
-    .transform((value) => value === "true"),
-});
+/**
+ * scope=range (mặc định): from/to như cũ (mặc định 30 ngày từ đầu hôm nay, tối đa 92 ngày).
+ * scope=upcoming: từ đầu hôm nay (giờ VN), phân trang cursor, không cắt ngang một ngày (D5, D6, D14).
+ * jobPostId lọc theo một tin ở cả hai chế độ; tin của công ty khác thì danh sách rỗng.
+ * Tham số không hợp với chế độ (from/to với upcoming, cursor với range) trả 400.
+ */
+export const listEmployerInterviewsQuerySchema = z
+  .object({
+    scope: z.enum(["range", "upcoming"]).default("range"),
+    from: isoDateTime.optional(),
+    to: isoDateTime.optional(),
+    cursor: z.string().min(1).optional(),
+    jobPostId: z.string().min(1).optional(),
+    includeCancelled: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((value) => value === "true"),
+  })
+  .superRefine((value, ctx) => {
+    if (value.scope === "upcoming" && (value.from || value.to)) {
+      ctx.addIssue({ code: "custom", message: "`from`/`to` không dùng được với scope=upcoming" });
+    }
+    if (value.scope === "range" && value.cursor) {
+      ctx.addIssue({ code: "custom", message: "`cursor` chỉ dùng được với scope=upcoming" });
+    }
+  });
 export type ListEmployerInterviewsQuery = z.infer<typeof listEmployerInterviewsQuerySchema>;
 
+/**
+ * Phân trang theo số trang (D18, ngoại lệ của API_CONVENTIONS.md). `group=job` kèm
+ * `jobPostId` thì bỏ qua (một tin không cần nhóm). `page` vượt trang cuối → trang cuối.
+ */
 export const listAwaitingScheduleQuerySchema = z.object({
   jobPostId: z.string().min(1).optional(),
+  sort: z.enum(["oldest", "newest"]).default("oldest"),
+  group: z.enum(["job", "none"]).default("none"),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(AWAITING_PAGE_MAX).default(AWAITING_PAGE_DEFAULT),
 });
 export type ListAwaitingScheduleQuery = z.infer<typeof listAwaitingScheduleQuerySchema>;

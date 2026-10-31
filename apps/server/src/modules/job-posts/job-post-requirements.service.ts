@@ -9,7 +9,7 @@ import type {
 import { AppError } from "../../shared/errors/AppError";
 import type { Logger } from "../../shared/logger";
 import type { RawJobRequirements, RequirementExtractor } from "../../shared/ports/RequirementExtractor";
-import type { EmployerRepository } from "../employers/employer.repository";
+import type { EmployerIdentityCache } from "../employers/employer-identity-cache";
 import type { MajorDedupeService } from "../education-catalog/major-dedupe.service";
 import type { SkillDedupeService } from "../skills/skill-dedupe.service";
 import { toJobPostDto } from "./job-post.mapper";
@@ -34,7 +34,7 @@ export class JobPostRequirementsService {
   private readonly redis: Redis;
   private readonly logger: Logger;
   private readonly jobPostRepository: JobPostRepository;
-  private readonly employerRepository: EmployerRepository;
+  private readonly employerIdentityCache: EmployerIdentityCache;
   private readonly requirementExtractor: RequirementExtractor;
   private readonly requirementExtractionRateLimitService: RequirementExtractionRateLimitService;
   private readonly skillDedupeService: SkillDedupeService;
@@ -45,7 +45,7 @@ export class JobPostRequirementsService {
     redis: Redis;
     logger: Logger;
     jobPostRepository: JobPostRepository;
-    employerRepository: EmployerRepository;
+    employerIdentityCache: EmployerIdentityCache;
     requirementExtractor: RequirementExtractor;
     requirementExtractionRateLimitService: RequirementExtractionRateLimitService;
     skillDedupeService: SkillDedupeService;
@@ -55,7 +55,7 @@ export class JobPostRequirementsService {
     this.redis = deps.redis;
     this.logger = deps.logger;
     this.jobPostRepository = deps.jobPostRepository;
-    this.employerRepository = deps.employerRepository;
+    this.employerIdentityCache = deps.employerIdentityCache;
     this.requirementExtractor = deps.requirementExtractor;
     this.requirementExtractionRateLimitService = deps.requirementExtractionRateLimitService;
     this.skillDedupeService = deps.skillDedupeService;
@@ -213,10 +213,8 @@ export class JobPostRequirementsService {
 
   /** Chỉ tin DRAFT của công ty mình — giống điều kiện sửa tin (updateDraft). */
   private async requireOwnedDraft(userId: string, id: string): Promise<JobPostWithRelations> {
-    const employer = await this.employerRepository.findByUserId(userId);
-    if (!employer) {
-      throw new AppError(404, "Employer profile not found");
-    }
+    // AD-19: companyId lấy từ cache.
+    const employer = await this.employerIdentityCache.require(userId);
     const jobPost = await this.jobPostRepository.findById(id);
     if (!jobPost || jobPost.companyId !== employer.companyId) {
       throw new AppError(404, "Job post not found");

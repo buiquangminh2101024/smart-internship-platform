@@ -45,9 +45,13 @@ import type { OutboxRepository } from "./modules/notifications/outbox/outbox.rep
 import type { NotificationsService } from "./modules/notifications/notifications.service";
 import type { EmailSender } from "./shared/ports/EmailSender";
 import { auditLogRouter } from "./modules/audit-log/audit-log.routes";
+import { startAuditLogStatsJob } from "./modules/audit-log/audit-log-stats.job";
+import { startAuditLogRetentionJob } from "./modules/audit-log/audit-log-retention.job";
+import type { AuditLogRepository } from "./modules/audit-log/audit-log.repository";
 import { dashboardRouter } from "./modules/dashboard/dashboard.routes";
 import { supportRouter } from "./modules/support/support.routes";
 import { jobReportsRouter } from "./modules/job-reports/job-reports.routes";
+import { supportChatRouter } from "./modules/support-chat/support-chat.routes";
 import { startJobPostExpiringNoticeJob } from "./modules/job-posts/job-post-expiring-notice.job";
 import { startSubscriptionExpiringNoticeJob } from "./modules/subscriptions/subscription-expiring-notice.job";
 import type { EmployerRepository } from "./modules/employers/employer.repository";
@@ -121,6 +125,8 @@ app.use("/api", dashboardRouter(container));
 // Trang hỗ trợ bản A (AD-17) — công khai; notificationsService resolve lúc có request.
 app.use("/api", supportRouter(container));
 app.use("/api", jobReportsRouter(container));
+// Chatbot hỗ trợ (AD-21) — sau jobMatchingRouter vì dùng embeddingProvider do router đó đăng ký.
+app.use("/api", supportChatRouter(container));
 
 app.use(errorHandler);
 
@@ -158,6 +164,19 @@ startInterviewReminderJob({
   interviewsRepository: container.resolve<InterviewsRepository>("interviewsRepository"),
   notificationsService: container.resolve<NotificationsService>("notificationsService"),
   logger,
+});
+// Gộp số nhật ký theo giờ cho biểu đồ của trang nhật ký (AD-20) — chạy bù khi
+// khởi động, rồi phút 5 mỗi giờ.
+startAuditLogStatsJob({
+  auditLogRepository: container.resolve<AuditLogRepository>("auditLogRepository"),
+  logger,
+});
+// Chuyển nhật ký cũ hơn AUDIT_RETENTION_DAYS sang bảng lưu trữ — 03:00 giờ Việt
+// Nam, mỗi lần tối đa 50 lô (AD-20).
+startAuditLogRetentionJob({
+  auditLogRepository: container.resolve<AuditLogRepository>("auditLogRepository"),
+  logger,
+  retentionDays: config.AUDIT_RETENTION_DAYS,
 });
 // Transactional Outbox cho email notification — quét mỗi phút (AD-8).
 startOutboxJob(

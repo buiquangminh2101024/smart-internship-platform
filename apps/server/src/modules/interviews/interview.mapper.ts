@@ -1,4 +1,5 @@
-import type { AwaitingScheduleApplication, CandidateInterview, EmployerInterview } from "@sip/shared-types";
+import type { Interview } from "@prisma/client";
+import type { ApplicationInterview, AwaitingScheduleApplication, CandidateInterview, EmployerInterview } from "@sip/shared-types";
 import type { AwaitingScheduleRow, InterviewWithRelations } from "./interviews.repository";
 
 export function toEmployerInterview(interview: InterviewWithRelations): EmployerInterview {
@@ -38,6 +39,22 @@ export function toCandidateInterview(interview: InterviewWithRelations): Candida
     note: interview.note,
     status: interview.status,
     cancelReason: interview.cancelReason,
+  };
+}
+
+/** Lịch trong chi tiết hồ sơ (D3): không lặp các trường hồ sơ đã có. */
+export function toApplicationInterview(interview: Interview): ApplicationInterview {
+  return {
+    id: interview.id,
+    scheduledAt: interview.scheduledAt.toISOString(),
+    durationMinutes: interview.durationMinutes,
+    mode: interview.mode,
+    location: interview.location,
+    note: interview.note,
+    status: interview.status,
+    cancelReason: interview.cancelReason,
+    createdById: interview.createdById,
+    createdAt: interview.createdAt.toISOString(),
   };
 }
 

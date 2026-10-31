@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { UserProfile } from "@sip/shared-types";
 import { apiFetch } from "@/lib/api-client";
 import type { AuthArea } from "@/lib/auth-area";
+import { setAreaCookie } from "@/lib/auth-storage";
 import { authStoreForArea } from "@/stores/auth-store";
 
 export interface SessionSyncProps {
@@ -34,8 +35,16 @@ export function SessionSync({ area }: SessionSyncProps) {
   });
 
   useEffect(() => {
-    if (data) setUser(data);
-  }, [data, setUser]);
+    if (!data) return;
+    // AD-22 — phiên đã đổi sang tài khoản khác (tab khác đăng nhập lại) trong lúc
+    // request bay: kết quả này của phiên cũ, không ghi đè.
+    const current = store.getState();
+    if (!current.accessToken || (current.user && current.user.id !== data.id)) return;
+    setUser(data);
+    // /users/me thành công nghĩa là phiên còn hợp lệ ⇒ ghi lại cookie cho proxy.ts,
+    // phòng khi trước đó cookie bị xoá nhầm (tab "còn phiên mà proxy chặn", AD-22).
+    setAreaCookie(area);
+  }, [area, data, setUser, store]);
 
   return null;
 }

@@ -3,6 +3,7 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { OUTREACH_KEY } from "@/hooks/useCandidateOutreach";
 import { useSocketConnection, isMessagingArea, type SocketStatus } from "@/hooks/useSocket";
 import { showBrowserNotification } from "@/lib/browser-notification";
 import { markNotificationRead } from "@/lib/notifications";
@@ -52,6 +53,10 @@ export function SocketProvider({
         if (area === "candidate" && event.type.startsWith("INTERVIEW_")) {
           void queryClient.invalidateQueries({ queryKey: ["candidate", "interviews"] });
           void queryClient.invalidateQueries({ queryKey: ["candidate", "applications"] });
+        }
+        // Ứng viên trả lời lời mời: trạng thái dòng và số đếm ở trang "Lời mời" đã cũ.
+        if (area === "employer" && event.type === "CANDIDATE_OUTREACH_INVITATION_RESPONDED") {
+          void queryClient.invalidateQueries({ queryKey: OUTREACH_KEY });
         }
         showBrowserNotification(area, "system", {
           title: event.title,

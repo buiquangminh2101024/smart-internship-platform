@@ -7,7 +7,9 @@ import { ApplicationsRepository } from "./applications.repository";
 import { ApplicationsService } from "./applications.service";
 import { ApplicationsController } from "./applications.controller";
 import {
+  bulkUpdateApplicationStatusSchema,
   createApplicationSchema,
+  listCompanyApplicationsQuerySchema,
   updateApplicationEvaluationSchema,
   updateApplicationStatusSchema,
 } from "./applications.dto";
@@ -45,6 +47,25 @@ export function applicationsRouter(container: AwilixContainer): Router {
   router.get("/employer/job-posts/:jobId/applications", ...employerGuard, (req, res, next) => {
     void resolveController().listEmployer(req, res, next);
   });
+
+  // Đăng ký trước "/employer/applications/:id".
+  router.get(
+    "/employer/applications",
+    ...employerGuard,
+    validate(listCompanyApplicationsQuerySchema, "query"),
+    (req, res, next) => {
+      void resolveController().listCompany(req, res, next);
+    },
+  );
+
+  router.post(
+    "/employer/applications/bulk-status",
+    ...employerGuard,
+    validate(bulkUpdateApplicationStatusSchema),
+    (req, res, next) => {
+      void resolveController().bulkUpdateStatus(req, res, next);
+    },
+  );
 
   router.get("/employer/applications/:id", ...employerGuard, (req, res, next) => {
     void resolveController().getEmployerDetail(req, res, next);

@@ -79,7 +79,7 @@ export function PasswordCard({ area }: { area: AuthArea }) {
           <span className="font-medium [overflow-wrap:anywhere] text-text-strong">{user.email}</span>. Mã có hiệu lực 5
           phút.
         </p>
-        <ResetPasswordForm email={user.email} onSuccess={() => handleChanged(user.email)} />
+        <ResetPasswordForm email={user.email} via="change" onSuccess={() => handleChanged(user.email)} />
         <Button
           variant="ghost"
           size="sm"
