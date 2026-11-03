@@ -156,6 +156,50 @@ Quy tắc hiển thị:
 - Khi tăng giảm bằng 0 thì nhãn ghi "Hồ sơ mới bằng 7 ngày trước" / "Bằng 7 ngày qua" thay cho số.
 - Kiểm: `tsc` và eslint cho các file sửa đều sạch. Trên trình duyệt (tài khoản employer demo): 4 thẻ một hàng ở 1536px, 1 cột và không cuộn ngang ở 375px (đo trong iframe 375px); thẻ "Tin cần chú ý" (1) bằng số dòng của `/employer/jobs?attention=1` (1); thẻ "Hồ sơ chờ" (3) bằng tab Chờ duyệt (3); đổi bộ lọc ghi đúng URL, nút Back không kẹt ở các lần đổi bộ lọc; thẻ nhận focus bằng bàn phím và có viền focus; không có lỗi console. Trang còn khoảng 2 màn hình (trước là 5).
 - Chưa kiểm: trạng thái lỗi và rỗng của `?attention=1` trên dữ liệu thật (công ty demo luôn có 1 tin bị từ chối).
+- Sửa sau đó: `TrendChart` vẽ theo đúng bề rộng px đo bằng `ResizeObserver` (trước là viewBox co giãn nên chữ và nét to ra ở màn hình rộng); tooltip đặt trên điểm, lật sang trái theo vùng đang thấy của khung cuộn ngang, nên không bị che ở 375px. Admin dùng chung component nên cũng đổi theo.
+
+## Phần 3 — Thêm hai khối (chốt 2026-11-04)
+
+Chủ dự án thấy trang còn ít thông tin; đã xem mockup bằng chữ và chốt theo đề xuất. Chỉ sửa frontend, không thêm API.
+
+### F3. Dòng nhắc về gói dịch vụ (`SubscriptionReminder`)
+
+- Vị trí: ngay dưới tiêu đề trang, trên 4 thẻ. Nền `marigold-100`, viền trái marigold, chữ `marigold-800`, một link ở cuối dòng.
+- Chỉ hiện **một câu**, xét theo thứ tự dưới đây. Không trường hợp nào khớp thì không render gì. Công ty chưa xác minh thì không hiện (đã có khối cảnh báo chưa xác minh).
+
+| # | Khi nào | Câu | Link |
+|---|---|---|---|
+| 1 | `mode = BLOCKED` | Công ty chưa có gói còn hiệu lực. Bạn chưa đăng được tin mới và chưa gửi được lời mời cho đến khi mua gói. | Xem gói dịch vụ → `/employer/subscription` |
+| 2 | `TRIAL`, `trialEndsAt` còn ≤ 7 ngày | Bạn đang dùng thử, hết hạn ngày DD/MM/YYYY (còn N ngày). | Xem gói dịch vụ |
+| 3 | `SUBSCRIBED`, `subscription.endDate` còn ≤ 7 ngày | Gói {tên} hết hạn ngày DD/MM/YYYY (còn N ngày). | Xem gói dịch vụ |
+| 4 | `SUBSCRIBED`, `publishRemaining = 0` | Bạn đã dùng hết lượt đăng tin của gói {tên}. | Xem gói dịch vụ |
+| 5 | `overview.outreach.quota.remainingToday = 0` | Bạn đã gửi hết N lời mời hôm nay. Hạn mức làm mới lúc 07:00 (sáng mai / hôm nay). | Xem lời mời → `/employer/outreach` |
+
+- Không ghi "Gia hạn gói": `SubscriptionsService.checkout` huỷ gói đang có rồi mới kích hoạt gói mới, không cộng thêm ngày.
+- Dữ liệu: `useCompanySubscription()` (`GET /employers/company/subscription`, đã có) và `overview.outreach.quota` (đã có). Đang tải hoặc lỗi thì không hiện dòng nhắc (không chặn trang).
+- Vì vậy **Đợt 2 giữ `overview.outreach.quota`**, chỉ xoá `outreach.last30Days`.
+
+### F4. Bảng "Hiệu quả tin đang hiển thị" (`JobPerformancePanel`)
+
+- Vị trí: dưới biểu đồ, trên trung tâm thông báo. Ẩn khi công ty chưa xác minh (như biểu đồ).
+- Dữ liệu: `useEmployerJobPosts({ status: "PUBLISHED" })`, trang đầu (20 tin mới nhất). Xếp theo số hồ sơ giảm dần, bằng nhau thì theo lượt xem; lấy 5 tin. Giới hạn đã chấp nhận: công ty có hơn 20 tin đang hiển thị thì chỉ xét 20 tin mới nhất (ghi ở dòng phụ).
+- Cột: Tin tuyển dụng (link `/employer/jobs/{id}`) · Lượt xem · Hồ sơ (số + thanh ngang tỉ lệ theo tin nhiều hồ sơ nhất) · Tỉ lệ nộp (= hồ sơ / lượt xem, 1 chữ số thập phân; 0 lượt xem thì "—") · Hạn ("Còn N ngày" theo `formatDeadline`, ≤ 7 ngày thì chữ marigold-800).
+- Dòng phụ: "N tin nhiều hồ sơ nhất trong M tin đang hiển thị." (M = `overview.jobs.published`). Cuối khối: "Xem tất cả M tin đang hiển thị →" sang `/employer/jobs?status=PUBLISHED`.
+- Rỗng: "Chưa có tin nào đang hiển thị. Tin được duyệt sẽ hiện ở đây kèm lượt xem và số hồ sơ." kèm link "Xem tất cả tin".
+- Hẹp (container < `@2xl`): mỗi tin là một khối 3 dòng (tên; số hồ sơ · lượt xem · tỉ lệ; thanh + hạn), không cuộn ngang. Rộng: bảng `<table>`.
+- Đang tải: khung xám. Lỗi: `BlockError`.
+
+### Kiểm (Phần 3)
+
+- `tsc`, eslint cho các file sửa.
+- Trình duyệt, tài khoản employer demo, 1536px và iframe 375px: dòng nhắc hiện/ẩn đúng với trạng thái thật của công ty demo; bảng (công ty demo đang 0 tin hiển thị → trạng thái rỗng); không cuộn ngang; link đúng đích; không lỗi console. Các trường hợp còn lại của dòng nhắc kiểm bằng hàm chọn câu (thuần, không phụ thuộc React).
+
+### Kết quả Phần 3 (2026-11-04)
+
+- Component mới: `components/dashboard/employer/SubscriptionReminder.tsx` (kèm hàm thuần `pickReminder`) và `components/dashboard/employer/JobPerformancePanel.tsx`. `dashboard/page.tsx` gắn hai khối theo đúng vị trí ở trên.
+- Số ngày còn lại của gói / dùng thử đếm theo **ngày lịch giờ Việt Nam** (hết hạn trong hôm nay ghi "(hôm nay)", không ghi "còn 1 ngày").
+- Kiểm: `tsc` và eslint sạch. `pickReminder` chạy qua 9 trường hợp (5 câu, 2 trường hợp ẩn, giờ làm mới trước/sau 07:00) và các mốc 12h/20h/30h/7 ngày/8 ngày: đúng. Trình duyệt: công ty demo đang `BLOCKED` nên hiện câu số 1; bảng rỗng đúng câu. Bảng có dữ liệu kiểm bằng dữ liệu giả chặn ở XHR trong tab (không sửa code): xếp đúng, tin 0 lượt xem ghi "—", tin còn 3 ngày tô marigold, tên dài cắt bằng "…". Ở 375px (iframe): danh sách 3 dòng, không cuộn ngang. Không lỗi console.
+- Chưa kiểm trên dữ liệu thật: câu 2–5 của dòng nhắc, bảng có tin thật (chờ dữ liệu demo, E11).
 
 ## Đợt 2 — Xoá phần không còn dùng (làm sau, xác nhận lại trước khi làm)
 
@@ -165,7 +209,7 @@ Chỉ làm khi đợt 1 đã chạy ổn trên trang thật. Trước khi xoá, 
 |---|---|---|
 | Server | `GET /employer/dashboard/tasks`: route, controller, `EmployerDashboardService.tasks`, các hàm repository chỉ nó dùng (`listPendingApplications`, `listExpiringJobs`, `listRejectedJobs` nếu B2 không còn dùng) | `InterviewsService.awaitingForCompany`/`upcomingForCompany` vẫn được trang lịch phỏng vấn dùng: giữ |
 | Server | Trong `analytics`: `funnel`, `firstResponse` và hàm repository tương ứng | Giữ `applicationsDaily`, `viewsDaily` (E10) |
-| Server | Trong `overview`: `outreach`, `jobs.topJob`, `applications.pendingWait`, `interviews.next7Days`, `jobs.expiringIn7Days` (đã chuyển vào `jobs.attention`); `DashboardRepository.countExpiringJobs` (từ Phần 1 không còn ai gọi) | Bỏ phụ thuộc `candidateOutreachService` của service nếu không còn dùng |
+| Server | Trong `overview`: `outreach.last30Days` (**giữ `outreach.quota`** cho dòng nhắc F3), `jobs.topJob`, `applications.pendingWait`, `interviews.next7Days`, `jobs.expiringIn7Days` (đã chuyển vào `jobs.attention`); `DashboardRepository.countExpiringJobs` (từ Phần 1 không còn ai gọi) | Bỏ phụ thuộc `candidateOutreachService` của service nếu không còn dùng |
 | Shared types | `EmployerDashboardTasks`, `DashboardPendingApplication`, `DashboardAttentionJob`, các trường vừa bỏ | |
 | Web | `useEmployerDashboardTasks`; `SummaryBanner`, `EmployerKpiGrid`, `EmployerTaskBoard`, `EmployerAnalytics`; `InterviewGroups` (kiểm lại); `DayColumns`, `CompareBars`, `BarList` (hiện chỉ dashboard Employer dùng) | **Giữ** `QuotaBar`, `SegmentBar`, `RangeChips`, `TaskGroup`, `TrendChart` vì trang khác hoặc Admin đang dùng |
 | Test | Cập nhật `employer-dashboard-service.test.ts` | |

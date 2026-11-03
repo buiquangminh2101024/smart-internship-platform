@@ -12,6 +12,8 @@ import { BlockError } from "@/components/dashboard/BlockState";
 import { DashButton } from "@/components/dashboard/DashButton";
 import { EmployerSummaryCards, EmployerSummaryCardsSkeleton } from "@/components/dashboard/employer/EmployerSummaryCards";
 import { ApplicationsTrendPanel } from "@/components/dashboard/employer/ApplicationsTrendPanel";
+import { JobPerformancePanel } from "@/components/dashboard/employer/JobPerformancePanel";
+import { SubscriptionReminder } from "@/components/dashboard/employer/SubscriptionReminder";
 import { NotificationCenter } from "@/components/dashboard/NotificationCenter";
 
 let toastIdCounter = 0;
@@ -30,8 +32,9 @@ function useToast() {
 
 /**
  * Tổng quan của Employer (docs/05-frontend/phases/employer-dashboard-v2/PLAN.md):
- * 4 thẻ việc đang chờ (bấm sang trang quản lý) → biểu đồ hồ sơ theo ngày →
- * trung tâm thông báo. Mỗi khối tải và báo lỗi độc lập.
+ * dòng nhắc gói dịch vụ (chỉ khi cần) → 4 thẻ việc đang chờ (bấm sang trang quản lý) →
+ * biểu đồ hồ sơ theo ngày → hiệu quả tin đang hiển thị → trung tâm thông báo.
+ * Mỗi khối tải và báo lỗi độc lập.
  */
 export default function EmployerDashboardPage() {
   const overview = useEmployerDashboardOverview();
@@ -62,6 +65,8 @@ export default function EmployerDashboardPage() {
         </DashButton>
       </header>
 
+      {overview.data && !notVerified ? <SubscriptionReminder quota={overview.data.outreach.quota} /> : null}
+
       {overview.isPending ? (
         <EmployerSummaryCardsSkeleton />
       ) : overview.isError ? (
@@ -81,6 +86,8 @@ export default function EmployerDashboardPage() {
       )}
 
       {notVerified ? null : <ApplicationsTrendPanel />}
+
+      {overview.data && !notVerified ? <JobPerformancePanel publishedTotal={overview.data.jobs.published} /> : null}
 
       <NotificationCenter area="employer" limit={5} notify={push} />
 

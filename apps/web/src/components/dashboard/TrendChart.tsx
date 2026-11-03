@@ -15,17 +15,22 @@ export interface TrendChartProps {
   className?: string;
 }
 
-// Hệ toạ độ của mẫu bản C: viewBox 640×230, co giãn theo bề rộng thẻ.
-const VIEW_W = 640;
-const VIEW_H = 230;
+// Vẽ đúng px theo bề rộng đo được (không phóng viewBox): chữ, nét và chấm giữ
+// nguyên cỡ dù thẻ rộng hay hẹp, chỉ chiều ngang giãn ra.
+const CHART_H = 240;
 const PAD_TOP = 26;
 const PAD_BOTTOM = 28;
 const PAD_RIGHT = 64; // chỗ cho nhãn "TB x,x" ngoài vùng vẽ
-const AXIS_FONT = 12;
+/** Chữ tối thiểu 13px (sip-ui). */
+const AXIS_FONT = 13;
 const PEAK_FONT = 13;
-/** Chữ không nhỏ hơn 13px khi biểu đồ bị thu hẹp (sip-ui). */
-const MIN_FONT_PX = 13;
+/** Hẹp hơn thì cuộn ngang thay vì ép nhãn ngày chồng lên nhau. */
 const MIN_WIDTH_PX = 480;
+/** Ô số liệu cách điểm đang chọn; điểm gần mép trên hơn mức này thì ô nằm dưới điểm. */
+const TOOLTIP_GAP = 12;
+const TOOLTIP_FLIP_Y = 44;
+/** Bề rộng ước lượng của ô số liệu, để biết bên phải còn đủ chỗ không. */
+const TOOLTIP_EST_W = 140;
 
 /** Bước chia trục Y "đẹp" (1, 2, 4, 5 × 10^n) cho khoảng 4 vạch. */
 function niceStep(max: number): number {
@@ -72,8 +77,11 @@ function useRenderedWidth<T extends Element>() {
  * chấm brand. Rê chuột / chạm vào biểu đồ hiện ô "DD/MM: n đơn vị" của ngày gần nhất.
  */
 export function TrendChart({ points, unit, periodLabel, emptyText, className = "" }: TrendChartProps) {
-  const [svgRef, renderedWidth] = useRenderedWidth<SVGSVGElement>();
-  const [hover, setHover] = useState<number | null>(null);
+  const [boxRef, chartW] = useRenderedWidth<HTMLDivElement>();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  /** Ngày đang chọn, và ô số liệu có phải lật sang trái điểm không (tính theo phần đang nhìn thấy của vùng cuộn). */
+  const [hoverState, setHoverState] = useState<{ index: number; flipLeft: boolean } | null>(null);
+  const hover = hoverState?.index ?? null;
 
   const n = points.length;
   const values = points.map((p) => p.value);
@@ -87,15 +95,13 @@ export function TrendChart({ points, unit, periodLabel, emptyText, className = "
   const ticks: number[] = [];
   for (let t = 0; t <= yMax; t += max > 0 ? step : 1) ticks.push(t);
 
-  // Đơn vị viewBox → px thật; giữ chữ tối thiểu 13px khi thẻ hẹp.
-  const scale = renderedWidth > 0 ? renderedWidth / VIEW_W : 1;
-  const axisFont = Math.max(AXIS_FONT, MIN_FONT_PX / scale);
-  const peakFont = Math.max(PEAK_FONT, MIN_FONT_PX / scale);
+  const axisFont = AXIS_FONT;
+  const peakFont = PEAK_FONT;
 
   const tickChars = Math.max(...ticks.map((t) => formatNumber(t).length));
   const padLeft = Math.max(34, Math.ceil(tickChars * axisFont * 0.62) + 10);
-  const plotW = VIEW_W - padLeft - PAD_RIGHT;
-  const plotBottom = VIEW_H - PAD_BOTTOM;
+  const plotW = Math.max(chartW - padLeft - PAD_RIGHT, 1);
+  const plotBottom = CHART_H - PAD_BOTTOM;
   const plotH = plotBottom - PAD_TOP;
   const x = (i: number) => padLeft + (n <= 1 ? plotW / 2 : (i * plotW) / (n - 1));
   const y = (v: number) => plotBottom - (v / yMax) * plotH;
@@ -112,134 +118,152 @@ export function TrendChart({ points, unit, periodLabel, emptyText, className = "
 
   function onPointerMove(event: PointerEvent<SVGSVGElement>) {
     if (n === 0) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const vx = ((event.clientX - rect.left) / rect.width) * VIEW_W;
+    const vx = event.clientX - event.currentTarget.getBoundingClientRect().left;
     const i = n <= 1 ? 0 : Math.round(((vx - padLeft) / plotW) * (n - 1));
-    setHover(Math.min(Math.max(i, 0), n - 1));
+    const index = Math.min(Math.max(i, 0), n - 1);
+    const box = scrollRef.current;
+    // Vị trí của điểm trong phần đang nhìn thấy (vùng cuộn có thể hẹp hơn biểu đồ ở màn hình nhỏ).
+    const visibleX = box ? x(index) - box.scrollLeft : x(index);
+    const visibleW = box ? box.clientWidth : chartW;
+    const roomRight = visibleW - visibleX;
+    // Chỉ lật khi bên phải thiếu chỗ và bên trái rộng hơn.
+    setHoverState({ index, flipLeft: roomRight < TOOLTIP_GAP + TOOLTIP_EST_W && visibleX > roomRight });
   }
 
   const hovered = hover !== null && hover < n ? points[hover]! : null;
   const hx = hover !== null ? x(hover) : 0;
   const hy = hovered ? y(hovered.value) : 0;
+  // Ô số liệu nằm trên điểm (ngón tay không che khi chạm), lật xuống dưới khi điểm sát mép trên;
+  // lật sang trái khi bên phải phần đang nhìn thấy không đủ chỗ.
+  const tooltipBelow = hy < TOOLTIP_FLIP_Y;
+  const tooltipLeft = hoverState?.flipLeft ?? false;
 
   return (
     <div className={["relative", className].join(" ")}>
-      <div className="overflow-x-auto">
-        <div className="relative" style={{ minWidth: MIN_WIDTH_PX }}>
-          <svg
-            ref={svgRef}
-            viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-            role="img"
-            aria-label={summary}
-            className="block h-auto w-full touch-pan-x"
-            onPointerMove={onPointerMove}
-            onPointerDown={onPointerMove}
-            onPointerLeave={() => setHover(null)}
-          >
-            {ticks.map((t) => (
-              <g key={t}>
-                <line x1={padLeft} x2={padLeft + plotW} y1={y(t)} y2={y(t)} className="stroke-border-subtle" strokeWidth={1} />
+      <div ref={scrollRef} className="overflow-x-auto">
+        <div ref={boxRef} className="relative" style={{ minWidth: MIN_WIDTH_PX, height: CHART_H }}>
+          {chartW > 0 ? (
+            <svg
+              width={chartW}
+              height={CHART_H}
+              viewBox={`0 0 ${chartW} ${CHART_H}`}
+              role="img"
+              aria-label={summary}
+              className="absolute inset-0 block touch-pan-x"
+              onPointerMove={onPointerMove}
+              onPointerDown={onPointerMove}
+              // Cảm ứng: nhấc tay cũng phát pointerleave — giữ ô số liệu tới lần chạm sau.
+              onPointerLeave={(event) => {
+                if (event.pointerType === "mouse") setHoverState(null);
+              }}
+            >
+              {ticks.map((t) => (
+                <g key={t}>
+                  <line x1={padLeft} x2={padLeft + plotW} y1={y(t)} y2={y(t)} className="stroke-border-subtle" strokeWidth={1} />
+                  <text
+                    x={padLeft - 8}
+                    y={y(t)}
+                    dy="0.35em"
+                    textAnchor="end"
+                    fontSize={axisFont}
+                    className="fill-text-muted font-num tabular-nums"
+                  >
+                    {formatNumber(t)}
+                  </text>
+                </g>
+              ))}
+
+              {xLabelIndexes(n).map((i) => (
                 <text
-                  x={padLeft - 8}
-                  y={y(t)}
-                  dy="0.35em"
-                  textAnchor="end"
+                  key={points[i]!.date}
+                  x={x(i)}
+                  y={CHART_H - 6}
+                  textAnchor="middle"
                   fontSize={axisFont}
                   className="fill-text-muted font-num tabular-nums"
                 >
-                  {formatNumber(t)}
+                  {formatDayMonth(points[i]!.date)}
                 </text>
-              </g>
-            ))}
+              ))}
 
-            {xLabelIndexes(n).map((i) => (
-              <text
-                key={points[i]!.date}
-                x={x(i)}
-                y={VIEW_H - 6}
-                textAnchor="middle"
-                fontSize={axisFont}
-                className="fill-text-muted font-num tabular-nums"
-              >
-                {formatDayMonth(points[i]!.date)}
-              </text>
-            ))}
+              {areaPath ? <path d={areaPath} className="fill-brand-600" fillOpacity={0.14} /> : null}
 
-            {areaPath ? <path d={areaPath} className="fill-brand-600" fillOpacity={0.14} /> : null}
+              {hovered ? (
+                <g aria-hidden>
+                  <line x1={hx} x2={hx} y1={PAD_TOP} y2={plotBottom} className="stroke-border-default" strokeWidth={1} />
+                  <circle cx={hx} cy={hy} r={9} className="fill-brand-100" />
+                </g>
+              ) : null}
 
-            {hovered ? (
-              <g aria-hidden>
-                <line x1={hx} x2={hx} y1={PAD_TOP} y2={plotBottom} className="stroke-border-default" strokeWidth={1} />
-                <circle cx={hx} cy={hy} r={9} className="fill-brand-100" />
-              </g>
-            ) : null}
-
-            {n > 0 ? (
-              <path
-                d={linePath}
-                fill="none"
-                className="stroke-brand-600"
-                strokeWidth={2.5}
-                strokeLinejoin="round"
-                strokeLinecap="round"
-              />
-            ) : null}
-
-            {total > 0 ? (
-              <g>
-                <line
-                  x1={padLeft}
-                  x2={padLeft + plotW}
-                  y1={y(average)}
-                  y2={y(average)}
-                  className="stroke-text-subtle"
-                  strokeWidth={1}
-                  strokeDasharray="4 4"
+              {n > 0 ? (
+                <path
+                  d={linePath}
+                  fill="none"
+                  className="stroke-brand-600"
+                  strokeWidth={2.5}
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
                 />
-                <text x={padLeft + plotW + 8} y={y(average)} dy="0.35em" fontSize={axisFont} className="fill-text-muted">
-                  TB {formatDecimal(average)}
-                </text>
-              </g>
-            ) : null}
+              ) : null}
 
-            {peakIndex >= 0 ? (
-              <g>
-                <circle
-                  cx={x(peakIndex)}
-                  cy={y(max)}
-                  r={5.5}
-                  className="fill-marigold-500 stroke-surface-card"
-                  strokeWidth={2}
-                />
-                <text
-                  x={Math.min(Math.max(x(peakIndex), padLeft + 10), padLeft + plotW)}
-                  y={y(max) - 12}
-                  textAnchor="middle"
-                  fontSize={peakFont}
-                  className="fill-text-strong font-num font-bold tabular-nums"
-                >
-                  {formatNumber(max)}
-                </text>
-              </g>
-            ) : null}
+              {total > 0 ? (
+                <g>
+                  <line
+                    x1={padLeft}
+                    x2={padLeft + plotW}
+                    y1={y(average)}
+                    y2={y(average)}
+                    className="stroke-text-subtle"
+                    strokeWidth={1}
+                    strokeDasharray="4 4"
+                  />
+                  <text x={padLeft + plotW + 8} y={y(average)} dy="0.35em" fontSize={axisFont} className="fill-text-muted">
+                    TB {formatDecimal(average)}
+                  </text>
+                </g>
+              ) : null}
 
-            {n > 0 && peakIndex !== n - 1 ? (
-              <circle cx={x(n - 1)} cy={y(values[n - 1]!)} r={4.5} className="fill-brand-600 stroke-surface-card" strokeWidth={2} />
-            ) : null}
+              {peakIndex >= 0 ? (
+                <g>
+                  <circle
+                    cx={x(peakIndex)}
+                    cy={y(max)}
+                    r={5.5}
+                    className="fill-marigold-500 stroke-surface-card"
+                    strokeWidth={2}
+                  />
+                  <text
+                    x={Math.min(Math.max(x(peakIndex), padLeft + 10), padLeft + plotW)}
+                    y={y(max) - 12}
+                    textAnchor="middle"
+                    fontSize={peakFont}
+                    className="fill-text-strong font-num font-bold tabular-nums"
+                  >
+                    {formatNumber(max)}
+                  </text>
+                </g>
+              ) : null}
 
-            {hovered && hover !== peakIndex && hover !== n - 1 ? (
-              <circle cx={hx} cy={hy} r={4} aria-hidden className="fill-brand-600 stroke-surface-card" strokeWidth={2} />
-            ) : null}
-          </svg>
+              {n > 0 && peakIndex !== n - 1 ? (
+                <circle cx={x(n - 1)} cy={y(values[n - 1]!)} r={4.5} className="fill-brand-600 stroke-surface-card" strokeWidth={2} />
+              ) : null}
+
+              {hovered && hover !== peakIndex && hover !== n - 1 ? (
+                <circle cx={hx} cy={hy} r={4} aria-hidden className="fill-brand-600 stroke-surface-card" strokeWidth={2} />
+              ) : null}
+            </svg>
+          ) : null}
 
           {hovered ? (
             <div
               aria-hidden
               className="pointer-events-none absolute z-10 rounded-md border border-border-default bg-surface-card px-2 py-1 text-[13px] whitespace-nowrap text-text-strong shadow-sm"
               style={{
-                left: `${(hx / VIEW_W) * 100}%`,
-                top: `${(hy / VIEW_H) * 100}%`,
-                transform: hx > VIEW_W * 0.7 ? "translate(calc(-100% - 12px), 12px)" : "translate(12px, 12px)",
+                left: hx,
+                top: hy,
+                transform: `translate(${tooltipLeft ? `calc(-100% - ${TOOLTIP_GAP}px)` : `${TOOLTIP_GAP}px`}, ${
+                  tooltipBelow ? `${TOOLTIP_GAP}px` : `calc(-100% - ${TOOLTIP_GAP}px)`
+                })`,
               }}
             >
               {formatDayMonth(hovered.date)}:{" "}
