@@ -48,14 +48,18 @@ function buildService() {
   };
   const interviewsService = {
     awaitingForCompany: async () => ({ total: 0, items: [] }),
-    upcomingForCompany: async () => ({ total: 0, items: [] }),
+    upcomingForCompany: async () => ({ total: 2, items: [] }),
+    pastWeekCountForCompany: async () => 1,
     nextForCompany: async () => null,
   };
   return new EmployerDashboardService({
     dashboardRepository,
     employerIdentityCache: { require: async () => EMPLOYER },
     companyRepository: { findById: async () => COMPANY },
-    jobPostsService: { ownStats: async () => ({}) },
+    jobPostsService: {
+      ownStats: async () => ({}),
+      attentionSummaryForCompany: async () => ({ total: 3, rejected: 1, expiringIn7Days: 2 }),
+    },
     candidateOutreachService: { getDailyQuotaStatus: async () => ({}) },
     // 3 hội thoại chưa đọc nhưng chỉ từ 2 ứng viên.
     messagingService: { getUnreadSummary: async () => ({ count: 3 }) },
@@ -79,4 +83,16 @@ test("overview: số ứng viên có tin chưa đọc tách khỏi số hội th
   const overview = await buildService().overview("user-1");
   assert.equal(overview.messages.unreadConversations, 3);
   assert.equal(overview.messages.unreadCandidates, 2);
+});
+
+test("overview: tin cần chú ý lấy từ job-posts; expiringIn7Days cũ cùng nguồn", async () => {
+  const overview = await buildService().overview("user-1");
+  assert.deepEqual(overview.jobs.attention, { total: 3, rejected: 1, expiringIn7Days: 2 });
+  assert.equal(overview.jobs.expiringIn7Days, 2);
+});
+
+test("overview: phỏng vấn 7 ngày qua đặt cạnh 7 ngày tới", async () => {
+  const overview = await buildService().overview("user-1");
+  assert.equal(overview.interviews.upcomingCount, 2);
+  assert.equal(overview.interviews.last7Days, 1);
 });

@@ -295,6 +295,16 @@ export class InterviewsService {
     return { total: page.total, items: page.items.map(toEmployerInterview) };
   }
 
+  /**
+   * Số buổi đã diễn ra trong 7 ngày qua: từ đầu ngày cách đây 6 ngày tới hiện tại
+   * (giờ Việt Nam) — đối xứng với `upcomingForCompany` để so tăng giảm (E8). Chỉ
+   * loại lịch đã huỷ; hồ sơ đã có kết quả vẫn tính vì buổi đó đã diễn ra.
+   */
+  pastWeekCountForCompany(companyId: string): Promise<number> {
+    const now = new Date();
+    return this.interviewsRepository.countScheduledForCompany(companyId, vnDayStart(now, -6), now);
+  }
+
   /** Buổi chưa diễn ra gần nhất, không giới hạn khoảng thời gian. */
   async nextForCompany(companyId: string): Promise<EmployerInterview | null> {
     const page = await this.interviewsRepository.listUpcomingForCompany(companyId, null, 1);

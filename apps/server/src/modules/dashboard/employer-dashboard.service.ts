@@ -10,6 +10,7 @@ import type { CandidateOutreachService } from "../candidate-outreach/candidate-o
 import type { CompanyRepository } from "../companies/company.repository";
 import type { EmployerIdentityCache } from "../employers/employer-identity-cache";
 import type { InterviewsService } from "../interviews/interviews.service";
+import { ATTENTION_EXPIRING_DAYS } from "../job-posts/job-post.repository";
 import type { JobPostsService } from "../job-posts/job-posts.service";
 import type { MessagingService } from "../messaging/messaging.service";
 import type { DashboardRepository } from "./dashboard.repository";
@@ -17,8 +18,8 @@ import type { DashboardRepository } from "./dashboard.repository";
 /** Mỗi nhóm "việc cần làm" hiện tối đa bấy nhiêu mục, còn lại là "Xem tất cả". */
 const TASK_LIMIT = 5;
 const RECENT_CONVERSATION_LIMIT = 3;
-/** "Tin sắp hết hạn" trên dashboard (khác cửa sổ 3 ngày của thông báo JOB_POST_EXPIRING). */
-const EXPIRING_WINDOW_DAYS = 7;
+/** "Tin sắp hết hạn" trên dashboard — dùng chung hằng số với bộ lọc "tin cần chú ý" của job-posts. */
+const EXPIRING_WINDOW_DAYS = ATTENTION_EXPIRING_DAYS;
 
 /**
  * Dashboard Employer (AD-16) — chỉ đọc. Số liệu tính cho cả công ty của
@@ -66,7 +67,7 @@ export class EmployerDashboardService {
     if (!company) throw new AppError(404, "Employer profile not found");
     const [
       stats,
-      expiringCount,
+      attention,
       topJob,
       applications,
       unread,
@@ -76,10 +77,12 @@ export class EmployerDashboardService {
       outreach,
       interviewsDaily,
       upcomingInterviews,
+      pastWeekInterviews,
       nextInterview,
     ] = await Promise.all([
       this.jobPostsService.ownStats(userId),
-      this.dashboardRepository.countExpiringJobs(companyId, EXPIRING_WINDOW_DAYS),
+      // Cùng điều kiện với GET /employer/job-posts?attention=1 (định nghĩa ở job-posts).
+      this.jobPostsService.attentionSummaryForCompany(companyId),
       this.dashboardRepository.findTopPublishedJob(companyId),
       this.dashboardRepository.applicationSummary(companyId),
       this.messagingService.getUnreadSummary(userId, "EMPLOYER"),
@@ -89,6 +92,7 @@ export class EmployerDashboardService {
       this.dashboardRepository.outreachLast30Days(companyId),
       this.dashboardRepository.interviewsNext7Days(companyId),
       this.interviewsService.upcomingForCompany(companyId, 0),
+      this.interviewsService.pastWeekCountForCompany(companyId),
       this.interviewsService.nextForCompany(companyId),
     ]);
 
@@ -98,7 +102,8 @@ export class EmployerDashboardService {
         name: company.name,
         verificationStatus: company.verificationStatus,
       },
-      jobs: { ...stats, expiringIn7Days: expiringCount, topJob },
+      // `expiringIn7Days` cũ giữ tới đợt 2 (employer-dashboard-v2), lấy cùng nguồn với `attention`.
+      jobs: { ...stats, expiringIn7Days: attention.expiringIn7Days, topJob, attention },
       applications: {
         newLast7Days: applications.newLast7Days,
         pendingCount: applications.pendingCount,
@@ -118,6 +123,7 @@ export class EmployerDashboardService {
       interviews: {
         next7Days: interviewsDaily,
         upcomingCount: upcomingInterviews.total,
+        last7Days: pastWeekInterviews,
         next: nextInterview
           ? {
               interviewId: nextInterview.id,

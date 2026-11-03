@@ -1117,8 +1117,21 @@ export interface JobPostSearchQuery {
 
 export interface EmployerJobPostListQuery {
   status?: JobPostStatus;
+  /**
+   * "1" = chỉ tin cần chú ý: bị Admin từ chối (DRAFT, thao tác kiểm duyệt gần
+   * nhất là REJECTED) hoặc PUBLISHED hết hạn trong 7 ngày tới. Không đi cùng `status`.
+   */
+  attention?: "1";
   q?: string;
   cursor?: string;
+}
+
+/** Số tin cần chú ý — cùng điều kiện với `EmployerJobPostListQuery.attention`. */
+export interface JobPostAttentionSummary {
+  /** = rejected + expiringIn7Days (hai tập khác trạng thái nên không trùng). */
+  total: number;
+  rejected: number;
+  expiringIn7Days: number;
 }
 
 export interface RejectJobPostRequest {
@@ -1616,6 +1629,8 @@ export interface EmployerDashboardOverview {
     expiringIn7Days: number;
     /** Tin PUBLISHED có nhiều hồ sơ nhất (không tính hồ sơ đã huỷ). */
     topJob: { id: string; title: string; applicationCount: number } | null;
+    /** Thẻ "Tin cần chú ý"; bằng số dòng của GET /employer/job-posts?attention=1. */
+    attention: JobPostAttentionSummary;
   };
   applications: {
     /** Hồ sơ mới trong 7 ngày so với 7 ngày trước đó. */
@@ -1643,6 +1658,12 @@ export interface EmployerDashboardOverview {
     next7Days: DailyPoint[];
     /** Số buổi chưa diễn ra trong 7 ngày tới (ô "phỏng vấn sắp tới" của banner). */
     upcomingCount: number;
+    /**
+     * Số buổi SCHEDULED đã diễn ra trong 7 ngày qua (từ đầu ngày cách đây 6 ngày tới
+     * hiện tại, giờ Việt Nam) — đối xứng với `upcomingCount` để so tăng giảm. Tính cả
+     * hồ sơ đã có kết quả; không tính lịch đã huỷ.
+     */
+    last7Days: number;
     /** Buổi chưa diễn ra gần nhất (không giới hạn 7 ngày). */
     next: { interviewId: string; scheduledAt: string; candidateName: string | null; jobPostTitle: string } | null;
   };
