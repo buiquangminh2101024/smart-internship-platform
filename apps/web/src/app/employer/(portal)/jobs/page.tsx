@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import type { JobPost, JobPostStatus } from "@sip/shared-types";
 import { apiFetch, ApiError } from "@/lib/api-client";
@@ -14,10 +15,43 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { StatCard } from "@/components/ui/StatCard";
 
-const STATUS_OPTIONS: { value: JobPostStatus | "ALL"; label: string }[] = [
+/** Giá trị ô lọc: một trạng thái, tất cả, hoặc "tin cần chú ý" (`?attention=1`, không đi cùng `status`). */
+type JobFilter = JobPostStatus | "ALL" | "ATTENTION";
+
+const JOB_STATUSES = Object.keys(JOB_STATUS_LABEL) as JobPostStatus[];
+
+const STATUS_OPTIONS: { value: JobFilter; label: string }[] = [
   { value: "ALL", label: "Tất cả trạng thái" },
-  ...(Object.keys(JOB_STATUS_LABEL) as JobPostStatus[]).map((value) => ({ value, label: JOB_STATUS_LABEL[value].label })),
+  { value: "ATTENTION", label: "Tin cần chú ý" },
+  ...JOB_STATUSES.map((value) => ({ value, label: JOB_STATUS_LABEL[value].label })),
 ];
+
+/**
+ * Bộ lọc của trang nằm trên URL để dashboard trỏ thẳng vào được
+ * (`/employer/jobs?attention=1`, docs/05-frontend/phases/employer-dashboard-v2/PLAN.md F1).
+ * Giá trị lạ bị bỏ qua; có `attention=1` thì bỏ qua `status`.
+ */
+function useJobFilterParam() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const rawStatus = searchParams.get("status");
+  const filter: JobFilter =
+    searchParams.get("attention") === "1" ? "ATTENTION" : (JOB_STATUSES.find((value) => value === rawStatus) ?? "ALL");
+
+  function setFilter(next: JobFilter) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("status");
+    params.delete("attention");
+    if (next === "ATTENTION") params.set("attention", "1");
+    else if (next !== "ALL") params.set("status", next);
+    const search = params.toString();
+    router.replace(search ? `${pathname}?${search}` : pathname, { scroll: false });
+  }
+
+  return { filter, setFilter };
+}
 
 /** Dòng tóm tắt dưới tiêu đề tin — lượt xem, ứng viên, hạn nộp. */
 function JobMeta({ job }: { job: JobPost }) {
@@ -94,8 +128,23 @@ const CONFIRM_COPY: Record<ConfirmAction, { message: string; confirmLabel: strin
  * card dọc kèm action bên phải.
  */
 export default function EmployerJobsPage() {
+  // useSearchParams() cần Suspense boundary khi Next prerender route này.
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto w-full max-w-4xl px-6 py-12">
+          <p className="text-sm text-text-muted">Đang tải...</p>
+        </div>
+      }
+    >
+      <EmployerJobsContent />
+    </Suspense>
+  );
+}
+
+function EmployerJobsContent() {
   const queryClient = useQueryClient();
-  const [status, setStatus] = useState<JobPostStatus | "ALL">("ALL");
+  const { filter, setFilter } = useJobFilterParam();
   /** Tin đang chờ xác nhận đóng/xóa — hiện inline thay vì dùng window.confirm. */
   const [confirming, setConfirming] = useState<{ id: string; action: ConfirmAction } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -104,18 +153,22 @@ export default function EmployerJobsPage() {
   const [appliedSearch, setAppliedSearch] = useState("");
   // API phân trang theo cursor — giữ ngăn xếp cursor của các trang đã qua để
   // quay lui được mà không phải tải lại từ đầu.
-  const [cursorStack, setCursorStack] = useState<string[]>([]);
+  // Ngăn xếp gắn với bộ lọc lúc tạo: bộ lọc trên URL đổi (kể cả bằng nút Back)
+  // thì coi như về trang 1.
+  const [paging, setPaging] = useState<{ filter: JobFilter; stack: string[] }>({ filter, stack: [] });
+  const cursorStack = paging.filter === filter ? paging.stack : [];
+  const setCursorStack = (update: (stack: string[]) => string[]) => setPaging({ filter, stack: update(cursorStack) });
   const cursor = cursorStack[cursorStack.length - 1];
 
   const { data, isLoading } = useEmployerJobPosts({
-    ...(status === "ALL" ? {} : { status }),
+    ...(filter === "ATTENTION" ? { attention: "1" as const } : filter === "ALL" ? {} : { status: filter }),
     ...(appliedSearch ? { q: appliedSearch } : {}),
     ...(cursor ? { cursor } : {}),
   });
   const { data: stats } = useEmployerJobPostStats();
 
   function resetPaging() {
-    setCursorStack([]);
+    setCursorStack(() => []);
   }
 
   function askConfirm(id: string, action: ConfirmAction) {
@@ -180,11 +233,9 @@ export default function EmployerJobsPage() {
         />
         <Select
           className="w-52"
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value as JobPostStatus | "ALL");
-            resetPaging();
-          }}
+          aria-label="Lọc theo trạng thái"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value as JobFilter)}
           options={STATUS_OPTIONS}
         />
         <Button type="submit" variant="secondary">
@@ -192,8 +243,22 @@ export default function EmployerJobsPage() {
         </Button>
       </form>
 
+      {filter === "ATTENTION" ? (
+        <p className="-mt-3 text-sm text-text-muted">
+          Tin bị từ chối cần sửa và gửi lại, cùng tin đang hiển thị sẽ hết hạn trong 7 ngày.
+        </p>
+      ) : null}
+
       {isLoading ? (
         <p className="text-sm text-text-muted">Đang tải...</p>
+      ) : (!data || data.items.length === 0) && filter === "ATTENTION" ? (
+        <Card padding="lg" className="grid justify-items-center gap-3 text-center">
+          <Icon name="circle-check" size={28} className="text-text-subtle" />
+          <p className="text-sm text-text-muted">Không có tin nào cần chú ý.</p>
+          <Button type="button" variant="secondary" size="sm" onClick={() => setFilter("ALL")}>
+            Xem tất cả tin
+          </Button>
+        </Card>
       ) : !data || data.items.length === 0 ? (
         <Card padding="lg" className="grid justify-items-center gap-3 text-center">
           <Icon name="briefcase" size={28} className="text-text-subtle" />

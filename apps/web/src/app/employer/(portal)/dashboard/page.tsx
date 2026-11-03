@@ -8,13 +8,10 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { ToastViewport, type ToastData } from "@/components/ui/Toast";
-import { BlockError, BlockSkeleton } from "@/components/dashboard/BlockState";
+import { BlockError } from "@/components/dashboard/BlockState";
 import { DashButton } from "@/components/dashboard/DashButton";
-import { PanelHead } from "@/components/dashboard/Panel";
-import { BannerNumber, SummaryBanner } from "@/components/dashboard/SummaryBanner";
-import { EmployerKpiGrid, PENDING_TASKS_ANCHOR } from "@/components/dashboard/employer/EmployerKpiGrid";
-import { EmployerTaskBoard } from "@/components/dashboard/employer/EmployerTaskBoard";
-import { EmployerAnalytics } from "@/components/dashboard/employer/EmployerAnalytics";
+import { EmployerSummaryCards, EmployerSummaryCardsSkeleton } from "@/components/dashboard/employer/EmployerSummaryCards";
+import { ApplicationsTrendPanel } from "@/components/dashboard/employer/ApplicationsTrendPanel";
 import { NotificationCenter } from "@/components/dashboard/NotificationCenter";
 
 let toastIdCounter = 0;
@@ -32,8 +29,9 @@ function useToast() {
 }
 
 /**
- * Tổng quan của Employer (AD-16, plan FE bản C): banner → 6 KPI → việc cần
- * làm → phân tích → trung tâm thông báo. Mỗi khối tải và báo lỗi độc lập.
+ * Tổng quan của Employer (docs/05-frontend/phases/employer-dashboard-v2/PLAN.md):
+ * 4 thẻ việc đang chờ (bấm sang trang quản lý) → biểu đồ hồ sơ theo ngày →
+ * trung tâm thông báo. Mỗi khối tải và báo lỗi độc lập.
  */
 export default function EmployerDashboardPage() {
   const overview = useEmployerDashboardOverview();
@@ -65,14 +63,7 @@ export default function EmployerDashboardPage() {
       </header>
 
       {overview.isPending ? (
-        <>
-          <BlockSkeleton height={188} />
-          <div className="grid grid-cols-1 gap-4 @xl:grid-cols-2 @4xl:grid-cols-3">
-            {Array.from({ length: 6 }, (_, i) => (
-              <BlockSkeleton key={i} height={236} />
-            ))}
-          </div>
-        </>
+        <EmployerSummaryCardsSkeleton />
       ) : overview.isError ? (
         <BlockError what="số liệu tổng quan" onRetry={() => void overview.refetch()} retrying={overview.isFetching} minHeight={120} />
       ) : notVerified ? (
@@ -86,53 +77,12 @@ export default function EmployerDashboardPage() {
           </Button>
         </Card>
       ) : (
-        <>
-          <SummaryBanner
-            eyebrow={`Hôm nay, ${formatVnDate(overview.dataUpdatedAt)}`}
-            title={
-              overview.data.applications.pendingCount > 0 ? (
-                <>
-                  Bạn có <BannerNumber value={overview.data.applications.pendingCount} /> hồ sơ cần xử lý
-                </>
-              ) : (
-                "Không có hồ sơ nào đang chờ xử lý"
-              )
-            }
-            subtitle={`${overview.data.jobs.expiringIn7Days} tin sắp hết hạn, ${overview.data.interviews.upcomingCount} lịch phỏng vấn sắp tới và ${overview.data.messages.unreadConversations} tin nhắn chưa đọc.`}
-            action={
-              overview.data.applications.pendingCount > 0 ? (
-                <DashButton href={`#${PENDING_TASKS_ANCHOR}`} variant="light">
-                  Xử lý hồ sơ chờ
-                </DashButton>
-              ) : undefined
-            }
-            stats={[
-              { label: "Hồ sơ chờ", value: overview.data.applications.pendingCount },
-              { label: "Tin sắp hết hạn", value: overview.data.jobs.expiringIn7Days },
-              { label: "Phỏng vấn sắp tới", value: overview.data.interviews.upcomingCount },
-            ]}
-          />
-          <EmployerKpiGrid overview={overview.data} />
-        </>
+        <EmployerSummaryCards overview={overview.data} />
       )}
 
-      {notVerified ? null : (
-        <>
-          <section aria-labelledby="employer-tasks-title" className="flex flex-col gap-3">
-            <PanelHead
-              as="h2"
-              id="employer-tasks-title"
-              title="Việc cần làm"
-              subtitle="Xử lý ngay tại đây, không cần chuyển trang."
-            />
-            <EmployerTaskBoard notify={push} />
-          </section>
+      {notVerified ? null : <ApplicationsTrendPanel />}
 
-          <EmployerAnalytics />
-        </>
-      )}
-
-      <NotificationCenter area="employer" notify={push} />
+      <NotificationCenter area="employer" limit={5} notify={push} />
 
       <ToastViewport toasts={toasts} onDismiss={dismiss} />
     </div>

@@ -2,7 +2,7 @@
 
 Thay bố cục Employer bản C trong `docs/05-frontend/phases/dashboard-employer-admin/PLAN.md`. Phần backend nhỏ nên ghi chung trong file này, không tách plan riêng. Dashboard Admin và trang nhật ký hoạt động **không** thuộc đợt này.
 
-**Trạng thái: ĐỢT 1 — PHẦN 1 (BACKEND) ĐÃ XONG (2026-11-04), chờ chủ dự án kiểm rồi mới làm Phần 2 (frontend).** Q1–Q4 đã chốt (E8–E11). Xem "Kết quả Phần 1" ngay dưới mục Kiểm (backend).
+**Trạng thái: ĐỢT 1 ĐÃ XONG (2026-11-04): Phần 1 (backend) và Phần 2 (frontend). Chờ chủ dự án kiểm rồi mới làm Đợt 2 (xoá).** Q1–Q4 đã chốt (E8–E11). Xem "Kết quả Phần 1" và "Kết quả Phần 2".
 
 ## Lý do
 
@@ -147,6 +147,15 @@ Quy tắc hiển thị:
 
 - `tsc`, `npm run lint --workspace web` cho các file sửa.
 - Trên trình duyệt, tài khoản employer demo, ở 375px và 1280px: không cuộn ngang; bấm từng thẻ ra đúng trang và đúng bộ lọc; số trên thẻ "Tin cần chú ý" bằng số dòng của `/employer/jobs?attention=1`; số "Hồ sơ chờ" bằng tổng của `/employer/applications?status=PENDING`; dùng được chỉ bằng phím Tab/Enter; trạng thái đang tải, lỗi, số 0.
+
+### Kết quả Phần 2 (2026-11-04)
+
+- F1: `jobs/page.tsx` đọc bộ lọc từ URL qua `useJobFilterParam` (`useSearchParams` + `router.replace`, bọc `Suspense`). Ô lọc thêm "Tin cần chú ý" (`?attention=1`); chọn trạng thái thì bỏ `attention` và ngược lại. Ô tìm vẫn ở state cục bộ như cũ. Ngăn xếp cursor gắn với bộ lọc nên đổi bộ lọc (kể cả bằng nút Back) thì về trang 1. Dòng tin đang hiển thị đã có sẵn "Còn N ngày" nên không thêm. Rỗng khi lọc tin cần chú ý: "Không có tin nào cần chú ý." kèm nút "Xem tất cả tin".
+- F2: `StatCard` thêm prop `cta`: đi cùng `href` thì cả thẻ là một link, cuối thẻ ghi "{cta} →", hover đổi màu viền, có viền focus. Không có `cta` thì giữ hành vi cũ (chỉ nhãn là link). Component mới `EmployerSummaryCards` (kèm `EmployerSummaryCardsSkeleton`) và `ApplicationsTrendPanel`. `page.tsx` không còn dùng `SummaryBanner`, `EmployerKpiGrid`, `EmployerTaskBoard`, `EmployerAnalytics` (file vẫn giữ, E7). `NotificationCenter` truyền `limit={5}`.
+- Link thẻ phỏng vấn là `/employer/interviews?view=upcoming`; `useInterviewsPageParams` tự hiểu `view=upcoming` là tab "Đã đặt lịch" nên không cần `tab=booked`.
+- Khi tăng giảm bằng 0 thì nhãn ghi "Hồ sơ mới bằng 7 ngày trước" / "Bằng 7 ngày qua" thay cho số.
+- Kiểm: `tsc` và eslint cho các file sửa đều sạch. Trên trình duyệt (tài khoản employer demo): 4 thẻ một hàng ở 1536px, 1 cột và không cuộn ngang ở 375px (đo trong iframe 375px); thẻ "Tin cần chú ý" (1) bằng số dòng của `/employer/jobs?attention=1` (1); thẻ "Hồ sơ chờ" (3) bằng tab Chờ duyệt (3); đổi bộ lọc ghi đúng URL, nút Back không kẹt ở các lần đổi bộ lọc; thẻ nhận focus bằng bàn phím và có viền focus; không có lỗi console. Trang còn khoảng 2 màn hình (trước là 5).
+- Chưa kiểm: trạng thái lỗi và rỗng của `?attention=1` trên dữ liệu thật (công ty demo luôn có 1 tin bị từ chối).
 
 ## Đợt 2 — Xoá phần không còn dùng (làm sau, xác nhận lại trước khi làm)
 
