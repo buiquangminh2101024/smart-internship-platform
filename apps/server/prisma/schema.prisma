@@ -211,6 +211,8 @@ model User {
   candidate           Candidate?
   employer            Employer?
   moderationActions   JobPostModerationAction[]
+  reportedJobReports  JobReport[]               @relation("ReportedJobReports")
+  resolvedJobReports  JobReport[]               @relation("ResolvedJobReports")
   messages            Message[]
   notifications       Notification[]
   createdSkills       Skill[]
@@ -704,6 +706,7 @@ model JobPost {
   updatedAt               DateTime      @updatedAt
 
   moderationActions   JobPostModerationAction[]
+  reports             JobReport[]
   applications        Application[]
   savedBy             SavedJob[]
   conversations       Conversation[]
@@ -1110,4 +1113,48 @@ model OutboxEvent {
 
   @@index([status, availableAt])
   @@map("outbox_events")
+}
+
+// ─── job-reports ──────────────────────────────────────────────────────────
+
+enum ReportReason {
+  SCAM
+  CHARGING_FEE
+  INAPPROPRIATE
+  MISLEADING
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  RESOLVED
+}
+
+enum ReportResolution {
+  TAKE_DOWN
+  DISMISS
+}
+
+model JobReport {
+  id           String            @id @default(cuid())
+  jobId        String
+  job          JobPost           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  reporterId   String
+  reporter     User              @relation("ReportedJobReports", fields: [reporterId], references: [id], onDelete: Cascade)
+  reason       ReportReason
+  description  String?           @db.Text
+  status       ReportStatus      @default(PENDING)
+  resolution   ReportResolution?
+  adminNote    String?           @db.Text
+  resolvedAt   DateTime?
+  resolvedById String?
+  resolvedBy   User?             @relation("ResolvedJobReports", fields: [resolvedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([jobId])
+  @@index([status])
+  @@index([reporterId])
+  @@index([resolution])
+  @@map("job_reports")
 }
