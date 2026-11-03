@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { apiFetch } from "@/lib/api-client";
 import { useAdminDashboardOverview } from "@/hooks/useAdminDashboard";
+import { useAdminJobReportStats } from "@/hooks/useAdminJobReports";
 import { useAdminAuthStore, useCurrentUser } from "@/stores/auth-store";
 import { Icon } from "@/components/ui/Icon";
 import { MobileNavDrawer, useMobileNav } from "./MobileNavDrawer";
@@ -22,6 +23,7 @@ const NAV_ITEMS: SideNavItem[] = [
   { label: "Kỹ năng", icon: "sparkles", href: "/admin/skills", matchNested: true },
   { label: "Danh mục học vấn", icon: "graduation-cap", href: "/admin/education-catalog", matchNested: true },
   { label: "Người dùng", icon: "users", href: "/admin/users", matchNested: true },
+  { label: "Báo cáo vi phạm", icon: "flag", href: "/admin/job-reports", matchNested: true },
   { label: "Báo cáo", icon: "flag", soon: true },
   { label: "Nhật ký hoạt động", icon: "scroll-text", href: "/admin/activity" },
   { label: "Cài đặt", icon: "settings", href: "/admin/settings" },
@@ -34,6 +36,7 @@ const CRUMB_LABELS: Record<string, string> = {
   skills: "Kỹ năng",
   "education-catalog": "Danh mục học vấn",
   users: "Người dùng",
+  "job-reports": "Báo cáo vi phạm",
   notifications: "Thông báo",
   activity: "Nhật ký hoạt động",
   settings: "Cài đặt",
@@ -52,6 +55,7 @@ export function AdminConsoleShell({ children }: { children: ReactNode }) {
   // Tổng quan nên không gọi API hai lần; sau mỗi thao tác duyệt trên dashboard
   // số này tải lại cùng thẻ hàng chờ.
   const { data: overview } = useAdminDashboardOverview();
+  const { data: reportStats } = useAdminJobReportStats();
   const queues = overview?.queues;
   const pendingByHref: Record<string, { count: number; label: string }> = queues
     ? {
@@ -64,6 +68,10 @@ export function AdminConsoleShell({ children }: { children: ReactNode }) {
         },
       }
     : {};
+  if (reportStats && reportStats.pending > 0) {
+    pendingByHref["/admin/job-reports"] = { count: reportStats.pending, label: "báo cáo chờ xử lý" };
+  }
+
   const navItems = NAV_ITEMS.map((item) => {
     const pending = item.href ? pendingByHref[item.href] : undefined;
     return pending

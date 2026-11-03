@@ -1940,6 +1940,93 @@ export interface AuditActivityItem {
   companyId: string | null;
 }
 
+
+// ─── Job Reports ─────────────────────────────────────────────────────────────
+
+export type ReportReason = "SCAM" | "CHARGING_FEE" | "INAPPROPRIATE" | "MISLEADING" | "OTHER";
+export type ReportStatus = "PENDING" | "RESOLVED";
+export type ReportResolution = "TAKE_DOWN" | "DISMISS";
+
+export interface CreateJobReportRequest {
+  reason: ReportReason;
+  description?: string | undefined;
+}
+
+export interface JobReportDto {
+  id: string;
+  jobId: string;
+  jobTitle?: string;
+  jobStatus?: JobPostStatus;
+  companyName?: string;
+  companyId?: string;
+  employerUserId?: string;
+  reporterId: string;
+  reporterEmail?: string;
+  reporterName?: string | null;
+  reason: ReportReason;
+  description: string | null;
+  status: ReportStatus;
+  resolution: ReportResolution | null;
+  adminNote: string | null;
+  resolvedAt: string | null;
+  resolvedById: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminJobReportListItem {
+  id: string;
+  jobId: string;
+  jobTitle: string;
+  jobStatus: JobPostStatus;
+  companyId: string;
+  companyName: string;
+  employerUserId: string;
+  reporterId: string;
+  reporterEmail: string;
+  reporterName: string | null;
+  reason: ReportReason;
+  description: string | null;
+  status: ReportStatus;
+  resolution: ReportResolution | null;
+  adminNote: string | null;
+  resolvedAt: string | null;
+  resolvedById: string | null;
+  resolvedByName?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminJobReportListQuery {
+  page?: number | undefined;
+  limit?: number | undefined;
+  status?: ReportStatus | "ALL" | undefined;
+  resolution?: ReportResolution | "ALL" | undefined;
+  reason?: ReportReason | "ALL" | undefined;
+  q?: string | undefined;
+}
+
+export interface AdminJobReportListResponse {
+  items: AdminJobReportListItem[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface AdminJobReportStats {
+  pending: number;
+  resolved: number;
+  takeDownCount: number;
+  dismissCount: number;
+  total: number;
+}
+
+export interface JobReportActionRequest {
+  resolution: ReportResolution;
+  adminNote?: string | undefined;
+  reason?: string | undefined;
+}
 /** Nhóm hành động của nhật ký (AD-20); bộ lọc `group` và biểu đồ theo nhóm. */
 export type AuditActionGroup = "JOB_POST" | "COMPANY" | "CATALOG" | "PAYMENT" | "ACCOUNT" | "SECURITY";
 

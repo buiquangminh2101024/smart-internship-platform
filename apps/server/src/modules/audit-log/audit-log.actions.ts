@@ -29,6 +29,10 @@ export const AUDIT_ACTIONS = [
   "USER_SESSIONS_REVOKED",
   "USER_ACTIVATED",
   "USER_PASSWORD_RESET_GUIDE_SENT",
+  // Báo cáo tin vi phạm
+  "JOB_REPORT_RESOLVED",
+  "JOB_REPORT_REJECTED",
+  "JOB_REPORT_ACTION_EXECUTED",
   // Bảo mật (AD-20, docs/06-backend/admin-audit-log/PLAN.md L2–L6)
   "AUTH_LOGIN_SUCCEEDED",
   "AUTH_LOGIN_FAILED_REPEATED",
@@ -38,7 +42,15 @@ export const AUDIT_ACTIONS = [
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
-export type AuditEntityType = "JobPost" | "Company" | "Skill" | "University" | "Major" | "Subscription" | "User";
+export type AuditEntityType =
+  | "JobPost"
+  | "Company"
+  | "Skill"
+  | "University"
+  | "Major"
+  | "Subscription"
+  | "User"
+  | "JobReport";
 
 /**
  * Nhóm hành động (L1): bộ lọc và biểu đồ làm việc theo nhóm. Mỗi action thuộc
