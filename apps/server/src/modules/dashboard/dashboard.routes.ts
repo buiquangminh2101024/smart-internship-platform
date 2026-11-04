@@ -32,10 +32,6 @@ export function dashboardRouter(container: AwilixContainer): Router {
     void resolveController().employerOverview(req, res, next);
   });
 
-  router.get("/employer/dashboard/tasks", ...employerGuard, (req, res, next) => {
-    void resolveController().employerTasks(req, res, next);
-  });
-
   router.get(
     "/employer/dashboard/analytics",
     ...employerGuard,

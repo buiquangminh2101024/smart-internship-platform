@@ -1581,7 +1581,7 @@ export interface UnreadCountByGroupResponse {
 // docs/06-backend/dashboard-employer-admin/PLAN.md. Mọi mốc "ngày" theo giờ
 // Việt Nam (Asia/Ho_Chi_Minh); "7 ngày" = hôm nay và 6 ngày trước đó.
 
-/** Nút 7/30/90 ngày — chỉ đổi chuỗi theo ngày và phễu (D10). */
+/** Nút 7/30/90 ngày — chỉ đổi chuỗi theo ngày (D10). */
 export type DashboardRange = 7 | 30 | 90;
 
 /** Một điểm của chuỗi theo ngày; server điền đủ ngày trống bằng 0. `date` dạng YYYY-MM-DD. */
@@ -1625,18 +1625,14 @@ export type OutreachDailyQuotaStatus =
 export interface EmployerDashboardOverview {
   company: { id: string; name: string; verificationStatus: CompanyVerificationStatus };
   jobs: JobPostStats & {
-    /** Tin PUBLISHED có expiresAt trong 7 ngày tới (còn lại của `published` là còn hạn > 7 ngày). */
-    expiringIn7Days: number;
-    /** Tin PUBLISHED có nhiều hồ sơ nhất (không tính hồ sơ đã huỷ). */
-    topJob: { id: string; title: string; applicationCount: number } | null;
     /** Thẻ "Tin cần chú ý"; bằng số dòng của GET /employer/job-posts?attention=1. */
     attention: JobPostAttentionSummary;
   };
   applications: {
     /** Hồ sơ mới trong 7 ngày so với 7 ngày trước đó. */
     newLast7Days: PeriodComparison;
+    /** Thẻ "Hồ sơ chờ xử lý" và số chờ trên menu của EmployerPortalShell. */
     pendingCount: number;
-    pendingWait: WaitBuckets;
     /** Mốc bắt đầu chờ của hồ sơ PENDING lâu nhất (ISO), null nếu không có. */
     oldestPendingSince: string | null;
   };
@@ -1647,16 +1643,11 @@ export interface EmployerDashboardOverview {
     /** Tối đa 3 hội thoại chưa đọc, tin mới nhất trước. */
     recent: Array<{ conversationId: string; candidateName: string; lastMessageAt: string }>;
   };
-  outreach: {
-    quota: OutreachDailyQuotaStatus;
-    /** Lời mời gửi trong 30 ngày qua; tỉ lệ chấp nhận = accepted / sent. */
-    last30Days: { sent: number; accepted: number; declined: number };
-  };
+  /** Hạn mức lời mời hôm nay, cho dòng nhắc gói dịch vụ. */
+  outreach: { quota: OutreachDailyQuotaStatus };
   /** Lịch SCHEDULED của hồ sơ đang INTERVIEWING, cả công ty. */
   interviews: {
-    /** 7 ngày kể từ hôm nay (giờ Việt Nam), đủ 7 điểm — dùng cho DayColumns. */
-    next7Days: DailyPoint[];
-    /** Số buổi chưa diễn ra trong 7 ngày tới (ô "phỏng vấn sắp tới" của banner). */
+    /** Số buổi chưa diễn ra trong 7 ngày tới (thẻ "Phỏng vấn"). */
     upcomingCount: number;
     /**
      * Số buổi SCHEDULED đã diễn ra trong 7 ngày qua (từ đầu ngày cách đây 6 ngày tới
@@ -1669,57 +1660,11 @@ export interface EmployerDashboardOverview {
   };
 }
 
-export interface DashboardPendingApplication {
-  applicationId: string;
-  candidateName: string | null;
-  candidateAvatarUrl: string | null;
-  /** Trường của học vấn đại diện (đang học trước, rồi năm kết thúc gần nhất); null nếu chưa khai. */
-  universityName: string | null;
-  jobPostId: string;
-  jobPostTitle: string;
-  /** Mốc bắt đầu chờ: lúc ứng tuyển, hoặc lúc ứng tuyển lại. */
-  waitingSince: string;
-}
-
-export interface DashboardAttentionJob {
-  jobPostId: string;
-  title: string;
-  /** EXPIRING: PUBLISHED hết hạn trong 7 ngày. REJECTED: bị Admin từ chối, đang là nháp. */
-  kind: "EXPIRING" | "REJECTED";
-  expiresAt: string | null;
-  rejectedReason: string | null;
-  rejectedAt: string | null;
-  /** Số hồ sơ của tin, không tính hồ sơ đã huỷ. */
-  applicationCount: number;
-}
-
-/** GET /employer/dashboard/tasks — mỗi nhóm tối đa 5 mục kèm tổng. */
-export interface EmployerDashboardTasks {
-  /** Chờ lâu nhất trước. */
-  pendingApplications: { total: number; wait: WaitBuckets; items: DashboardPendingApplication[] };
-  /** Sắp hết hạn trước (gần hạn nhất trước), rồi tới tin bị từ chối (mới nhất trước). */
-  attentionJobs: { total: number; items: DashboardAttentionJob[] };
-  /** Hồ sơ chờ đặt lịch phỏng vấn, chờ lâu nhất trước. */
-  awaitingSchedule: { total: number; items: AwaitingScheduleApplication[] };
-  /** `total` = số buổi chưa diễn ra trong 7 ngày tới; `items` = 5 buổi gần nhất trong khoảng đó. */
-  upcomingInterviews: { total: number; items: EmployerInterview[] };
-}
-
-/** Các bước phễu trên đường chính (AD-16 mục 6). */
-export type FunnelStep = "APPLIED" | "REVIEWING" | "SHORTLISTED" | "INTERVIEWING" | "ACCEPTED";
-
 /** GET /employer/dashboard/analytics?range= */
 export interface EmployerDashboardAnalytics {
   range: DashboardRange;
   applicationsDaily: DailyPoint[];
   viewsDaily: DailyPoint[];
-  /**
-   * Hồ sơ nộp trong kỳ (không tính hồ sơ đã huỷ), đếm "đã đạt bước". Hồ sơ cũ
-   * bị từ chối trước khi có lịch sử chỉ tính ở APPLIED — `legacyRejected` là số đó.
-   */
-  funnel: { steps: Array<{ step: FunnelStep; count: number }>; legacyRejected: number };
-  /** Từ lúc hồ sơ vào PENDING tới lần employer xem xét/từ chối đầu tiên, trong kỳ. */
-  firstResponse: { averageHours: number | null; sampleSize: number };
 }
 
 /** GET /admin/dashboard/overview — `oldestSince`: mốc bắt đầu chờ của mục chờ lâu nhất (ISO), null nếu hàng chờ trống. */

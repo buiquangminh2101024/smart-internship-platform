@@ -1,16 +1,11 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import type {
-  DashboardRange,
-  EmployerDashboardAnalytics,
-  EmployerDashboardOverview,
-  EmployerDashboardTasks,
-} from "@sip/shared-types";
+import type { DashboardRange, EmployerDashboardAnalytics, EmployerDashboardOverview } from "@sip/shared-types";
 import { apiFetch } from "@/lib/api-client";
 
 /**
- * Dashboard Employer (AD-16) — ba truy vấn độc lập để mỗi khối có trạng thái
+ * Dashboard Employer (AD-16) — hai truy vấn độc lập để mỗi khối có trạng thái
  * đang tải / lỗi riêng. Mọi key bắt đầu bằng `EMPLOYER_DASHBOARD_KEY` để
  * invalidate cả dashboard một lần (sau thao tác, khi có thông báo realtime).
  */
@@ -24,14 +19,6 @@ export function useEmployerDashboardOverview(enabled = true) {
     queryKey: [...EMPLOYER_DASHBOARD_KEY, "overview"],
     queryFn: () => apiFetch<EmployerDashboardOverview>("employer", "/employer/dashboard/overview"),
     enabled,
-    staleTime: STALE_MS,
-  });
-}
-
-export function useEmployerDashboardTasks() {
-  return useQuery({
-    queryKey: [...EMPLOYER_DASHBOARD_KEY, "tasks"],
-    queryFn: () => apiFetch<EmployerDashboardTasks>("employer", "/employer/dashboard/tasks"),
     staleTime: STALE_MS,
   });
 }

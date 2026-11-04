@@ -2,7 +2,7 @@
 
 Thay bố cục Employer bản C trong `docs/05-frontend/phases/dashboard-employer-admin/PLAN.md`. Phần backend nhỏ nên ghi chung trong file này, không tách plan riêng. Dashboard Admin và trang nhật ký hoạt động **không** thuộc đợt này.
 
-**Trạng thái: ĐỢT 1 ĐÃ XONG (2026-11-04): Phần 1 (backend) và Phần 2 (frontend). Chờ chủ dự án kiểm rồi mới làm Đợt 2 (xoá).** Q1–Q4 đã chốt (E8–E11). Xem "Kết quả Phần 1" và "Kết quả Phần 2".
+**Trạng thái: ĐỢT 1 và ĐỢT 2 ĐÃ XONG (2026-11-04). Còn Đợt 3 (tài liệu).** Q1–Q4 đã chốt (E8–E11). Xem "Kết quả Phần 1/2/3" và "Kết quả Đợt 2".
 
 ## Lý do
 
@@ -201,18 +201,27 @@ Chủ dự án thấy trang còn ít thông tin; đã xem mockup bằng chữ v�
 - Kiểm: `tsc` và eslint sạch. `pickReminder` chạy qua 9 trường hợp (5 câu, 2 trường hợp ẩn, giờ làm mới trước/sau 07:00) và các mốc 12h/20h/30h/7 ngày/8 ngày: đúng. Trình duyệt: công ty demo đang `BLOCKED` nên hiện câu số 1; bảng rỗng đúng câu. Bảng có dữ liệu kiểm bằng dữ liệu giả chặn ở XHR trong tab (không sửa code): xếp đúng, tin 0 lượt xem ghi "—", tin còn 3 ngày tô marigold, tên dài cắt bằng "…". Ở 375px (iframe): danh sách 3 dòng, không cuộn ngang. Không lỗi console.
 - Chưa kiểm trên dữ liệu thật: câu 2–5 của dòng nhắc, bảng có tin thật (chờ dữ liệu demo, E11).
 
-## Đợt 2 — Xoá phần không còn dùng (làm sau, xác nhận lại trước khi làm)
+## Đợt 2 — Xoá phần không còn dùng (xong 2026-11-04)
 
 Chỉ làm khi đợt 1 đã chạy ổn trên trang thật. Trước khi xoá, grep lại từng tên để chắc không còn nơi nào dùng (kể cả `support-chat` và `tests/`).
 
+Đã rà lại từng tên ngày 2026-11-04 (grep `apps/web`, `apps/server` gồm `src`, `tests`, `scripts`, `support-chat`, và `packages/shared-types`). Bảng dưới là bản đã sửa theo kết quả rà.
+
 | Phía | Xoá | Ghi chú |
 |---|---|---|
-| Server | `GET /employer/dashboard/tasks`: route, controller, `EmployerDashboardService.tasks`, các hàm repository chỉ nó dùng (`listPendingApplications`, `listExpiringJobs`, `listRejectedJobs` nếu B2 không còn dùng) | `InterviewsService.awaitingForCompany`/`upcomingForCompany` vẫn được trang lịch phỏng vấn dùng: giữ |
-| Server | Trong `analytics`: `funnel`, `firstResponse` và hàm repository tương ứng | Giữ `applicationsDaily`, `viewsDaily` (E10) |
-| Server | Trong `overview`: `outreach.last30Days` (**giữ `outreach.quota`** cho dòng nhắc F3), `jobs.topJob`, `applications.pendingWait`, `interviews.next7Days`, `jobs.expiringIn7Days` (đã chuyển vào `jobs.attention`); `DashboardRepository.countExpiringJobs` (từ Phần 1 không còn ai gọi) | Bỏ phụ thuộc `candidateOutreachService` của service nếu không còn dùng |
-| Shared types | `EmployerDashboardTasks`, `DashboardPendingApplication`, `DashboardAttentionJob`, các trường vừa bỏ | |
-| Web | `useEmployerDashboardTasks`; `SummaryBanner`, `EmployerKpiGrid`, `EmployerTaskBoard`, `EmployerAnalytics`; `InterviewGroups` (kiểm lại); `DayColumns`, `CompareBars`, `BarList` (hiện chỉ dashboard Employer dùng) | **Giữ** `QuotaBar`, `SegmentBar`, `RangeChips`, `TaskGroup`, `TrendChart` vì trang khác hoặc Admin đang dùng |
+| Server | `GET /employer/dashboard/tasks`: route, controller, `EmployerDashboardService.tasks`, hằng `TASK_LIMIT`, `EXPIRING_WINDOW_DAYS`; repository `listPendingApplications`, `listExpiringJobs`, `listRejectedJobs`; `InterviewsService.awaitingForCompany` (chỉ `tasks()` gọi) | Trang lịch phỏng vấn gọi thẳng repository `countAwaitingSchedule`/`listAwaitingSchedule`: giữ hai hàm này. `upcomingForCompany`, `pastWeekCountForCompany`, `nextForCompany` overview còn dùng: giữ |
+| Server | Trong `analytics`: `funnel`, `firstResponse` và hai hàm repository tương ứng | Giữ `applicationsDaily`, `viewsDaily` (E10) |
+| Server | Trong `overview`: `outreach.last30Days` (`DashboardRepository.outreachLast30Days`), `jobs.topJob` (`findTopPublishedJob`), `applications.pendingWait` (bỏ phần tính trong SQL của `applicationSummary`), `interviews.next7Days` (`interviewsNext7Days`), `jobs.expiringIn7Days`; `DashboardRepository.countExpiringJobs` | **Giữ** `outreach.quota` (dòng nhắc F3) nên vẫn giữ phụ thuộc `candidateOutreachService`. **Giữ** `applications.pendingCount`: `EmployerPortalShell` đọc để hiện số hồ sơ chờ trên menu ở mọi trang |
+| Shared types | `EmployerDashboardTasks`, `DashboardPendingApplication`, `DashboardAttentionJob`, `FunnelStep`, các trường vừa bỏ | Giữ `WaitBuckets`, `PeriodComparison`, `JobPostWaitBuckets` (Admin dùng). Build lại `dist` |
+| Web | `useEmployerDashboardTasks`; `SummaryBanner`, `EmployerKpiGrid`, `EmployerTaskBoard`, `EmployerAnalytics`, `InterviewGroups`, `DayColumns`, `CompareBars`, `BarList` | **Giữ** `QuotaBar`, `SegmentBar`, `RangeChips`, `Panel` (trang Lời mời), `TaskGroup` (hàng hồ sơ, trang lịch phỏng vấn), `TrendChart`, `ColumnChart` (Admin), mọi hàm trong `lib/dashboard-format.ts` |
+| Comment | `hooks/useApplications.ts`, `candidate-outreach.repository.ts`, shared types, `StatCard.tsx`, `ActivityBarList.tsx` đang nhắc tên đồ bị xoá: sửa lại | Skill `sip-ui` để đợt 3 |
 | Test | Cập nhật `employer-dashboard-service.test.ts` | |
+
+### Kết quả Đợt 2 (2026-11-04)
+
+- Đã xoá đúng bảng trên: 8 file component web, hook `useEmployerDashboardTasks`, route `GET /employer/dashboard/tasks` (giờ trả 404), 9 hàm repository cùng các hàm phụ chỉ chúng dùng (`REPRESENTATIVE_UNIVERSITY`, `JOB_APPLICATION_COUNT`, `funnelRank`, `FUNNEL_STEPS`, `Page`/`toPage`), `InterviewsService.awaitingForCompany`, 4 kiểu và các trường cũ trong shared types. Comment nhắc đồ đã xoá đã sửa.
+- `EmployerDashboardOverview` còn: `company`; `jobs` (`ownStats` + `attention`); `applications` (`newLast7Days`, `pendingCount`, `oldestPendingSince`); `messages`; `outreach.quota`; `interviews` (`upcomingCount`, `last7Days`, `next`). `EmployerDashboardAnalytics` còn `range`, `applicationsDaily`, `viewsDaily`.
+- Kiểm: build shared types; `tsc` server và web sạch; eslint web không lỗi (cảnh báo cũ ở file khác); test `employer-dashboard-service` (4, đã viết lại, kiểm cả việc trường cũ không còn), `admin-dashboard-service`, `job-post-attention`, `interviews-pagination` đều qua. Câu SQL `applicationSummary` đã bỏ phần `pendingWait` chạy thử trên DB dev (chỉ SELECT): đúng. Chưa xem lại trang trên trình duyệt sau khi xoá (extension chưa kết nối).
 
 ## Đợt 3 — Tài liệu
 

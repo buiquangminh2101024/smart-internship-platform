@@ -22,7 +22,7 @@ export interface StatCardProps {
   hint?: ReactNode;
   /** `attention` = việc đang chờ người xử lý: viền trái 3px marigold. */
   tone?: "default" | "attention";
-  /** Phần minh hoạ có nhãn và số (SegmentBar, CompareBars...). */
+  /** Phần minh hoạ có nhãn và số (SegmentBar, QuotaBar...). */
   footer?: ReactNode;
   /** Trang chi tiết — nhãn thẻ thành liên kết. */
   href?: string;

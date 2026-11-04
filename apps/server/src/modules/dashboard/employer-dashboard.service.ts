@@ -1,25 +1,14 @@
-import type {
-  DashboardAttentionJob,
-  DashboardRange,
-  EmployerDashboardAnalytics,
-  EmployerDashboardOverview,
-  EmployerDashboardTasks,
-} from "@sip/shared-types";
+import type { DashboardRange, EmployerDashboardAnalytics, EmployerDashboardOverview } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
 import type { CandidateOutreachService } from "../candidate-outreach/candidate-outreach.service";
 import type { CompanyRepository } from "../companies/company.repository";
 import type { EmployerIdentityCache } from "../employers/employer-identity-cache";
 import type { InterviewsService } from "../interviews/interviews.service";
-import { ATTENTION_EXPIRING_DAYS } from "../job-posts/job-post.repository";
 import type { JobPostsService } from "../job-posts/job-posts.service";
 import type { MessagingService } from "../messaging/messaging.service";
 import type { DashboardRepository } from "./dashboard.repository";
 
-/** Mỗi nhóm "việc cần làm" hiện tối đa bấy nhiêu mục, còn lại là "Xem tất cả". */
-const TASK_LIMIT = 5;
 const RECENT_CONVERSATION_LIMIT = 3;
-/** "Tin sắp hết hạn" trên dashboard — dùng chung hằng số với bộ lọc "tin cần chú ý" của job-posts. */
-const EXPIRING_WINDOW_DAYS = ATTENTION_EXPIRING_DAYS;
 
 /**
  * Dashboard Employer (AD-16) — chỉ đọc. Số liệu tính cho cả công ty của
@@ -68,14 +57,11 @@ export class EmployerDashboardService {
     const [
       stats,
       attention,
-      topJob,
       applications,
       unread,
       unreadCandidates,
       recentConversations,
       quota,
-      outreach,
-      interviewsDaily,
       upcomingInterviews,
       pastWeekInterviews,
       nextInterview,
@@ -83,14 +69,11 @@ export class EmployerDashboardService {
       this.jobPostsService.ownStats(userId),
       // Cùng điều kiện với GET /employer/job-posts?attention=1 (định nghĩa ở job-posts).
       this.jobPostsService.attentionSummaryForCompany(companyId),
-      this.dashboardRepository.findTopPublishedJob(companyId),
       this.dashboardRepository.applicationSummary(companyId),
       this.messagingService.getUnreadSummary(userId, "EMPLOYER"),
       this.dashboardRepository.countUnreadCandidates(employerId, userId),
       this.dashboardRepository.listUnreadConversations(employerId, userId, RECENT_CONVERSATION_LIMIT),
       this.candidateOutreachService.getDailyQuotaStatus({ companyId, company }),
-      this.dashboardRepository.outreachLast30Days(companyId),
-      this.dashboardRepository.interviewsNext7Days(companyId),
       this.interviewsService.upcomingForCompany(companyId, 0),
       this.interviewsService.pastWeekCountForCompany(companyId),
       this.interviewsService.nextForCompany(companyId),
@@ -102,12 +85,10 @@ export class EmployerDashboardService {
         name: company.name,
         verificationStatus: company.verificationStatus,
       },
-      // `expiringIn7Days` cũ giữ tới đợt 2 (employer-dashboard-v2), lấy cùng nguồn với `attention`.
-      jobs: { ...stats, expiringIn7Days: attention.expiringIn7Days, topJob, attention },
+      jobs: { ...stats, attention },
       applications: {
         newLast7Days: applications.newLast7Days,
         pendingCount: applications.pendingCount,
-        pendingWait: applications.pendingWait,
         oldestPendingSince: applications.oldestPendingSince?.toISOString() ?? null,
       },
       messages: {
@@ -119,9 +100,8 @@ export class EmployerDashboardService {
           lastMessageAt: conversation.lastMessageAt.toISOString(),
         })),
       },
-      outreach: { quota, last30Days: outreach },
+      outreach: { quota },
       interviews: {
-        next7Days: interviewsDaily,
         upcomingCount: upcomingInterviews.total,
         last7Days: pastWeekInterviews,
         next: nextInterview
@@ -136,70 +116,16 @@ export class EmployerDashboardService {
     };
   }
 
-  async tasks(userId: string): Promise<EmployerDashboardTasks> {
-    const { companyId } = await this.requireEmployer(userId);
-    const [summary, pending, expiring, rejected, awaitingSchedule, upcomingInterviews] = await Promise.all([
-      this.dashboardRepository.applicationSummary(companyId),
-      this.dashboardRepository.listPendingApplications(companyId, TASK_LIMIT),
-      this.dashboardRepository.listExpiringJobs(companyId, EXPIRING_WINDOW_DAYS, TASK_LIMIT),
-      this.dashboardRepository.listRejectedJobs(companyId, TASK_LIMIT),
-      this.interviewsService.awaitingForCompany(companyId, TASK_LIMIT),
-      this.interviewsService.upcomingForCompany(companyId, TASK_LIMIT),
-    ]);
-
-    const attention: DashboardAttentionJob[] = [
-      ...expiring.items.map((job): DashboardAttentionJob => ({
-        jobPostId: job.jobPostId,
-        title: job.title,
-        kind: "EXPIRING",
-        expiresAt: job.expiresAt.toISOString(),
-        rejectedReason: null,
-        rejectedAt: null,
-        applicationCount: job.applicationCount,
-      })),
-      ...rejected.items.map((job): DashboardAttentionJob => ({
-        jobPostId: job.jobPostId,
-        title: job.title,
-        kind: "REJECTED",
-        expiresAt: null,
-        rejectedReason: job.rejectedReason,
-        rejectedAt: job.rejectedAt.toISOString(),
-        applicationCount: job.applicationCount,
-      })),
-    ];
-
-    return {
-      pendingApplications: {
-        total: summary.pendingCount,
-        wait: summary.pendingWait,
-        items: pending.map((application) => ({
-          applicationId: application.applicationId,
-          candidateName: application.candidateName,
-          candidateAvatarUrl: application.candidateAvatarUrl,
-          universityName: application.universityName,
-          jobPostId: application.jobPostId,
-          jobPostTitle: application.jobPostTitle,
-          waitingSince: application.waitingSince.toISOString(),
-        })),
-      },
-      attentionJobs: { total: expiring.total + rejected.total, items: attention.slice(0, TASK_LIMIT) },
-      awaitingSchedule,
-      upcomingInterviews,
-    };
-  }
-
   async analytics(userId: string, range: DashboardRange): Promise<EmployerDashboardAnalytics> {
     const { companyId } = await this.requireEmployer(userId);
-    const [applicationsDaily, viewsDaily, funnel, firstResponse] = await Promise.all([
+    const [applicationsDaily, viewsDaily] = await Promise.all([
       this.dashboardRepository.applicationsDaily(companyId, range),
       this.dashboardRepository.viewsDaily(companyId, range),
-      this.dashboardRepository.funnel(companyId, range),
-      this.dashboardRepository.firstResponse(companyId, range),
     ]);
-    return { range, applicationsDaily, viewsDaily, funnel, firstResponse };
+    return { range, applicationsDaily, viewsDaily };
   }
 
-  // AD-19: tasks/analytics chỉ cần companyId ⇒ không hỏi DB.
+  // AD-19: analytics chỉ cần companyId ⇒ không hỏi DB.
   private requireEmployer(userId: string) {
     return this.employerIdentityCache.require(userId);
   }

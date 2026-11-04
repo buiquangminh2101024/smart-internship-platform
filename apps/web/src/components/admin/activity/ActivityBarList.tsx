@@ -15,8 +15,7 @@ export interface ActivityBarItem<K extends string> {
 
 /**
  * Thanh ngang có số và phần trăm, mỗi hàng là nút bật/tắt bộ lọc (`aria-pressed`).
- * Dựng theo ý `BarList` của dashboard nhưng viết riêng, vì `BarList` là `<dl>`
- * chỉ để đọc. Dùng cho "Tỉ lệ theo nhóm" và "Vai trò người làm".
+ * Dùng cho "Tỉ lệ theo nhóm" và "Vai trò người làm".
  */
 export function ActivityBarList<K extends string>({
   items,
