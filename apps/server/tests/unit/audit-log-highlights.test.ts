@@ -6,13 +6,17 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { activityHighlightsQuerySchema } from "../../src/modules/audit-log/audit-log.dto";
 import {
+  DANGEROUS_ACTIONS_PER_HOUR,
+  DANGEROUS_ADMIN_ACTIONS,
   HIGHLIGHT_ACCOUNT_LIMIT,
   KNOWN_IP_LIMIT,
   SUBMIT_BURST_PER_HOUR,
   findNewIpLogins,
+  findReportedJobs,
   groupBurstHours,
   summarizeRule,
   type AdminLoginRow,
+  type PendingReportRow,
 } from "../../src/modules/audit-log/audit-log.highlights";
 import { AuditLogService } from "../../src/modules/audit-log/audit-log.service";
 
@@ -141,6 +145,87 @@ test("gửi tin dồn dập: gộp theo tài khoản, số giờ, nhiều nhất
   assert.equal(emp1?.latestAt.toISOString(), "2026-11-03T02:50:00.000Z");
 });
 
+// ─── findReportedJobs (quy tắc e) ────────────────────────────────────────
+
+const HOUR = 60 * 60 * 1000;
+const WEEK = { gte: at("2026-10-28T17:00:00Z"), lt: at("2026-11-04T17:00:00Z") };
+const report = (id: string, jobId: string, reporterId: string, iso: string): PendingReportRow => ({
+  id,
+  jobId,
+  reporterId,
+  createdAt: at(iso),
+});
+
+test("tin bị báo cáo: đúng 3 người trong 24 giờ (tính cả mốc 24 giờ) thì báo; cách 24 giờ 1 phút thì không", () => {
+  const exact = [
+    report("a1", "job-a", "c1", "2026-11-01T00:00:00Z"),
+    report("a2", "job-a", "c2", "2026-11-01T10:00:00Z"),
+    report("a3", "job-a", "c3", "2026-11-02T00:00:00Z"),
+  ];
+  const late = [
+    report("b1", "job-b", "c1", "2026-11-01T00:00:00Z"),
+    report("b2", "job-b", "c2", "2026-11-01T10:00:00Z"),
+    report("b3", "job-b", "c3", "2026-11-02T00:01:00Z"),
+  ];
+  const result = findReportedJobs([...late, ...exact], WEEK);
+  assert.deepEqual(result, [
+    {
+      jobId: "job-a",
+      pendingReports: 3,
+      crossedAt: at("2026-11-02T00:00:00Z"),
+      oldestPendingAt: at("2026-11-01T00:00:00Z"),
+      oldestPendingReportId: "a1",
+    },
+  ]);
+});
+
+test("tin bị báo cáo: một người báo hai lần chỉ tính một; còn 2 báo cáo chờ thì không báo", () => {
+  const twoPeople = [
+    report("a1", "job-a", "c1", "2026-11-01T00:00:00Z"),
+    report("a2", "job-a", "c1", "2026-11-01T01:00:00Z"),
+    report("a3", "job-a", "c2", "2026-11-01T02:00:00Z"),
+  ];
+  assert.deepEqual(findReportedJobs(twoPeople, WEEK), []);
+  // Người thứ ba tới: đủ 3 người, báo cáo trùng vẫn nằm trong số báo cáo đang chờ.
+  const result = findReportedJobs([...twoPeople, report("a4", "job-a", "c3", "2026-11-01T03:00:00Z")], WEEK);
+  assert.equal(result.length, 1);
+  assert.equal(result[0]?.pendingReports, 4);
+  assert.deepEqual(result[0]?.crossedAt, at("2026-11-01T03:00:00Z"));
+  assert.deepEqual(findReportedJobs(twoPeople.slice(0, 2), WEEK), []);
+});
+
+test("tin bị báo cáo: lấy lần đầu đạt ngưỡng theo cửa sổ trượt; đạt trước khoảng thì không tính", () => {
+  // Ba báo cáo đầu rải 3 ngày; báo cáo 2–4 trong 24 giờ ⇒ vượt ngưỡng ở báo cáo thứ tư.
+  const sliding = [
+    report("a1", "job-a", "c1", "2026-10-29T00:00:00Z"),
+    report("a2", "job-a", "c2", "2026-10-31T13:00:00Z"),
+    report("a3", "job-a", "c3", "2026-11-01T00:00:00Z"),
+    report("a4", "job-a", "c4", "2026-11-01T12:00:00Z"),
+  ];
+  // Đạt ngưỡng ngày 20/10 (trước khoảng 7 ngày), thêm báo cáo trong khoảng cũng không đổi.
+  const before = [
+    report("b1", "job-b", "c1", "2026-10-20T00:00:00Z"),
+    report("b2", "job-b", "c2", "2026-10-20T01:00:00Z"),
+    report("b3", "job-b", "c3", "2026-10-20T02:00:00Z"),
+    report("b4", "job-b", "c4", "2026-11-03T00:00:00Z"),
+  ];
+  const result = findReportedJobs([...before, ...sliding], WEEK);
+  assert.deepEqual(result.map((job) => [job.jobId, job.crossedAt.toISOString(), job.oldestPendingReportId]), [
+    ["job-a", "2026-11-01T12:00:00.000Z", "a1"],
+  ]);
+  const month = { gte: new Date(WEEK.lt.getTime() - 30 * DAY), lt: WEEK.lt };
+  assert.deepEqual(findReportedJobs(before, month).map((job) => job.jobId), ["job-b"]);
+});
+
+test("tin bị báo cáo: tin vượt ngưỡng gần nhất đứng trước; thứ tự đầu vào không quan trọng", () => {
+  const rows = ["job-x", "job-y", "job-z"].flatMap((jobId, j) =>
+    ["c1", "c2", "c3"].map((reporterId, i) =>
+      report(`${jobId}-${i}`, jobId, reporterId, new Date(Date.UTC(2026, 10, 1 + j) + i * HOUR).toISOString()),
+    ),
+  );
+  assert.deepEqual(findReportedJobs([...rows].reverse(), WEEK).map((job) => job.jobId), ["job-z", "job-y", "job-x"]);
+});
+
 // ─── GET /admin/activity/highlights ──────────────────────────────────────
 
 test("DTO highlights: mặc định 7, nhận 30, từ chối giá trị khác", () => {
@@ -173,6 +258,8 @@ function buildService(options: { archivedUntil?: Date | null } = {}) {
         ["CATALOG_ENTRY_APPROVED", 3],
         ["CATALOG_ENTRY_RENAME_APPROVED", 1],
         ["CATALOG_ENTRY_MERGED", 1],
+        ["JOB_REPORT_ACTION_EXECUTED", 2],
+        ["JOB_REPORT_RESOLVED", 3],
       ]),
     ),
     count: record("count", 2),
@@ -194,6 +281,22 @@ function buildService(options: { archivedUntil?: Date | null } = {}) {
     findSubmitBurstHours: record("findSubmitBurstHours", [
       { userId: "emp-1", hourStart: at("2026-11-01T20:00:00Z"), count: 24, latestAt: at("2026-11-01T20:55:00Z"), latestLogId: "s1" },
     ]),
+    findAdminDangerBurstHours: record("findAdminDangerBurstHours", [
+      { userId: "admin-1", hourStart: at("2026-10-31T14:00:00Z"), count: 6, latestAt: at("2026-10-31T14:48:00Z"), latestLogId: "d1" },
+    ]),
+    // job-a vượt ngưỡng 02/11 (trong khoảng); job-b có 3 báo cáo nhưng rải quá 24 giờ.
+    findPendingJobReports: record("findPendingJobReports", [
+      { id: "r1", jobId: "job-a", reporterId: "c1", createdAt: at("2026-11-02T01:00:00Z") },
+      { id: "r2", jobId: "job-a", reporterId: "c2", createdAt: at("2026-11-02T03:00:00Z") },
+      { id: "r3", jobId: "job-a", reporterId: "c3", createdAt: at("2026-11-02T05:30:00Z") },
+      { id: "r4", jobId: "job-b", reporterId: "c1", createdAt: at("2026-10-30T01:00:00Z") },
+      { id: "r5", jobId: "job-b", reporterId: "c2", createdAt: at("2026-11-01T01:00:00Z") },
+      { id: "r6", jobId: "job-b", reporterId: "c3", createdAt: at("2026-11-03T01:00:00Z") },
+    ]),
+    findJobTitles: record(
+      "findJobTitles",
+      new Map([["job-a", { title: "Thực tập sinh QA", companyName: "TechViet" }]]),
+    ),
   };
   const service = new AuditLogService({
     auditLogRepository,
@@ -237,6 +340,9 @@ test("highlights 7 ngày: khoảng tới hôm nay giờ VN, đủ ba quy tắc v
     failedLoginWindowMinutes: 15,
     newIpLookbackDays: 30,
     submitBurstPerHour: 10,
+    dangerousActionsPerHour: 5,
+    reportedJobMinReports: 3,
+    reportedJobWindowHours: 24,
   });
 
   const { failedLogins, adminNewIp, employerSubmitBurst } = result.attention;
@@ -280,7 +386,48 @@ test("highlights 7 ngày: khoảng tới hôm nay giờ VN, đủ ba quy tắc v
     companies: { verified: 4, rejected: 1 },
     payments: { completed: 5 },
     catalog: { approved: 4, rejected: 0, merged: 1 },
+    jobReports: { takenDown: 2, dismissed: 3 },
   });
+
+  // (d) cùng khoảng, năm action nguy hiểm, tắt kiểm duyệt mới tính, ngưỡng 5.
+  assert.deepEqual(calls.find((call) => call.method === "findAdminDangerBurstHours")?.args, [
+    range,
+    DANGEROUS_ADMIN_ACTIONS,
+    "COMPANY_REQUIRES_APPROVAL_CHANGED",
+    DANGEROUS_ACTIONS_PER_HOUR,
+  ]);
+  assert.deepEqual(result.attention.adminDangerBurst, {
+    count: 1,
+    accountCount: 1,
+    accounts: [
+      {
+        userId: "admin-1",
+        email: "admin@sip.vn",
+        count: 1,
+        latestAt: "2026-10-31T14:48:00.000Z",
+        latestLogId: "d1",
+        maxPerHour: 6,
+        latestHour: { since: "2026-10-31T14:00:00.000Z", until: "2026-10-31T14:59:59.999Z", count: 6 },
+      },
+    ],
+  });
+
+  // (e) chỉ job-a; tên tin chỉ tra cho tin hiện ra.
+  assert.deepEqual(result.attention.reportedJobs, {
+    count: 1,
+    items: [
+      {
+        jobId: "job-a",
+        title: "Thực tập sinh QA",
+        companyName: "TechViet",
+        pendingReports: 3,
+        crossedAt: "2026-11-02T05:30:00.000Z",
+        oldestPendingAt: "2026-11-02T01:00:00.000Z",
+        oldestPendingReportId: "r1",
+      },
+    ],
+  });
+  assert.deepEqual(calls.find((call) => call.method === "findJobTitles")?.args, [["job-a"]]);
   // "Gửi lại" đếm hai hành động gửi có cờ resubmit trong cùng khoảng.
   assert.deepEqual(calls.find((call) => call.method === "count")?.args, [
     {

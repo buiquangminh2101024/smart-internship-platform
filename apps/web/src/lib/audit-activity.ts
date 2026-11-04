@@ -51,6 +51,10 @@ export const ACTION_META: Record<string, { label: string; group: AuditActionGrou
   JOB_POST_APPROVED: { label: "Duyệt tin", group: "JOB_POST" },
   JOB_POST_REJECTED: { label: "Từ chối tin", group: "JOB_POST" },
   JOB_POST_RETRACTED: { label: "Hạ tin", group: "JOB_POST" },
+  JOB_REPORT_ACTION_EXECUTED: { label: "Gỡ tin theo báo cáo", group: "JOB_POST" },
+  JOB_REPORT_RESOLVED: { label: "Bỏ qua báo cáo", group: "JOB_POST" },
+  // Không chỗ nào ghi action này nữa; giữ nhãn để đọc được dữ liệu cũ.
+  JOB_REPORT_REJECTED: { label: "Bác báo cáo", group: "JOB_POST" },
   COMPANY_SUBMITTED: { label: "Gửi xác minh công ty", group: "COMPANY" },
   COMPANY_AUTO_VERIFIED: { label: "Tự xác minh công ty", group: "COMPANY" },
   COMPANY_VERIFIED: { label: "Xác minh công ty", group: "COMPANY" },
@@ -102,6 +106,7 @@ export const ENTITY_LABEL: Record<string, string> = {
   Skill: "Kỹ năng",
   University: "Trường",
   Major: "Ngành",
+  JobReport: "Báo cáo vi phạm",
 };
 
 /** Thứ Hai … Chủ Nhật, chỉ số `dow - 1` (1 = Thứ Hai, như API). */
@@ -134,6 +139,9 @@ export function entityHref(
     case "University":
     case "Major":
       return { href: "/admin/education-catalog", label: "Mở danh mục" };
+    case "JobReport":
+      // Trang Báo cáo vi phạm mở modal của báo cáo theo `?report=` (plan admin-activity-v2 B5).
+      return { href: `/admin/job-reports?report=${id}`, label: "Mở báo cáo" };
     default:
       return null;
   }

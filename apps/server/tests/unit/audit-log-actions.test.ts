@@ -17,6 +17,8 @@ test("groupOfAction: theo danh sách, action cũ xếp theo entityType, còn l�
   assert.equal(groupOfAction("PAYMENT_COMPLETED", "Subscription"), "PAYMENT");
   assert.equal(groupOfAction("AUTH_LOGIN_FAILED_REPEATED", "User"), "SECURITY");
   assert.equal(groupOfAction("JOB_POST_TAKEN_DOWN", "JobPost"), "JOB_POST");
+  assert.equal(groupOfAction("JOB_REPORT_ACTION_EXECUTED", "JobReport"), "JOB_POST");
+  assert.equal(groupOfAction("JOB_REPORT_SOMETHING_OLD", "JobReport"), "JOB_POST");
   assert.equal(groupOfAction("SOMETHING_OLD", "Major"), "CATALOG");
   assert.equal(groupOfAction("SOMETHING_OLD", "Interview"), "OTHER");
   assert.equal(groupOfAction("SOMETHING_OLD"), "OTHER");

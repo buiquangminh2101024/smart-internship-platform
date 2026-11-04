@@ -1,6 +1,6 @@
 # Nhật ký hoạt động Admin bản 2 — từ "bàn điều tra" về đúng "nhật ký"
 
-**Trạng thái: ĐÃ DUYỆT (2026-11-04). Xong A1–A8 (2026-11-04).**
+**Trạng thái: ĐÃ DUYỆT (2026-11-04). Xong A1–A8 (2026-11-04).** Bản 2.1 (thao tác nguy hiểm của Admin, báo cáo vi phạm; bước B0–B7): **ĐÃ DUYỆT (2026-11-04)**, xong B0–B3.
 
 Thay bố cục của `docs/05-frontend/phases/admin-audit-log/PLAN.md` (bản C "Bàn điều tra", xong 2026-10-18). Phần backend của nhật ký (`docs/06-backend/admin-audit-log/PLAN.md`: ghi nhật ký, index, lưu trữ, bảng thống kê theo giờ, xuất CSV) giữ nguyên, trừ một API mới ở N6.
 
@@ -138,7 +138,7 @@ Mỗi phần trả lời được bằng một câu:
 | --- | --- | --- |
 | Q1 | 8 file component không còn dùng (`ActivityStatsGrid`, `ActivityDayChart`, `ActivityBarList`, `TopActorsList`, `WeekHourHeatmap`, `JobPostFlow`, `ChartTable`, `SecurityAlertBar`), hook `useActivityStats`/`useRecentFailedLogins` và API `/stats`: xoá hay giữ? | **Xoá các file FE** (code chết dễ bị hỏi). **Giữ API `/stats` và bảng thống kê** ở bản này; xoá phía server là một bước riêng sau, vì đụng cron, AD-20 và bài đo hiệu năng trong tài liệu. |
 | Q2 | Quy tắc phát hiện tài khoản bất thường | **Đã chốt 2026-11-04: ba quy tắc theo vai trò (N4).** Phương án cũ "một tài khoản từ 20 thao tác/giờ" bị bỏ vì một ngưỡng chung cho mọi vai trò luôn kẹt giữa hai đầu: Admin làm năng suất (dữ liệu thật đã có giờ 8 thao tác) bị báo nhầm, còn nâng ngưỡng thì Employer bị hack lách qua. |
-| Q3 | Báo cáo tin vi phạm (`JOB_REPORT_*`, phần của bạn cùng nhóm) | **Đã chốt 2026-11-04: chưa đưa vào bản này**, ghi ở "Hướng phát triển" mục 2. |
+| Q3 | Báo cáo tin vi phạm (`JOB_REPORT_*`, phần của bạn cùng nhóm) | **Đã chốt 2026-11-04: chưa đưa vào bản 2.** Chốt lại cùng ngày: **làm ở bản 2.1** (mục dưới). |
 
 ## Các bước
 
@@ -153,29 +153,88 @@ Mỗi phần trả lời được bằng một câu:
 | A7 | Script `seed-activity-demo.ts` + lệnh npm | `--dry-run` do mình chạy; chạy thật do chủ dự án. **Script xong 2026-11-04, `--dry-run` ra 401 dòng; chưa chạy thật.** Lệch so với mục "Dữ liệu demo": DB chỉ có 3 Employer nên Employer gửi 9 tin dưới ngưỡng là một trong ba tài khoản dồn dập (MB Bank, ở giờ khác). Tin rác của quy tắc (c) và vài đề xuất danh mục bị từ chối hoặc được gộp là đối tượng không có trong DB, nên "Mở tin" ở các dòng đó không tìm thấy tin. Phần lớn tin thật đăng trước khoảng 30 ngày, nên ngày trong nhật ký không khớp ngày đăng trên trang tin. Thao tác kiểm duyệt của `seed-dashboard-demo` được chép sang nhật ký đúng thời điểm. Dòng đăng nhập sai thật ngày 18/10 cũng được đếm, nên 30 ngày ra 4 lần · 3 tài khoản |
 | A8 | Kiểm trên trang thật sau khi chủ dự án chạy seed; cập nhật plan cũ (ghi "đã thay bằng bản 2"), `sip-ui` mục Nhật ký hoạt động, `FEATURE_BACKLOG.md` (nếu chủ dự án đồng ý) | Ảnh chụp 375px và desktop. **Xong 2026-11-04** (sau khi chủ dự án chạy seed): 422 hoạt động trong 30 ngày; Điểm chính khớp `--dry-run` (7 ngày 1·1·1, 30 ngày 4·3, 1·1, 5·3); bấm tài khoản dồn dập lọc đúng 24 dòng giờ 03:00; ngăn kéo IP mới hiện IP quen, Esc trả focus về nút tài khoản; tiêu đề ngày "Hôm qua · 03/11/2026 · 13 hoạt động", ngày 02/11 ra 38 dù trang đầu chỉ tải một phần; 375px không cuộn ngang. Đã cập nhật plan cũ và `sip-ui`; `FEATURE_BACKLOG.md` chờ chủ dự án đồng ý |
 
+## Bản 2.1 — thao tác nguy hiểm của Admin và báo cáo vi phạm
+
+Làm hai mục 1 và 2 cũ của "Hướng phát triển". Chủ dự án đã đồng ý hướng làm (2026-11-04): danh sách thao tác nguy hiểm và ngưỡng 5 lần mỗi giờ; `JOB_REPORT_*` vào nhóm Tin tuyển dụng; quy tắc tin bị báo cáo với ngưỡng 3 báo cáo của 3 người trong 24 giờ.
+
+### Hiện trạng (kiểm chỉ đọc, 2026-11-04)
+
+- **Neon chưa có bảng `job_reports`.** `prisma migrate status` báo hai migration chưa chạy: `20261031120000_add_job_reports` và `20261031170000_refactor_job_report_resolution`. Server dev đang lỗi ở `JobReportRepository.countStats`. Quy tắc (e) đọc bảng này, nên phải chạy migration trước (B0).
+- `job-reports.service.ts` chỉ ghi hai action: `JOB_REPORT_ACTION_EXECUTED` (xử lý "Gỡ tin") và `JOB_REPORT_RESOLVED` (xử lý "Bỏ qua", giữ tin). `JOB_REPORT_REJECTED` có trong `AUDIT_ACTIONS` nhưng không chỗ nào ghi.
+- Khi gỡ tin đang hiển thị, service gọi `jobPostsService.retract`. Hàm này ghi thêm một dòng `JOB_POST_RETRACTED` (Admin). Vậy một lần gỡ tin theo báo cáo sinh **hai** dòng nhật ký.
+- Ba action `JOB_REPORT_*` chưa thuộc nhóm nào, và `JobReport` chưa có trong `GROUP_BY_ENTITY_TYPE`, nên các dòng rơi vào nhóm `OTHER`. Phía web, `ACTION_META` chưa có nhãn cho ba action này, và `entityHref` chưa có link cho `JobReport`.
+- **Tạo** báo cáo không ghi nhật ký (đó là việc của ứng viên, không phải thao tác quản trị).
+- Mỗi người chỉ có một báo cáo đang chờ trên một tin: `findPendingByJobAndReporter` chặn báo cáo trùng. Bảng có index `[jobId]`, `[status]`, `[reporterId]`, `[resolution]`, nhưng không có ràng buộc unique.
+- Trang `/admin/job-reports` (của bạn cùng nhóm) giữ bộ lọc và báo cáo đang mở bằng `useState`, không đọc URL. Chi tiết báo cáo mở trong modal `AdminJobReportDetailModal`, không có đường dẫn riêng. API `GET /admin/job-reports/:id` đã có.
+
+### Quyết định bản 2.1
+
+| # | Quyết định |
+| --- | --- |
+| M1 | **Nhóm:** `JOB_REPORT_RESOLVED`, `JOB_REPORT_REJECTED`, `JOB_REPORT_ACTION_EXECUTED` vào nhóm `JOB_POST`; `GROUP_BY_ENTITY_TYPE` thêm `JobReport: "JOB_POST"`. Không thêm nhóm thứ 7 hay token màu mới. Chọn "Tin tuyển dụng" ở ô "Loại hoạt động" sẽ thấy cả các dòng báo cáo. Test `audit-log-actions.test.ts` đã kiểm mọi phần tử của `AUDIT_ACTIONS` đều có nhóm và **đang đỏ** vì ba action này (kiểm lúc làm B1); thêm ca `groupOfAction` cho `JobReport`. |
+| M2 | **Nhãn web** (`ACTION_META`): `JOB_REPORT_ACTION_EXECUTED` "Gỡ tin theo báo cáo", `JOB_REPORT_RESOLVED` "Bỏ qua báo cáo", `JOB_REPORT_REJECTED` "Bác báo cáo" (chỉ để đọc được dữ liệu cũ, nếu có). `entityHref` của `JobReport` là `/admin/job-reports?report=<id>`, nhãn "Mở báo cáo" (cần M8). |
+| M3 | **Quy tắc (d): Admin thao tác nguy hiểm dồn dập.** Một Admin có từ **5** thao tác nguy hiểm trong cùng một giờ (giờ tròn, giờ Việt Nam). Thao tác nguy hiểm: `USER_SUSPENDED` (khoá tài khoản), `USER_SESSIONS_REVOKED` (đăng xuất mọi thiết bị), `COMPANY_REQUIRES_APPROVAL_CHANGED` **chỉ khi `metadata.requiresApproval = false`** (tắt kiểm duyệt tin), `COMPANY_REJECTED`, `JOB_POST_RETRACTED` (hạ tin, gồm cả gỡ tin theo báo cáo). Hằng số `DANGEROUS_ADMIN_ACTIONS`, `DANGEROUS_ACTIONS_PER_HOUR = 5` đặt ở `audit-log.highlights.ts`. Gom theo `(actorId, giờ)` và dùng lại `groupBurstHours` của quy tắc (c). |
+| M4 | **Vì sao đếm `JOB_POST_RETRACTED`, không đếm `JOB_REPORT_ACTION_EXECUTED`:** gỡ một tin đang hiển thị sinh cả hai dòng, đếm cả hai thì một lần thành hai. Đếm `JOB_POST_RETRACTED` thì bắt được cả hạ tin trực tiếp lẫn gỡ theo báo cáo. Nếu tin đã không còn hiển thị lúc gỡ thì không có gì bị hạ, nên không tính. Duyệt tin, từ chối tin, duyệt danh mục, xác minh công ty **không** tính: Admin làm nhiều những việc này là bình thường. Dữ liệu demo có giờ Admin từ chối 11 tin rác và duyệt 15 mục danh mục, cả hai đều không bị báo. |
+| M5 | **Quy tắc (e): tin bị nhiều người báo cáo chưa xử lý.** Đếm trên bảng `job_reports`, không qua nhật ký (vì tạo báo cáo không ghi nhật ký). Chỉ xét báo cáo `PENDING`. Với mỗi tin, mỗi người báo cáo chỉ lấy báo cáo sớm nhất. Một tin bị tính khi có **3 báo cáo của 3 người khác nhau trong vòng 24 giờ** (báo cáo thứ k và thứ k+2, xếp theo giờ tạo, cách nhau không quá 24 giờ). **Thời điểm vượt ngưỡng** là giờ tạo của báo cáo thứ ba trong lần đầu đạt ngưỡng. Hằng số: `REPORTED_JOB_MIN_REPORTS = 3`, `REPORTED_JOB_WINDOW_HOURS = 24`. |
+| M6 | **(e) theo kỳ 7/30 ngày:** chỉ tính tin có thời điểm vượt ngưỡng nằm trong kỳ đang chọn. Như vậy (e) vẫn là "chuyện đã xảy ra trong kỳ", giống các quy tắc khác. Admin xử lý một báo cáo thì tin còn dưới 3 báo cáo chờ, nên tự ra khỏi danh sách. Đơn vị đếm là **tin**, không phải tài khoản: dòng tóm tắt "N tin bị nhiều người báo cáo chưa xử lý". Bằng 0: "Không có tin bị báo cáo dồn dập". Mở ra: tối đa 10 tin, mỗi tin gồm tên tin, công ty, số báo cáo đang chờ, thời điểm vượt ngưỡng, báo cáo cũ nhất chờ từ lúc nào. Tin vượt ngưỡng gần nhất đứng trước. |
+| M7 | **Thứ tự "Cần xem"** (5 quy tắc, nhóm theo đối tượng): (a) đăng nhập sai liên tục, (b) Admin đăng nhập từ IP mới, (d) Admin thao tác nguy hiểm dồn dập, (c) Employer gửi duyệt dồn dập, (e) tin bị nhiều người báo cáo. Vẫn mặc định đóng, mỗi quy tắc một dòng, nên khối chỉ dài thêm 2 dòng. |
+| M8 | **Bấm vào một mục:** (d) bấm một tài khoản thì đặt `actorId` + `since`/`until` của giờ dồn dập gần nhất + `action=` năm action nguy hiểm. Bộ lọc URL không lọc được theo `metadata`, nên nếu cùng giờ đó Admin cũng **bật** kiểm duyệt thì danh sách hiện thêm dòng đó. Dữ liệu demo không có trường hợp này. "Xem cả N tài khoản" lọc năm action + `actorRole=ADMIN`. (e) bấm một tin thì mở `/admin/job-reports?report=<id báo cáo cũ nhất đang chờ>`. Muốn vậy, trang Báo cáo vi phạm phải đọc tham số `report` (gọi `GET /admin/job-reports/:id` rồi mở modal); xem Q4. "Xem cả N tin" mở `/admin/job-reports` (mặc định đã lọc "Chờ xử lý"). (e) là quy tắc duy nhất dẫn ra khỏi nhật ký, vì bằng chứng (các báo cáo) nằm ở bảng báo cáo. |
+| M9 | **Hoạt động chính, dòng thứ 5 "Báo cáo vi phạm":** "K tin bị gỡ theo báo cáo · M báo cáo bỏ qua (giữ tin)", đếm `JOB_REPORT_ACTION_EXECUTED` và `JOB_REPORT_RESOLVED` trong kỳ. Mỗi số là một nút lọc `action=…`. Không có số "đã xử lý" (chỉ là tổng hai số kia), và không có "bị bác" (không chỗ nào ghi `JOB_REPORT_REJECTED`). Số tổng từ trước đến nay đã có ở trang Báo cáo vi phạm; ở đây là số trong 7/30 ngày, nên không trùng. |
+| M10 | **API:** `GET /admin/activity/highlights` thêm `attention.adminDangerBurst` (cùng kiểu với quy tắc (c)), `attention.reportedJobs` (`{ count, items }`, phần tử kiểu mới `AuditHighlightReportedJob`), `activity.jobReports: { takenDown, dismissed }`, và `thresholds` thêm `dangerousActionsPerHour`, `reportedJobMinReports`, `reportedJobWindowHours`. Logic thuần (cửa sổ 24 giờ của (e)) đặt ở `audit-log.highlights.ts` và có test. Truy vấn (e) đọc báo cáo `PENDING` theo index `[status]`. |
+| M11 | **Không đổi:** trang Tổng quan, API `/stats`, cách tạo và xử lý báo cáo. Không thêm dependency, không thêm migration mới (hai migration của bạn cùng nhóm chỉ cần chạy). Dòng nhắc "Nhật ký có N mục cần xem" ở Tổng quan **không** làm ở bản này, chỉ làm nếu giáo viên yêu cầu. |
+
+### Câu hỏi cần chủ dự án chốt (bản 2.1)
+
+| # | Câu hỏi | Khuyến nghị |
+| --- | --- | --- |
+| Q4 | Sửa trang `/admin/job-reports` của bạn cùng nhóm để đọc `?report=<id>` (mở modal báo cáo đó)? | **Đã chốt 2026-11-04: có.** Chỉ sửa `page.tsx`, dùng hook `useAdminJobReportDetail` có sẵn. Chỉ thêm việc đọc một tham số URL và một lần gọi API có sẵn, không đổi cách xử lý báo cáo. Nên báo bạn cùng nhóm trước khi làm. Nếu không đồng ý: link "Mở báo cáo" và quy tắc (e) chỉ mở `/admin/job-reports` chung, Admin tự tìm tin. |
+
+### Dữ liệu demo bổ sung (mở rộng `seed-activity-demo.ts`)
+
+- **(d) bị báo:** ngày -4, 21:00–22:00. Admin đăng nhập từ IP văn phòng quen (nên (b) không bắt, đúng lý do có (d)), rồi trong giờ đó khoá 3 tài khoản, tắt kiểm duyệt 2 công ty, hạ 1 tin: 6 thao tác. Đối tượng là id giả `cdemolog…`, để trang người dùng và trang công ty thật không hiện lần khoá giả.
+- **(d) dưới ngưỡng:** ngày -12, một giờ có 4 thao tác nguy hiểm, không bị báo.
+- **(e) bị báo:** một tin thật đang hiển thị, ngày -2, nhận 4 báo cáo `PENDING` của 4 ứng viên demo (`seed-dashboard-demo`) trong khoảng 5 giờ.
+- **(e) không bị báo, để chứng minh:** tin thứ hai có 3 báo cáo chờ rải trong 5 ngày (quá 24 giờ). Tin thứ ba có 3 báo cáo trong 24 giờ nhưng Admin đã bỏ qua 1 báo cáo, nên chỉ còn 2 chờ.
+- **Hoạt động chính:** 2 lần gỡ tin theo báo cáo (mỗi lần một dòng `JOB_REPORT_ACTION_EXECUTED` và một dòng `JOB_POST_RETRACTED`, đối tượng giả) và 3 lần bỏ qua báo cáo.
+- **Quy ước:**
+  - Báo cáo demo có id bắt đầu bằng `cdemolog`. `--reset` xoá cả báo cáo demo.
+  - Script không đổi trạng thái tin thật, không tạo thông báo, vẫn kiểm số dòng outbox.
+  - Bảng `job_reports` chưa có (chưa làm B0) thì script dừng và báo rõ lý do.
+  - Báo cáo `PENDING` demo sẽ hiện ở trang Báo cáo vi phạm, đây là điều cố ý cho demo.
+- Kết quả mong đợi (7 ngày): (d) 1 lần · 1 tài khoản, (e) 1 tin. Script in số chính xác ở `--dry-run`.
+
+### Các bước (bản 2.1)
+
+| Bước | Việc | Kiểm |
+| --- | --- | --- |
+| B0 | **Chủ dự án** chạy `npm run db:deploy --workspace server` (`prisma migrate deploy`, không dùng shadow DB). Không dùng `db:migrate`. | Mình chạy `prisma migrate status` (chỉ đọc): không còn migration chờ; trang `/admin/job-reports` tải được. **Xong 2026-11-04**: 33 migration đã chạy, `job_reports` có 0 dòng, trang tải được với phiên Admin |
+| B1 | BE: M1 (nhóm, test). Web: M2 (nhãn, link "Mở báo cáo"). | `tsc`, test đơn vị. Đếm chỉ đọc số dòng `JOB_REPORT_*` hiện có trên Neon. Nếu khác 0 thì bảng `audit_log_hourly_stats` đang xếp chúng vào `OTHER`: ghi lại và chạy tính lại cho các giờ đó (cùng cách với script demo, do chủ dự án chạy). **Xong 2026-11-04**: Neon có 0 dòng `JOB_REPORT_*` nên không cần tính lại |
+| B2 | Shared types + BE: quy tắc (d) và dòng Hoạt động chính thứ 5 (M3, M4, M9, M10). | Test logic thuần, kể cả trường hợp tắt và bật kiểm duyệt. Gọi API trên server dev. Đếm chỉ đọc số thao tác nguy hiểm cao nhất mỗi giờ trên dữ liệu thật rồi ghi vào bảng trình bày. **Xong 2026-11-04**: truy vấn ở `findAdminDangerBurstHours` (`metadata->>'requiresApproval' = 'false'`); gọi `getHighlights` chỉ đọc trên Neon: ba quy tắc cũ không đổi (7 ngày 1·1·1, 30 ngày 4·1·5), (d) bằng 0, cao nhất hiện có 2 thao tác nguy hiểm/giờ |
+| B3 | BE: quy tắc (e) (M5, M6, M10). | Test cửa sổ 24 giờ: đúng 3 báo cáo trong 24 giờ; 3 báo cáo cách 24 giờ 1 phút; người trùng; vượt ngưỡng trước kỳ thì không tính; còn 2 chờ thì không tính. **Xong 2026-11-04**: `findReportedJobs` (thêm ca cửa sổ trượt: báo cáo 1–3 rải quá 24 giờ, báo cáo 2–4 trong 24 giờ); `findPendingJobReports`, `findJobTitles` đặt ở `AuditLogRepository` để không phải sửa module báo cáo; trên Neon (e) bằng 0 vì chưa có báo cáo |
+| B4 | Web: `ActivityHighlights` thêm (d), (e) và dòng thứ 5; link theo M8. Đọc tài liệu Next liên quan trước khi viết code. | 375px và ≥ 1280px; mở/đóng bằng bàn phím; trạng thái tải, lỗi, toàn số 0; `npm run lint --workspace web`. |
+| B5 | Web: trang `/admin/job-reports` đọc `?report=` (chỉ làm khi Q4 được đồng ý). | Mở link từ nhật ký thì modal hiện đúng báo cáo; đóng modal thì xoá tham số; id sai hiện lỗi một câu và trang vẫn dùng được. |
+| B6 | Script demo theo mục "Dữ liệu demo bổ sung". | `--dry-run` do mình chạy, chạy thật do chủ dự án; số in ra khớp kết quả mong đợi. |
+| B7 | Kiểm trên trang thật, cập nhật plan này, `sip-ui`, dòng L1 ở `docs/06-backend/admin-audit-log/PLAN.md` (nhóm `JOB_POST` có thêm `JOB_REPORT_*`). | Ảnh chụp 375px và desktop. |
+
+### Trình bày với giáo viên (bổ sung)
+
+| Câu hỏi | Trả lời |
+| --- | --- |
+| Vì sao 5 thao tác nguy hiểm mỗi giờ? | Khoá tài khoản, đăng xuất mọi thiết bị, tắt kiểm duyệt, từ chối công ty, hạ tin là những việc gây hại nếu làm sai. Bình thường Admin chỉ làm vài lần một lúc: dữ liệu đến 04/11/2026 cao nhất 2 lần trong một giờ. Từ 5 lần trong một giờ là dấu hiệu tài khoản Admin bị chiếm, kể cả khi kẻ xấu đăng nhập từ IP quen (quy tắc (b) không bắt được trường hợp này). Ngưỡng là hằng số ở server. |
+| Sao duyệt tin nhiều lại không bị báo? | Duyệt là việc chính của Admin, làm nhiều là bình thường. Chỉ đếm việc gây hại. |
+| Vì sao 3 báo cáo trong 24 giờ? | Một báo cáo có thể do hiểu nhầm hoặc ghét công ty, hai có thể trùng hợp. Ba người khác nhau báo trong một ngày là dấu hiệu rõ. Một người không đẩy số lên được, vì mỗi người chỉ có một báo cáo đang chờ trên một tin. |
+| Sao quy tắc tin bị báo cáo lại mở sang trang Báo cáo vi phạm? | Tạo báo cáo là việc của ứng viên, không phải thao tác quản trị, nên không ghi nhật ký. Bằng chứng nằm ở bảng báo cáo. |
+| Sao không đưa Điểm chính sang trang Tổng quan? | Tổng quan cho biết **bây giờ** có việc gì cần làm (hàng chờ, người dùng, gói). Điểm chính tóm tắt **những gì đã xảy ra** trong 7/30 ngày. Mỗi số bấm vào lọc ra đúng các dòng nhật ký làm bằng chứng ngay bên dưới, nên phải nằm cạnh danh sách. Mỗi con số chỉ ở một chỗ, không lặp giữa hai trang. |
+
 ## Hướng phát triển (chưa làm ở bản này)
 
 ### 1. Admin: thao tác nguy hiểm dồn dập
 
-Quy tắc (b) bắt tài khoản Admin bị chiếm **lúc đăng nhập**. Nếu kẻ xấu đăng nhập từ IP quen (vd. dùng máy của Admin), cần thêm một lớp theo **hành động gây hại**, không theo số thao tác chung:
-
-- Quy tắc dự kiến: một Admin có từ **5** thao tác nguy hiểm trong cùng một giờ.
-- Thao tác nguy hiểm (cần chốt danh sách): `USER_SUSPENDED` (khoá tài khoản), `USER_SESSIONS_REVOKED` (thu hồi phiên đăng nhập), `COMPANY_REQUIRES_APPROVAL_CHANGED` khi tắt duyệt tin (công ty được tự đăng tin không qua Admin), `COMPANY_REJECTED`, `JOB_REPORT_ACTION_EXECUTED` (gỡ tin theo báo cáo, sau khi mục 2 xong).
-- Duyệt tin, duyệt danh mục, xác minh công ty **không** tính: Admin làm nhiều những việc này là bình thường.
-- Cách làm: thêm một dòng vào "Cần xem", thêm một đếm vào API `highlights`, gom theo `(actorId, giờ)` như quy tắc (c).
-- Để sau vì: cần chốt danh sách hành động và ngưỡng, và giáo viên muốn trang ít đi ở bản này.
+Chuyển sang bản 2.1 (quy tắc (d), M3–M4).
 
 ### 2. Báo cáo tin vi phạm (phần của bạn cùng nhóm)
 
-Hiện trạng (kiểm 2026-11-04): `job-reports.service.ts` đã ghi `JOB_REPORT_RESOLVED` và `JOB_REPORT_ACTION_EXECUTED`; `JOB_REPORT_REJECTED` có trong `AUDIT_ACTIONS`. Nhưng ba action này **chưa thuộc nhóm nào** trong `AUDIT_ACTION_GROUPS`, và `JobReport` không có trong bảng nhóm theo đối tượng, nên các dòng này rơi vào nhóm `OTHER`: không có icon, màu và nhãn nhóm, không lọc được bằng ô "Loại hoạt động". Cần kiểm lại `tests/unit/audit-log-actions.test.ts` (test này kiểm mọi action thuộc đúng một nhóm).
-
-Khi phần báo cáo xong:
-
-- **Xếp nhóm:** đưa `JOB_REPORT_*` vào nhóm Tin tuyển dụng (khuyến nghị: không cần thêm màu thứ 7 ngoài 6 token `audit-*`), hoặc tạo nhóm "Báo cáo vi phạm" riêng (phải thêm token màu và kiểm tương phản lại theo `sip-ui`). Thêm `JobReport` vào bảng nhóm theo đối tượng.
-- **Hoạt động chính:** thêm dòng thứ 5: "N báo cáo đã xử lý · M báo cáo bị bác · K tin bị gỡ theo báo cáo".
-- **Cần xem (tuỳ chọn):** một tin bị nhiều người báo cáo trong thời gian ngắn (vd. từ 3 báo cáo trong 24 giờ) mà chưa ai xử lý. Hiện việc **tạo** báo cáo không ghi nhật ký, nên quy tắc này đếm thẳng trên bảng báo cáo, không qua nhật ký.
-- **Liên kết:** dòng nhật ký báo cáo có link "Mở báo cáo" tới trang xử lý báo cáo của Admin.
-- Thao tác gỡ tin theo báo cáo nên tính là thao tác nguy hiểm ở mục 1.
+Chuyển sang bản 2.1 (M1, M2, M5–M9).
 
 ### 3. Bảo mật đăng nhập
 

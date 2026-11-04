@@ -2074,9 +2074,12 @@ export interface AuditHighlightNewIpAccount extends AuditHighlightAccount {
   knownIps: string[];
 }
 
-/** (c) Employer gửi duyệt tin dồn dập; `count` là số giờ vượt ngưỡng. */
+/**
+ * (c) Employer gửi duyệt tin dồn dập, (d) Admin thao tác nguy hiểm dồn dập;
+ * `count` là số giờ vượt ngưỡng.
+ */
 export interface AuditHighlightBurstAccount extends AuditHighlightAccount {
-  /** Số tin nhiều nhất trong một giờ. */
+  /** Số dòng nhiều nhất trong một giờ (số tin với (c), số thao tác với (d)). */
   maxPerHour: number;
   /** Giờ vượt ngưỡng gần nhất, dùng thẳng làm `since`/`until` của danh sách (`until` là ms cuối giờ). */
   latestHour: { since: string; until: string; count: number };
@@ -2089,18 +2092,38 @@ export interface AuditHighlightRule<Account extends AuditHighlightAccount = Audi
   accounts: Account[];
 }
 
+/**
+ * (e) Một tin bị nhiều người báo cáo trong thời gian ngắn mà chưa ai xử lý. Đếm trên
+ * bảng báo cáo (tạo báo cáo không ghi nhật ký), chỉ các báo cáo đang chờ.
+ */
+export interface AuditHighlightReportedJob {
+  jobId: string;
+  title: string;
+  companyName: string;
+  /** Số báo cáo đang chờ của tin. */
+  pendingReports: number;
+  /** Lúc báo cáo thứ `reportedJobMinReports` trong vòng `reportedJobWindowHours` giờ được gửi. */
+  crossedAt: string;
+  /** Báo cáo cũ nhất đang chờ: thời điểm và id (mở ở trang Báo cáo vi phạm bằng `?report=`). */
+  oldestPendingAt: string;
+  oldestPendingReportId: string;
+}
+
 /** `GET /admin/activity/highlights?days=7|30` — khối "Điểm chính" của trang nhật ký. */
 export interface AuditActivityHighlights {
   days: AuditHighlightDays;
   /** Khoảng đã đếm (`YYYY-MM-DD`, giờ Việt Nam), dùng thẳng làm `from`/`to` của danh sách. */
   from: string;
   to: string;
-  /** Ngưỡng của ba quy tắc (hằng số ở server), để giao diện ghi đúng số. */
+  /** Ngưỡng của các quy tắc (hằng số ở server), để giao diện ghi đúng số. */
   thresholds: {
     failedLoginAttempts: number;
     failedLoginWindowMinutes: number;
     newIpLookbackDays: number;
     submitBurstPerHour: number;
+    dangerousActionsPerHour: number;
+    reportedJobMinReports: number;
+    reportedJobWindowHours: number;
   };
   attention: {
     /** (a) Đăng nhập sai liên tục; tài khoản là tài khoản bị dò (`entityId`). */
@@ -2109,6 +2132,13 @@ export interface AuditActivityHighlights {
     adminNewIp: AuditHighlightRule<AuditHighlightNewIpAccount>;
     /** (c) Employer gửi duyệt từ `submitBurstPerHour` tin trong cùng một giờ. */
     employerSubmitBurst: AuditHighlightRule<AuditHighlightBurstAccount>;
+    /**
+     * (d) Admin có từ `dangerousActionsPerHour` thao tác nguy hiểm trong cùng một giờ:
+     * khoá tài khoản, đăng xuất mọi thiết bị, tắt kiểm duyệt tin, từ chối công ty, hạ tin.
+     */
+    adminDangerBurst: AuditHighlightRule<AuditHighlightBurstAccount>;
+    /** (e) Tin vượt ngưỡng báo cáo trong khoảng và vẫn còn đủ báo cáo đang chờ; tối đa 10 tin. */
+    reportedJobs: { count: number; items: AuditHighlightReportedJob[] };
   };
   activity: {
     /** `approved` gồm tin tự đăng; `resubmitted` là tin gửi lại sau khi bị từ chối. */
@@ -2118,6 +2148,8 @@ export interface AuditActivityHighlights {
     payments: { completed: number };
     /** `approved` gồm đề xuất đổi tên được duyệt. */
     catalog: { approved: number; rejected: number; merged: number };
+    /** `takenDown`: gỡ tin theo báo cáo; `dismissed`: bỏ qua báo cáo, giữ tin. */
+    jobReports: { takenDown: number; dismissed: number };
   };
 }
 

@@ -18,10 +18,17 @@ import { groupOfAction, type AuditAction } from "./audit-log.actions";
 import { exportFileName, toActivityCsv } from "./audit-log.csv";
 import type { ActivityExportQuery, ActivityHighlightsQuery, ActivityListQuery, ActivityStatsQuery } from "./audit-log.dto";
 import {
+  APPROVAL_OFF_ACTION,
+  DANGEROUS_ACTIONS_PER_HOUR,
+  DANGEROUS_ADMIN_ACTIONS,
+  HIGHLIGHT_ACCOUNT_LIMIT,
   NEW_IP_LOOKBACK_DAYS,
+  REPORTED_JOB_MIN_REPORTS,
+  REPORTED_JOB_WINDOW_HOURS,
   SUBMIT_BURST_ACTIONS,
   SUBMIT_BURST_PER_HOUR,
   findNewIpLogins,
+  findReportedJobs,
   groupBurstHours,
   summarizeRule,
   toAccountBase,
@@ -69,6 +76,8 @@ const HIGHLIGHT_ACTIONS: readonly AuditAction[] = [
   "CATALOG_ENTRY_RENAME_APPROVED",
   "CATALOG_ENTRY_REJECTED",
   "CATALOG_ENTRY_MERGED",
+  "JOB_REPORT_ACTION_EXECUTED",
+  "JOB_REPORT_RESOLVED",
 ];
 const JOB_POST_FLOW_ACTIONS = [
   "JOB_POST_SUBMITTED",
@@ -203,21 +212,47 @@ export class AuditLogService {
       );
     };
 
-    const [actionCounts, resubmitted, failed, logins, burstHours] = await Promise.all([
+    const [actionCounts, resubmitted, failed, logins, burstHours, dangerHours, pendingReports] = await Promise.all([
       this.auditLogRepository.countByAction(buildActivityWhere({ actions: [...HIGHLIGHT_ACTIONS], range })),
       this.auditLogRepository.count(buildActivityWhere({ actions: [...SUBMIT_BURST_ACTIONS], resubmit: true, range })),
       this.auditLogRepository.tallyFailedLoginAlerts(range),
       readLogins(),
       this.auditLogRepository.findSubmitBurstHours(range, SUBMIT_BURST_ACTIONS, SUBMIT_BURST_PER_HOUR),
+      this.auditLogRepository.findAdminDangerBurstHours(
+        range,
+        DANGEROUS_ADMIN_ACTIONS,
+        APPROVAL_OFF_ACTION,
+        DANGEROUS_ACTIONS_PER_HOUR,
+      ),
+      this.auditLogRepository.findPendingJobReports(),
     ]);
 
     const failedLogins = summarizeRule(failed);
     const adminNewIp = summarizeRule(findNewIpLogins(logins, range));
     const employerSubmitBurst = summarizeRule(groupBurstHours(burstHours));
-    const emails = await this.userRepository.findEmailsByIds([
-      ...new Set([...failedLogins.top, ...adminNewIp.top, ...employerSubmitBurst.top].map((tally) => tally.userId)),
+    const adminDangerBurst = summarizeRule(groupBurstHours(dangerHours));
+    const reportedJobs = findReportedJobs(pendingReports, range);
+    const shownJobs = reportedJobs.slice(0, HIGHLIGHT_ACCOUNT_LIMIT);
+    const [emails, jobTitles] = await Promise.all([
+      this.userRepository.findEmailsByIds([
+        ...new Set(
+          [...failedLogins.top, ...adminNewIp.top, ...employerSubmitBurst.top, ...adminDangerBurst.top].map(
+            (tally) => tally.userId,
+          ),
+        ),
+      ]),
+      this.auditLogRepository.findJobTitles(shownJobs.map((job) => job.jobId)),
     ]);
     const countOf = (...actions: AuditAction[]) => actions.reduce((sum, action) => sum + (actionCounts.get(action) ?? 0), 0);
+    const toBurstAccount = (tally: (typeof employerSubmitBurst.top)[number]) => ({
+      ...toAccountBase(tally, emails),
+      maxPerHour: tally.maxPerHour,
+      latestHour: {
+        since: tally.latestHour.since.toISOString(),
+        until: tally.latestHour.until.toISOString(),
+        count: tally.latestHour.count,
+      },
+    });
 
     return {
       days: query.days,
@@ -228,6 +263,9 @@ export class AuditLogService {
         failedLoginWindowMinutes: LOGIN_FAIL_WINDOW_MINUTES,
         newIpLookbackDays: NEW_IP_LOOKBACK_DAYS,
         submitBurstPerHour: SUBMIT_BURST_PER_HOUR,
+        dangerousActionsPerHour: DANGEROUS_ACTIONS_PER_HOUR,
+        reportedJobMinReports: REPORTED_JOB_MIN_REPORTS,
+        reportedJobWindowHours: REPORTED_JOB_WINDOW_HOURS,
       },
       attention: {
         failedLogins: toRule(failedLogins, (tally) => toAccountBase(tally, emails)),
@@ -236,15 +274,28 @@ export class AuditLogService {
           ip: tally.ip,
           knownIps: tally.knownIps,
         })),
-        employerSubmitBurst: toRule(employerSubmitBurst, (tally) => ({
-          ...toAccountBase(tally, emails),
-          maxPerHour: tally.maxPerHour,
-          latestHour: {
-            since: tally.latestHour.since.toISOString(),
-            until: tally.latestHour.until.toISOString(),
-            count: tally.latestHour.count,
-          },
-        })),
+        employerSubmitBurst: toRule(employerSubmitBurst, toBurstAccount),
+        adminDangerBurst: toRule(adminDangerBurst, toBurstAccount),
+        reportedJobs: {
+          count: reportedJobs.length,
+          // Tin vừa bị xoá giữa hai lần đọc (báo cáo xoá theo cascade) thì bỏ.
+          items: shownJobs.flatMap((job) => {
+            const info = jobTitles.get(job.jobId);
+            return info
+              ? [
+                  {
+                    jobId: job.jobId,
+                    title: info.title,
+                    companyName: info.companyName,
+                    pendingReports: job.pendingReports,
+                    crossedAt: job.crossedAt.toISOString(),
+                    oldestPendingAt: job.oldestPendingAt.toISOString(),
+                    oldestPendingReportId: job.oldestPendingReportId,
+                  },
+                ]
+              : [];
+          }),
+        },
       },
       activity: {
         jobPosts: {
@@ -261,6 +312,10 @@ export class AuditLogService {
           approved: countOf("CATALOG_ENTRY_APPROVED", "CATALOG_ENTRY_RENAME_APPROVED"),
           rejected: countOf("CATALOG_ENTRY_REJECTED"),
           merged: countOf("CATALOG_ENTRY_MERGED"),
+        },
+        jobReports: {
+          takenDown: countOf("JOB_REPORT_ACTION_EXECUTED"),
+          dismissed: countOf("JOB_REPORT_RESOLVED"),
         },
       },
     };

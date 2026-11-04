@@ -220,6 +220,50 @@ export class AuditLogRepository {
     `;
   }
 
+  /**
+   * (d) Các giờ một Admin có từ `minCount` thao tác nguy hiểm (bản 2.1, M3). `actions` tính
+   * mọi dòng, trừ `approvalOffAction` chỉ tính khi `metadata.requiresApproval = false`.
+   */
+  findAdminDangerBurstHours(
+    range: { gte: Date; lt: Date },
+    actions: readonly string[],
+    approvalOffAction: string,
+    minCount: number,
+  ): Promise<Array<{ userId: string; hourStart: Date; count: number; latestAt: Date; latestLogId: string }>> {
+    return this.prisma.$queryRaw`
+      SELECT "actorId" AS "userId", date_trunc('hour', "createdAt") AS "hourStart", COUNT(*)::int AS "count",
+             MAX("createdAt") AS "latestAt",
+             (array_agg("id" ORDER BY "createdAt" DESC, "id" DESC))[1] AS "latestLogId"
+      FROM audit_logs
+      WHERE "action" IN (${Prisma.join(actions)}) AND "actorRole" = 'ADMIN' AND "actorId" IS NOT NULL
+        AND ("action" <> ${approvalOffAction} OR "metadata"->>'requiresApproval' = 'false')
+        AND "createdAt" >= ${utcSql(range.gte)} AND "createdAt" < ${utcSql(range.lt)}
+      GROUP BY 1, 2
+      HAVING COUNT(*) >= ${minCount}
+    `;
+  }
+
+  /**
+   * (e) Mọi báo cáo tin đang chờ (M5). Đọc thẳng bảng `job_reports` vì tạo báo cáo không
+   * ghi nhật ký. Số báo cáo đang chờ là hàng đợi nhỏ, theo index `[status]`.
+   */
+  findPendingJobReports(): Promise<Array<{ id: string; jobId: string; reporterId: string; createdAt: Date }>> {
+    return this.prisma.jobReport.findMany({
+      where: { status: "PENDING" },
+      select: { id: true, jobId: true, reporterId: true, createdAt: true },
+    });
+  }
+
+  /** (e) Tên tin và tên công ty của các tin hiện ra trong khối Điểm chính. */
+  async findJobTitles(jobIds: readonly string[]): Promise<Map<string, { title: string; companyName: string }>> {
+    if (jobIds.length === 0) return new Map();
+    const jobs = await this.prisma.jobPost.findMany({
+      where: { id: { in: [...jobIds] } },
+      select: { id: true, title: true, company: { select: { name: true } } },
+    });
+    return new Map(jobs.map((job) => [job.id, { title: job.title, companyName: job.company.name }]));
+  }
+
   /** (b) Các lần Admin đăng nhập thành công trong [gte, lt); `archived` đọc bảng lưu trữ. */
   findAdminLogins(
     range: { gte: Date; lt: Date },

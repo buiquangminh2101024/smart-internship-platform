@@ -14,6 +14,28 @@ export const KNOWN_IP_LIMIT = 3;
 export const SUBMIT_BURST_PER_HOUR = 10;
 /** (c) Hai hành động tính là "gửi duyệt": gửi chờ duyệt và tự đăng (công ty không cần duyệt). */
 export const SUBMIT_BURST_ACTIONS = ["JOB_POST_SUBMITTED", "JOB_POST_AUTO_PUBLISHED"] as const;
+/** (d) Một Admin có từ chừng này thao tác nguy hiểm trong cùng một giờ thì bị báo (bản 2.1, M3). */
+export const DANGEROUS_ACTIONS_PER_HOUR = 5;
+/**
+ * (d) Thao tác nguy hiểm của Admin. `COMPANY_REQUIRES_APPROVAL_CHANGED` chỉ tính khi
+ * **tắt** kiểm duyệt (`metadata.requiresApproval = false`, xem `APPROVAL_OFF_ACTION`).
+ * `JOB_POST_RETRACTED` gồm cả gỡ tin theo báo cáo; không đếm `JOB_REPORT_ACTION_EXECUTED`
+ * vì một lần gỡ tin đang hiển thị ghi cả hai dòng (M4). Duyệt, từ chối tin, duyệt danh
+ * mục, xác minh công ty không tính: Admin làm nhiều là bình thường.
+ */
+export const DANGEROUS_ADMIN_ACTIONS = [
+  "USER_SUSPENDED",
+  "USER_SESSIONS_REVOKED",
+  "COMPANY_REQUIRES_APPROVAL_CHANGED",
+  "COMPANY_REJECTED",
+  "JOB_POST_RETRACTED",
+] as const;
+/** (d) Action chỉ tính là nguy hiểm khi `metadata.requiresApproval = false`. */
+export const APPROVAL_OFF_ACTION = "COMPANY_REQUIRES_APPROVAL_CHANGED";
+/** (e) Một tin có chừng này báo cáo đang chờ của chừng này người khác nhau ... */
+export const REPORTED_JOB_MIN_REPORTS = 3;
+/** (e) ... trong vòng chừng này giờ thì bị báo (M5). */
+export const REPORTED_JOB_WINDOW_HOURS = 24;
 
 /** Số đếm của một tài khoản trong một quy tắc, trước khi gắn email. */
 export type AccountTally<Extra extends object = object> = {
@@ -136,6 +158,80 @@ export function groupBurstHours(rows: readonly SubmitBurstHourRow[]): BurstTally
     });
   }
   return [...byAccount.values()];
+}
+
+/** (e) Một báo cáo đang chờ (`job_reports.status = PENDING`). */
+export interface PendingReportRow {
+  id: string;
+  jobId: string;
+  reporterId: string;
+  createdAt: Date;
+}
+
+/** (e) Một tin vượt ngưỡng báo cáo, trước khi gắn tên tin và công ty. */
+export interface ReportedJobTally {
+  jobId: string;
+  pendingReports: number;
+  crossedAt: Date;
+  oldestPendingAt: Date;
+  oldestPendingReportId: string;
+}
+
+function compareReport(a: PendingReportRow, b: PendingReportRow): number {
+  return a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id);
+}
+
+/**
+ * (e) Tin có `minReports` báo cáo đang chờ của `minReports` người khác nhau trong vòng
+ * `windowHours` giờ (báo cáo thứ k và thứ k + minReports − 1, xếp theo giờ gửi, cách nhau
+ * không quá `windowHours` giờ). Mỗi người chỉ lấy báo cáo sớm nhất trên một tin.
+ * **Thời điểm vượt ngưỡng** là giờ gửi của báo cáo đủ ngưỡng trong lần đầu đạt ngưỡng; chỉ
+ * trả tin có thời điểm này nằm trong `window`. Tin vượt ngưỡng gần nhất đứng trước.
+ * `reports` phải là mọi báo cáo đang chờ (không cắt theo khoảng), để biết lần đầu đạt ngưỡng.
+ */
+export function findReportedJobs(
+  reports: readonly PendingReportRow[],
+  window: { gte: Date; lt: Date },
+  minReports: number = REPORTED_JOB_MIN_REPORTS,
+  windowHours: number = REPORTED_JOB_WINDOW_HOURS,
+): ReportedJobTally[] {
+  const windowMs = windowHours * HOUR_MS;
+  const byJob = new Map<string, PendingReportRow[]>();
+  for (const report of reports) {
+    const list = byJob.get(report.jobId) ?? [];
+    list.push(report);
+    byJob.set(report.jobId, list);
+  }
+
+  const tallies: ReportedJobTally[] = [];
+  for (const [jobId, list] of byJob) {
+    list.sort(compareReport);
+    const seen = new Set<string>();
+    const firstPerReporter = list.filter((report) => {
+      if (seen.has(report.reporterId)) return false;
+      seen.add(report.reporterId);
+      return true;
+    });
+    let crossedAt: Date | undefined;
+    for (let i = minReports - 1; i < firstPerReporter.length; i += 1) {
+      const last = firstPerReporter[i]!;
+      const first = firstPerReporter[i - minReports + 1]!;
+      if (last.createdAt.getTime() - first.createdAt.getTime() <= windowMs) {
+        crossedAt = last.createdAt;
+        break;
+      }
+    }
+    if (!crossedAt || crossedAt < window.gte || crossedAt >= window.lt) continue;
+    const oldest = list[0]!;
+    tallies.push({
+      jobId,
+      pendingReports: list.length,
+      crossedAt,
+      oldestPendingAt: oldest.createdAt,
+      oldestPendingReportId: oldest.id,
+    });
+  }
+  return tallies.sort((a, b) => b.crossedAt.getTime() - a.crossedAt.getTime() || a.jobId.localeCompare(b.jobId));
 }
 
 /** Gắn email và đổi thời điểm sang ISO cho phần tài khoản chung của mọi quy tắc. */

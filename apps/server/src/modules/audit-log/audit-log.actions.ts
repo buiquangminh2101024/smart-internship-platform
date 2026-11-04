@@ -63,6 +63,10 @@ export const AUDIT_ACTION_GROUPS: Record<AuditActionGroup, readonly AuditAction[
     "JOB_POST_APPROVED",
     "JOB_POST_REJECTED",
     "JOB_POST_RETRACTED",
+    // Báo cáo tin vi phạm xếp chung nhóm tin, không thêm nhóm thứ 7 (plan admin-activity-v2 M1).
+    "JOB_REPORT_RESOLVED",
+    "JOB_REPORT_REJECTED",
+    "JOB_REPORT_ACTION_EXECUTED",
   ],
   COMPANY: [
     "COMPANY_SUBMITTED",
@@ -103,6 +107,7 @@ const GROUP_BY_ENTITY_TYPE: Record<string, AuditActionGroup> = {
   Major: "CATALOG",
   Subscription: "PAYMENT",
   User: "ACCOUNT",
+  JobReport: "JOB_POST",
 };
 
 export function isAuditAction(action: string): action is AuditAction {
