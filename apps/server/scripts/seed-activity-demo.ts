@@ -1,35 +1,45 @@
-// Dữ liệu demo cho trang Nhật ký hoạt động bản 2 (A7) — đặc tả:
-// docs/05-frontend/phases/admin-activity-v2/PLAN.md, mục "Dữ liệu demo (N12)".
+// Dữ liệu demo cho trang Nhật ký hoạt động bản 2 (A7) và bản 2.1 (B6) — đặc tả:
+// docs/05-frontend/phases/admin-activity-v2/PLAN.md, mục "Dữ liệu demo (N12)" và
+// "Dữ liệu demo bổ sung".
 //
 //   npm run seed-activity-demo --workspace server -- --dry-run   chỉ ĐỌC DB, in ra sẽ xoá / tạo gì và số Điểm chính dự kiến
 //   npm run seed-activity-demo --workspace server                xoá dòng demo cũ rồi tạo lại (chạy lại bao nhiêu lần cũng được)
-//   npm run seed-activity-demo --workspace server -- --reset     chỉ xoá dòng demo
+//   npm run seed-activity-demo --workspace server -- --reset     chỉ xoá dòng demo (cả báo cáo vi phạm demo)
 //
 // Nên chạy SAU `npm run seed-dashboard-demo`: các thao tác kiểm duyệt mà script đó
 // tạo (id `cdemodash…`) được chép sang nhật ký để hai trang khớp nhau. Chạy lại
 // script dashboard thì chạy lại script này.
 //
-// Chỉ ghi bảng `audit_logs` (mọi dòng có id bắt đầu bằng ID_PREFIX) và tính lại
-// bảng `audit_log_hourly_stats` cho khoảng giờ có dòng demo, trong một transaction.
-// Không tạo user, tin, công ty hay thông báo. Người làm và đối tượng là dữ liệu có
-// thật trong DB; riêng tin "rác" của quy tắc (c) và vài mục danh mục bị từ chối /
-// được gộp là đối tượng không có trong DB (id cũng bắt đầu bằng ID_PREFIX).
+// Chỉ ghi bảng `audit_logs` và `job_reports` (mọi dòng có id bắt đầu bằng ID_PREFIX)
+// và tính lại bảng `audit_log_hourly_stats` cho khoảng giờ có dòng demo, trong một
+// transaction. Không tạo user, tin, công ty hay thông báo, không đổi trạng thái tin.
+// Người làm và đối tượng là dữ liệu có thật trong DB; riêng tin "rác" của quy tắc (c),
+// vài mục danh mục bị từ chối / được gộp, các tài khoản, công ty, tin của quy tắc (d)
+// và hai lần gỡ tin theo báo cáo là đối tượng không có trong DB (id cũng bắt đầu bằng
+// ID_PREFIX), để trang người dùng, công ty, báo cáo thật không hiện lần khoá / gỡ giả.
+// Báo cáo vi phạm demo gắn với tin và ứng viên có thật, nên hiện ở trang Báo cáo vi
+// phạm (cố ý, cho demo). Bảng `job_reports` chưa có (chưa chạy db:deploy) thì dừng.
 //
 // Không gửi email: không đi qua service nào, đếm outbox_events trước/sau và huỷ
 // toàn bộ nếu số này đổi. Thời điểm tính theo ngày chạy (30 ngày tới hôm qua, giờ
 // Việt Nam); bộ sinh số có hạt giống cố định nên chạy lại cùng ngày ra cùng dữ liệu.
-import { PrismaClient, Prisma, type JobPostStatus, type Role } from "@prisma/client";
+import { PrismaClient, Prisma, type JobPostStatus, type ReportReason, type Role } from "@prisma/client";
 import type { AuditAction, AuditEntityType } from "../src/modules/audit-log/audit-log.actions";
 import { groupOfAction } from "../src/modules/audit-log/audit-log.actions";
 import { toStatBuckets } from "../src/modules/audit-log/audit-log-stats.job";
 import {
+  APPROVAL_OFF_ACTION,
+  DANGEROUS_ACTIONS_PER_HOUR,
+  DANGEROUS_ADMIN_ACTIONS,
   NEW_IP_LOOKBACK_DAYS,
   SUBMIT_BURST_ACTIONS,
   SUBMIT_BURST_PER_HOUR,
   findNewIpLogins,
+  findReportedJobs,
   groupBurstHours,
   summarizeRule,
   type AdminLoginRow,
+  type PendingReportRow,
   type SubmitBurstHourRow,
 } from "../src/modules/audit-log/audit-log.highlights";
 import { floorHour, utcSql } from "../src/modules/audit-log/audit-log.where";
@@ -165,6 +175,46 @@ const REJECTED_PROPOSALS: ReadonlyArray<readonly [type: CatalogType, name: strin
   ["University", "Đại học ABC"],
 ];
 
+/** (d) Đối tượng giả của các thao tác nguy hiểm. */
+const FAKE_COMPANIES = ["Công ty TNHH Việc Nhanh 24h", "Công ty Tuyển Dụng Online Toàn Cầu", "Công ty CP Kết Nối Việc Làm Số"] as const;
+const FAKE_JOBS = [
+  "Tuyển cộng tác viên đóng phí giữ chỗ 300k",
+  "Thực tập sinh marketing, nhận lương sau khi đóng phí đào tạo",
+  "Tuyển gấp nhân viên nhập liệu, cọc trước 500k",
+] as const;
+const FAKE_SUSPEND_REASON = "Tài khoản đăng tin thu phí ứng viên trước khi phỏng vấn";
+const FAKE_RETRACT_REASON = "Tin yêu cầu ứng viên đóng phí, vi phạm quy định đăng tin";
+const FAKE_COMPANY_REJECT_REASON = "Mã số thuế không khớp với tên công ty";
+const DISMISS_NOTE = "Đã liên hệ công ty, nội dung tin đúng với thực tế";
+
+/** (e) Báo cáo vi phạm demo: [vị trí ứng viên, ngày, giờ, phút, lý do, mô tả]. */
+type ReportPlan = readonly [candidate: number, day: number, hour: number, minute: number, reason: ReportReason, description: string];
+/** Tin 1: 4 báo cáo trong khoảng 5 giờ → bị báo. */
+const REPORTS_FLAGGED: readonly ReportPlan[] = [
+  [3, -2, 9, 10, "SCAM", "Nhà tuyển dụng yêu cầu chuyển 500.000đ phí giữ chỗ trước khi phỏng vấn"],
+  [4, -2, 10, 45, "CHARGING_FEE", "Gọi điện bảo phải đóng phí đào tạo mới được nhận"],
+  [5, -2, 12, 30, "SCAM", "Liên hệ qua Zalo cá nhân, đòi chụp hai mặt CCCD"],
+  [6, -2, 14, 5, "MISLEADING", "Mức phụ cấp trong tin khác hẳn lúc trao đổi"],
+];
+/** Tin 2: 3 báo cáo chờ rải trong 5 ngày (quá 24 giờ) → không bị báo. */
+const REPORTS_SPREAD: readonly ReportPlan[] = [
+  [7, -9, 10, 20, "MISLEADING", "Tin ghi làm tại Hà Nội nhưng phỏng vấn yêu cầu đi Bình Dương"],
+  [8, -7, 15, 5, "OTHER", "Đã nộp hồ sơ hai tuần nhưng không ai liên hệ"],
+  [2, -5, 20, 40, "MISLEADING", "Yêu cầu kinh nghiệm 2 năm dù là tin thực tập"],
+];
+/** Tin 2: hai báo cáo cũ đã được Admin bỏ qua (ngày xử lý = ngày gửi + 1). */
+const REPORTS_SPREAD_DISMISSED: readonly ReportPlan[] = [
+  [0, -18, 20, 10, "INAPPROPRIATE", "Ảnh bìa tin không phù hợp"],
+  [1, -11, 19, 45, "OTHER", "Tin đăng trùng với một tin khác của công ty"],
+];
+/** Tin 3: 3 báo cáo trong 24 giờ, báo cáo giữa đã bị bỏ qua → còn 2 chờ, không bị báo. */
+const REPORTS_ONE_DISMISSED: readonly ReportPlan[] = [
+  [3, -3, 8, 15, "MISLEADING", "Thời gian thực tập trong tin không rõ ràng"],
+  [4, -3, 13, 40, "OTHER", "Tin có lỗi chính tả trong phần mô tả"],
+  [5, -3, 19, 5, "MISLEADING", "Địa chỉ làm việc trên bản đồ không đúng"],
+];
+const ONE_DISMISSED_INDEX = 1;
+
 type CatalogType = "Skill" | "University" | "Major";
 const CATALOG_LABEL: Record<CatalogType, string> = { Skill: "kỹ năng", University: "trường", Major: "ngành" };
 
@@ -216,6 +266,8 @@ interface Context {
   candidates: Person[];
   storyJob: JobCtx;
   approvalJobs: JobCtx[];
+  /** (e) Ba tin đang hiển thị, chưa có báo cáo thật: [bị báo, rải nhiều ngày, đã bỏ qua 1]. */
+  reportJobs: JobCtx[];
   skippedJobs: number;
   mirrored: MirroredAction[];
   catalog: CatalogEntry[];
@@ -296,6 +348,13 @@ async function loadContext(db: Db): Promise<Context> {
   const storyJob = usable.find((j) => j.status === "PUBLISHED") ?? fail("Không có tin PUBLISHED nào dùng được cho câu chuyện từ chối → gửi lại → duyệt.");
   const approvalJobs = usable.filter((j) => j.id !== storyJob.id);
 
+  // (e) Tin nhận báo cáo demo: đang hiển thị, chưa có báo cáo thật (để số đúng như kịch bản).
+  const realReported = new Set(
+    (await db.jobReport.findMany({ where: { NOT: { id: isDemoId } }, select: { jobId: true }, distinct: ["jobId"] })).map((r) => r.jobId),
+  );
+  const reportJobs = jobs.filter((j) => j.status === "PUBLISHED" && j.id !== storyJob.id && !realReported.has(j.id)).slice(0, 3);
+  if (reportJobs.length < 3) fail(`Cần ít nhất 3 tin PUBLISHED chưa có báo cáo vi phạm thật cho quy tắc (e), DB có ${reportJobs.length}.`);
+
   const [skills, universities, majors] = await Promise.all([
     db.skill.findMany({ where: { status: "APPROVED" }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     db.university.findMany({ where: { status: "APPROVED" }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
@@ -335,6 +394,7 @@ async function loadContext(db: Db): Promise<Context> {
     candidates,
     storyJob,
     approvalJobs,
+    reportJobs,
     skippedJobs: jobs.length - usable.length,
     mirrored,
     catalog,
@@ -363,6 +423,8 @@ interface Draft {
 interface Built {
   drafts: Draft[];
   scenarios: string[];
+  /** Báo cáo vi phạm demo (bảng `job_reports`). */
+  reports: Prisma.JobReportCreateManyInput[];
 }
 
 function buildDrafts(ctx: Context): Built {
@@ -370,6 +432,7 @@ function buildDrafts(ctx: Context): Built {
   const int = (min: number, max: number) => min + Math.floor(rand() * (max - min + 1));
   const drafts: Draft[] = [];
   const scenarios: string[] = [];
+  const reports: Prisma.JobReportCreateManyInput[] = [];
   const admin = ctx.admin;
   const [e0, e1, e2] = [itemAt(ctx.employers, 0), itemAt(ctx.employers, 1), itemAt(ctx.employers, 2)];
   const cand = (i: number) => itemAt(ctx.candidates, i);
@@ -633,6 +696,121 @@ function buildDrafts(ctx: Context): Built {
   );
   scenarios.push(`${suspended.email} bị khoá rồi mở khoá; ${accountA.email} được gửi hướng dẫn đặt lại mật khẩu sau lần bị dò`);
 
+  // 11a. (d) Admin thao tác nguy hiểm dồn dập (bản 2.1). Đối tượng là id giả.
+  const fakeAccount = (key: string) => ({ id: demoId("acct", key), email: `tk.dangtin.${key}@example.com` });
+  const fakeCompany = (n: number) => ({ id: demoId("comp", `d${n}`), name: itemAt(FAKE_COMPANIES, n % FAKE_COMPANIES.length) });
+  const suspendFake = (key: string, at: Date, scenario: string): Draft => {
+    const account = fakeAccount(key);
+    return asAdmin({ action: "USER_SUSPENDED", entityType: "User", entityId: account.id, summary: `Khoá tài khoản ${account.email}`, metadata: { reason: FAKE_SUSPEND_REASON, previousStatus: "ACTIVE" }, createdAt: at, scenario });
+  };
+  const approvalFake = (n: number, requiresApproval: boolean, at: Date, scenario: string): Draft => {
+    const company = fakeCompany(n);
+    return asAdmin({
+      action: "COMPANY_REQUIRES_APPROVAL_CHANGED",
+      entityType: "Company",
+      entityId: company.id,
+      summary: requiresApproval ? `Bật kiểm duyệt tin cho công ty ${company.name}` : `Tắt kiểm duyệt tin cho công ty ${company.name}`,
+      metadata: { requiresApproval },
+      createdAt: at,
+      scenario,
+    });
+  };
+  const retractFake = (n: number, at: Date, scenario: string): Draft => {
+    const title = itemAt(FAKE_JOBS, n % FAKE_JOBS.length);
+    return asAdmin({ action: "JOB_POST_RETRACTED", entityType: "JobPost", entityId: demoId("job", `d${n}`), summary: `Gỡ tin "${title}" của ${fakeCompany(n).name}`, metadata: { reason: FAKE_RETRACT_REASON }, createdAt: at, scenario });
+  };
+  {
+    // Ngày -4, 21:00–22:00: đăng nhập từ IP văn phòng (quy tắc (b) không bắt), rồi 6 thao tác nguy hiểm.
+    const s = "(d) Admin thao tác nguy hiểm dồn dập";
+    push(
+      login(vnAt(-4, 21, 2, 14), OFFICE_IP, s),
+      suspendFake("d1", vnAt(-4, 21, 8, 30), s),
+      suspendFake("d2", vnAt(-4, 21, 14, 5), s),
+      suspendFake("d3", vnAt(-4, 21, 19, 48), s),
+      approvalFake(1, false, vnAt(-4, 21, 31, 12), s),
+      approvalFake(2, false, vnAt(-4, 21, 36, 40), s),
+      retractFake(1, vnAt(-4, 21, 52, 3), s),
+    );
+    scenarios.push(`(d) ${fmt(vnAt(-4, 21, 2))} ${admin.email} đăng nhập từ IP văn phòng ${OFFICE_IP}, rồi trong giờ 21:00–21:59 khoá 3 tài khoản, tắt kiểm duyệt 2 công ty, hạ 1 tin (6 thao tác)`);
+
+    // Ngày -12, 15:00–16:00: 4 thao tác nguy hiểm + 1 lần BẬT kiểm duyệt (không tính) → không bị báo.
+    const below = "(d) dưới ngưỡng";
+    const revoked = fakeAccount("b2");
+    const rejected = fakeCompany(0);
+    push(
+      suspendFake("b1", vnAt(-12, 15, 5, 22), below),
+      asAdmin({ action: "USER_SESSIONS_REVOKED", entityType: "User", entityId: revoked.id, summary: `Buộc đăng xuất ${revoked.email}`, metadata: { reason: "Nghi tài khoản bị chiếm" }, createdAt: vnAt(-12, 15, 18, 9), scenario: below }),
+      asAdmin({ action: "COMPANY_REJECTED", entityType: "Company", entityId: rejected.id, summary: `Từ chối xác minh công ty ${rejected.name}`, metadata: { reason: FAKE_COMPANY_REJECT_REASON }, createdAt: vnAt(-12, 15, 33, 41), scenario: below }),
+      approvalFake(0, true, vnAt(-12, 15, 41, 17), below),
+      retractFake(0, vnAt(-12, 15, 50, 55), below),
+    );
+    scenarios.push(`(d) dưới ngưỡng: ${fmt(vnAt(-12, 15))} ${DANGEROUS_ACTIONS_PER_HOUR - 1} thao tác nguy hiểm và 1 lần BẬT kiểm duyệt (không tính) trong một giờ — không bị báo`);
+  }
+
+  // 11b. Hai lần gỡ tin theo báo cáo (tin và báo cáo giả): như job-reports.service, mỗi lần
+  // một dòng JOB_POST_RETRACTED rồi một dòng JOB_REPORT_ACTION_EXECUTED.
+  ([[-15, 10, 20], [-6, 14, 40]] as const).forEach(([day, hour, minute], i) => {
+    const s = "Gỡ tin theo báo cáo";
+    const n = i + 2;
+    const title = itemAt(FAKE_JOBS, n % FAKE_JOBS.length);
+    const jobId = demoId("job", `t${n}`);
+    const retractedAt = vnAt(day, hour, minute, 11);
+    push(
+      asAdmin({ action: "JOB_POST_RETRACTED", entityType: "JobPost", entityId: jobId, summary: `Gỡ tin "${title}" của ${fakeCompany(n).name}`, metadata: { reason: FAKE_RETRACT_REASON }, createdAt: retractedAt, scenario: s }),
+      asAdmin({
+        action: "JOB_REPORT_ACTION_EXECUTED",
+        entityType: "JobReport",
+        entityId: demoId("rep", `t${n}`),
+        summary: `Gỡ tin tuyển dụng "${title}" theo báo cáo vi phạm`,
+        metadata: { resolution: "TAKE_DOWN", jobId, reason: FAKE_RETRACT_REASON },
+        createdAt: new Date(retractedAt.getTime() + 1000),
+        scenario: s,
+      }),
+    );
+    scenarios.push(`${fmt(retractedAt)} Admin gỡ tin "${title}" theo báo cáo (tin và báo cáo giả)`);
+  });
+
+  // 11c. (e) Báo cáo vi phạm demo trên ba tin thật đang hiển thị, và ba lần bỏ qua báo cáo.
+  const [flaggedJob, spreadJob, dismissedJob] = [itemAt(ctx.reportJobs, 0), itemAt(ctx.reportJobs, 1), itemAt(ctx.reportJobs, 2)];
+  const addReports = (job: JobCtx, key: string, plans: readonly ReportPlan[], dismissedIndexes: ReadonlySet<number> = new Set()) =>
+    plans.forEach(([candidate, day, hour, minute, reason, description], i) => {
+      const id = demoId("rep", `${key}${i + 1}`);
+      const createdAt = vnAt(day, hour, minute, 7);
+      const dismissed = dismissedIndexes.has(i);
+      // Bỏ qua: tin 3 trong cùng tối; tin 2 sáng hôm sau.
+      const resolvedAt = dismissed ? (key === "c" ? vnAt(day, 21, 30, 26) : vnAt(day + 1, 9, 30 + i * 5, 44)) : null;
+      reports.push({
+        id,
+        jobId: job.id,
+        reporterId: cand(candidate).id,
+        reason,
+        description,
+        status: dismissed ? "RESOLVED" : "PENDING",
+        ...(resolvedAt ? { resolution: "DISMISS" as const, adminNote: DISMISS_NOTE, resolvedAt, resolvedById: admin.id } : {}),
+        createdAt,
+      });
+      if (resolvedAt) {
+        push(
+          asAdmin({
+            action: "JOB_REPORT_RESOLVED",
+            entityType: "JobReport",
+            entityId: id,
+            summary: `Bỏ qua báo cáo vi phạm tin "${job.title}" (giữ nguyên bài đăng)`,
+            metadata: { resolution: "DISMISS", adminNote: DISMISS_NOTE, reason },
+            createdAt: resolvedAt,
+            scenario: "Bỏ qua báo cáo",
+          }),
+        );
+      }
+    });
+  addReports(flaggedJob, "a", REPORTS_FLAGGED);
+  addReports(spreadJob, "b", REPORTS_SPREAD);
+  addReports(spreadJob, "bx", REPORTS_SPREAD_DISMISSED, new Set([0, 1]));
+  addReports(dismissedJob, "c", REPORTS_ONE_DISMISSED, new Set([ONE_DISMISSED_INDEX]));
+  scenarios.push(`(e) Tin "${flaggedJob.title}" (${flaggedJob.companyName}): ${REPORTS_FLAGGED.length} báo cáo chờ trong khoảng 5 giờ ngày ${fmtDay(-2)} — bị báo`);
+  scenarios.push(`(e) không bị báo: tin "${spreadJob.title}" có ${REPORTS_SPREAD.length} báo cáo chờ rải từ ${fmtDay(-9)} tới ${fmtDay(-5)} (quá 24 giờ), kèm ${REPORTS_SPREAD_DISMISSED.length} báo cáo cũ đã bỏ qua`);
+  scenarios.push(`(e) không bị báo: tin "${dismissedJob.title}" có ${REPORTS_ONE_DISMISSED.length} báo cáo trong 24 giờ ngày ${fmtDay(-3)}, Admin đã bỏ qua 1 nên còn ${REPORTS_ONE_DISMISSED.length - 1} chờ`);
+
   // 11. Lấp mỗi ngày tới số dòng mục tiêu bằng việc duyệt danh mục của Admin.
   const educationEntries = ctx.catalog.filter((c) => c.type !== "Skill");
   const rejectedLeft = [...REJECTED_PROPOSALS];
@@ -680,7 +858,7 @@ function buildDrafts(ctx: Context): Built {
   }
 
   drafts.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-  return { drafts, scenarios };
+  return { drafts, scenarios, reports };
 }
 
 function toRows(drafts: readonly Draft[]): Prisma.AuditLogCreateManyInput[] {
@@ -742,7 +920,7 @@ function metadataOf(row: PlainRow): Record<string, unknown> {
   return row.metadata && typeof row.metadata === "object" ? (row.metadata as Record<string, unknown>) : {};
 }
 
-function expectedHighlights(rows: readonly PlainRow[], days: 7 | 30) {
+function expectedHighlights(rows: readonly PlainRow[], pendingReports: readonly PendingReportRow[], days: 7 | 30) {
   const range = { gte: vnDayStart(-(days - 1)), lt: vnDayStart(1) };
   const lookbackGte = new Date(range.gte.getTime() - NEW_IP_LOOKBACK_DAYS * DAY);
   const inRange = rows.filter((r) => r.createdAt >= range.gte && r.createdAt < range.lt);
@@ -769,17 +947,55 @@ function expectedHighlights(rows: readonly PlainRow[], days: 7 | 30) {
     hours.set(key, { userId: r.actorId!, hourStart, count: (h?.count ?? 0) + 1, latestAt: latest ? r.createdAt : h.latestAt, latestLogId: latest ? r.id : h.latestLogId });
   }
 
+  // (d) như `findAdminDangerBurstHours`: COMPANY_REQUIRES_APPROVAL_CHANGED chỉ tính khi tắt kiểm duyệt.
+  const dangerHours = new Map<string, SubmitBurstHourRow>();
+  const isDanger = (r: PlainRow) =>
+    (DANGEROUS_ADMIN_ACTIONS as readonly string[]).includes(r.action) &&
+    r.actorRole === "ADMIN" &&
+    !!r.actorId &&
+    (r.action !== APPROVAL_OFF_ACTION || metadataOf(r).requiresApproval === false);
+  for (const r of inRange.filter(isDanger)) {
+    const hourStart = floorHour(r.createdAt);
+    const key = `${r.actorId}|${hourStart.getTime()}`;
+    const h = dangerHours.get(key);
+    const latest = !h || r.createdAt > h.latestAt;
+    dangerHours.set(key, { userId: r.actorId!, hourStart, count: (h?.count ?? 0) + 1, latestAt: latest ? r.createdAt : h.latestAt, latestLogId: latest ? r.id : h.latestLogId });
+  }
+
   return {
     failedLogins: summarizeRule([...failedByUser.values()]),
     adminNewIp: summarizeRule(findNewIpLogins(logins, range)),
     employerSubmitBurst: summarizeRule(groupBurstHours([...hours.values()].filter((h) => h.count >= SUBMIT_BURST_PER_HOUR))),
+    adminDangerBurst: summarizeRule(groupBurstHours([...dangerHours.values()].filter((h) => h.count >= DANGEROUS_ACTIONS_PER_HOUR))),
+    reportedJobs: findReportedJobs(pendingReports, range),
     activity: {
       jobs: [count("JOB_POST_APPROVED", "JOB_POST_AUTO_PUBLISHED"), count("JOB_POST_REJECTED"), inRange.filter((r) => isSubmit(r) && metadataOf(r).resubmit === true).length],
       companies: [count("COMPANY_VERIFIED", "COMPANY_AUTO_VERIFIED"), count("COMPANY_REJECTED")],
       payments: count("PAYMENT_COMPLETED"),
       catalog: [count("CATALOG_ENTRY_APPROVED", "CATALOG_ENTRY_RENAME_APPROVED"), count("CATALOG_ENTRY_REJECTED"), count("CATALOG_ENTRY_MERGED")],
+      jobReports: [count("JOB_REPORT_ACTION_EXECUTED"), count("JOB_REPORT_RESOLVED")],
     },
   };
+}
+
+/** (e) Báo cáo đang chờ; `withDemo` = cả báo cáo demo. */
+async function loadPendingReports(db: Db, withDemo: boolean): Promise<PendingReportRow[]> {
+  return db.jobReport.findMany({
+    where: { status: "PENDING", ...(withDemo ? {} : { NOT: { id: isDemoId } }) },
+    select: { id: true, jobId: true, reporterId: true, createdAt: true },
+  });
+}
+
+function asPendingReports(reports: readonly Prisma.JobReportCreateManyInput[]): PendingReportRow[] {
+  return reports
+    .filter((r) => r.status === "PENDING")
+    .map((r) => ({ id: r.id!, jobId: r.jobId, reporterId: r.reporterId, createdAt: r.createdAt as Date }));
+}
+
+/** Dừng sớm nếu chưa chạy migration tạo bảng `job_reports` (bước B0). */
+async function assertJobReportsTable() {
+  const [row] = await prisma.$queryRaw<Array<{ exists: boolean }>>`SELECT to_regclass('public.job_reports') IS NOT NULL AS "exists"`;
+  if (!row?.exists) fail("Chưa có bảng job_reports: chủ dự án chạy `npm run db:deploy --workspace server` trước (bước B0), rồi chạy lại script.");
 }
 
 /** Dòng nhật ký đủ để tính Điểm chính 30 ngày (kèm phần lùi của quy tắc b); `withDemo` = cả dòng demo. */
@@ -790,15 +1006,18 @@ async function loadRows(db: Db, withDemo: boolean): Promise<PlainRow[]> {
   });
 }
 
-async function printHighlights(title: string, rows: readonly PlainRow[], emails: ReadonlyMap<string, string>) {
+async function printHighlights(title: string, rows: readonly PlainRow[], pendingReports: readonly PendingReportRow[], emails: ReadonlyMap<string, string>) {
   const missing = [...new Set(rows.flatMap((r) => [r.actorId, r.entityId]).filter((id): id is string => !!id && !emails.has(id)))];
   const users = missing.length > 0 ? await prisma.user.findMany({ where: { id: { in: missing } }, select: { id: true, email: true } }) : [];
   const allEmails = new Map([...emails, ...users.map((u) => [u.id, u.email] as const)]);
   const email = (id: string) => allEmails.get(id) ?? "(tài khoản đã xoá)";
+  const jobIds = [...new Set(pendingReports.map((r) => r.jobId))];
+  const jobs = jobIds.length > 0 ? await prisma.jobPost.findMany({ where: { id: { in: jobIds } }, select: { id: true, title: true } }) : [];
+  const jobTitle = new Map(jobs.map((j) => [j.id, j.title] as const));
 
   console.log(`\n${title}`);
   for (const days of [7, 30] as const) {
-    const h = expectedHighlights(rows, days);
+    const h = expectedHighlights(rows, pendingReports, days);
     console.log(`  ${days} ngày:`);
     console.log(`    (a) ${h.failedLogins.count} lần đăng nhập sai liên tục · ${h.failedLogins.accountCount} tài khoản`);
     for (const t of h.failedLogins.top) console.log(`        ${email(t.userId).padEnd(42)} ${t.count} lần · gần nhất ${fmt(t.latestAt)}`);
@@ -806,10 +1025,15 @@ async function printHighlights(title: string, rows: readonly PlainRow[], emails:
     for (const t of h.adminNewIp.top) console.log(`        ${email(t.userId).padEnd(42)} IP mới ${t.ip} · IP quen: ${t.knownIps.join(", ") || "(chưa đăng nhập trong 30 ngày trước)"} · ${fmt(t.latestAt)}`);
     console.log(`    (c) ${h.employerSubmitBurst.count} lần Employer gửi duyệt dồn dập · ${h.employerSubmitBurst.accountCount} tài khoản`);
     for (const t of h.employerSubmitBurst.top) console.log(`        ${email(t.userId).padEnd(42)} ${t.count} lần · nhiều nhất ${t.maxPerHour} tin/giờ · gần nhất ${fmt(t.latestHour.since)}`);
+    console.log(`    (d) ${h.adminDangerBurst.count} lần Admin thao tác nguy hiểm dồn dập · ${h.adminDangerBurst.accountCount} tài khoản`);
+    for (const t of h.adminDangerBurst.top) console.log(`        ${email(t.userId).padEnd(42)} ${t.count} lần · nhiều nhất ${t.maxPerHour} thao tác/giờ · gần nhất ${fmt(t.latestHour.since)}`);
+    console.log(`    (e) ${h.reportedJobs.length} tin bị nhiều người báo cáo chưa xử lý`);
+    for (const t of h.reportedJobs) console.log(`        "${jobTitle.get(t.jobId) ?? t.jobId}" · ${t.pendingReports} báo cáo đang chờ · vượt ngưỡng ${fmt(t.crossedAt)} · link ?report=${t.oldestPendingReportId}`);
     const a = h.activity;
     console.log(`    Tin: ${a.jobs[0]} được duyệt · ${a.jobs[1]} bị từ chối · ${a.jobs[2]} gửi lại sau từ chối`);
     console.log(`    Công ty: ${a.companies[0]} được xác minh · ${a.companies[1]} bị từ chối. Thanh toán: ${a.payments}`);
     console.log(`    Danh mục: ${a.catalog[0]} được duyệt · ${a.catalog[1]} bị từ chối · ${a.catalog[2]} được gộp`);
+    console.log(`    Báo cáo vi phạm: ${a.jobReports[0]} tin bị gỡ theo báo cáo · ${a.jobReports[1]} báo cáo bỏ qua (giữ tin)`);
   }
 }
 
@@ -833,9 +1057,10 @@ function asPlain(rows: readonly Prisma.AuditLogCreateManyInput[]): PlainRow[] {
 // ─── Lệnh ───────────────────────────────────────────────────────────────────
 
 async function dryRun(ctx: Context) {
-  const { drafts, scenarios } = buildDrafts(ctx);
+  const { drafts, scenarios, reports } = buildDrafts(ctx);
   const rows = toRows(drafts);
   const demoCount = await prisma.auditLog.count({ where: { id: isDemoId } });
+  const demoReportCount = await prisma.jobReport.count({ where: { id: isDemoId } });
   const range = await statRange(prisma, drafts);
   const outbox = await prisma.outboxEvent.count();
 
@@ -846,9 +1071,13 @@ async function dryRun(ctx: Context) {
   console.log(`Thao tác kiểm duyệt chép từ seed-dashboard-demo: ${ctx.mirrored.length}.`);
   console.log(`Gói để ghi thanh toán: ${[...ctx.subscriptions.values()].map((s) => `${s.companyName} "${s.planName}" ${s.amount.toLocaleString("vi-VN")}đ`).join("; ") || "(không có)"}`);
 
-  console.log(`\nSẽ xoá: ${demoCount} dòng demo của lần chạy trước.`);
+  console.log(`Tin nhận báo cáo demo (e): ${ctx.reportJobs.map((j, i) => `[${i}] "${j.title}" (${j.companyName})`).join(", ")}`);
+
+  console.log(`\nSẽ xoá: ${demoCount} dòng demo và ${demoReportCount} báo cáo vi phạm demo của lần chạy trước.`);
   const baseline = drafts.filter((d) => dayOffsetOf(d.createdAt) < FIRST_DAY).length;
   console.log(`Sẽ tạo: ${rows.length} dòng (${rows.length - baseline} dòng từ ${fmtDay(FIRST_DAY)} tới ${fmtDay(LAST_DAY)}, ${baseline} lần Admin đăng nhập trước đó để có IP quen).`);
+  const pendingCount = reports.filter((r) => r.status === "PENDING").length;
+  console.log(`Sẽ tạo: ${reports.length} báo cáo vi phạm (${pendingCount} đang chờ, ${reports.length - pendingCount} đã bỏ qua); không đổi trạng thái tin.`);
   const byGroup = new Map<string, number>();
   for (const d of drafts) byGroup.set(groupOfAction(d.action, d.entityType), (byGroup.get(groupOfAction(d.action, d.entityType)) ?? 0) + 1);
   console.log(`  Theo nhóm: ${[...byGroup].map(([g, n]) => `${g} ${n}`).join(", ")}`);
@@ -873,11 +1102,17 @@ async function dryRun(ctx: Context) {
   console.log(`${OUTBOX_GUARD} hiện có: ${outbox} (bản ghi sẽ huỷ nếu số này đổi).`);
 
   const real = await loadRows(prisma, false);
-  await printHighlights("Điểm chính dự kiến sau khi chạy (tính cả dòng nhật ký thật):", [...real, ...asPlain(rows)], knownEmails(ctx));
+  const realReports = await loadPendingReports(prisma, false);
+  await printHighlights(
+    "Điểm chính dự kiến sau khi chạy (tính cả dòng nhật ký và báo cáo thật):",
+    [...real, ...asPlain(rows)],
+    [...realReports, ...asPendingReports(reports)],
+    knownEmails(ctx),
+  );
 }
 
 async function write(ctx: Context) {
-  const { drafts } = buildDrafts(ctx);
+  const { drafts, reports } = buildDrafts(ctx);
   const rows = toRows(drafts);
   const outboxBefore = await prisma.outboxEvent.count();
 
@@ -886,17 +1121,20 @@ async function write(ctx: Context) {
       const range = await statRange(tx, drafts);
       const removed = await tx.auditLog.deleteMany({ where: { id: isDemoId } });
       await tx.auditLogArchive.deleteMany({ where: { id: isDemoId } });
+      const removedReports = await tx.jobReport.deleteMany({ where: { id: isDemoId } });
       await tx.auditLog.createMany({ data: rows });
+      await tx.jobReport.createMany({ data: reports });
       const buckets = range ? await recomputeStats(tx, range) : 0;
 
       const outboxAfter = await tx.outboxEvent.count();
       if (outboxAfter !== outboxBefore) fail(`${OUTBOX_GUARD} đổi từ ${outboxBefore} thành ${outboxAfter} — huỷ toàn bộ.`);
       console.log(`✓ Đã xoá ${removed.count} dòng demo cũ, tạo ${rows.length} dòng; ghi lại ${buckets} dòng thống kê theo giờ.`);
+      console.log(`✓ Đã xoá ${removedReports.count} báo cáo vi phạm demo cũ, tạo ${reports.length} báo cáo.`);
     },
     { timeout: 120_000, maxWait: 30_000 },
   );
 
-  await printHighlights("Điểm chính hiện tại:", await loadRows(prisma, true), knownEmails(ctx));
+  await printHighlights("Điểm chính hiện tại:", await loadRows(prisma, true), await loadPendingReports(prisma, true), knownEmails(ctx));
   console.log(`\nĐăng nhập ${ctx.admin.email} rồi mở /admin/activity.`);
 }
 
@@ -906,8 +1144,9 @@ async function reset() {
       const range = await statRange(tx, []);
       const removed = await tx.auditLog.deleteMany({ where: { id: isDemoId } });
       await tx.auditLogArchive.deleteMany({ where: { id: isDemoId } });
+      const removedReports = await tx.jobReport.deleteMany({ where: { id: isDemoId } });
       const buckets = range ? await recomputeStats(tx, range) : 0;
-      console.log(`✓ Đã xoá ${removed.count} dòng demo; ghi lại ${buckets} dòng thống kê theo giờ cho khoảng đó.`);
+      console.log(`✓ Đã xoá ${removed.count} dòng demo và ${removedReports.count} báo cáo vi phạm demo; ghi lại ${buckets} dòng thống kê theo giờ cho khoảng đó.`);
     },
     { timeout: 120_000, maxWait: 30_000 },
   );
@@ -915,6 +1154,7 @@ async function reset() {
 
 async function main() {
   const args = new Set(process.argv.slice(2));
+  await assertJobReportsTable();
   if (args.has("--reset")) return reset();
   const ctx = await loadContext(prisma);
   if (args.has("--dry-run")) return dryRun(ctx);
