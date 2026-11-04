@@ -166,6 +166,73 @@ export class AuditLogRepository {
   }
 
   /**
+   * Số dòng theo ngày giờ Việt Nam (`dayCounts`, plan admin-activity-v2 N11), chỉ
+   * những ngày có dòng, mới trước. `where` dựng bằng `buildActivityWhereSql`.
+   */
+  countByDay(where: Prisma.Sql, archived = false): Promise<Array<{ date: string; count: number }>> {
+    const table = Prisma.raw(archived ? "audit_logs_archive" : "audit_logs");
+    return this.prisma.$queryRaw<Array<{ date: string; count: number }>>`
+      SELECT to_char("createdAt" + interval '7 hours', 'YYYY-MM-DD') AS "date", COUNT(*)::int AS "count"
+      FROM ${table}
+      WHERE ${where}
+      GROUP BY 1
+      ORDER BY 1 DESC
+    `;
+  }
+
+  // ─── Khối "Điểm chính" (plan admin-activity-v2 N6) ──────────────────────
+
+  /**
+   * (a) Dòng `AUTH_LOGIN_FAILED_REPEATED` trong [gte, lt) gộp theo tài khoản bị dò
+   * (`entityId`, người làm là hệ thống): số lần, thời điểm và id của lần gần nhất.
+   */
+  tallyFailedLoginAlerts(range: { gte: Date; lt: Date }): Promise<
+    Array<{ userId: string; count: number; latestAt: Date; latestLogId: string }>
+  > {
+    return this.prisma.$queryRaw`
+      SELECT "entityId" AS "userId", COUNT(*)::int AS "count", MAX("createdAt") AS "latestAt",
+             (array_agg("id" ORDER BY "createdAt" DESC, "id" DESC))[1] AS "latestLogId"
+      FROM audit_logs
+      WHERE "action" = 'AUTH_LOGIN_FAILED_REPEATED' AND "entityType" = 'User'
+        AND "createdAt" >= ${utcSql(range.gte)} AND "createdAt" < ${utcSql(range.lt)}
+      GROUP BY "entityId"
+    `;
+  }
+
+  /**
+   * (c) Các giờ một Employer có từ `minCount` dòng thuộc `actions` (gom theo
+   * `(actorId, giờ)`; giờ UTC trùng ranh giới giờ Việt Nam).
+   */
+  findSubmitBurstHours(
+    range: { gte: Date; lt: Date },
+    actions: readonly string[],
+    minCount: number,
+  ): Promise<Array<{ userId: string; hourStart: Date; count: number; latestAt: Date; latestLogId: string }>> {
+    return this.prisma.$queryRaw`
+      SELECT "actorId" AS "userId", date_trunc('hour', "createdAt") AS "hourStart", COUNT(*)::int AS "count",
+             MAX("createdAt") AS "latestAt",
+             (array_agg("id" ORDER BY "createdAt" DESC, "id" DESC))[1] AS "latestLogId"
+      FROM audit_logs
+      WHERE "action" IN (${Prisma.join(actions)}) AND "actorRole" = 'EMPLOYER' AND "actorId" IS NOT NULL
+        AND "createdAt" >= ${utcSql(range.gte)} AND "createdAt" < ${utcSql(range.lt)}
+      GROUP BY 1, 2
+      HAVING COUNT(*) >= ${minCount}
+    `;
+  }
+
+  /** (b) Các lần Admin đăng nhập thành công trong [gte, lt); `archived` đọc bảng lưu trữ. */
+  findAdminLogins(
+    range: { gte: Date; lt: Date },
+    archived = false,
+  ): Promise<Array<{ id: string; actorId: string | null; createdAt: Date; metadata: Prisma.JsonValue }>> {
+    const args = {
+      where: { action: "AUTH_LOGIN_SUCCEEDED", actorRole: "ADMIN" as const, createdAt: { gte: range.gte, lt: range.lt } },
+      select: { id: true, actorId: true, createdAt: true, metadata: true },
+    };
+    return archived ? this.prisma.auditLogArchive.findMany(args) : this.prisma.auditLog.findMany(args);
+  }
+
+  /**
    * `createdAt` của dòng mới nhất trong bảng lưu trữ; null khi chưa chuyển dòng nào.
    * Dòng được chuyển theo thứ tự cũ nhất trước, nên dòng mới hơn mốc này chỉ có ở bảng chính.
    */

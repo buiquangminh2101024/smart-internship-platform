@@ -2044,6 +2044,81 @@ export interface AuditActivityPage extends PaginatedResponse<AuditActivityItem> 
   total?: number;
   /** `q` khớp hơn 200 người dùng, kết quả chỉ tính 200 người đầu. */
   searchTruncated?: boolean;
+  /**
+   * Số dòng khớp bộ lọc theo từng ngày (`YYYY-MM-DD`, giờ Việt Nam), chỉ những ngày có
+   * dòng, cùng chiều với `order`. Chỉ có ở trang đầu, cùng lúc với `total`.
+   */
+  dayCounts?: Array<{ date: string; count: number }>;
+}
+
+/** Khoảng của khối "Điểm chính" trên trang nhật ký. */
+export type AuditHighlightDays = 7 | 30;
+
+/** Một tài khoản trong một quy tắc "Cần xem", gộp mọi lần vi phạm trong khoảng. */
+export interface AuditHighlightAccount {
+  userId: string;
+  /** null khi tài khoản đã bị xoá. */
+  email: string | null;
+  /** Số lần vi phạm của tài khoản trong khoảng. */
+  count: number;
+  /** Lần gần nhất: thời điểm và id dòng nhật ký (mở ngăn kéo chi tiết bằng `row=`). */
+  latestAt: string;
+  latestLogId: string;
+}
+
+/** (b) Admin đăng nhập từ IP mới. */
+export interface AuditHighlightNewIpAccount extends AuditHighlightAccount {
+  /** IP mới của lần gần nhất. */
+  ip: string;
+  /** Tối đa 3 IP đã dùng trong 30 ngày trước lần gần nhất, mới trước; rỗng khi chưa đăng nhập lần nào. */
+  knownIps: string[];
+}
+
+/** (c) Employer gửi duyệt tin dồn dập; `count` là số giờ vượt ngưỡng. */
+export interface AuditHighlightBurstAccount extends AuditHighlightAccount {
+  /** Số tin nhiều nhất trong một giờ. */
+  maxPerHour: number;
+  /** Giờ vượt ngưỡng gần nhất, dùng thẳng làm `since`/`until` của danh sách (`until` là ms cuối giờ). */
+  latestHour: { since: string; until: string; count: number };
+}
+
+/** Một quy tắc "Cần xem": tổng số lần, số tài khoản, và tối đa 10 tài khoản có lần gần nhất mới nhất. */
+export interface AuditHighlightRule<Account extends AuditHighlightAccount = AuditHighlightAccount> {
+  count: number;
+  accountCount: number;
+  accounts: Account[];
+}
+
+/** `GET /admin/activity/highlights?days=7|30` — khối "Điểm chính" của trang nhật ký. */
+export interface AuditActivityHighlights {
+  days: AuditHighlightDays;
+  /** Khoảng đã đếm (`YYYY-MM-DD`, giờ Việt Nam), dùng thẳng làm `from`/`to` của danh sách. */
+  from: string;
+  to: string;
+  /** Ngưỡng của ba quy tắc (hằng số ở server), để giao diện ghi đúng số. */
+  thresholds: {
+    failedLoginAttempts: number;
+    failedLoginWindowMinutes: number;
+    newIpLookbackDays: number;
+    submitBurstPerHour: number;
+  };
+  attention: {
+    /** (a) Đăng nhập sai liên tục; tài khoản là tài khoản bị dò (`entityId`). */
+    failedLogins: AuditHighlightRule;
+    /** (b) Admin đăng nhập từ IP chưa thấy trong 30 ngày trước đó. */
+    adminNewIp: AuditHighlightRule<AuditHighlightNewIpAccount>;
+    /** (c) Employer gửi duyệt từ `submitBurstPerHour` tin trong cùng một giờ. */
+    employerSubmitBurst: AuditHighlightRule<AuditHighlightBurstAccount>;
+  };
+  activity: {
+    /** `approved` gồm tin tự đăng; `resubmitted` là tin gửi lại sau khi bị từ chối. */
+    jobPosts: { approved: number; rejected: number; resubmitted: number };
+    /** `verified` gồm công ty tự xác minh. */
+    companies: { verified: number; rejected: number };
+    payments: { completed: number };
+    /** `approved` gồm đề xuất đổi tên được duyệt. */
+    catalog: { approved: number; rejected: number; merged: number };
+  };
 }
 
 /** `GET /admin/activity/stats` — số liệu cho biểu đồ, cùng bộ lọc với danh sách. */

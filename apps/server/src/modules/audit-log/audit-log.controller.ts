@@ -1,6 +1,18 @@
 import type { NextFunction, Request, Response } from "express";
-import type { ApiResponse, AuditActivityItem, AuditActivityPage, AuditActivityStats } from "@sip/shared-types";
-import type { ActivityExportQuery, ActivityItemQuery, ActivityListQuery, ActivityStatsQuery } from "./audit-log.dto";
+import type {
+  ApiResponse,
+  AuditActivityHighlights,
+  AuditActivityItem,
+  AuditActivityPage,
+  AuditActivityStats,
+} from "@sip/shared-types";
+import type {
+  ActivityExportQuery,
+  ActivityHighlightsQuery,
+  ActivityItemQuery,
+  ActivityListQuery,
+  ActivityStatsQuery,
+} from "./audit-log.dto";
 import type { AuditLogService } from "./audit-log.service";
 
 export class AuditLogController {
@@ -37,6 +49,17 @@ export class AuditLogController {
       const query = req.query as unknown as ActivityStatsQuery;
       const result = await this.auditLogService.getStats(query);
       const body: ApiResponse<AuditActivityStats> = { success: true, data: result };
+      res.json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getHighlights = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const query = req.query as unknown as ActivityHighlightsQuery;
+      const result = await this.auditLogService.getHighlights(query);
+      const body: ApiResponse<AuditActivityHighlights> = { success: true, data: result };
       res.json(body);
     } catch (error) {
       next(error);

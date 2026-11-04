@@ -6,6 +6,7 @@ import { validate } from "../../shared/middleware/validate";
 import { AuditLogController } from "./audit-log.controller";
 import {
   activityExportQuerySchema,
+  activityHighlightsQuerySchema,
   activityItemParamsSchema,
   activityItemQuerySchema,
   activityListQuerySchema,
@@ -34,10 +35,19 @@ export function auditLogRouter(container: AwilixContainer): Router {
     void resolveController().listActivity(req, res, next);
   });
 
-  // `/stats` và `/export` đăng ký trước `/:id`.
+  // `/stats`, `/highlights` và `/export` đăng ký trước `/:id`.
   router.get("/admin/activity/stats", ...adminGuard, validate(activityStatsQuerySchema, "query"), (req, res, next) => {
     void resolveController().getStats(req, res, next);
   });
+
+  router.get(
+    "/admin/activity/highlights",
+    ...adminGuard,
+    validate(activityHighlightsQuerySchema, "query"),
+    (req, res, next) => {
+      void resolveController().getHighlights(req, res, next);
+    },
+  );
 
   router.get("/admin/activity/export", ...adminGuard, validate(activityExportQuerySchema, "query"), (req, res, next) => {
     void resolveController().exportCsv(req, res, next);

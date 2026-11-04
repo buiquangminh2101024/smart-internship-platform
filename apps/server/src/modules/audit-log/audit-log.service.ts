@@ -2,6 +2,7 @@ import type { AuditLog, Prisma } from "@prisma/client";
 import type {
   AuditActionGroup,
   AuditActivityGroup,
+  AuditActivityHighlights,
   AuditActivityItem,
   AuditActivityPage,
   AuditActivityStats,
@@ -10,17 +11,29 @@ import type {
 import { AppError } from "../../shared/errors/AppError";
 import type { Logger } from "../../shared/logger";
 import type { RateLimiter } from "../../shared/ports/RateLimiter";
+import { LOGIN_FAIL_THRESHOLD, LOGIN_FAIL_WINDOW_MINUTES } from "../auth/auth.service";
 import type { CompanySubscriptionRepository } from "../subscriptions/company-subscription.repository";
 import type { UserRepository } from "../users/user.repository";
-import { groupOfAction } from "./audit-log.actions";
+import { groupOfAction, type AuditAction } from "./audit-log.actions";
 import { exportFileName, toActivityCsv } from "./audit-log.csv";
-import type { ActivityExportQuery, ActivityListQuery, ActivityStatsQuery } from "./audit-log.dto";
+import type { ActivityExportQuery, ActivityHighlightsQuery, ActivityListQuery, ActivityStatsQuery } from "./audit-log.dto";
+import {
+  NEW_IP_LOOKBACK_DAYS,
+  SUBMIT_BURST_ACTIONS,
+  SUBMIT_BURST_PER_HOUR,
+  findNewIpLogins,
+  groupBurstHours,
+  summarizeRule,
+  toAccountBase,
+  toRule,
+} from "./audit-log.highlights";
 import type { AuditLogRepository, AuditLogWriteData, StatBucket } from "./audit-log.repository";
 import { toStatBuckets } from "./audit-log-stats.job";
 import {
   DAY_MS,
   HOUR_MS,
   buildActivityWhere,
+  buildActivityWhereSql,
   buildStatsWhereSql,
   floorHour,
   vnDateOf,
@@ -43,6 +56,20 @@ const TOP_ACTORS = 5;
 
 const GROUP_ORDER: readonly AuditActionGroup[] = ["JOB_POST", "COMPANY", "CATALOG", "PAYMENT", "ACCOUNT", "SECURITY"];
 const ROLE_ORDER: readonly AuditActorRoleFilter[] = ["ADMIN", "EMPLOYER", "CANDIDATE", "SYSTEM"];
+/** Các hành động đếm ở phần "Hoạt động chính" (N5). */
+const HIGHLIGHT_ACTIONS: readonly AuditAction[] = [
+  "JOB_POST_APPROVED",
+  "JOB_POST_AUTO_PUBLISHED",
+  "JOB_POST_REJECTED",
+  "COMPANY_VERIFIED",
+  "COMPANY_AUTO_VERIFIED",
+  "COMPANY_REJECTED",
+  "PAYMENT_COMPLETED",
+  "CATALOG_ENTRY_APPROVED",
+  "CATALOG_ENTRY_RENAME_APPROVED",
+  "CATALOG_ENTRY_REJECTED",
+  "CATALOG_ENTRY_MERGED",
+];
 const JOB_POST_FLOW_ACTIONS = [
   "JOB_POST_SUBMITTED",
   "JOB_POST_AUTO_PUBLISHED",
@@ -129,21 +156,113 @@ export class AuditLogService {
   async listActivity(query: ActivityListQuery): Promise<AuditActivityPage> {
     const { filter, searchTruncated } = await this.toFilter(query);
     const where = buildActivityWhere(filter);
-    const [page, total] = await Promise.all([
+    const firstPage = !query.cursor;
+    const [page, total, days] = await Promise.all([
       this.auditLogRepository.list(where, {
         cursor: query.cursor,
         limit: query.limit,
         order: query.order,
         archived: query.archived,
       }),
-      query.cursor ? undefined : this.auditLogRepository.count(where, query.archived),
+      firstPage ? this.auditLogRepository.count(where, query.archived) : undefined,
+      // N11: số dòng mỗi ngày cho tiêu đề ngày, vì một ngày có thể bị cắt giữa hai trang.
+      firstPage ? this.auditLogRepository.countByDay(buildActivityWhereSql(filter), query.archived) : undefined,
     ]);
+    const dayCounts = days && (query.order === "asc" ? [...days].reverse() : days);
     return {
       items: await this.toItems(page.items),
       hasMore: page.hasMore,
       ...(page.nextCursor ? { nextCursor: page.nextCursor } : {}),
       ...(total !== undefined ? { total } : {}),
+      ...(dayCounts ? { dayCounts } : {}),
       ...(searchTruncated ? { searchTruncated: true } : {}),
+    };
+  }
+
+  /**
+   * GET /admin/activity/highlights (plan admin-activity-v2 N4–N6). Khoảng là
+   * `days` ngày tới hôm nay theo giờ Việt Nam, trùng `from`/`to` mà giao diện đặt
+   * cho danh sách khi bấm một dòng. Khoảng tối đa 30 ngày và thời hạn giữ tối
+   * thiểu 30 ngày (L20) nên các số đếm chỉ đọc bảng chính; riêng (b) lùi thêm 30
+   * ngày để so IP nên đọc cả bảng lưu trữ khi phần lùi lấn qua mốc lưu trữ.
+   */
+  async getHighlights(query: ActivityHighlightsQuery, now: Date = new Date()): Promise<AuditActivityHighlights> {
+    const to = vnDateOf(now);
+    const from = vnDateOf(new Date(vnDayStart(to).getTime() - (query.days - 1) * DAY_MS));
+    const range = { gte: vnDayStart(from), lt: new Date(vnDayStart(to).getTime() + DAY_MS) };
+    const lookback = { gte: new Date(range.gte.getTime() - NEW_IP_LOOKBACK_DAYS * DAY_MS), lt: range.lt };
+
+    const readLogins = async () => {
+      const archivedUntil = await this.auditLogRepository.findLatestArchivedAt();
+      const [main, archived] = await Promise.all([
+        this.auditLogRepository.findAdminLogins(lookback),
+        archivedUntil && archivedUntil >= lookback.gte ? this.auditLogRepository.findAdminLogins(lookback, true) : [],
+      ]);
+      return [...main, ...archived].flatMap((row) =>
+        row.actorId ? [{ id: row.id, actorId: row.actorId, createdAt: row.createdAt, ip: readIp("AUTH_LOGIN_SUCCEEDED", row.metadata) }] : [],
+      );
+    };
+
+    const [actionCounts, resubmitted, failed, logins, burstHours] = await Promise.all([
+      this.auditLogRepository.countByAction(buildActivityWhere({ actions: [...HIGHLIGHT_ACTIONS], range })),
+      this.auditLogRepository.count(buildActivityWhere({ actions: [...SUBMIT_BURST_ACTIONS], resubmit: true, range })),
+      this.auditLogRepository.tallyFailedLoginAlerts(range),
+      readLogins(),
+      this.auditLogRepository.findSubmitBurstHours(range, SUBMIT_BURST_ACTIONS, SUBMIT_BURST_PER_HOUR),
+    ]);
+
+    const failedLogins = summarizeRule(failed);
+    const adminNewIp = summarizeRule(findNewIpLogins(logins, range));
+    const employerSubmitBurst = summarizeRule(groupBurstHours(burstHours));
+    const emails = await this.userRepository.findEmailsByIds([
+      ...new Set([...failedLogins.top, ...adminNewIp.top, ...employerSubmitBurst.top].map((tally) => tally.userId)),
+    ]);
+    const countOf = (...actions: AuditAction[]) => actions.reduce((sum, action) => sum + (actionCounts.get(action) ?? 0), 0);
+
+    return {
+      days: query.days,
+      from,
+      to,
+      thresholds: {
+        failedLoginAttempts: LOGIN_FAIL_THRESHOLD,
+        failedLoginWindowMinutes: LOGIN_FAIL_WINDOW_MINUTES,
+        newIpLookbackDays: NEW_IP_LOOKBACK_DAYS,
+        submitBurstPerHour: SUBMIT_BURST_PER_HOUR,
+      },
+      attention: {
+        failedLogins: toRule(failedLogins, (tally) => toAccountBase(tally, emails)),
+        adminNewIp: toRule(adminNewIp, (tally) => ({
+          ...toAccountBase(tally, emails),
+          ip: tally.ip,
+          knownIps: tally.knownIps,
+        })),
+        employerSubmitBurst: toRule(employerSubmitBurst, (tally) => ({
+          ...toAccountBase(tally, emails),
+          maxPerHour: tally.maxPerHour,
+          latestHour: {
+            since: tally.latestHour.since.toISOString(),
+            until: tally.latestHour.until.toISOString(),
+            count: tally.latestHour.count,
+          },
+        })),
+      },
+      activity: {
+        jobPosts: {
+          approved: countOf("JOB_POST_APPROVED", "JOB_POST_AUTO_PUBLISHED"),
+          rejected: countOf("JOB_POST_REJECTED"),
+          resubmitted,
+        },
+        companies: {
+          verified: countOf("COMPANY_VERIFIED", "COMPANY_AUTO_VERIFIED"),
+          rejected: countOf("COMPANY_REJECTED"),
+        },
+        payments: { completed: countOf("PAYMENT_COMPLETED") },
+        catalog: {
+          approved: countOf("CATALOG_ENTRY_APPROVED", "CATALOG_ENTRY_RENAME_APPROVED"),
+          rejected: countOf("CATALOG_ENTRY_REJECTED"),
+          merged: countOf("CATALOG_ENTRY_MERGED"),
+        },
+      },
     };
   }
 

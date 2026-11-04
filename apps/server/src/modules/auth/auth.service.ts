@@ -20,9 +20,10 @@ const OTP_MAX_PER_EMAIL_PER_HOUR = 20;
 const OTP_MAX_PER_IP_PER_HOUR = 1000;
 const ONE_HOUR_SECONDS = 60 * 60;
 // Nhật ký bảo mật (AD-20, docs/06-backend/admin-audit-log/PLAN.md L4): sai mật khẩu
-// lần thứ 5 trong 15 phút với email có tài khoản ⇒ ghi một dòng.
-const LOGIN_FAIL_THRESHOLD = 5;
-const LOGIN_FAIL_WINDOW_MINUTES = 15;
+// lần thứ 5 trong 15 phút với email có tài khoản ⇒ ghi một dòng. Khối "Điểm chính"
+// của trang nhật ký đọc lại hai số này để ghi đúng ngưỡng.
+export const LOGIN_FAIL_THRESHOLD = 5;
+export const LOGIN_FAIL_WINDOW_MINUTES = 15;
 
 export type AuthTokens = AuthTokensResponse;
 

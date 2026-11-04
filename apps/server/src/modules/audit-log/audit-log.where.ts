@@ -161,6 +161,69 @@ export function utcSql(instant: Date): Prisma.Sql {
   return Prisma.sql`(${instant.toISOString()}::timestamptz AT TIME ZONE 'UTC')`;
 }
 
+/**
+ * Bản SQL của `buildActivityWhere` (không `omit`, `q` khớp người làm hoặc đối
+ * tượng), cho truy vấn Prisma không diễn đạt được: đếm theo ngày giờ Việt Nam
+ * (`dayCounts`, plan admin-activity-v2 N11). Dùng được cho cả `audit_logs` và
+ * `audit_logs_archive` (cùng cột). Sửa một bên thì sửa cả bên kia; unit test
+ * `audit-log-where.test.ts` kiểm hai bản khớp nhau ở từng khoá của bộ lọc.
+ */
+export function buildActivityWhereSql(filter: ActivityFilter): Prisma.Sql {
+  const conditions: Prisma.Sql[] = [];
+
+  const actions = allowedActions(filter, []);
+  if (actions) {
+    conditions.push(actions.length === 0 ? Prisma.sql`FALSE` : Prisma.sql`"action" IN (${Prisma.join(actions)})`);
+  }
+
+  if (filter.resubmit !== undefined) {
+    // Cùng nghĩa với bản Prisma: `false` là mọi dòng khác `true`, gồm metadata null hoặc thiếu khoá.
+    conditions.push(
+      filter.resubmit
+        ? Prisma.sql`("metadata" -> 'resubmit') = 'true'::jsonb`
+        : Prisma.sql`("metadata" -> 'resubmit') IS DISTINCT FROM 'true'::jsonb`,
+    );
+  }
+
+  if (filter.actorRoles) {
+    const roles = filter.actorRoles.map((role) =>
+      role === "SYSTEM" ? Prisma.sql`"actorId" IS NULL` : Prisma.sql`"actorRole"::text = ${role}`,
+    );
+    conditions.push(Prisma.sql`(${Prisma.join(roles, " OR ")})`);
+  }
+
+  if (filter.actorId) conditions.push(Prisma.sql`"actorId" = ${filter.actorId}`);
+
+  if (filter.range?.gte) conditions.push(Prisma.sql`"createdAt" >= ${utcSql(filter.range.gte)}`);
+  if (filter.range?.lt) conditions.push(Prisma.sql`"createdAt" < ${utcSql(filter.range.lt)}`);
+
+  if (filter.slot && filter.range?.gte && filter.range.lt) {
+    const slots = hourSlots({ gte: filter.range.gte, lt: filter.range.lt }, filter.slot.dow, filter.slot.hour);
+    conditions.push(
+      slots.length === 0
+        ? Prisma.sql`FALSE`
+        : Prisma.sql`(${Prisma.join(
+            slots.map((slot) => Prisma.sql`("createdAt" >= ${utcSql(slot.gte)} AND "createdAt" < ${utcSql(slot.lt)})`),
+            " OR ",
+          )})`,
+    );
+  }
+
+  if (filter.qUserIds) {
+    conditions.push(
+      filter.qUserIds.length === 0
+        ? Prisma.sql`FALSE`
+        : Prisma.sql`("actorId" IN (${Prisma.join(filter.qUserIds)}) OR ("entityType" = 'User' AND "entityId" IN (${Prisma.join(filter.qUserIds)})))`,
+    );
+  }
+
+  if (filter.entity) {
+    conditions.push(Prisma.sql`"entityType" = ${filter.entity.type} AND "entityId" = ${filter.entity.id}`);
+  }
+
+  return conditions.length === 0 ? Prisma.sql`TRUE` : Prisma.join(conditions, " AND ");
+}
+
 /** Thêm cho top người làm: mọi dòng có người làm, hoặc đúng các id này. */
 export type StatsActorFilter = "any" | string[];
 
