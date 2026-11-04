@@ -1,13 +1,16 @@
 "use client";
 
 import { Suspense, useCallback, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type {
   AdminJobReportListItem,
   ReportReason,
   ReportResolution,
   ReportStatus,
 } from "@sip/shared-types";
-import { useAdminJobReports, useAdminJobReportStats } from "@/hooks/useAdminJobReports";
+import { useAdminJobReportDetail, useAdminJobReports, useAdminJobReportStats } from "@/hooks/useAdminJobReports";
+import { ApiError } from "@/lib/api-client";
+import { NoteBox } from "@/components/interviews/NoteBox";
 import { formatDate } from "@/lib/job-post-display";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -64,6 +67,24 @@ function AdminJobReportsView() {
   const [page, setPage] = useState(1);
   const [selectedReport, setSelectedReport] = useState<AdminJobReportListItem | null>(null);
 
+  // `?report=<id>`: link từ Nhật ký hoạt động (quy tắc (e), "Mở báo cáo") mở thẳng modal
+  // của báo cáo đó (admin-activity-v2 bản 2.1, Q4). Đóng modal thì bỏ tham số khỏi URL.
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const linkedId = searchParams.get("report");
+  const linked = useAdminJobReportDetail(linkedId);
+  const activeReport = selectedReport ?? (linkedId ? (linked.data ?? null) : null);
+
+  const clearLinked = useCallback(() => {
+    if (linkedId) router.replace(pathname, { scroll: false });
+  }, [linkedId, router, pathname]);
+
+  function closeReport() {
+    setSelectedReport(null);
+    clearLinked();
+  }
+
   const [toasts, setToasts] = useState<ToastData[]>([]);
 
   const pushToast = useCallback((tone: ToastData["tone"], message: string) => {
@@ -117,6 +138,21 @@ function AdminJobReportsView() {
           Tiếp nhận và xử lý các phản ánh, khiếu nại về tin tuyển dụng có dấu hiệu lừa đảo hoặc vi phạm quy định.
         </p>
       </div>
+
+      {linkedId && linked.isError ? (
+        <NoteBox tone="danger" icon="circle-alert" role="alert">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm">
+              {linked.error instanceof ApiError && linked.error.status === 404
+                ? "Không tìm thấy báo cáo trong liên kết. Bạn chọn báo cáo trong danh sách bên dưới."
+                : "Không mở được báo cáo trong liên kết. Bạn tải lại trang để thử lại."}
+            </p>
+            <Button type="button" variant="ghost" size="sm" onClick={clearLinked}>
+              Bỏ liên kết
+            </Button>
+          </div>
+        </NoteBox>
+      ) : null}
 
       {/* Overview StatCards */}
       {stats ? (
@@ -316,8 +352,8 @@ function AdminJobReportsView() {
 
       {/* Detail & Action Modal */}
       <AdminJobReportDetailModal
-        report={selectedReport}
-        onClose={() => setSelectedReport(null)}
+        report={activeReport}
+        onClose={closeReport}
         onDone={(outcome) => pushToast(outcome.tone, outcome.message)}
       />
 

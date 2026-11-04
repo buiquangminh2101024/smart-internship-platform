@@ -15,6 +15,7 @@ import {
 import { ApiError } from "@/lib/api-client";
 import {
   HIGHLIGHT_PARAM,
+  VIEW_PARAM,
   actionLabel,
   clearedFilters,
   countActiveFilters,
@@ -22,11 +23,13 @@ import {
   formatIsoDate,
   formatVnDateTime,
   parseActivityParams,
+  parseActivityView,
   parseHighlightDays,
   rangeLabel,
   toActivityParams,
   toListSearch,
   type ActivityFilters as Filters,
+  type ActivityView,
 } from "@/lib/audit-activity";
 import { formatNumber, vnTodayIso } from "@/lib/dashboard-format";
 import { Icon } from "@/components/ui/Icon";
@@ -38,7 +41,9 @@ import { ActivityDetail } from "@/components/admin/activity/ActivityDetail";
 import { ActivityDetailDrawer, type DrawerTab } from "@/components/admin/activity/ActivityDetailDrawer";
 import { ActivityFilters } from "@/components/admin/activity/ActivityFilters";
 import { ActivityHighlights, type HighlightFilter } from "@/components/admin/activity/ActivityHighlights";
+import { ActivityLegendDialog } from "@/components/admin/activity/ActivityLegendDialog";
 import { ActivityList, focusActivityRow } from "@/components/admin/activity/ActivityList";
+import { ActivityViewTabs, viewPanelId, viewTabId } from "@/components/admin/activity/ActivityViewTabs";
 import { ActorSessions } from "@/components/admin/activity/ActorSessions";
 import { EntityJourney } from "@/components/admin/activity/EntityJourney";
 import { ExportCsvButton } from "@/components/admin/activity/ExportCsvButton";
@@ -57,6 +62,7 @@ const HIGHLIGHT_MS = 1500;
 const JUMP_MAX_PAGES = 4;
 const COPIED_MS = 2000;
 const LIST_TITLE_ID = "activity-list-title";
+const VIEW_TABLIST_ID = "activity-view-tabs";
 
 let toastIdCounter = 0;
 
@@ -82,10 +88,10 @@ export default function AdminActivityPage() {
 }
 
 /**
- * Nhật ký hoạt động (AD-20; bố cục theo plan "admin-activity-v2"): khối Điểm
- * chính, thanh lọc, danh sách chia theo ngày. Mọi bộ lọc, dòng đang mở và khoảng
- * của Điểm chính nằm trên URL (`parseActivityParams`, `parseHighlightDays`), nên
- * link chia sẻ mở đúng cảnh đang xem.
+ * Nhật ký hoạt động (AD-20; bố cục theo plan "admin-activity-v2"): hai tab "Điểm
+ * chính" và "Danh sách hoạt động" (thanh lọc, danh sách chia theo ngày). Mọi bộ lọc,
+ * dòng đang mở, tab và khoảng của Điểm chính nằm trên URL (`parseActivityParams`,
+ * `parseActivityView`, `parseHighlightDays`), nên link chia sẻ mở đúng cảnh đang xem.
  */
 function AdminActivityView() {
   const router = useRouter();
@@ -97,21 +103,28 @@ function AdminActivityView() {
   const search = searchParams.toString();
   const { filters, row, errors } = useMemo(() => parseActivityParams(new URLSearchParams(search)), [search]);
   const highlightDays = useMemo(() => parseHighlightDays(new URLSearchParams(search)), [search]);
+  const view = useMemo(() => parseActivityView(new URLSearchParams(search), filters, row), [search, filters, row]);
   const range = effectiveRange(filters);
   const listSearch = toListSearch(filters).toString();
 
   const navigate = useCallback(
-    (next: Filters, nextRow: string | null, days: AuditHighlightDays) => {
+    (next: Filters, nextRow: string | null, days: AuditHighlightDays, nextView: ActivityView) => {
       const params = toActivityParams(next, nextRow);
       if (days === 30) params.set(HIGHLIGHT_PARAM, "30");
+      // Tab luôn ghi rõ khi có tab, để bỏ hết bộ lọc ở tab Danh sách không tự nhảy về Điểm chính.
+      if (!next.archived) params.set(VIEW_PARAM, nextView);
       const query = params.toString();
-      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+      const href = query ? `${pathname}?${query}` : pathname;
+      // Đổi tab tạo một mục lịch sử để nút Back quay về tab trước (M13); đổi bộ lọc thì không.
+      if (!next.archived && nextView !== view) router.push(href, { scroll: false });
+      else router.replace(href, { scroll: false });
     },
-    [router, pathname],
+    [router, pathname, view],
   );
   const update = useCallback(
-    (next: Filters, nextRow: string | null = null) => navigate(next, nextRow, highlightDays),
-    [navigate, highlightDays],
+    (next: Filters, nextRow: string | null = null, nextView: ActivityView = view) =>
+      navigate(next, nextRow, highlightDays, nextView),
+    [navigate, highlightDays, view],
   );
   const changeFilters = useCallback((next: Filters) => update(next, null), [update]);
   const clearFilters = useCallback(() => update(clearedFilters(filters), null), [update, filters]);
@@ -130,6 +143,18 @@ function AdminActivityView() {
 
   // ─── Điểm chính (không áp cho nhật ký đã lưu trữ) ──────────────────────
   const highlights = useActivityHighlights(highlightDays, { enabled: !filters.archived });
+  // Số trên tab Điểm chính: số quy tắc "Cần xem" đang khác 0 (M14).
+  const attention = highlights.data?.attention;
+  const attentionCount = attention
+    ? [
+        attention.failedLogins,
+        attention.adminNewIp,
+        attention.adminDangerBurst,
+        attention.employerSubmitBurst,
+        attention.reportedJobs,
+      ].filter((rule) => rule.count > 0).length
+    : undefined;
+  const [legendOpen, setLegendOpen] = useState(false);
 
   // ─── Ngăn kéo ──────────────────────────────────────────────────────────
   const drawerOpen = row !== null;
@@ -247,49 +272,82 @@ function AdminActivityView() {
     update(filters, null);
   }
 
+  // Ngăn kéo mở từ tab Điểm chính (quy tắc (b)) cũng nhảy được tới dòng: các thao tác
+  // dưới đây đều đưa về tab Danh sách.
   function jumpToRow(id: string) {
     if (items.some((entry) => entry.id === id)) {
+      openerRef.current = null;
       focusAfterCloseRef.current = id;
       setHighlightId(id);
-      update(filters, null);
+      update(filters, null, "list");
       return;
     }
     // Bước cũ hơn khoảng đang xem: bỏ các lọc khác, xem toàn bộ lịch sử của đối tượng.
     const next: Filters = { ...clearedFilters(filters), ent: item ? { type: item.entityType, id: item.entityId } : null };
+    openerRef.current = null;
     focusAfterCloseRef.current = null;
     setJump({ id, search: toListSearch(next).toString() });
-    update(next, null);
+    update(next, null, "list");
   }
 
   function selectSession(session: { since: string; until: string }) {
     if (!actorTarget) return;
     setKnownActor({ id: actorTarget.actorId, email: actorTarget.email });
+    // Ngăn kéo mở từ Điểm chính: nút đã mở nằm ở tab bị ẩn, nên đưa focus tới danh sách.
+    openerRef.current = null;
+    if (!focusAfterCloseRef.current) focusList();
     update(
       { ...clearedFilters(filters), actorId: actorTarget.actorId, since: session.since, until: session.until },
       null,
+      "list",
     );
   }
 
-  /** Một dòng Điểm chính: thay bộ lọc danh sách rồi đưa focus tới tiêu đề danh sách (N7). */
-  function applyHighlight(patch: HighlightFilter) {
-    if (patch.actorId) {
-      const account = highlights.data?.attention.employerSubmitBurst.accounts.find((entry) => entry.userId === patch.actorId);
-      if (account) setKnownActor({ id: account.userId, email: account.email });
-    }
-    update({ ...clearedFilters(filters), ...patch }, null);
-    requestAnimationFrame(() => {
+  // Sau khi sang tab Danh sách: đưa focus vào tiêu đề danh sách (M14). Đợi URL đổi và
+  // tab hiện ra rồi mới focus, vì `router.push` không đổi trang ngay.
+  const focusListRef = useRef(false);
+  function focusList() {
+    focusListRef.current = true;
+  }
+  useEffect(() => {
+    if (view !== "list" || !focusListRef.current) return;
+    const frame = requestAnimationFrame(() => {
       const heading = document.getElementById(LIST_TITLE_ID);
-      if (!heading) return;
+      if (!heading || heading.closest("[hidden]")) return;
+      focusListRef.current = false;
+      // Thanh tab bị cuộn khuất phía trên thì đưa về đầu màn hình, để thấy cả tab lẫn thanh lọc.
+      const tablist = document.getElementById(VIEW_TABLIST_ID);
+      if (tablist && tablist.getBoundingClientRect().top < 0) tablist.scrollIntoView({ block: "start" });
       // Tiêu đề nhận focus bằng script (không vào thứ tự Tab) để bàn phím đi tiếp từ danh sách.
       heading.setAttribute("tabindex", "-1");
-      heading.scrollIntoView({ block: "start", behavior: "auto" });
-      heading.focus({ preventScroll: true });
+      heading.focus();
     });
+    return () => cancelAnimationFrame(frame);
+  }, [view, search]);
+
+  /** Một dòng Điểm chính: thay bộ lọc danh sách, sang tab Danh sách, focus tiêu đề danh sách (N7, M14). */
+  function applyHighlight(patch: HighlightFilter) {
+    if (patch.actorId) {
+      // Quy tắc (c) và (d) lọc theo người làm: nhớ email để chip "Người làm" có tên ngay.
+      const account = [...(attention?.employerSubmitBurst.accounts ?? []), ...(attention?.adminDangerBurst.accounts ?? [])].find(
+        (entry) => entry.userId === patch.actorId,
+      );
+      if (account) setKnownActor({ id: account.userId, email: account.email });
+    }
+    focusList();
+    update({ ...clearedFilters(filters), ...patch }, null, "list");
+  }
+
+  function changeView(next: ActivityView) {
+    navigate(filters, row, highlightDays, next);
   }
 
   async function copyLink() {
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      // Bỏ `view`: link tới một dòng luôn mở tab Danh sách (M13), dù dòng được mở từ Điểm chính.
+      const url = new URL(window.location.href);
+      url.searchParams.delete(VIEW_PARAM);
+      await navigator.clipboard.writeText(url.toString());
       setCopied(true);
     } catch {
       push("danger", "Không sao chép được liên kết. Bạn sao chép địa chỉ trên thanh trình duyệt.");
@@ -408,7 +466,8 @@ function AdminActivityView() {
           ) : null}
         </div>
         <div className="flex flex-wrap items-start gap-2">
-          <ExportCsvButton filters={filters} total={total} onResult={push} />
+          {/* Xuất danh sách đang lọc, nên chỉ có ở tab Danh sách (M12). */}
+          {view === "list" ? <ExportCsvButton filters={filters} total={total} onResult={push} /> : null}
           <button
             type="button"
             aria-pressed={filters.archived}
@@ -422,6 +481,9 @@ function AdminActivityView() {
             <Icon name="archive" size={16} />
             Xem nhật ký đã lưu trữ
           </button>
+          <DashButton variant="ghost" icon="circle-help" onClick={() => setLegendOpen(true)}>
+            Chú giải
+          </DashButton>
           <DashButton variant="ghost" icon="refresh-cw" loading={reloading} onClick={reload}>
             Tải lại
           </DashButton>
@@ -435,53 +497,71 @@ function AdminActivityView() {
           trữ” để quay về nhật ký hiện tại.
         </p>
       ) : (
-        <ActivityHighlights
-          days={highlightDays}
-          onDaysChange={(days) => navigate(filters, row, days)}
-          status={highlights.status}
-          data={highlights.data}
-          dimmed={highlights.isPlaceholderData}
-          onRetry={() => void highlights.refetch()}
-          retrying={highlights.isFetching}
-          onFilter={applyHighlight}
-          onOpenRow={openRowFromOutside}
-        />
+        <>
+          <div id={VIEW_TABLIST_ID} className="-mb-1 scroll-mt-4">
+            <ActivityViewTabs view={view} onChange={changeView} attentionCount={attentionCount} />
+          </div>
+          {/* Hai tab cùng được render, tab ẩn dùng `hidden`, để giữ quy tắc đang mở và ô đang gõ khi đổi tab. */}
+          <div role="tabpanel" id={viewPanelId("highlights")} aria-labelledby={viewTabId("highlights")} hidden={view !== "highlights"}>
+            <ActivityHighlights
+              days={highlightDays}
+              onDaysChange={(days) => navigate(filters, row, days, view)}
+              status={highlights.status}
+              data={highlights.data}
+              dimmed={highlights.isPlaceholderData}
+              onRetry={() => void highlights.refetch()}
+              retrying={highlights.isFetching}
+              onFilter={applyHighlight}
+              onOpenRow={openRowFromOutside}
+            />
+          </div>
+        </>
       )}
 
-      <ActivityFilters
-        filters={filters}
-        errors={errors}
-        range={range}
-        actorEmail={actorEmail}
-        onChange={changeFilters}
-        onClear={clearFilters}
-      />
+      <div
+        role={filters.archived ? undefined : "tabpanel"}
+        id={filters.archived ? undefined : viewPanelId("list")}
+        aria-labelledby={filters.archived ? undefined : viewTabId("list")}
+        hidden={view !== "list"}
+        className="grid content-start gap-5"
+      >
+        <ActivityFilters
+          filters={filters}
+          errors={errors}
+          range={range}
+          actorEmail={actorEmail}
+          onChange={changeFilters}
+          onClear={clearFilters}
+        />
 
-      <AdminPanel labelledBy={LIST_TITLE_ID}>
-        <AdminPanelHead
-          id={LIST_TITLE_ID}
-          title="Danh sách hoạt động"
-          subtitle="Mới nhất trước, chia theo ngày. Bấm một dòng để xem chi tiết và hành trình."
-        />
-        <ActivityList
-          items={items}
-          total={total}
-          dayCounts={dayCounts}
-          status={list.status}
-          dimmed={list.isPlaceholderData}
-          hasMore={hasNextPage}
-          loadingMore={list.isFetchingNextPage}
-          activeId={row}
-          highlightId={highlightId}
-          hasFilters={hasFilters}
-          archived={filters.archived}
-          onOpen={openRow}
-          onLoadMore={() => void fetchNextPage()}
-          onRetry={() => void list.refetch()}
-          retrying={list.isFetching}
-          onClearFilters={clearFilters}
-        />
-      </AdminPanel>
+        <AdminPanel labelledBy={LIST_TITLE_ID}>
+          <AdminPanelHead
+            id={LIST_TITLE_ID}
+            title="Danh sách hoạt động"
+            subtitle="Mới nhất trước, chia theo ngày. Bấm một dòng để xem chi tiết và hành trình."
+          />
+          <ActivityList
+            items={items}
+            total={total}
+            dayCounts={dayCounts}
+            status={list.status}
+            dimmed={list.isPlaceholderData}
+            hasMore={hasNextPage}
+            loadingMore={list.isFetchingNextPage}
+            activeId={row}
+            highlightId={highlightId}
+            hasFilters={hasFilters}
+            archived={filters.archived}
+            onOpen={openRow}
+            onLoadMore={() => void fetchNextPage()}
+            onRetry={() => void list.refetch()}
+            retrying={list.isFetching}
+            onClearFilters={clearFilters}
+          />
+        </AdminPanel>
+      </div>
+
+      <ActivityLegendDialog open={legendOpen} onClose={() => setLegendOpen(false)} />
 
       <ActivityDetailDrawer<DrawerTabKey>
         open={drawerOpen}

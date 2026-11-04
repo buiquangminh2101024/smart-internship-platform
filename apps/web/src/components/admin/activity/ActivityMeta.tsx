@@ -7,8 +7,11 @@ import { Icon } from "@/components/ui/Icon";
  * mình: ô màu luôn đi kèm icon, và nơi dùng luôn có nhãn chữ bên cạnh.
  */
 
-/** Ô màu nhóm có icon trắng bên trong (trang trí; nhãn nằm cạnh). */
-export function GroupSwatch({ group, size = 22 }: { group: AuditActivityGroup; size?: number }) {
+/**
+ * Ô màu nhóm có icon trắng bên trong (trang trí; nhãn nằm cạnh). `icon` thay icon của
+ * nhóm nhưng giữ màu, vd. dòng "Báo cáo vi phạm" (nhóm Tin tuyển dụng, icon lá cờ).
+ */
+export function GroupSwatch({ group, size = 22, icon }: { group: AuditActivityGroup; size?: number; icon?: string }) {
   const meta = GROUP_META[group];
   return (
     <span
@@ -16,7 +19,7 @@ export function GroupSwatch({ group, size = 22 }: { group: AuditActivityGroup; s
       className={`inline-grid flex-none place-items-center rounded-md text-white ${meta.swatch}`}
       style={{ width: size, height: size }}
     >
-      <Icon name={meta.icon} size={Math.round(size * 0.62)} strokeWidth={2} />
+      <Icon name={icon ?? meta.icon} size={Math.round(size * 0.62)} strokeWidth={2} />
     </span>
   );
 }

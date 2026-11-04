@@ -81,6 +81,19 @@ export const FAILED_LOGIN_ACTION = "AUTH_LOGIN_FAILED_REPEATED";
 /** Hai hành động có cờ "gửi lại sau từ chối" (L28). */
 export const RESUBMIT_ACTIONS: readonly string[] = ["JOB_POST_SUBMITTED", "JOB_POST_AUTO_PUBLISHED"];
 
+/**
+ * Năm thao tác nguy hiểm của quy tắc (d) (bản 2.1, M3), khớp `DANGEROUS_ADMIN_ACTIONS` ở
+ * server. Bộ lọc URL không lọc được theo `metadata`, nên lọc theo danh sách này còn hiện
+ * cả lần **bật** kiểm duyệt (M8).
+ */
+export const DANGEROUS_ADMIN_ACTIONS: readonly string[] = [
+  "USER_SUSPENDED",
+  "USER_SESSIONS_REVOKED",
+  "COMPANY_REQUIRES_APPROVAL_CHANGED",
+  "COMPANY_REJECTED",
+  "JOB_POST_RETRACTED",
+];
+
 /** Nhãn hành động của một dòng; gửi duyệt có cờ gửi lại thì thành "Gửi lại tin". */
 export function actionLabel(action: string, resubmit?: boolean | null): string {
   if (resubmit && action === "JOB_POST_SUBMITTED") return "Gửi lại tin";
@@ -402,6 +415,23 @@ export const HIGHLIGHT_PARAM = "hl";
 
 export function parseHighlightDays(params: URLSearchParams): AuditHighlightDays {
   return params.get(HIGHLIGHT_PARAM) === "30" ? 30 : 7;
+}
+
+/** Tab của trang (bản 2.1, M12–M13): `view=highlights` hoặc `view=list`. */
+export const VIEW_PARAM = "view";
+
+export type ActivityView = "highlights" | "list";
+
+/**
+ * Tab đang mở. Xem lưu trữ thì chỉ có danh sách. Không có `view` (link cũ, link "Mở
+ * báo cáo", sao chép liên kết tới dòng) thì link có bộ lọc hoặc `row` mở Danh sách,
+ * còn lại mở Điểm chính.
+ */
+export function parseActivityView(params: URLSearchParams, filters: ActivityFilters, row: string | null): ActivityView {
+  if (filters.archived) return "list";
+  const view = params.get(VIEW_PARAM);
+  if (view === "highlights" || view === "list") return view;
+  return countActiveFilters(filters) > 0 || row ? "list" : "highlights";
 }
 
 /** Số bộ lọc đang bật (nút "Bộ lọc (n)" trên màn hình hẹp); không tính "xem lưu trữ". */
