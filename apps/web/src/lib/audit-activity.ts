@@ -3,6 +3,7 @@ import type {
   AuditActivityGroup,
   AuditActivityItem,
   AuditActorRoleFilter,
+  AuditHighlightDays,
 } from "@sip/shared-types";
 import { formatVnDate, formatVnTime, vnTodayIso } from "./dashboard-format";
 
@@ -385,6 +386,16 @@ export function toActivityParams(filters: ActivityFilters, row?: string | null):
   return params;
 }
 
+/**
+ * Khoảng của khối "Điểm chính" (plan admin-activity-v2 N3): `hl=30` trên URL,
+ * vắng hoặc giá trị khác thì 7 ngày. Không phải bộ lọc của danh sách.
+ */
+export const HIGHLIGHT_PARAM = "hl";
+
+export function parseHighlightDays(params: URLSearchParams): AuditHighlightDays {
+  return params.get(HIGHLIGHT_PARAM) === "30" ? 30 : 7;
+}
+
 /** Số bộ lọc đang bật (nút "Bộ lọc (n)" trên màn hình hẹp); không tính "xem lưu trữ". */
 export function countActiveFilters(filters: ActivityFilters): number {
   return (
@@ -468,21 +479,6 @@ export function toListSearch(filters: ActivityFilters, today?: string): URLSearc
   }
   if (filters.actorId) params.set("actorId", filters.actorId);
   if (filters.archived) params.set("archived", "true");
-  return params;
-}
-
-/**
- * Query của `/stats` (L11): bỏ đối tượng, người làm, phiên, lưu trữ. Chỉ gửi
- * khoảng ngày khi đang lọc theo ngày; còn lại server dùng mặc định 30 ngày.
- */
-export function toStatsSearch(filters: ActivityFilters, today?: string): URLSearchParams {
-  const params = new URLSearchParams();
-  setCommon(params, filters);
-  const range = effectiveRange({ ...filters, ent: null, since: null, until: null, archived: false }, today);
-  if (range.kind === "days") {
-    params.set("from", range.from);
-    params.set("to", range.to);
-  }
   return params;
 }
 

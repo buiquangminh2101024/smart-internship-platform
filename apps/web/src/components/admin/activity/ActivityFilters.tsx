@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import type { AuditActionGroup, AuditActorRoleFilter } from "@sip/shared-types";
 import {
   AUDIT_GROUPS,
@@ -21,10 +21,13 @@ import {
 } from "@/lib/audit-activity";
 import { Icon } from "@/components/ui/Icon";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 import { DashButton } from "@/components/dashboard/DashButton";
 import { DateRangeField } from "./DateRangeField";
 import { GroupSwatch } from "./ActivityMeta";
 
+/** Giá trị của ô chọn khi link cũ lọc nhiều nhóm cùng lúc (không chọn lại được). */
+const MULTI_GROUPS = "__multi";
 const SEARCH_DEBOUNCE_MS = 300;
 const SEARCH_MIN = 2;
 const SEARCH_MAX = 100;
@@ -161,9 +164,9 @@ function activeChips(filters: Filters, actorEmail: string | null): ActiveChip[] 
 }
 
 /**
- * Thanh lọc của trang (nhóm, vai trò, khoảng ngày, email) và hàng chip các bộ
- * lọc đang bật, kể cả bộ lọc đặt từ biểu đồ. Dưới `lg` thanh lọc thu thành nút
- * "Bộ lọc (n)"; hàng chip luôn hiện.
+ * Thanh lọc của trang (loại hoạt động, vai trò, khoảng ngày, email) và hàng chip
+ * các bộ lọc đang bật, kể cả bộ lọc đặt từ khối Điểm chính hay từ link. Dưới
+ * `lg` thanh lọc thu thành nút "Bộ lọc (n)"; hàng chip luôn hiện.
  */
 export function ActivityFilters({
   filters,
@@ -184,6 +187,15 @@ export function ActivityFilters({
   const [open, setOpen] = useState(false);
   const activeCount = countActiveFilters(filters);
   const chips = activeChips(filters, actorEmail);
+
+  const groupSelectId = useId();
+  const groupValue =
+    filters.groups.length === 0 ? "" : filters.groups.length === 1 ? filters.groups[0]! : MULTI_GROUPS;
+  const groupOptions = [
+    { value: "", label: "Tất cả" },
+    ...AUDIT_GROUPS.map((group) => ({ value: group, label: GROUP_META[group].label })),
+    ...(groupValue === MULTI_GROUPS ? [{ value: MULTI_GROUPS, label: `${filters.groups.length} loại (từ link)` }] : []),
+  ];
 
   // Ô email: gõ thì đợi 300 ms mới đẩy lên URL; 1 ký tự thì chỉ nhắc, chưa gọi API.
   const urlQ = filters.q ?? "";
@@ -228,22 +240,22 @@ export function ActivityFilters({
         id="activity-filter-panel"
         className={`${open ? "flex" : "hidden"} flex-col gap-4 rounded-[14px] border border-border-subtle bg-surface-card p-4 lg:flex lg:flex-row lg:flex-wrap lg:items-start lg:gap-x-6`}
       >
-        <fieldset className="grid min-w-0 gap-1.5">
-          <legend className="mb-1.5 text-sm font-medium text-text-strong">Nhóm hành động</legend>
-          <div className="flex flex-wrap gap-1.5">
-            {AUDIT_GROUPS.map((group: AuditActionGroup) => (
-              <ToggleChip
-                key={group}
-                pressed={filters.groups.includes(group)}
-                onClick={() => onChange({ ...filters, groups: toggle(filters.groups, group) })}
-              >
-                <GroupSwatch group={group} size={18} />
-                {GROUP_META[group].label}
-              </ToggleChip>
-            ))}
-          </div>
-          {errors.group ? <p className="text-sm text-red-600">{errors.group}</p> : null}
-        </fieldset>
+        {/* N8: một ô chọn thay cho 6 nút nhóm. Link cũ có nhiều nhóm vẫn đọc được (chip bên dưới). */}
+        <div className="w-full min-w-0 lg:w-[220px]">
+          <Select
+            id={groupSelectId}
+            label="Loại hoạt động"
+            size="sm"
+            value={groupValue}
+            error={errors.group}
+            options={groupOptions}
+            onChange={(event) => {
+              const value = event.target.value;
+              if (value === MULTI_GROUPS) return;
+              onChange({ ...filters, groups: value ? [value as AuditActionGroup] : [] });
+            }}
+          />
+        </div>
 
         <fieldset className="grid min-w-0 gap-1.5">
           <legend className="mb-1.5 text-sm font-medium text-text-strong">Vai trò người làm</legend>

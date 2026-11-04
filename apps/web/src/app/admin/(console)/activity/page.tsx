@@ -3,20 +3,18 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import type { AuditActivityItem, AuditActivityStats } from "@sip/shared-types";
+import type { AuditActivityItem, AuditHighlightDays } from "@sip/shared-types";
 import {
   ADMIN_ACTIVITY_KEY,
+  useActivityHighlights,
   useActivityItem,
   useActivityList,
-  useActivityStats,
   useActorJourney,
   useEntityJourney,
-  useRecentFailedLogins,
 } from "@/hooks/useAdminActivityLog";
-import { useAdminDashboardOverview } from "@/hooks/useAdminDashboard";
 import { ApiError } from "@/lib/api-client";
 import {
-  FAILED_LOGIN_ACTION,
+  HIGHLIGHT_PARAM,
   actionLabel,
   clearedFilters,
   countActiveFilters,
@@ -24,6 +22,7 @@ import {
   formatIsoDate,
   formatVnDateTime,
   parseActivityParams,
+  parseHighlightDays,
   rangeLabel,
   toActivityParams,
   toListSearch,
@@ -38,12 +37,11 @@ import { AdminPanel, AdminPanelHead } from "@/components/dashboard/admin/AdminPa
 import { ActivityDetail } from "@/components/admin/activity/ActivityDetail";
 import { ActivityDetailDrawer, type DrawerTab } from "@/components/admin/activity/ActivityDetailDrawer";
 import { ActivityFilters } from "@/components/admin/activity/ActivityFilters";
+import { ActivityHighlights, type HighlightFilter } from "@/components/admin/activity/ActivityHighlights";
 import { ActivityList, focusActivityRow } from "@/components/admin/activity/ActivityList";
-import { ActivityStatsGrid } from "@/components/admin/activity/ActivityStatsGrid";
 import { ActorSessions } from "@/components/admin/activity/ActorSessions";
 import { EntityJourney } from "@/components/admin/activity/EntityJourney";
 import { ExportCsvButton } from "@/components/admin/activity/ExportCsvButton";
-import { SecurityAlertBar } from "@/components/admin/activity/SecurityAlertBar";
 
 type DrawerTabKey = "detail" | "entity" | "actor";
 
@@ -58,6 +56,7 @@ const HIGHLIGHT_MS = 1500;
 /** Nhảy tới một bước của hành trình: tải thêm tối đa tới trang thứ 4 (200 dòng, bằng giới hạn hành trình). */
 const JUMP_MAX_PAGES = 4;
 const COPIED_MS = 2000;
+const LIST_TITLE_ID = "activity-list-title";
 
 let toastIdCounter = 0;
 
@@ -73,13 +72,6 @@ function useToast() {
   return { toasts, push, dismiss };
 }
 
-/** Hành trình người làm mở từ "Top 5 người làm": theo khoảng ngày của thống kê. */
-interface ActorDrawer {
-  actorId: string;
-  email: string | null;
-  range: { from: string; to: string };
-}
-
 export default function AdminActivityPage() {
   // useSearchParams() cần Suspense boundary khi Next prerender route này.
   return (
@@ -90,9 +82,10 @@ export default function AdminActivityPage() {
 }
 
 /**
- * Nhật ký hoạt động (AD-20, plan FE "admin-audit-log", bản C "Bàn điều tra").
- * Mọi bộ lọc và dòng đang mở nằm trên URL (`parseActivityParams` là chỗ đọc duy
- * nhất), nên link chia sẻ mở đúng cảnh đang xem. Biểu đồ bấm được để đổi bộ lọc.
+ * Nhật ký hoạt động (AD-20; bố cục theo plan "admin-activity-v2"): khối Điểm
+ * chính, thanh lọc, danh sách chia theo ngày. Mọi bộ lọc, dòng đang mở và khoảng
+ * của Điểm chính nằm trên URL (`parseActivityParams`, `parseHighlightDays`), nên
+ * link chia sẻ mở đúng cảnh đang xem.
  */
 function AdminActivityView() {
   const router = useRouter();
@@ -103,15 +96,22 @@ function AdminActivityView() {
 
   const search = searchParams.toString();
   const { filters, row, errors } = useMemo(() => parseActivityParams(new URLSearchParams(search)), [search]);
+  const highlightDays = useMemo(() => parseHighlightDays(new URLSearchParams(search)), [search]);
   const range = effectiveRange(filters);
   const listSearch = toListSearch(filters).toString();
 
-  const update = useCallback(
-    (next: Filters, nextRow: string | null = null) => {
-      const query = toActivityParams(next, nextRow).toString();
+  const navigate = useCallback(
+    (next: Filters, nextRow: string | null, days: AuditHighlightDays) => {
+      const params = toActivityParams(next, nextRow);
+      if (days === 30) params.set(HIGHLIGHT_PARAM, "30");
+      const query = params.toString();
       router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
     },
     [router, pathname],
+  );
+  const update = useCallback(
+    (next: Filters, nextRow: string | null = null) => navigate(next, nextRow, highlightDays),
+    [navigate, highlightDays],
   );
   const changeFilters = useCallback((next: Filters) => update(next, null), [update]);
   const clearFilters = useCallback(() => update(clearedFilters(filters), null), [update, filters]);
@@ -121,20 +121,18 @@ function AdminActivityView() {
   const items = useMemo(() => list.data?.pages.flatMap((page) => page.items) ?? [], [list.data]);
   const firstPage = list.data?.pages[0];
   const total = firstPage?.total;
+  const dayCounts = useMemo(
+    () => (firstPage?.dayCounts ? new Map(firstPage.dayCounts.map((day) => [day.date, day.count])) : undefined),
+    [firstPage],
+  );
   const pageCount = list.data?.pages.length ?? 0;
   const { hasNextPage, fetchNextPage } = list;
 
-  // ─── Thống kê, cảnh báo ────────────────────────────────────────────────
-  const stats = useActivityStats(filters, { enabled: true });
-  const [statsOpen, setStatsOpen] = useState(false);
-  const alertCount = filters.archived ? 0 : (stats.data?.securityAlerts ?? 0);
-  const recentFailed = useRecentFailedLogins(filters, { enabled: alertCount > 0 });
-  // Cùng key với số chờ trên menu của shell, nên không gọi thêm API.
-  const overview = useAdminDashboardOverview();
+  // ─── Điểm chính (không áp cho nhật ký đã lưu trữ) ──────────────────────
+  const highlights = useActivityHighlights(highlightDays, { enabled: !filters.archived });
 
   // ─── Ngăn kéo ──────────────────────────────────────────────────────────
-  const [actorDrawer, setActorDrawer] = useState<ActorDrawer | null>(null);
-  const drawerOpen = row !== null || actorDrawer !== null;
+  const drawerOpen = row !== null;
   const [tabState, setTabState] = useState<{ row: string | null; tab: DrawerTabKey }>({ row: null, tab: "detail" });
   const tab = tabState.row === row ? tabState.tab : "detail";
 
@@ -151,19 +149,19 @@ function AdminActivityView() {
     { enabled: row !== null && tab === "entity" },
   );
 
-  // Mở từ một dòng: thao tác của người đó trong ngày (giờ Việt Nam) của dòng.
+  // Thao tác của người làm trong ngày (giờ Việt Nam) của dòng đang mở.
   const rowDay = item ? vnTodayIso(new Date(item.createdAt)) : null;
   const actorTarget =
-    actorDrawer ??
-    (item?.actorId && rowDay ? { actorId: item.actorId, email: item.actorEmail, range: { from: rowDay, to: rowDay } } : null);
+    item?.actorId && rowDay ? { actorId: item.actorId, email: item.actorEmail, range: { from: rowDay, to: rowDay } } : null;
   const actorJourney = useActorJourney(actorTarget?.actorId ?? null, actorTarget?.range ?? null, filters.archived, {
-    enabled: actorDrawer !== null || (row !== null && tab === "actor"),
+    enabled: row !== null && tab === "actor",
   });
-  const actorScope = actorTarget
-    ? actorTarget.range.from === actorTarget.range.to
-      ? `ngày ${formatIsoDate(actorTarget.range.from)}`
-      : `${formatIsoDate(actorTarget.range.from)} – ${formatIsoDate(actorTarget.range.to)}`
-    : "";
+  const actorScope = actorTarget ? `ngày ${formatIsoDate(actorTarget.range.from)}` : "";
+
+  // Dòng mở từ quy tắc "Admin đăng nhập từ IP mới": hiện IP quen để so (N7).
+  const newIpAccount = row
+    ? highlights.data?.attention.adminNewIp.accounts.find((account) => account.latestLogId === row)
+    : undefined;
 
   // Email của người làm đang lọc (chip "Phiên … của …"): lấy từ dòng đã tải, hoặc nhớ lúc chọn phiên.
   const [knownActor, setKnownActor] = useState<{ id: string; email: string | null } | null>(null);
@@ -178,9 +176,19 @@ function AdminActivityView() {
   const [jump, setJump] = useState<{ id: string; search: string } | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Đóng ngăn kéo thì trả focus về dòng đã mở (hoặc dòng vừa nhảy tới).
+  // Nút ngoài danh sách đã mở ngăn kéo (tài khoản trong khối Điểm chính).
+  const openerRef = useRef<HTMLElement | null>(null);
+
+  // Đóng ngăn kéo thì trả focus về nút đã mở, hoặc dòng đã mở (hoặc dòng vừa nhảy tới).
   useEffect(() => {
-    if (drawerOpen || !focusAfterCloseRef.current) return;
+    if (drawerOpen) return;
+    const opener = openerRef.current;
+    openerRef.current = null;
+    if (opener?.isConnected) {
+      const frame = requestAnimationFrame(() => opener.focus());
+      return () => cancelAnimationFrame(frame);
+    }
+    if (!focusAfterCloseRef.current) return;
     const id = focusAfterCloseRef.current;
     focusAfterCloseRef.current = null;
     const frame = requestAnimationFrame(() => focusActivityRow(id));
@@ -221,14 +229,22 @@ function AdminActivityView() {
 
   // ─── Thao tác ──────────────────────────────────────────────────────────
   function openRow(entry: AuditActivityItem) {
+    openerRef.current = null;
     focusAfterCloseRef.current = entry.id;
     update(filters, entry.id);
   }
 
+  /** Mở ngăn kéo từ một nút ngoài danh sách; đóng thì focus quay về nút đó. */
+  function openRowFromOutside(id: string) {
+    openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    focusAfterCloseRef.current = null;
+    update(filters, id);
+  }
+
   function closeDrawer() {
-    if (row) focusAfterCloseRef.current ??= row;
-    setActorDrawer(null);
-    if (row) update(filters, null);
+    if (!row) return;
+    if (!openerRef.current) focusAfterCloseRef.current ??= row;
+    update(filters, null);
   }
 
   function jumpToRow(id: string) {
@@ -248,16 +264,27 @@ function AdminActivityView() {
   function selectSession(session: { since: string; until: string }) {
     if (!actorTarget) return;
     setKnownActor({ id: actorTarget.actorId, email: actorTarget.email });
-    setActorDrawer(null);
     update(
       { ...clearedFilters(filters), actorId: actorTarget.actorId, since: session.since, until: session.until },
       null,
     );
   }
 
-  function openActorJourney(actor: AuditActivityStats["topActors"][number]) {
-    if (!stats.data) return;
-    setActorDrawer({ actorId: actor.actorId, email: actor.email, range: { from: stats.data.from, to: stats.data.to } });
+  /** Một dòng Điểm chính: thay bộ lọc danh sách rồi đưa focus tới tiêu đề danh sách (N7). */
+  function applyHighlight(patch: HighlightFilter) {
+    if (patch.actorId) {
+      const account = highlights.data?.attention.employerSubmitBurst.accounts.find((entry) => entry.userId === patch.actorId);
+      if (account) setKnownActor({ id: account.userId, email: account.email });
+    }
+    update({ ...clearedFilters(filters), ...patch }, null);
+    requestAnimationFrame(() => {
+      const heading = document.getElementById(LIST_TITLE_ID);
+      if (!heading) return;
+      // Tiêu đề nhận focus bằng script (không vào thứ tự Tab) để bàn phím đi tiếp từ danh sách.
+      heading.setAttribute("tabindex", "-1");
+      heading.scrollIntoView({ block: "start", behavior: "auto" });
+      heading.focus({ preventScroll: true });
+    });
   }
 
   async function copyLink() {
@@ -281,23 +308,26 @@ function AdminActivityView() {
 
   // ─── Nội dung ngăn kéo ─────────────────────────────────────────────────
   let drawerBody;
-  if (actorDrawer) {
-    drawerBody = (
-      <ActorSessions
-        email={actorDrawer.email}
-        scopeLabel={actorScope}
-        status={actorJourney.status}
-        items={actorJourney.data?.items ?? []}
-        hasMore={actorJourney.data?.hasMore ?? false}
-        currentRowId={null}
-        onRetry={() => void actorJourney.refetch()}
-        retrying={actorJourney.isFetching}
-        onSelectSession={selectSession}
-      />
-    );
-  } else if (item) {
+  if (item) {
     if (tab === "detail") {
-      drawerBody = <ActivityDetail item={item} />;
+      drawerBody = (
+        <div className="grid gap-4">
+          {newIpAccount ? (
+            <p className="rounded-[10px] border border-marigold-300 bg-marigold-100 px-3 py-2 text-[13px] text-marigold-800">
+              Lần đăng nhập từ IP mới <b className="font-num tabular-nums">{newIpAccount.ip}</b>.{" "}
+              {newIpAccount.knownIps.length > 0 ? (
+                <>
+                  IP quen trong {highlights.data?.thresholds.newIpLookbackDays} ngày trước:{" "}
+                  <span className="font-num tabular-nums">{newIpAccount.knownIps.join(", ")}</span>.
+                </>
+              ) : (
+                `Admin này chưa đăng nhập lần nào trong ${highlights.data?.thresholds.newIpLookbackDays} ngày trước đó.`
+              )}
+            </p>
+          ) : null}
+          <ActivityDetail item={item} />
+        </div>
+      );
     } else if (tab === "entity") {
       drawerBody = (
         <EntityJourney
@@ -365,10 +395,10 @@ function AdminActivityView() {
           <p className="text-sm text-text-muted">
             {total !== undefined ? (
               <>
-                <b className="text-text-strong tabular-nums">{formatNumber(total)}</b> sự kiện
+                <b className="text-text-strong tabular-nums">{formatNumber(total)}</b> hoạt động
               </>
             ) : (
-              "Đang đếm sự kiện"
+              "Đang đếm hoạt động"
             )}{" "}
             · <span className="tabular-nums">{rangeLabel(range)}</span>
             {filters.archived ? " · nhật ký đã lưu trữ" : ""}
@@ -404,7 +434,19 @@ function AdminActivityView() {
           Bạn đang xem nhật ký đã lưu trữ: các dòng cũ đã được chuyển khỏi nhật ký chính. Bấm lại nút “Xem nhật ký đã lưu
           trữ” để quay về nhật ký hiện tại.
         </p>
-      ) : null}
+      ) : (
+        <ActivityHighlights
+          days={highlightDays}
+          onDaysChange={(days) => navigate(filters, row, days)}
+          status={highlights.status}
+          data={highlights.data}
+          dimmed={highlights.isPlaceholderData}
+          onRetry={() => void highlights.refetch()}
+          retrying={highlights.isFetching}
+          onFilter={applyHighlight}
+          onOpenRow={openRowFromOutside}
+        />
+      )}
 
       <ActivityFilters
         filters={filters}
@@ -415,76 +457,42 @@ function AdminActivityView() {
         onClear={clearFilters}
       />
 
-      {alertCount > 0 ? (
-        <SecurityAlertBar
-          count={alertCount}
-          recent={recentFailed.data?.items ?? []}
-          recentStatus={recentFailed.status}
-          filtered={filters.actions.length === 1 && filters.actions[0] === FAILED_LOGIN_ACTION}
-          onShowAll={() => update({ ...filters, actions: [FAILED_LOGIN_ACTION], resubmit: null }, null)}
+      <AdminPanel labelledBy={LIST_TITLE_ID}>
+        <AdminPanelHead
+          id={LIST_TITLE_ID}
+          title="Danh sách hoạt động"
+          subtitle="Mới nhất trước, chia theo ngày. Bấm một dòng để xem chi tiết và hành trình."
         />
-      ) : null}
-
-      {/* Màn hẹp: danh sách trước, thống kê gom vào mục đóng sẵn ở dưới. Màn rộng: thống kê trước. */}
-      <div className="flex flex-col gap-5">
-        <AdminPanel labelledBy="activity-list-title" className="lg:order-2">
-          <AdminPanelHead id="activity-list-title" title="Sự kiện" subtitle="Mới nhất trước. Bấm một dòng để xem chi tiết và hành trình." />
-          <ActivityList
-            items={items}
-            total={total}
-            status={list.status}
-            dimmed={list.isPlaceholderData}
-            hasMore={hasNextPage}
-            loadingMore={list.isFetchingNextPage}
-            activeId={row}
-            highlightId={highlightId}
-            hasFilters={hasFilters}
-            archived={filters.archived}
-            onOpen={openRow}
-            onLoadMore={() => void fetchNextPage()}
-            onRetry={() => void list.refetch()}
-            retrying={list.isFetching}
-            onClearFilters={clearFilters}
-          />
-        </AdminPanel>
-
-        <section aria-label="Thống kê" className="grid gap-3 lg:order-1">
-          <button
-            type="button"
-            aria-expanded={statsOpen}
-            aria-controls="activity-stats"
-            onClick={() => setStatsOpen((value) => !value)}
-            className="flex h-11 cursor-pointer items-center gap-2 rounded-[14px] border border-border-subtle bg-surface-card px-4 text-sm font-semibold text-text-strong hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 lg:hidden"
-          >
-            <Icon name="chart-column" size={16} className="text-text-muted" />
-            <span className="flex-1 text-left">Thống kê</span>
-            <Icon name={statsOpen ? "chevron-up" : "chevron-down"} size={16} className="text-text-muted" />
-          </button>
-          <div id="activity-stats" className={`${statsOpen ? "block" : "hidden"} lg:block`}>
-            <ActivityStatsGrid
-              filters={filters}
-              status={stats.status}
-              stats={stats.data}
-              retrying={stats.isFetching}
-              onRetry={() => void stats.refetch()}
-              pendingJobPosts={overview.data?.queues.jobPosts.total}
-              onChange={changeFilters}
-              onOpenActorJourney={openActorJourney}
-            />
-          </div>
-        </section>
-      </div>
+        <ActivityList
+          items={items}
+          total={total}
+          dayCounts={dayCounts}
+          status={list.status}
+          dimmed={list.isPlaceholderData}
+          hasMore={hasNextPage}
+          loadingMore={list.isFetchingNextPage}
+          activeId={row}
+          highlightId={highlightId}
+          hasFilters={hasFilters}
+          archived={filters.archived}
+          onOpen={openRow}
+          onLoadMore={() => void fetchNextPage()}
+          onRetry={() => void list.refetch()}
+          retrying={list.isFetching}
+          onClearFilters={clearFilters}
+        />
+      </AdminPanel>
 
       <ActivityDetailDrawer<DrawerTabKey>
         open={drawerOpen}
         onClose={closeDrawer}
-        title={actorDrawer ? "Hành trình người làm" : item ? actionLabel(item.action, item.resubmit) : "Chi tiết sự kiện"}
-        subtitle={actorDrawer ? (actorDrawer.email ?? "Tài khoản đã xoá") : item ? formatVnDateTime(item.createdAt) : undefined}
-        tabs={!actorDrawer && item ? DRAWER_TABS : undefined}
+        title={item ? actionLabel(item.action, item.resubmit) : "Chi tiết hoạt động"}
+        subtitle={item ? formatVnDateTime(item.createdAt) : undefined}
+        tabs={item ? DRAWER_TABS : undefined}
         tab={tab}
         onTabChange={(next) => setTabState({ row, tab: next })}
         actions={
-          !actorDrawer && row ? (
+          row ? (
             <DashButton variant="secondary" size="sm" icon={copied ? "check" : "link"} onClick={copyLink}>
               {copied ? "Đã sao chép liên kết" : "Sao chép liên kết tới dòng này"}
             </DashButton>

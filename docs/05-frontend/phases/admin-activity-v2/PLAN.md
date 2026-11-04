@@ -1,6 +1,6 @@
 # Nhật ký hoạt động Admin bản 2 — từ "bàn điều tra" về đúng "nhật ký"
 
-**Trạng thái: ĐÃ DUYỆT (2026-11-04). Xong A1–A3 (backend); A4–A8 chưa làm.**
+**Trạng thái: ĐÃ DUYỆT (2026-11-04). Xong A1–A6 (backend và giao diện); A7–A8 chưa làm.**
 
 Thay bố cục của `docs/05-frontend/phases/admin-audit-log/PLAN.md` (bản C "Bàn điều tra", xong 2026-10-18). Phần backend của nhật ký (`docs/06-backend/admin-audit-log/PLAN.md`: ghi nhật ký, index, lưu trữ, bảng thống kê theo giờ, xuất CSV) giữ nguyên, trừ một API mới ở N6.
 
@@ -147,9 +147,9 @@ Mỗi phần trả lời được bằng một câu:
 | A1 | Shared types: `AuditActivityHighlights`; thêm `dayCounts?` vào trang đầu của `AuditActivityPage` | `tsc`. **Xong 2026-11-04** |
 | A2 | BE: `GET /admin/activity/highlights` (DTO `days` ∈ {7, 30}), service + repository, hằng số ngưỡng | `tsc`; gọi API trên server dev. **Xong 2026-11-04**: logic thuần ở `audit-log.highlights.ts`, test `audit-log-highlights.test.ts`; ngưỡng đăng nhập sai đọc lại từ `auth.service.ts` |
 | A3 | BE: `dayCounts` ở trang đầu `GET /admin/activity` (cả `archived=1`) | So tổng `dayCounts` với `total`. **Xong 2026-11-04**: đếm bằng `buildActivityWhereSql` (bản SQL của bộ lọc, test kiểm hai bản dùng đủ mọi khoá); khớp `total` ở 13 bộ lọc trên Neon |
-| A4 | FE: hook `useActivityHighlights`; component `ActivityHighlights` (khối Điểm chính, `SegmentedControl` 7/30, link lọc N7) | 375px và ≥ 1280px; trạng thái tải, lỗi, toàn số 0; mở/đóng bằng bàn phím; quy tắc có hơn 10 tài khoản hiện dòng "Xem cả N tài khoản" |
-| A5 | FE: `ActivityList` chia theo ngày + đổi tên khối; `ActivityFilters` đổi nút nhóm thành ô chọn | Bàn phím ↑/↓ vẫn chạy qua tiêu đề ngày; chip cũ vẫn bỏ được |
-| A6 | FE: `page.tsx` bỏ lưới thống kê, thanh cảnh báo và ngăn kéo "Top 5 người làm"; xoá file theo Q1 | `tsc`, `npm run lint --workspace web`; link từ dashboard Admin và trang chi tiết vẫn mở đúng |
+| A4 | FE: hook `useActivityHighlights`; component `ActivityHighlights` (khối Điểm chính, `SegmentedControl` 7/30, link lọc N7) | 375px và ≥ 1280px; trạng thái tải, lỗi, toàn số 0; mở/đóng bằng bàn phím; quy tắc có hơn 10 tài khoản hiện dòng "Xem cả N tài khoản". **Xong 2026-11-04**: kiểm trên trình duyệt bằng dữ liệu giả (phiên Admin hết hạn), gồm 12 tài khoản, quy tắc bằng 0, lỗi tải, 375px. Mỗi số ở "Hoạt động chính" là một nút lọc riêng (số 0 không bấm được). Khối ẩn khi xem nhật ký đã lưu trữ. Mở tài khoản (b) thì ngăn kéo có dòng IP mới và IP quen; đóng ngăn kéo thì focus về nút tài khoản |
+| A5 | FE: `ActivityList` chia theo ngày + đổi tên khối; `ActivityFilters` đổi nút nhóm thành ô chọn | Bàn phím ↑/↓ vẫn chạy qua tiêu đề ngày; chip cũ vẫn bỏ được. **Xong 2026-11-04**: link cũ có nhiều nhóm hiện "N loại (từ link)" trong ô chọn, các chip nhóm vẫn bỏ được từng cái |
+| A6 | FE: `page.tsx` bỏ lưới thống kê, thanh cảnh báo và ngăn kéo "Top 5 người làm"; xoá file theo Q1 | `tsc`, `npm run lint --workspace web`; link từ dashboard Admin và trang chi tiết vẫn mở đúng. **Xong 2026-11-04**: xoá 8 component, `useActivityStats`, `useRecentFailedLogins`, `toStatsSearch`; API `/stats` giữ nguyên |
 | A7 | Script `seed-activity-demo.ts` + lệnh npm | `--dry-run` do mình chạy; chạy thật do chủ dự án |
 | A8 | Kiểm trên trang thật sau khi chủ dự án chạy seed; cập nhật plan cũ (ghi "đã thay bằng bản 2"), `sip-ui` mục Nhật ký hoạt động, `FEATURE_BACKLOG.md` (nếu chủ dự án đồng ý) | Ảnh chụp 375px và desktop |
 
