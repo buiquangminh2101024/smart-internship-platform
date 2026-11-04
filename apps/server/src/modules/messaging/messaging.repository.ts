@@ -2,7 +2,7 @@ import type { Prisma, PrismaClient, Role } from "@prisma/client";
 
 const conversationInclude = {
   jobPost: { select: { id: true, title: true, status: true, company: { select: { name: true } } } },
-  candidate: { select: { id: true, userId: true, user: { select: { email: true } }, avatarUrl: true } },
+  candidate: { select: { id: true, userId: true, fullName: true, user: { select: { email: true } }, avatarUrl: true } },
   employer: { select: { id: true, userId: true, user: { select: { email: true } }, title: true } },
 } satisfies Prisma.ConversationInclude;
 

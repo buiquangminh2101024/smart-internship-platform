@@ -259,7 +259,7 @@ Chủ dự án đồng ý cả bốn khuyến nghị.
 | Q3 | ~~Giữ nút "Hồ sơ / Lượt xem"?~~ | Giữ (E10). |
 | Q4 | ~~Có làm dữ liệu demo không?~~ | Có, việc riêng (E11, mục dưới). |
 
-## Việc riêng: dữ liệu demo (ngoài plan, chưa lên chi tiết)
+## Việc riêng: dữ liệu demo (ngoài plan; plan chi tiết: `docs/06-backend/employer-dashboard-demo-data/PLAN.md`, lập 2026-11-04)
 
 - Mục tiêu: tài khoản employer demo có đủ dữ liệu để cả 4 thẻ, biểu đồ và trung tâm thông báo không toàn số 0 khi báo cáo: vài tin đang hiển thị (có tin hết hạn trong 7 ngày), hồ sơ nộp rải trong 30 ngày, vài hồ sơ chờ, lịch phỏng vấn trong 7 ngày qua và 7 ngày tới, một tin bị từ chối, tin nhắn chưa đọc.
 - Làm thành script trong `apps/server/scripts/`, đánh dấu được dữ liệu demo để chạy lại không nhân đôi và xoá được.
