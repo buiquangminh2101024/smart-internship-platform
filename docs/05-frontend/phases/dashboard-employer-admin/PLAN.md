@@ -6,6 +6,11 @@ Bản mock tham chiếu (cục bộ, không commit vì `docs/temp` bị gitignor
 
 **Trạng thái: ĐÃ LẬP KẾ HOẠCH và ĐÃ ĐƯỢC CHỦ DỰ ÁN DUYỆT (2026-09-29), gồm các quyết định D7–D11 ở plan backend: bỏ "Gia hạn tin" (nút "Xem tin"); Admin có nhóm thông báo Danh mục và Thanh toán; có nhắc lịch phỏng vấn; nút 7/30/90 ngày chỉ áp dụng cho biểu đồ; doanh thu tính theo thời điểm hoàn tất thanh toán. Bổ sung 2026-09-29 (D12): lên lịch phỏng vấn hàng loạt, xem mục "Lịch phỏng vấn". FE-1 đến FE-4 đã có code (2026-09-30), xem ghi chú ở Phần 3; FE-5 chỉ bắt đầu khi chủ dự án ra lệnh. **Sửa 2026-09-30 (đã duyệt cùng ngày):** dashboard Admin chuyển từ bản C sang bản D "bàn duyệt" (D14 ở plan backend), kèm bước backend 6 (đã xong code).**
 
+> **Phần Employer (bản C) đã được thay (2026-11-04)** bởi `docs/05-frontend/phases/employer-dashboard-v2/PLAN.md`: 4 thẻ bấm sang trang quản lý, dòng nhắc gói, biểu đồ hồ sơ theo ngày, bảng hiệu quả tin, trung tâm thông báo. Phần Admin (bản D) và trung tâm thông báo trong file này vẫn đúng. Các mục Employer bên dưới chỉ còn để tra lịch sử.
+>
+> - Component đã xoá: `SummaryBanner`/`BannerNumber`, `EmployerKpiGrid`, `EmployerTaskBoard`, `EmployerAnalytics`, `InterviewGroups`, `DayColumns`, `CompareBars`, `BarList`, hook `useEmployerDashboardTasks`.
+> - API và trường đã bỏ: xem plan backend `docs/06-backend/dashboard-employer-admin/PLAN.md` (ghi chú đầu file).
+
 ## Phần 1 — Công nghệ và quy ước
 
 - Không thêm dependency. Dùng sẵn: Next.js (đọc `node_modules/next/dist/docs/` trước khi viết route, theo `apps/web/AGENTS.md`), Tailwind v4, `@tanstack/react-query`, `lucide-react`, Socket.IO client (`hooks/useSocket.ts`).

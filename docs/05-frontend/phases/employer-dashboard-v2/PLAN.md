@@ -2,7 +2,7 @@
 
 Thay bố cục Employer bản C trong `docs/05-frontend/phases/dashboard-employer-admin/PLAN.md`. Phần backend nhỏ nên ghi chung trong file này, không tách plan riêng. Dashboard Admin và trang nhật ký hoạt động **không** thuộc đợt này.
 
-**Trạng thái: ĐỢT 1 và ĐỢT 2 ĐÃ XONG (2026-11-04). Còn Đợt 3 (tài liệu).** Q1–Q4 đã chốt (E8–E11). Xem "Kết quả Phần 1/2/3" và "Kết quả Đợt 2".
+**Trạng thái: ĐÃ XONG CẢ BA ĐỢT (2026-11-04).** Còn việc riêng: dữ liệu demo (E11). Q1–Q4 đã chốt (E8–E11). Xem "Kết quả Phần 1/2/3" và "Kết quả Đợt 2".
 
 ## Lý do
 
@@ -223,12 +223,20 @@ Chỉ làm khi đợt 1 đã chạy ổn trên trang thật. Trước khi xoá, 
 - `EmployerDashboardOverview` còn: `company`; `jobs` (`ownStats` + `attention`); `applications` (`newLast7Days`, `pendingCount`, `oldestPendingSince`); `messages`; `outreach.quota`; `interviews` (`upcomingCount`, `last7Days`, `next`). `EmployerDashboardAnalytics` còn `range`, `applicationsDaily`, `viewsDaily`.
 - Kiểm: build shared types; `tsc` server và web sạch; eslint web không lỗi (cảnh báo cũ ở file khác); test `employer-dashboard-service` (4, đã viết lại, kiểm cả việc trường cũ không còn), `admin-dashboard-service`, `job-post-attention`, `interviews-pagination` đều qua. Câu SQL `applicationSummary` đã bỏ phần `pendingWait` chạy thử trên DB dev (chỉ SELECT): đúng. Chưa xem lại trang trên trình duyệt sau khi xoá (extension chưa kết nối).
 
-## Đợt 3 — Tài liệu
+## Đợt 3 — Tài liệu (xong 2026-11-04)
 
 - `docs/05-frontend/phases/dashboard-employer-admin/PLAN.md` và `docs/06-backend/dashboard-employer-admin/PLAN.md`: ghi ở đầu file rằng bố cục Employer bản C đã được thay bởi plan này, kèm danh sách API đã bỏ ở đợt 2.
 - `sip-ui`: sửa các quy tắc nói về khối tóm tắt nền tối và hàng 6 KPI của Employer.
 - `ARCHITECTURE_DECISIONS.md` (AD-16): nếu có nhắc endpoint `tasks` của Employer thì cập nhật.
 - `FEATURE_BACKLOG.md` (chủ dự án đang có thay đổi chưa commit trong file này, nên chỉ sửa khi được đồng ý): ghi mục đã làm.
+
+### Kết quả Đợt 3 (2026-11-04)
+
+- Hai plan `dashboard-employer-admin` (FE, BE): ghi chú đầu file, kèm danh sách component / API / trường đã bỏ.
+- `ARCHITECTURE_DECISIONS.md` AD-16: không nhắc endpoint `tasks`, nhưng mục 5 ("việc cần làm") và mục 6 (phễu) không còn đúng với Employer, nên thêm một đoạn cập nhật dưới dòng trạng thái. Không sửa nội dung các mục cũ.
+- `sip-ui`: bỏ tên component đã xoá; thay mục "Điểm nhấn cho dashboard (bản C)" bằng "Dashboard Employer bản 2" và "Quy tắc điểm nhấn dùng chung". File này nằm trong `.claude/` (bị gitignore) nên không vào commit.
+- `FEATURE_BACKLOG.md` (chủ dự án đồng ý): thêm dòng ✅ ở mục 4.
+- Để nguyên `employer-interviews/PLAN.md`, `employer-applications/PLAN.md`: là ghi chép của phase đã xong.
 
 ## Ước lượng
 

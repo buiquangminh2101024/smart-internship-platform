@@ -5,6 +5,14 @@ Các lựa chọn đã được chủ dự án đồng ý (2026-09-29): `docs/te
 
 **Trạng thái: ĐÃ ĐƯỢC CHỦ DỰ ÁN DUYỆT (2026-09-29), chấp nhận toàn bộ đề xuất D7–D11. ĐANG TRIỂN KHAI: bước 0 xong (AD-16, `PROJECT_STRUCTURE.md` §4–§5); bước 1 xong, migration `20260929000000_add_dashboard_analytics_tables` đã được chủ dự án áp lên Neon (2026-09-29); bước 2, 3 và 4 xong, kiểm chứng trên PostgreSQL tạm. Bước 5 (Interview, gồm D12–D13 được chủ dự án đồng ý 2026-09-29) xong phần code, kiểm chứng trên PostgreSQL tạm; migration `20260929120000_add_interviews` **chưa áp lên Neon**, chờ chủ dự án đồng ý. Bước 6 (bổ sung dữ liệu cho dashboard Admin bản D, D14) được chủ dự án duyệt 2026-09-30 và **xong phần code** (không migration).**
 
+> **Phần Employer đã đổi (2026-11-04)** theo `docs/05-frontend/phases/employer-dashboard-v2/PLAN.md` (đợt 2). Phần Admin, thông báo, audit log, `interviews` trong file này vẫn đúng. Đã bỏ:
+>
+> - `GET /employer/dashboard/tasks` (cả `EmployerDashboardTasks`, `DashboardPendingApplication`, `DashboardAttentionJob`) và `InterviewsService.awaitingForCompany`.
+> - Trong `GET /employer/dashboard/overview`: `jobs.expiringIn7Days`, `jobs.topJob`, `applications.pendingWait`, `outreach.last30Days`, `interviews.next7Days`. Thay bằng `jobs.attention` và `interviews.last7Days`. Còn giữ `applications.pendingCount` (số chờ trên menu) và `outreach.quota` (dòng nhắc gói).
+> - Trong `GET /employer/dashboard/analytics`: `funnel`, `firstResponse` (kèm `FunnelStep`). Còn `applicationsDaily`, `viewsDaily`.
+>
+> Bảng `application_status_history` vẫn ghi như cũ; trang lịch phỏng vấn còn đọc nó (`interviews.repository.ts`, mốc chờ đặt lịch). Chỉ là không còn API phễu nào đọc.
+
 ## Mục tiêu
 
 Cung cấp dữ liệu cho hai dashboard (`/employer/dashboard`, `/admin/dashboard`): số liệu, danh sách "việc cần làm" thao tác tại chỗ, biểu đồ, và trung tâm thông báo phân nhóm. Thao tác (đổi trạng thái hồ sơ, duyệt/từ chối tin, xác minh công ty, duyệt danh mục) **dùng lại API hiện có**, không viết API riêng cho thao tác.
