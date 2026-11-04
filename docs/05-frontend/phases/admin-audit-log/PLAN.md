@@ -1,5 +1,7 @@
 # Trang nhật ký hoạt động (audit log) cho Admin — Frontend (bản C "Bàn điều tra")
 
+> **Đã thay bằng bản 2 (2026-11-04):** `docs/05-frontend/phases/admin-activity-v2/PLAN.md`. Bố cục trang, 6 khối biểu đồ, thanh cảnh báo và ngăn kéo "Top 5 người làm" trong tài liệu này không còn. Các phần vẫn dùng: ngăn kéo chi tiết, hành trình đối tượng và người làm, bộ lọc trên URL, xuất CSV, nhật ký đã lưu trữ. API `GET /admin/activity/stats` và bảng thống kê theo giờ vẫn giữ ở server nhưng trang không gọi nữa.
+
 Song song: `docs/06-backend/admin-audit-log/PLAN.md` (gọi tắt "plan BE"; các mã L1–L35, B0–B11 nằm ở đó).
 Quy ước giao diện: `.claude/skills/sip-ui/SKILL.md`, cùng mục "Admin — bản D" trong `docs/05-frontend/phases/dashboard-employer-admin/PLAN.md`.
 Mẫu thử tham chiếu: `docs/temp/ui-compare/admin-nhat-ky-hoat-dong.html`, phương án C. File này chỉ có trên máy, không commit vì `docs/temp` bị gitignore. Mọi mô tả cần để code đều nằm trong tài liệu này, không phụ thuộc vào mẫu thử.

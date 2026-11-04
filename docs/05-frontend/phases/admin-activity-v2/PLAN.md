@@ -1,6 +1,6 @@
 # Nhật ký hoạt động Admin bản 2 — từ "bàn điều tra" về đúng "nhật ký"
 
-**Trạng thái: ĐÃ DUYỆT (2026-11-04). Xong A1–A6 (backend và giao diện); A7–A8 chưa làm.**
+**Trạng thái: ĐÃ DUYỆT (2026-11-04). Xong A1–A8 (2026-11-04).**
 
 Thay bố cục của `docs/05-frontend/phases/admin-audit-log/PLAN.md` (bản C "Bàn điều tra", xong 2026-10-18). Phần backend của nhật ký (`docs/06-backend/admin-audit-log/PLAN.md`: ghi nhật ký, index, lưu trữ, bảng thống kê theo giờ, xuất CSV) giữ nguyên, trừ một API mới ở N6.
 
@@ -150,8 +150,8 @@ Mỗi phần trả lời được bằng một câu:
 | A4 | FE: hook `useActivityHighlights`; component `ActivityHighlights` (khối Điểm chính, `SegmentedControl` 7/30, link lọc N7) | 375px và ≥ 1280px; trạng thái tải, lỗi, toàn số 0; mở/đóng bằng bàn phím; quy tắc có hơn 10 tài khoản hiện dòng "Xem cả N tài khoản". **Xong 2026-11-04**: kiểm trên trình duyệt bằng dữ liệu giả (phiên Admin hết hạn), gồm 12 tài khoản, quy tắc bằng 0, lỗi tải, 375px. Mỗi số ở "Hoạt động chính" là một nút lọc riêng (số 0 không bấm được). Khối ẩn khi xem nhật ký đã lưu trữ. Mở tài khoản (b) thì ngăn kéo có dòng IP mới và IP quen; đóng ngăn kéo thì focus về nút tài khoản |
 | A5 | FE: `ActivityList` chia theo ngày + đổi tên khối; `ActivityFilters` đổi nút nhóm thành ô chọn | Bàn phím ↑/↓ vẫn chạy qua tiêu đề ngày; chip cũ vẫn bỏ được. **Xong 2026-11-04**: link cũ có nhiều nhóm hiện "N loại (từ link)" trong ô chọn, các chip nhóm vẫn bỏ được từng cái |
 | A6 | FE: `page.tsx` bỏ lưới thống kê, thanh cảnh báo và ngăn kéo "Top 5 người làm"; xoá file theo Q1 | `tsc`, `npm run lint --workspace web`; link từ dashboard Admin và trang chi tiết vẫn mở đúng. **Xong 2026-11-04**: xoá 8 component, `useActivityStats`, `useRecentFailedLogins`, `toStatsSearch`; API `/stats` giữ nguyên |
-| A7 | Script `seed-activity-demo.ts` + lệnh npm | `--dry-run` do mình chạy; chạy thật do chủ dự án |
-| A8 | Kiểm trên trang thật sau khi chủ dự án chạy seed; cập nhật plan cũ (ghi "đã thay bằng bản 2"), `sip-ui` mục Nhật ký hoạt động, `FEATURE_BACKLOG.md` (nếu chủ dự án đồng ý) | Ảnh chụp 375px và desktop |
+| A7 | Script `seed-activity-demo.ts` + lệnh npm | `--dry-run` do mình chạy; chạy thật do chủ dự án. **Script xong 2026-11-04, `--dry-run` ra 401 dòng; chưa chạy thật.** Lệch so với mục "Dữ liệu demo": DB chỉ có 3 Employer nên Employer gửi 9 tin dưới ngưỡng là một trong ba tài khoản dồn dập (MB Bank, ở giờ khác). Tin rác của quy tắc (c) và vài đề xuất danh mục bị từ chối hoặc được gộp là đối tượng không có trong DB, nên "Mở tin" ở các dòng đó không tìm thấy tin. Phần lớn tin thật đăng trước khoảng 30 ngày, nên ngày trong nhật ký không khớp ngày đăng trên trang tin. Thao tác kiểm duyệt của `seed-dashboard-demo` được chép sang nhật ký đúng thời điểm. Dòng đăng nhập sai thật ngày 18/10 cũng được đếm, nên 30 ngày ra 4 lần · 3 tài khoản |
+| A8 | Kiểm trên trang thật sau khi chủ dự án chạy seed; cập nhật plan cũ (ghi "đã thay bằng bản 2"), `sip-ui` mục Nhật ký hoạt động, `FEATURE_BACKLOG.md` (nếu chủ dự án đồng ý) | Ảnh chụp 375px và desktop. **Xong 2026-11-04** (sau khi chủ dự án chạy seed): 422 hoạt động trong 30 ngày; Điểm chính khớp `--dry-run` (7 ngày 1·1·1, 30 ngày 4·3, 1·1, 5·3); bấm tài khoản dồn dập lọc đúng 24 dòng giờ 03:00; ngăn kéo IP mới hiện IP quen, Esc trả focus về nút tài khoản; tiêu đề ngày "Hôm qua · 03/11/2026 · 13 hoạt động", ngày 02/11 ra 38 dù trang đầu chỉ tải một phần; 375px không cuộn ngang. Đã cập nhật plan cũ và `sip-ui`; `FEATURE_BACKLOG.md` chờ chủ dự án đồng ý |
 
 ## Hướng phát triển (chưa làm ở bản này)
 
