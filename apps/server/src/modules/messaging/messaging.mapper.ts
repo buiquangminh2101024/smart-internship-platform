@@ -21,7 +21,8 @@ export function toConversationDto(entity: ConversationWithRelations): Conversati
     },
     candidate: {
       id: entity.candidate.id,
-      name: entity.candidate.user.email.split("@")[0] || "", // Fallback for name
+      // Họ tên; chưa đặt thì phần trước @ của email (cùng quy tắc với dashboard Employer).
+      name: entity.candidate.fullName?.trim() || entity.candidate.user.email.split("@")[0] || "",
       avatarUrl: entity.candidate.avatarUrl,
     },
     employer: {

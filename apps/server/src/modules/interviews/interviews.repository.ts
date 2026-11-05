@@ -234,6 +234,17 @@ export class InterviewsRepository {
     return { total, items };
   }
 
+  /** Số lịch SCHEDULED của cả công ty có scheduledAt trong [from, to], mọi trạng thái hồ sơ. */
+  countScheduledForCompany(companyId: string, from: Date, to: Date): Promise<number> {
+    return this.prisma.interview.count({
+      where: {
+        status: "SCHEDULED",
+        scheduledAt: { gte: from, lte: to },
+        application: { jobPost: { companyId } },
+      },
+    });
+  }
+
   listForCandidate(candidateId: string, limit: number): Promise<InterviewWithRelations[]> {
     return this.prisma.interview.findMany({
       where: { application: { candidateId } },

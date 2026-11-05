@@ -176,22 +176,22 @@ Khác so với plan:
 
 ## Checklist kiểm trên trình duyệt
 
-- [ ] Khách ở `/`: thấy chip gợi ý, bấm chip trả lời ngay (`source=faq`), hỏi tự do thì chữ chạy dần.
-- [ ] Hỏi ngoài phạm vi ("viết giúp tôi bài luận") ⇒ từ chối + link "Liên hệ hỗ trợ".
+- [x] Khách ở `/`: thấy chip gợi ý, bấm chip trả lời ngay (`source=faq`), hỏi tự do thì chữ chạy dần.
+- [x] Hỏi ngoài phạm vi ("viết giúp tôi bài luận") ⇒ từ chối + link "Liên hệ hỗ trợ".
 - [ ] Hỏi nối tiếp ("vậy nó giá bao nhiêu?") ⇒ trả lời đúng ngữ cảnh.
-- [ ] F5 giữa hội thoại ⇒ lịch sử còn. Đóng tab mở lại ⇒ trống.
-- [ ] Đăng nhập Candidate ⇒ hội thoại khách không hiện (key khác). Đăng xuất ⇒ lịch sử Candidate bị xoá (xem trong DevTools → Session Storage).
+- [ ] F5 giữa hội thoại ⇒ lịch sử còn. Đóng tab mở lại ⇒ trống. *(Đợt D đã kiểm phần F5; còn phần đóng tab mở lại.)*
+- [x] Đăng nhập Candidate ⇒ hội thoại khách không hiện (key khác). Đăng xuất ⇒ lịch sử Candidate bị xoá (xem trong DevTools → Session Storage).
 - [ ] Đăng xuất ở trang ẩn widget (vd. `/messages`) ⇒ lịch sử vẫn bị xoá.
-- [ ] Sửa tay một key `sip-support-chat:candidate:{userId cũ}` trong DevTools rồi F5 khi đã đăng xuất ⇒ key bị quét đi.
-- [ ] Làm hết hạn cả access lẫn refresh token rồi gửi câu hỏi ⇒ không bị chuyển trang, hiện dòng "Phiên đăng nhập đã hết hạn…", vẫn nhận câu trả lời như khách.
-- [ ] Khu Employer: màu Indigo; khu Candidate/công khai: Pine.
-- [ ] Không thấy widget ở `/admin*`, `/messages`, `/employer/messages`, `/cv/editor`, `/support`.
-- [ ] Bấm "Dừng" giữa chừng ⇒ giữ phần chữ, có "Đã dừng"; gửi tiếp được.
-- [ ] Gửi liên tục đến khi 429 ⇒ thông báo đúng, không vỡ giao diện.
-- [ ] Tắt mạng khi đang hỏi ⇒ thông báo lỗi + "Thử lại".
-- [ ] 375px: toàn màn hình, bàn phím ảo không che ô nhập, nút mở không đè nút "Ứng tuyển".
-- [ ] Bàn phím: Tab tới nút mở, Enter mở, focus vào ô nhập, Esc đóng và focus về nút mở.
-- [ ] Câu trả lời chứa `<script>` hoặc HTML (thử bằng adapter giả) ⇒ hiện nguyên văn, không chạy.
+- [x] Sửa tay một key `sip-support-chat:candidate:{userId cũ}` trong DevTools rồi F5 khi đã đăng xuất ⇒ key bị quét đi.
+- [x] Làm hết hạn cả access lẫn refresh token rồi gửi câu hỏi ⇒ không bị chuyển trang, hiện dòng "Phiên đăng nhập đã hết hạn…", vẫn nhận câu trả lời như khách.
+- [ ] Khu Employer: màu Indigo; khu Candidate/công khai: Pine. *(Đợt D đã kiểm màu Indigo ở Employer; chưa ghi lại việc kiểm màu Pine.)*
+- [ ] Không thấy widget ở `/admin*`, `/messages`, `/employer/messages`, `/cv/editor`, `/support`. *(Đợt D đã kiểm trên trình duyệt `/support`, `/admin*`; các trang còn lại mới kiểm qua hàm `isSupportChatHiddenAt`, cần tài khoản thật.)*
+- [ ] Bấm "Dừng" giữa chừng ⇒ giữ phần chữ, có "Đã dừng"; gửi tiếp được. *(Đợt D đã kiểm giữ chữ và "Đã dừng"; chưa ghi lại việc gửi tiếp sau khi dừng.)*
+- [x] Gửi liên tục đến khi 429 ⇒ thông báo đúng, không vỡ giao diện. *(Đợt D giả lập 429 bằng cách chặn `fetch` trong trang, chưa gửi thật tới khi chạm giới hạn.)*
+- [x] Tắt mạng khi đang hỏi ⇒ thông báo lỗi + "Thử lại". *(Đợt D giả lập mất mạng bằng cách chặn `fetch`.)*
+- [ ] 375px: toàn màn hình, bàn phím ảo không che ô nhập, nút mở không đè nút "Ứng tuyển". *(Đợt D đã kiểm toàn màn hình và nút mở không đè; còn bàn phím ảo trên điện thoại thật.)*
+- [ ] Bàn phím: Tab tới nút mở, Enter mở, focus vào ô nhập, Esc đóng và focus về nút mở. *(Đợt D đã kiểm focus vào ô nhập khi mở, Esc đóng và focus về nút mở; còn Tab tới nút mở và Enter mở.)*
+- [x] Câu trả lời chứa `<script>` hoặc HTML (thử bằng adapter giả) ⇒ hiện nguyên văn, không chạy.
 
 ## Ngoài phạm vi
 

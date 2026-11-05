@@ -166,6 +166,117 @@ export class AuditLogRepository {
   }
 
   /**
+   * Số dòng theo ngày giờ Việt Nam (`dayCounts`, plan admin-activity-v2 N11), chỉ
+   * những ngày có dòng, mới trước. `where` dựng bằng `buildActivityWhereSql`.
+   */
+  countByDay(where: Prisma.Sql, archived = false): Promise<Array<{ date: string; count: number }>> {
+    const table = Prisma.raw(archived ? "audit_logs_archive" : "audit_logs");
+    return this.prisma.$queryRaw<Array<{ date: string; count: number }>>`
+      SELECT to_char("createdAt" + interval '7 hours', 'YYYY-MM-DD') AS "date", COUNT(*)::int AS "count"
+      FROM ${table}
+      WHERE ${where}
+      GROUP BY 1
+      ORDER BY 1 DESC
+    `;
+  }
+
+  // ─── Khối "Điểm chính" (plan admin-activity-v2 N6) ──────────────────────
+
+  /**
+   * (a) Dòng `AUTH_LOGIN_FAILED_REPEATED` trong [gte, lt) gộp theo tài khoản bị dò
+   * (`entityId`, người làm là hệ thống): số lần, thời điểm và id của lần gần nhất.
+   */
+  tallyFailedLoginAlerts(range: { gte: Date; lt: Date }): Promise<
+    Array<{ userId: string; count: number; latestAt: Date; latestLogId: string }>
+  > {
+    return this.prisma.$queryRaw`
+      SELECT "entityId" AS "userId", COUNT(*)::int AS "count", MAX("createdAt") AS "latestAt",
+             (array_agg("id" ORDER BY "createdAt" DESC, "id" DESC))[1] AS "latestLogId"
+      FROM audit_logs
+      WHERE "action" = 'AUTH_LOGIN_FAILED_REPEATED' AND "entityType" = 'User'
+        AND "createdAt" >= ${utcSql(range.gte)} AND "createdAt" < ${utcSql(range.lt)}
+      GROUP BY "entityId"
+    `;
+  }
+
+  /**
+   * (c) Các giờ một Employer có từ `minCount` dòng thuộc `actions` (gom theo
+   * `(actorId, giờ)`; giờ UTC trùng ranh giới giờ Việt Nam).
+   */
+  findSubmitBurstHours(
+    range: { gte: Date; lt: Date },
+    actions: readonly string[],
+    minCount: number,
+  ): Promise<Array<{ userId: string; hourStart: Date; count: number; latestAt: Date; latestLogId: string }>> {
+    return this.prisma.$queryRaw`
+      SELECT "actorId" AS "userId", date_trunc('hour', "createdAt") AS "hourStart", COUNT(*)::int AS "count",
+             MAX("createdAt") AS "latestAt",
+             (array_agg("id" ORDER BY "createdAt" DESC, "id" DESC))[1] AS "latestLogId"
+      FROM audit_logs
+      WHERE "action" IN (${Prisma.join(actions)}) AND "actorRole" = 'EMPLOYER' AND "actorId" IS NOT NULL
+        AND "createdAt" >= ${utcSql(range.gte)} AND "createdAt" < ${utcSql(range.lt)}
+      GROUP BY 1, 2
+      HAVING COUNT(*) >= ${minCount}
+    `;
+  }
+
+  /**
+   * (d) Các giờ một Admin có từ `minCount` thao tác nguy hiểm (bản 2.1, M3). `actions` tính
+   * mọi dòng, trừ `approvalOffAction` chỉ tính khi `metadata.requiresApproval = false`.
+   */
+  findAdminDangerBurstHours(
+    range: { gte: Date; lt: Date },
+    actions: readonly string[],
+    approvalOffAction: string,
+    minCount: number,
+  ): Promise<Array<{ userId: string; hourStart: Date; count: number; latestAt: Date; latestLogId: string }>> {
+    return this.prisma.$queryRaw`
+      SELECT "actorId" AS "userId", date_trunc('hour', "createdAt") AS "hourStart", COUNT(*)::int AS "count",
+             MAX("createdAt") AS "latestAt",
+             (array_agg("id" ORDER BY "createdAt" DESC, "id" DESC))[1] AS "latestLogId"
+      FROM audit_logs
+      WHERE "action" IN (${Prisma.join(actions)}) AND "actorRole" = 'ADMIN' AND "actorId" IS NOT NULL
+        AND ("action" <> ${approvalOffAction} OR "metadata"->>'requiresApproval' = 'false')
+        AND "createdAt" >= ${utcSql(range.gte)} AND "createdAt" < ${utcSql(range.lt)}
+      GROUP BY 1, 2
+      HAVING COUNT(*) >= ${minCount}
+    `;
+  }
+
+  /**
+   * (e) Mọi báo cáo tin đang chờ (M5). Đọc thẳng bảng `job_reports` vì tạo báo cáo không
+   * ghi nhật ký. Số báo cáo đang chờ là hàng đợi nhỏ, theo index `[status]`.
+   */
+  findPendingJobReports(): Promise<Array<{ id: string; jobId: string; reporterId: string; createdAt: Date }>> {
+    return this.prisma.jobReport.findMany({
+      where: { status: "PENDING" },
+      select: { id: true, jobId: true, reporterId: true, createdAt: true },
+    });
+  }
+
+  /** (e) Tên tin và tên công ty của các tin hiện ra trong khối Điểm chính. */
+  async findJobTitles(jobIds: readonly string[]): Promise<Map<string, { title: string; companyName: string }>> {
+    if (jobIds.length === 0) return new Map();
+    const jobs = await this.prisma.jobPost.findMany({
+      where: { id: { in: [...jobIds] } },
+      select: { id: true, title: true, company: { select: { name: true } } },
+    });
+    return new Map(jobs.map((job) => [job.id, { title: job.title, companyName: job.company.name }]));
+  }
+
+  /** (b) Các lần Admin đăng nhập thành công trong [gte, lt); `archived` đọc bảng lưu trữ. */
+  findAdminLogins(
+    range: { gte: Date; lt: Date },
+    archived = false,
+  ): Promise<Array<{ id: string; actorId: string | null; createdAt: Date; metadata: Prisma.JsonValue }>> {
+    const args = {
+      where: { action: "AUTH_LOGIN_SUCCEEDED", actorRole: "ADMIN" as const, createdAt: { gte: range.gte, lt: range.lt } },
+      select: { id: true, actorId: true, createdAt: true, metadata: true },
+    };
+    return archived ? this.prisma.auditLogArchive.findMany(args) : this.prisma.auditLog.findMany(args);
+  }
+
+  /**
    * `createdAt` của dòng mới nhất trong bảng lưu trữ; null khi chưa chuyển dòng nào.
    * Dòng được chuyển theo thứ tự cũ nhất trước, nên dòng mới hơn mốc này chỉ có ở bảng chính.
    */

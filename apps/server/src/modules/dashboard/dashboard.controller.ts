@@ -6,7 +6,6 @@ import type {
   ApiResponse,
   EmployerDashboardAnalytics,
   EmployerDashboardOverview,
-  EmployerDashboardTasks,
 } from "@sip/shared-types";
 import type { AdminDashboardService } from "./admin-dashboard.service";
 import type { DashboardAnalyticsQuery } from "./dashboard.dto";
@@ -33,16 +32,6 @@ export class DashboardController {
     try {
       const result = await this.employerDashboardService.overview(req.user!.id);
       const body: ApiResponse<EmployerDashboardOverview> = { success: true, data: result };
-      res.json(body);
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  employerTasks = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const result = await this.employerDashboardService.tasks(req.user!.id);
-      const body: ApiResponse<EmployerDashboardTasks> = { success: true, data: result };
       res.json(body);
     } catch (error) {
       next(error);

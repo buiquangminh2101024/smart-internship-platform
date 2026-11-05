@@ -10,6 +10,7 @@ import type {
   CreateJobPostRequest,
   EmployerJobPostListQuery,
   JobPost as JobPostDto,
+  JobPostAttentionSummary,
   JobPostSearchQuery,
   JobPostStats,
   PaginatedResponse,
@@ -101,14 +102,24 @@ export class JobPostsService {
 
   async listOwn(userId: string, query: EmployerJobPostListQuery): Promise<PaginatedResponse<JobPostDto>> {
     const { companyId } = await this.requireEmployer(userId);
-    const { cursor, ...filter } = query;
-    const page = await this.jobPostRepository.findOwnedByCompany(companyId, filter, cursor);
+    const { cursor, attention, ...filter } = query;
+    const page = await this.jobPostRepository.findOwnedByCompany(
+      companyId,
+      { ...filter, attention: attention === "1" },
+      cursor,
+    );
     return this.toPage(page);
   }
 
   async ownStats(userId: string): Promise<JobPostStats> {
     const { companyId } = await this.requireEmployer(userId);
     return this.countStats({ companyId });
+  }
+
+  /** Dùng bởi dashboard (AD-16): cùng điều kiện với `listOwn({ attention: "1" })`. */
+  async attentionSummaryForCompany(companyId: string): Promise<JobPostAttentionSummary> {
+    const { rejected, expiringIn7Days } = await this.jobPostRepository.countAttention(companyId);
+    return { total: rejected + expiringIn7Days, rejected, expiringIn7Days };
   }
 
   async getOwn(userId: string, id: string): Promise<JobPostDto> {

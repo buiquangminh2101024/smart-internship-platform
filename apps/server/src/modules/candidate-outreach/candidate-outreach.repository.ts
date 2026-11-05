@@ -330,7 +330,7 @@ export class CandidateOutreachRepository {
     return new Map(rows.map(({ jobPostId, ...counts }) => [jobPostId, counts]));
   }
 
-  /** Lời mời của công ty gửi trong 30 ngày — cùng mốc với dashboardRepository.outreachLast30Days. */
+  /** Lời mời của công ty gửi trong 30 ngày qua. */
   async countLast30Days(companyId: string): Promise<InvitationCountsRow> {
     const [row] = await this.prisma.$queryRaw<InvitationCountsRow[]>(Prisma.sql`
       SELECT ${COUNT_COLUMNS}

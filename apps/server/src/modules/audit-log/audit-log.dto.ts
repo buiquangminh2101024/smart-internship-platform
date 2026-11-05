@@ -157,6 +157,16 @@ export const activityStatsQuerySchema = z
 
 export type ActivityStatsQuery = z.infer<typeof activityStatsQuerySchema>;
 
+// Khối "Điểm chính" (plan admin-activity-v2 N3, N6): chỉ 7 hoặc 30 ngày, mặc định 7.
+export const activityHighlightsQuerySchema = z.object({
+  days: z
+    .enum(["7", "30"], { message: "days must be 7 or 30" })
+    .default("7")
+    .transform((value): 7 | 30 => (value === "30" ? 30 : 7)),
+});
+
+export type ActivityHighlightsQuery = z.infer<typeof activityHighlightsQuerySchema>;
+
 export const activityItemParamsSchema = z.object({ id: z.string().min(1).max(64) });
 
 export const activityItemQuerySchema = z.object({ archived: flag.default(false) });

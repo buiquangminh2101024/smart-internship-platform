@@ -1,18 +1,30 @@
-import type {
-  JobPost,
-  JobPostModerationAction,
-  JobPostStatus,
-  JobPostType,
-  MajorRelevance,
-  ModerationActionType,
+import {
   Prisma,
-  PrismaClient,
-  SkillImportance,
+  type JobPost,
+  type JobPostModerationAction,
+  type JobPostStatus,
+  type JobPostType,
+  type MajorRelevance,
+  type ModerationActionType,
+  type PrismaClient,
+  type SkillImportance,
 } from "@prisma/client";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
 const PAGE_SIZE = 20;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Cửa sổ "sắp hết hạn" của tin cần chú ý (khác cửa sổ 3 ngày của thông báo JOB_POST_EXPIRING). */
+export const ATTENTION_EXPIRING_DAYS = 7;
+
+/** Tin PUBLISHED hết hạn trong `ATTENTION_EXPIRING_DAYS` ngày tới, tính từ `now`. */
+function expiringSoonWhere(now: Date): Prisma.JobPostWhereInput {
+  return {
+    status: "PUBLISHED",
+    expiresAt: { gt: now, lte: new Date(now.getTime() + ATTENTION_EXPIRING_DAYS * DAY_MS) },
+  };
+}
 
 // Quan hệ luôn kèm theo khi trả 1 tin ra ngoài — company/city/industry để
 // render card "Thông tin công ty" + nhãn địa điểm/ngành mà frontend không phải
@@ -95,16 +107,21 @@ export class JobPostRepository {
     await db.jobPost.delete({ where: { id } });
   }
 
-  /** Danh sách tin của chính company (mọi trạng thái) — trang quản lý của Employer. */
+  /**
+   * Danh sách tin của chính company (mọi trạng thái) — trang quản lý của Employer.
+   * `attention`: chỉ tin cần chú ý (xem `attentionWhere`); không đi cùng `status`.
+   */
   async findOwnedByCompany(
     companyId: string,
-    filter: { status?: JobPostStatus; q?: string },
+    filter: { status?: JobPostStatus; attention?: boolean; q?: string },
     cursor: string | undefined,
   ): Promise<Page<JobPostWithRelations>> {
+    const attention = filter.attention ? await this.attentionWhere(companyId, new Date()) : null;
     const rows = await this.prisma.jobPost.findMany({
       where: {
         companyId,
         ...(filter.status ? { status: filter.status } : {}),
+        ...(attention ?? {}),
         ...(filter.q ? { title: { contains: filter.q, mode: "insensitive" as const } } : {}),
       },
       include: jobPostInclude,
@@ -113,6 +130,45 @@ export class JobPostRepository {
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     });
     return paginate(rows);
+  }
+
+  // ─── Tin cần chú ý — định nghĩa DUY NHẤT, dùng cho cả danh sách và số đếm ───
+  // của dashboard, để số trên thẻ luôn bằng số dòng của trang danh sách.
+
+  /** Số tin cần chú ý của company, tách theo hai loại. */
+  async countAttention(companyId: string): Promise<{ rejected: number; expiringIn7Days: number }> {
+    const [rejectedIds, expiringIn7Days] = await Promise.all([
+      this.findRejectedDraftIds(companyId),
+      this.prisma.jobPost.count({ where: { companyId, ...expiringSoonWhere(new Date()) } }),
+    ]);
+    return { rejected: rejectedIds.length, expiringIn7Days };
+  }
+
+  /**
+   * Tin cần chú ý: bị Admin từ chối (DRAFT, thao tác kiểm duyệt gần nhất là
+   * REJECTED) HOẶC PUBLISHED hết hạn trong 7 ngày tới. Hai tập khác trạng thái
+   * nên không trùng nhau.
+   */
+  private async attentionWhere(companyId: string, now: Date): Promise<Prisma.JobPostWhereInput> {
+    const rejectedIds = await this.findRejectedDraftIds(companyId);
+    return { OR: [{ id: { in: rejectedIds } }, expiringSoonWhere(now)] };
+  }
+
+  /**
+   * Id các tin DRAFT có thao tác kiểm duyệt gần nhất là REJECTED. "Gần nhất"
+   * không viết được bằng where của Prisma nên dùng SQL; số dòng mỗi company nhỏ.
+   */
+  private async findRejectedDraftIds(companyId: string): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+      SELECT j."id"
+      FROM job_posts j
+      JOIN LATERAL (
+        SELECT ma."action" FROM job_post_moderation_actions ma
+        WHERE ma."jobPostId" = j."id" ORDER BY ma."createdAt" DESC LIMIT 1
+      ) last ON last."action" = 'REJECTED'
+      WHERE j."companyId" = ${companyId} AND j."status" = 'DRAFT'
+    `);
+    return rows.map((row) => row.id);
   }
 
   /** Hàng đợi kiểm duyệt của Admin — mặc định PENDING, cho phép lọc trạng thái khác. */

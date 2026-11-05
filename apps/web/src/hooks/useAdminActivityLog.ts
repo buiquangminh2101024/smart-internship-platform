@@ -1,14 +1,14 @@
 "use client";
 
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import type { AuditActivityItem, AuditActivityPage, AuditActivityStats } from "@sip/shared-types";
+import type {
+  AuditActivityHighlights,
+  AuditActivityItem,
+  AuditActivityPage,
+  AuditHighlightDays,
+} from "@sip/shared-types";
 import { apiFetch, ApiError } from "@/lib/api-client";
-import {
-  FAILED_LOGIN_ACTION,
-  toListSearch,
-  toStatsSearch,
-  type ActivityFilters,
-} from "@/lib/audit-activity";
+import { toListSearch, type ActivityFilters } from "@/lib/audit-activity";
 
 /**
  * Trang Nhật ký hoạt động (AD-20, plan FE "admin-audit-log"). Mọi key nằm dưới
@@ -50,32 +50,15 @@ export function useActivityList(filters: ActivityFilters) {
 }
 
 /**
- * Số liệu cho biểu đồ (L11, L31, L32). Bỏ đối tượng, người làm, phiên và lưu trữ
- * trước khi gửi. Xem nhật ký đã lưu trữ thì không gọi (L19, L23).
+ * Khối "Điểm chính" (plan admin-activity-v2 N3–N6): 7 hoặc 30 ngày gần nhất,
+ * không theo bộ lọc danh sách. Xem nhật ký đã lưu trữ thì không gọi.
  */
-export function useActivityStats(filters: ActivityFilters, options: { enabled: boolean }) {
-  const search = toStatsSearch(filters).toString();
+export function useActivityHighlights(days: AuditHighlightDays, options: { enabled: boolean }) {
   return useQuery({
-    queryKey: [...ADMIN_ACTIVITY_KEY, "stats", search],
-    queryFn: () => apiFetch<AuditActivityStats>("admin", `/admin/activity/stats${search ? `?${search}` : ""}`),
-    enabled: options.enabled && !filters.archived,
-    placeholderData: keepPreviousData,
-    staleTime: STALE_MS,
-  });
-}
-
-/**
- * 3 lần "đăng nhập sai 5 lần" gần nhất khớp bộ lọc, cho thanh cảnh báo. Chỉ gọi
- * khi `/stats` báo `securityAlerts > 0`.
- */
-export function useRecentFailedLogins(filters: ActivityFilters, options: { enabled: boolean }) {
-  const params = toListSearch({ ...filters, actions: [FAILED_LOGIN_ACTION], resubmit: null });
-  params.set("limit", "3");
-  const search = params.toString();
-  return useQuery({
-    queryKey: [...ADMIN_ACTIVITY_KEY, "failed-logins", search],
-    queryFn: () => apiFetch<AuditActivityPage>("admin", `/admin/activity?${search}`),
+    queryKey: [...ADMIN_ACTIVITY_KEY, "highlights", days],
+    queryFn: () => apiFetch<AuditActivityHighlights>("admin", `/admin/activity/highlights?days=${days}`),
     enabled: options.enabled,
+    placeholderData: keepPreviousData,
     staleTime: STALE_MS,
   });
 }

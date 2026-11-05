@@ -280,19 +280,20 @@ export class InterviewsService {
 
   // ─── Dùng bởi dashboard (AD-16: dashboard gọi service của module chủ) ──────
 
-  /** Trang đầu, chờ lâu nhất trước, không nhóm; `total` không phụ thuộc `limit`. */
-  async awaitingForCompany(companyId: string, limit: number): Promise<{ total: number; items: AwaitingScheduleApplication[] }> {
-    const [total, rows] = await Promise.all([
-      this.interviewsRepository.countAwaitingSchedule(companyId),
-      this.interviewsRepository.listAwaitingSchedule(companyId, { sort: "oldest", group: false, offset: 0, limit }),
-    ]);
-    return { total, items: rows.map(toAwaitingScheduleApplication) };
-  }
-
   /** Lịch chưa diễn ra trong 7 ngày tới (tới hết ngày thứ 7 kể cả hôm nay, giờ Việt Nam). */
   async upcomingForCompany(companyId: string, limit: number): Promise<{ total: number; items: EmployerInterview[] }> {
     const page = await this.interviewsRepository.listUpcomingForCompany(companyId, vnDayStart(new Date(), 7), limit);
     return { total: page.total, items: page.items.map(toEmployerInterview) };
+  }
+
+  /**
+   * Số buổi đã diễn ra trong 7 ngày qua: từ đầu ngày cách đây 6 ngày tới hiện tại
+   * (giờ Việt Nam) — đối xứng với `upcomingForCompany` để so tăng giảm (E8). Chỉ
+   * loại lịch đã huỷ; hồ sơ đã có kết quả vẫn tính vì buổi đó đã diễn ra.
+   */
+  pastWeekCountForCompany(companyId: string): Promise<number> {
+    const now = new Date();
+    return this.interviewsRepository.countScheduledForCompany(companyId, vnDayStart(now, -6), now);
   }
 
   /** Buổi chưa diễn ra gần nhất, không giới hạn khoảng thời gian. */

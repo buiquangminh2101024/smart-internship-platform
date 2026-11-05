@@ -47,11 +47,18 @@ export const createJobPostSchema = z.object(jobPostFields);
 
 export const updateJobPostSchema = z.object(jobPostFields).partial();
 
-export const employerJobPostListQuerySchema = z.object({
-  status: z.enum(JOB_POST_STATUSES).optional(),
-  q: optionalText,
-  cursor: z.string().optional(),
-});
+export const employerJobPostListQuerySchema = z
+  .object({
+    status: z.enum(JOB_POST_STATUSES).optional(),
+    // "1" = chỉ tin cần chú ý (bị từ chối hoặc hết hạn trong 7 ngày) — link từ dashboard.
+    attention: z.literal("1").optional(),
+    q: optionalText,
+    cursor: z.string().optional(),
+  })
+  .refine((query) => !(query.attention && query.status), {
+    message: "`attention` cannot be combined with `status`",
+    path: ["attention"],
+  });
 
 export const moderationQueueQuerySchema = z.object({
   status: z.enum(JOB_POST_STATUSES).optional(),

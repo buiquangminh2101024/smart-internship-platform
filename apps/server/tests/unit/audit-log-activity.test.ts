@@ -1,6 +1,6 @@
 // Chạy: node --import tsx --test tests/unit/audit-log-activity.test.ts (từ apps/server)
 // GET /admin/activity, /:id và /export (docs/06-backend/admin-audit-log/PLAN.md L7–L10,
-// L13, L34, L35): bộ lọc chuyển đúng xuống repository, `total` chỉ ở trang đầu, `q` hai
+// L13, L34, L35): bộ lọc chuyển đúng xuống repository, `total` và `dayCounts` chỉ ở trang đầu, `q` hai
 // bước, link dòng thanh toán, 404, giới hạn CSV. Repository là bản giả.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -34,6 +34,12 @@ const ROWS = [
   },
 ];
 
+// Repository trả mới trước (ORDER BY 1 DESC).
+const DAY_COUNTS = [
+  { date: "2026-09-30", count: 4 },
+  { date: "2026-09-29", count: 1 },
+];
+
 function buildService(options: { total?: number; userIds?: string[]; rateLimitOk?: boolean } = {}) {
   const calls: Array<{ method: string; args: unknown[] }> = [];
   const auditLogRepository = {
@@ -52,6 +58,10 @@ function buildService(options: { total?: number; userIds?: string[]; rateLimitOk
     listForExport: async (...args: unknown[]) => {
       calls.push({ method: "listForExport", args });
       return ROWS;
+    },
+    countByDay: async (...args: unknown[]) => {
+      calls.push({ method: "countByDay", args });
+      return DAY_COUNTS;
     },
   };
   const service = new AuditLogService({
@@ -94,6 +104,23 @@ test("total chỉ có ở trang đầu; archived và order chuyển xuống repo
   const next = await service.listActivity(listQuery({ cursor: "a5" }));
   assert.equal(next.total, undefined);
   assert.equal(calls.filter((call) => call.method === "count").length, 1);
+});
+
+test("dayCounts chỉ ở trang đầu, cùng bảng với total, cùng chiều với order", async () => {
+  const { service, calls } = buildService();
+  const first = await service.listActivity(listQuery({ archived: "1", actorRole: "SYSTEM" }));
+  assert.deepEqual(first.dayCounts, DAY_COUNTS);
+  const call = calls.find((entry) => entry.method === "countByDay");
+  // Bản SQL của cùng bộ lọc, đọc bảng lưu trữ như `count`.
+  assert.match((call?.args[0] as { sql: string }).sql, /"actorId" IS NULL/);
+  assert.equal(call?.args[1], true);
+
+  const asc = await service.listActivity(listQuery({ order: "asc", actorId: "admin-1" }));
+  assert.deepEqual(asc.dayCounts, [...DAY_COUNTS].reverse());
+
+  const next = await service.listActivity(listQuery({ cursor: "a5" }));
+  assert.equal(next.dayCounts, undefined);
+  assert.equal(calls.filter((entry) => entry.method === "countByDay").length, 2);
 });
 
 test("q tìm tối đa 200 người, khớp người làm hoặc đối tượng; hơn 200 thì searchTruncated", async () => {

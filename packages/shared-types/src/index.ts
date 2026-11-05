@@ -1117,8 +1117,21 @@ export interface JobPostSearchQuery {
 
 export interface EmployerJobPostListQuery {
   status?: JobPostStatus;
+  /**
+   * "1" = chỉ tin cần chú ý: bị Admin từ chối (DRAFT, thao tác kiểm duyệt gần
+   * nhất là REJECTED) hoặc PUBLISHED hết hạn trong 7 ngày tới. Không đi cùng `status`.
+   */
+  attention?: "1";
   q?: string;
   cursor?: string;
+}
+
+/** Số tin cần chú ý — cùng điều kiện với `EmployerJobPostListQuery.attention`. */
+export interface JobPostAttentionSummary {
+  /** = rejected + expiringIn7Days (hai tập khác trạng thái nên không trùng). */
+  total: number;
+  rejected: number;
+  expiringIn7Days: number;
 }
 
 export interface RejectJobPostRequest {
@@ -1568,7 +1581,7 @@ export interface UnreadCountByGroupResponse {
 // docs/06-backend/dashboard-employer-admin/PLAN.md. Mọi mốc "ngày" theo giờ
 // Việt Nam (Asia/Ho_Chi_Minh); "7 ngày" = hôm nay và 6 ngày trước đó.
 
-/** Nút 7/30/90 ngày — chỉ đổi chuỗi theo ngày và phễu (D10). */
+/** Nút 7/30/90 ngày — chỉ đổi chuỗi theo ngày (D10). */
 export type DashboardRange = 7 | 30 | 90;
 
 /** Một điểm của chuỗi theo ngày; server điền đủ ngày trống bằng 0. `date` dạng YYYY-MM-DD. */
@@ -1612,16 +1625,14 @@ export type OutreachDailyQuotaStatus =
 export interface EmployerDashboardOverview {
   company: { id: string; name: string; verificationStatus: CompanyVerificationStatus };
   jobs: JobPostStats & {
-    /** Tin PUBLISHED có expiresAt trong 7 ngày tới (còn lại của `published` là còn hạn > 7 ngày). */
-    expiringIn7Days: number;
-    /** Tin PUBLISHED có nhiều hồ sơ nhất (không tính hồ sơ đã huỷ). */
-    topJob: { id: string; title: string; applicationCount: number } | null;
+    /** Thẻ "Tin cần chú ý"; bằng số dòng của GET /employer/job-posts?attention=1. */
+    attention: JobPostAttentionSummary;
   };
   applications: {
     /** Hồ sơ mới trong 7 ngày so với 7 ngày trước đó. */
     newLast7Days: PeriodComparison;
+    /** Thẻ "Hồ sơ chờ xử lý" và số chờ trên menu của EmployerPortalShell. */
     pendingCount: number;
-    pendingWait: WaitBuckets;
     /** Mốc bắt đầu chờ của hồ sơ PENDING lâu nhất (ISO), null nếu không có. */
     oldestPendingSince: string | null;
   };
@@ -1632,73 +1643,28 @@ export interface EmployerDashboardOverview {
     /** Tối đa 3 hội thoại chưa đọc, tin mới nhất trước. */
     recent: Array<{ conversationId: string; candidateName: string; lastMessageAt: string }>;
   };
-  outreach: {
-    quota: OutreachDailyQuotaStatus;
-    /** Lời mời gửi trong 30 ngày qua; tỉ lệ chấp nhận = accepted / sent. */
-    last30Days: { sent: number; accepted: number; declined: number };
-  };
+  /** Hạn mức lời mời hôm nay, cho dòng nhắc gói dịch vụ. */
+  outreach: { quota: OutreachDailyQuotaStatus };
   /** Lịch SCHEDULED của hồ sơ đang INTERVIEWING, cả công ty. */
   interviews: {
-    /** 7 ngày kể từ hôm nay (giờ Việt Nam), đủ 7 điểm — dùng cho DayColumns. */
-    next7Days: DailyPoint[];
-    /** Số buổi chưa diễn ra trong 7 ngày tới (ô "phỏng vấn sắp tới" của banner). */
+    /** Số buổi chưa diễn ra trong 7 ngày tới (thẻ "Phỏng vấn"). */
     upcomingCount: number;
+    /**
+     * Số buổi SCHEDULED đã diễn ra trong 7 ngày qua (từ đầu ngày cách đây 6 ngày tới
+     * hiện tại, giờ Việt Nam) — đối xứng với `upcomingCount` để so tăng giảm. Tính cả
+     * hồ sơ đã có kết quả; không tính lịch đã huỷ.
+     */
+    last7Days: number;
     /** Buổi chưa diễn ra gần nhất (không giới hạn 7 ngày). */
     next: { interviewId: string; scheduledAt: string; candidateName: string | null; jobPostTitle: string } | null;
   };
 }
-
-export interface DashboardPendingApplication {
-  applicationId: string;
-  candidateName: string | null;
-  candidateAvatarUrl: string | null;
-  /** Trường của học vấn đại diện (đang học trước, rồi năm kết thúc gần nhất); null nếu chưa khai. */
-  universityName: string | null;
-  jobPostId: string;
-  jobPostTitle: string;
-  /** Mốc bắt đầu chờ: lúc ứng tuyển, hoặc lúc ứng tuyển lại. */
-  waitingSince: string;
-}
-
-export interface DashboardAttentionJob {
-  jobPostId: string;
-  title: string;
-  /** EXPIRING: PUBLISHED hết hạn trong 7 ngày. REJECTED: bị Admin từ chối, đang là nháp. */
-  kind: "EXPIRING" | "REJECTED";
-  expiresAt: string | null;
-  rejectedReason: string | null;
-  rejectedAt: string | null;
-  /** Số hồ sơ của tin, không tính hồ sơ đã huỷ. */
-  applicationCount: number;
-}
-
-/** GET /employer/dashboard/tasks — mỗi nhóm tối đa 5 mục kèm tổng. */
-export interface EmployerDashboardTasks {
-  /** Chờ lâu nhất trước. */
-  pendingApplications: { total: number; wait: WaitBuckets; items: DashboardPendingApplication[] };
-  /** Sắp hết hạn trước (gần hạn nhất trước), rồi tới tin bị từ chối (mới nhất trước). */
-  attentionJobs: { total: number; items: DashboardAttentionJob[] };
-  /** Hồ sơ chờ đặt lịch phỏng vấn, chờ lâu nhất trước. */
-  awaitingSchedule: { total: number; items: AwaitingScheduleApplication[] };
-  /** `total` = số buổi chưa diễn ra trong 7 ngày tới; `items` = 5 buổi gần nhất trong khoảng đó. */
-  upcomingInterviews: { total: number; items: EmployerInterview[] };
-}
-
-/** Các bước phễu trên đường chính (AD-16 mục 6). */
-export type FunnelStep = "APPLIED" | "REVIEWING" | "SHORTLISTED" | "INTERVIEWING" | "ACCEPTED";
 
 /** GET /employer/dashboard/analytics?range= */
 export interface EmployerDashboardAnalytics {
   range: DashboardRange;
   applicationsDaily: DailyPoint[];
   viewsDaily: DailyPoint[];
-  /**
-   * Hồ sơ nộp trong kỳ (không tính hồ sơ đã huỷ), đếm "đã đạt bước". Hồ sơ cũ
-   * bị từ chối trước khi có lịch sử chỉ tính ở APPLIED — `legacyRejected` là số đó.
-   */
-  funnel: { steps: Array<{ step: FunnelStep; count: number }>; legacyRejected: number };
-  /** Từ lúc hồ sơ vào PENDING tới lần employer xem xét/từ chối đầu tiên, trong kỳ. */
-  firstResponse: { averageHours: number | null; sampleSize: number };
 }
 
 /** GET /admin/dashboard/overview — `oldestSince`: mốc bắt đầu chờ của mục chờ lâu nhất (ISO), null nếu hàng chờ trống. */
@@ -2078,6 +2044,113 @@ export interface AuditActivityPage extends PaginatedResponse<AuditActivityItem> 
   total?: number;
   /** `q` khớp hơn 200 người dùng, kết quả chỉ tính 200 người đầu. */
   searchTruncated?: boolean;
+  /**
+   * Số dòng khớp bộ lọc theo từng ngày (`YYYY-MM-DD`, giờ Việt Nam), chỉ những ngày có
+   * dòng, cùng chiều với `order`. Chỉ có ở trang đầu, cùng lúc với `total`.
+   */
+  dayCounts?: Array<{ date: string; count: number }>;
+}
+
+/** Khoảng của khối "Điểm chính" trên trang nhật ký. */
+export type AuditHighlightDays = 7 | 30;
+
+/** Một tài khoản trong một quy tắc "Cần xem", gộp mọi lần vi phạm trong khoảng. */
+export interface AuditHighlightAccount {
+  userId: string;
+  /** null khi tài khoản đã bị xoá. */
+  email: string | null;
+  /** Số lần vi phạm của tài khoản trong khoảng. */
+  count: number;
+  /** Lần gần nhất: thời điểm và id dòng nhật ký (mở ngăn kéo chi tiết bằng `row=`). */
+  latestAt: string;
+  latestLogId: string;
+}
+
+/** (b) Admin đăng nhập từ IP mới. */
+export interface AuditHighlightNewIpAccount extends AuditHighlightAccount {
+  /** IP mới của lần gần nhất. */
+  ip: string;
+  /** Tối đa 3 IP đã dùng trong 30 ngày trước lần gần nhất, mới trước; rỗng khi chưa đăng nhập lần nào. */
+  knownIps: string[];
+}
+
+/**
+ * (c) Employer gửi duyệt tin dồn dập, (d) Admin thao tác nguy hiểm dồn dập;
+ * `count` là số giờ vượt ngưỡng.
+ */
+export interface AuditHighlightBurstAccount extends AuditHighlightAccount {
+  /** Số dòng nhiều nhất trong một giờ (số tin với (c), số thao tác với (d)). */
+  maxPerHour: number;
+  /** Giờ vượt ngưỡng gần nhất, dùng thẳng làm `since`/`until` của danh sách (`until` là ms cuối giờ). */
+  latestHour: { since: string; until: string; count: number };
+}
+
+/** Một quy tắc "Cần xem": tổng số lần, số tài khoản, và tối đa 10 tài khoản có lần gần nhất mới nhất. */
+export interface AuditHighlightRule<Account extends AuditHighlightAccount = AuditHighlightAccount> {
+  count: number;
+  accountCount: number;
+  accounts: Account[];
+}
+
+/**
+ * (e) Một tin bị nhiều người báo cáo trong thời gian ngắn mà chưa ai xử lý. Đếm trên
+ * bảng báo cáo (tạo báo cáo không ghi nhật ký), chỉ các báo cáo đang chờ.
+ */
+export interface AuditHighlightReportedJob {
+  jobId: string;
+  title: string;
+  companyName: string;
+  /** Số báo cáo đang chờ của tin. */
+  pendingReports: number;
+  /** Lúc báo cáo thứ `reportedJobMinReports` trong vòng `reportedJobWindowHours` giờ được gửi. */
+  crossedAt: string;
+  /** Báo cáo cũ nhất đang chờ: thời điểm và id (mở ở trang Báo cáo vi phạm bằng `?report=`). */
+  oldestPendingAt: string;
+  oldestPendingReportId: string;
+}
+
+/** `GET /admin/activity/highlights?days=7|30` — khối "Điểm chính" của trang nhật ký. */
+export interface AuditActivityHighlights {
+  days: AuditHighlightDays;
+  /** Khoảng đã đếm (`YYYY-MM-DD`, giờ Việt Nam), dùng thẳng làm `from`/`to` của danh sách. */
+  from: string;
+  to: string;
+  /** Ngưỡng của các quy tắc (hằng số ở server), để giao diện ghi đúng số. */
+  thresholds: {
+    failedLoginAttempts: number;
+    failedLoginWindowMinutes: number;
+    newIpLookbackDays: number;
+    submitBurstPerHour: number;
+    dangerousActionsPerHour: number;
+    reportedJobMinReports: number;
+    reportedJobWindowHours: number;
+  };
+  attention: {
+    /** (a) Đăng nhập sai liên tục; tài khoản là tài khoản bị dò (`entityId`). */
+    failedLogins: AuditHighlightRule;
+    /** (b) Admin đăng nhập từ IP chưa thấy trong 30 ngày trước đó. */
+    adminNewIp: AuditHighlightRule<AuditHighlightNewIpAccount>;
+    /** (c) Employer gửi duyệt từ `submitBurstPerHour` tin trong cùng một giờ. */
+    employerSubmitBurst: AuditHighlightRule<AuditHighlightBurstAccount>;
+    /**
+     * (d) Admin có từ `dangerousActionsPerHour` thao tác nguy hiểm trong cùng một giờ:
+     * khoá tài khoản, đăng xuất mọi thiết bị, tắt kiểm duyệt tin, từ chối công ty, hạ tin.
+     */
+    adminDangerBurst: AuditHighlightRule<AuditHighlightBurstAccount>;
+    /** (e) Tin vượt ngưỡng báo cáo trong khoảng và vẫn còn đủ báo cáo đang chờ; tối đa 10 tin. */
+    reportedJobs: { count: number; items: AuditHighlightReportedJob[] };
+  };
+  activity: {
+    /** `approved` gồm tin tự đăng; `resubmitted` là tin gửi lại sau khi bị từ chối. */
+    jobPosts: { approved: number; rejected: number; resubmitted: number };
+    /** `verified` gồm công ty tự xác minh. */
+    companies: { verified: number; rejected: number };
+    payments: { completed: number };
+    /** `approved` gồm đề xuất đổi tên được duyệt. */
+    catalog: { approved: number; rejected: number; merged: number };
+    /** `takenDown`: gỡ tin theo báo cáo; `dismissed`: bỏ qua báo cáo, giữ tin. */
+    jobReports: { takenDown: number; dismissed: number };
+  };
 }
 
 /** `GET /admin/activity/stats` — số liệu cho biểu đồ, cùng bộ lọc với danh sách. */

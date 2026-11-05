@@ -3,6 +3,7 @@ import type {
   AuditActivityGroup,
   AuditActivityItem,
   AuditActorRoleFilter,
+  AuditHighlightDays,
 } from "@sip/shared-types";
 import { formatVnDate, formatVnTime, vnTodayIso } from "./dashboard-format";
 
@@ -50,6 +51,10 @@ export const ACTION_META: Record<string, { label: string; group: AuditActionGrou
   JOB_POST_APPROVED: { label: "Duyệt tin", group: "JOB_POST" },
   JOB_POST_REJECTED: { label: "Từ chối tin", group: "JOB_POST" },
   JOB_POST_RETRACTED: { label: "Hạ tin", group: "JOB_POST" },
+  JOB_REPORT_ACTION_EXECUTED: { label: "Gỡ tin theo báo cáo", group: "JOB_POST" },
+  JOB_REPORT_RESOLVED: { label: "Bỏ qua báo cáo", group: "JOB_POST" },
+  // Không chỗ nào ghi action này nữa; giữ nhãn để đọc được dữ liệu cũ.
+  JOB_REPORT_REJECTED: { label: "Bác báo cáo", group: "JOB_POST" },
   COMPANY_SUBMITTED: { label: "Gửi xác minh công ty", group: "COMPANY" },
   COMPANY_AUTO_VERIFIED: { label: "Tự xác minh công ty", group: "COMPANY" },
   COMPANY_VERIFIED: { label: "Xác minh công ty", group: "COMPANY" },
@@ -76,6 +81,19 @@ export const FAILED_LOGIN_ACTION = "AUTH_LOGIN_FAILED_REPEATED";
 /** Hai hành động có cờ "gửi lại sau từ chối" (L28). */
 export const RESUBMIT_ACTIONS: readonly string[] = ["JOB_POST_SUBMITTED", "JOB_POST_AUTO_PUBLISHED"];
 
+/**
+ * Năm thao tác nguy hiểm của quy tắc (d) (bản 2.1, M3), khớp `DANGEROUS_ADMIN_ACTIONS` ở
+ * server. Bộ lọc URL không lọc được theo `metadata`, nên lọc theo danh sách này còn hiện
+ * cả lần **bật** kiểm duyệt (M8).
+ */
+export const DANGEROUS_ADMIN_ACTIONS: readonly string[] = [
+  "USER_SUSPENDED",
+  "USER_SESSIONS_REVOKED",
+  "COMPANY_REQUIRES_APPROVAL_CHANGED",
+  "COMPANY_REJECTED",
+  "JOB_POST_RETRACTED",
+];
+
 /** Nhãn hành động của một dòng; gửi duyệt có cờ gửi lại thì thành "Gửi lại tin". */
 export function actionLabel(action: string, resubmit?: boolean | null): string {
   if (resubmit && action === "JOB_POST_SUBMITTED") return "Gửi lại tin";
@@ -101,6 +119,7 @@ export const ENTITY_LABEL: Record<string, string> = {
   Skill: "Kỹ năng",
   University: "Trường",
   Major: "Ngành",
+  JobReport: "Báo cáo vi phạm",
 };
 
 /** Thứ Hai … Chủ Nhật, chỉ số `dow - 1` (1 = Thứ Hai, như API). */
@@ -133,6 +152,9 @@ export function entityHref(
     case "University":
     case "Major":
       return { href: "/admin/education-catalog", label: "Mở danh mục" };
+    case "JobReport":
+      // Trang Báo cáo vi phạm mở modal của báo cáo theo `?report=` (plan admin-activity-v2 B5).
+      return { href: `/admin/job-reports?report=${id}`, label: "Mở báo cáo" };
     default:
       return null;
   }
@@ -385,6 +407,33 @@ export function toActivityParams(filters: ActivityFilters, row?: string | null):
   return params;
 }
 
+/**
+ * Khoảng của khối "Điểm chính" (plan admin-activity-v2 N3): `hl=30` trên URL,
+ * vắng hoặc giá trị khác thì 7 ngày. Không phải bộ lọc của danh sách.
+ */
+export const HIGHLIGHT_PARAM = "hl";
+
+export function parseHighlightDays(params: URLSearchParams): AuditHighlightDays {
+  return params.get(HIGHLIGHT_PARAM) === "30" ? 30 : 7;
+}
+
+/** Tab của trang (bản 2.1, M12–M13): `view=highlights` hoặc `view=list`. */
+export const VIEW_PARAM = "view";
+
+export type ActivityView = "highlights" | "list";
+
+/**
+ * Tab đang mở. Xem lưu trữ thì chỉ có danh sách. Không có `view` (link cũ, link "Mở
+ * báo cáo", sao chép liên kết tới dòng) thì link có bộ lọc hoặc `row` mở Danh sách,
+ * còn lại mở Điểm chính.
+ */
+export function parseActivityView(params: URLSearchParams, filters: ActivityFilters, row: string | null): ActivityView {
+  if (filters.archived) return "list";
+  const view = params.get(VIEW_PARAM);
+  if (view === "highlights" || view === "list") return view;
+  return countActiveFilters(filters) > 0 || row ? "list" : "highlights";
+}
+
 /** Số bộ lọc đang bật (nút "Bộ lọc (n)" trên màn hình hẹp); không tính "xem lưu trữ". */
 export function countActiveFilters(filters: ActivityFilters): number {
   return (
@@ -468,21 +517,6 @@ export function toListSearch(filters: ActivityFilters, today?: string): URLSearc
   }
   if (filters.actorId) params.set("actorId", filters.actorId);
   if (filters.archived) params.set("archived", "true");
-  return params;
-}
-
-/**
- * Query của `/stats` (L11): bỏ đối tượng, người làm, phiên, lưu trữ. Chỉ gửi
- * khoảng ngày khi đang lọc theo ngày; còn lại server dùng mặc định 30 ngày.
- */
-export function toStatsSearch(filters: ActivityFilters, today?: string): URLSearchParams {
-  const params = new URLSearchParams();
-  setCommon(params, filters);
-  const range = effectiveRange({ ...filters, ent: null, since: null, until: null, archived: false }, today);
-  if (range.kind === "days") {
-    params.set("from", range.from);
-    params.set("to", range.to);
-  }
   return params;
 }
 

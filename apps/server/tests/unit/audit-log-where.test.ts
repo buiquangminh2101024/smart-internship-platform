@@ -1,6 +1,7 @@
 // Chạy: node --import tsx --test tests/unit/audit-log-where.test.ts (từ apps/server)
 // Bộ lọc nhật ký (docs/06-backend/admin-audit-log/PLAN.md L7, L27–L29, L33): kiểm tham số
-// ở DTO (các lỗi 400) và `where` dựng ra từ bộ lọc, gồm khung giờ của ô thứ × giờ.
+// ở DTO (các lỗi 400) và `where` dựng ra từ bộ lọc, gồm khung giờ của ô thứ × giờ, và bản SQL
+// của cùng bộ lọc dùng cho `dayCounts` (plan admin-activity-v2 N11).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Prisma } from "@prisma/client";
@@ -8,7 +9,13 @@ import {
   activityListQuerySchema,
   activityStatsQuerySchema,
 } from "../../src/modules/audit-log/audit-log.dto";
-import { buildActivityWhere, hourSlots, vnDayStart } from "../../src/modules/audit-log/audit-log.where";
+import {
+  buildActivityWhere,
+  buildActivityWhereSql,
+  hourSlots,
+  vnDayStart,
+  type ActivityFilter,
+} from "../../src/modules/audit-log/audit-log.where";
 
 function listError(query: Record<string, string>): string | undefined {
   const result = activityListQuerySchema.safeParse(query);
@@ -125,4 +132,63 @@ test("buildActivityWhere: ô thứ × giờ thành OR các khung createdAt", () 
       },
     ],
   });
+});
+
+// ─── buildActivityWhereSql (dayCounts) ─────────────────────────────────────
+
+const FULL_FILTER: ActivityFilter = {
+  groups: ["JOB_POST"],
+  actions: ["JOB_POST_SUBMITTED", "PAYMENT_COMPLETED"],
+  resubmit: true,
+  actorRoles: ["EMPLOYER", "SYSTEM"],
+  actorId: "emp-1",
+  range: { gte: vnDayStart("2026-10-01"), lt: vnDayStart("2026-10-15") },
+  slot: { dow: 2, hour: 9 },
+  qUserIds: ["u-1"],
+  entity: { type: "JobPost", id: "job-1" },
+};
+
+test("buildActivityWhereSql: không lọc gì thì TRUE; nhóm giao action ra rỗng hoặc q không khớp ai thì FALSE", () => {
+  assert.equal(buildActivityWhereSql({}).sql, "TRUE");
+  assert.equal(buildActivityWhereSql({ groups: ["SECURITY"], actions: ["JOB_POST_APPROVED"] }).sql, "FALSE");
+  assert.equal(buildActivityWhereSql({ qUserIds: [] }).sql, "FALSE");
+});
+
+test("buildActivityWhereSql: đủ mọi khoá của bộ lọc, giá trị đi qua tham số", () => {
+  const { sql, values } = buildActivityWhereSql(FULL_FILTER);
+  // Nhóm giao action (L27): PAYMENT_COMPLETED không thuộc JOB_POST nên bị bỏ.
+  assert.match(sql, /^"action" IN \(\?\)/);
+  assert.equal(values[0], "JOB_POST_SUBMITTED");
+  assert.match(sql, /\("metadata" -> 'resubmit'\) = 'true'::jsonb/);
+  assert.match(sql, /\("actorRole"::text = \? OR "actorId" IS NULL\)/);
+  assert.match(sql, /"actorId" = \?/);
+  assert.match(sql, /"createdAt" >= \(\?::timestamptz AT TIME ZONE 'UTC'\)/);
+  // Hai khung 9:00 thứ Ba trong khoảng, cùng khung với bản Prisma.
+  assert.equal(sql.match(/\("createdAt" >= .*? AND "createdAt" < .*?\)/g)?.length, 2);
+  assert.match(sql, /\("actorId" IN \(\?\) OR \("entityType" = 'User' AND "entityId" IN \(\?\)\)\)/);
+  assert.match(sql, /"entityType" = \? AND "entityId" = \?$/);
+  for (const value of ["EMPLOYER", "emp-1", "u-1", "JobPost", "job-1", "2026-10-06T02:00:00.000Z", "2026-10-13T03:00:00.000Z"]) {
+    assert.ok(values.includes(value), `thiếu tham số ${value}`);
+  }
+  assert.ok(!sql.includes("emp-1") && !sql.includes("job-1"), "giá trị không được nối thẳng vào câu SQL");
+});
+
+test("buildActivityWhereSql: resubmit=false là mọi dòng khác true, gồm metadata null hoặc thiếu khoá", () => {
+  assert.equal(
+    buildActivityWhereSql({ resubmit: false }).sql,
+    `("metadata" -> 'resubmit') IS DISTINCT FROM 'true'::jsonb`,
+  );
+});
+
+test("buildActivityWhereSql và buildActivityWhere cùng dùng mọi khoá của bộ lọc", () => {
+  const full = { prisma: JSON.stringify(buildActivityWhere(FULL_FILTER)), sql: buildActivityWhereSql(FULL_FILTER) };
+  for (const key of Object.keys(FULL_FILTER) as Array<keyof ActivityFilter>) {
+    const without: ActivityFilter = { ...FULL_FILTER, [key]: undefined };
+    const sql = buildActivityWhereSql(without);
+    assert.notEqual(JSON.stringify(buildActivityWhere(without)), full.prisma, `bản Prisma bỏ qua ${key}`);
+    assert.ok(
+      sql.sql !== full.sql.sql || JSON.stringify(sql.values) !== JSON.stringify(full.sql.values),
+      `bản SQL bỏ qua ${key}`,
+    );
+  }
 });

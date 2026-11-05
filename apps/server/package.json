@@ -18,6 +18,8 @@
     "db:clear": "dotenv -e ../../.env -- tsx scripts/clear-data.ts",
     "seed-education-catalog": "dotenv -e ../../.env -- tsx scripts/seed-education-catalog.ts",
     "seed-match-demo": "dotenv -e ../../.env -- tsx scripts/seed-match-demo.ts",
+    "seed-dashboard-demo": "dotenv -e ../../.env -- tsx scripts/seed-dashboard-demo.ts",
+    "seed-activity-demo": "dotenv -e ../../.env -- tsx scripts/seed-activity-demo.ts",
     "eval-job-matching": "dotenv -e ../../.env -- tsx scripts/eval-job-matching.ts",
     "support-chat:index": "dotenv -e ../../.env -- tsx scripts/support-chat-index.ts",
     "support-chat:eval": "dotenv -e ../../.env -- tsx scripts/support-chat-eval.ts",

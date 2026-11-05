@@ -22,10 +22,15 @@ export interface StatCardProps {
   hint?: ReactNode;
   /** `attention` = việc đang chờ người xử lý: viền trái 3px marigold. */
   tone?: "default" | "attention";
-  /** Phần minh hoạ có nhãn và số (SegmentBar, CompareBars...). */
+  /** Phần minh hoạ có nhãn và số (SegmentBar, QuotaBar...). */
   footer?: ReactNode;
   /** Trang chi tiết — nhãn thẻ thành liên kết. */
   href?: string;
+  /**
+   * Đi cùng `href`: **cả thẻ** là một link, cuối thẻ ghi `"{cta} →"` (vd. "Xem hồ sơ chờ").
+   * Không có thì chỉ nhãn là link như cũ. Khi dùng, `footer` không được chứa link (không lồng link).
+   */
+  cta?: string;
   /** Thay cho `href` khi chưa có trang đích — nhãn thẻ thành nút (vd. báo "đang cập nhật"). */
   onClick?: () => void;
 }
@@ -39,10 +44,10 @@ const deltaIcon: Record<StatCardDelta["trend"], string> = {
 /**
  * Hai bố cục: ngang gọn (các trang `jobs`, `admin/jobs` — chỉ label/value/unit/icon)
  * và thẻ KPI của dashboard (số 36px, nhãn tăng giảm, minh hoạ) khi có
- * `delta`/`hint`/`tone`/`footer`/`href`/`onClick`.
+ * `delta`/`hint`/`tone`/`footer`/`href`/`onClick`. Thêm `cta` cạnh `href` thì cả thẻ là link.
  */
 export function StatCard(props: StatCardProps) {
-  const { label, value, unit, icon, className = "", delta, hint, tone, footer, href, onClick } = props;
+  const { label, value, unit, icon, className = "", delta, hint, tone, footer, href, onClick, cta } = props;
   const isKpi =
     delta !== undefined ||
     hint !== undefined ||
@@ -71,19 +76,23 @@ export function StatCard(props: StatCardProps) {
   }
 
   const attention = tone === "attention";
+  const cardLink = href !== undefined && cta !== undefined;
 
   // Kích thước theo mẫu bản C (docs/temp/ui-compare): ô icon 32px, nhãn đậm
   // màu muted, số 36px đậm, thẻ padding 16px, phần minh hoạ dính đáy thẻ.
-  return (
-    <article
-      className={[
-        "flex flex-col gap-2 rounded-xl border bg-surface-card p-4 text-sm",
-        attention
-          ? "border-marigold-300 shadow-[inset_3px_0_0_var(--color-marigold-500)]"
-          : "border-border-subtle",
-        className,
-      ].join(" ")}
-    >
+  const cardClass = [
+    "flex flex-col gap-2 rounded-xl border bg-surface-card p-4 text-sm",
+    attention ? "border-marigold-300 shadow-[inset_3px_0_0_var(--color-marigold-500)]" : "border-border-subtle",
+    cardLink
+      ? `group transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 ${
+          attention ? "hover:border-marigold-500" : "hover:border-brand-300"
+        }`
+      : "",
+    className,
+  ].join(" ");
+
+  const body = (
+    <>
       <div className="flex items-center gap-3">
         {icon ? (
           <span
@@ -96,7 +105,9 @@ export function StatCard(props: StatCardProps) {
           </span>
         ) : null}
         <h3 className="font-semibold text-text-muted">
-          {href ? (
+          {cardLink ? (
+            label
+          ) : href ? (
             <Link href={href} className="transition-colors hover:text-brand-700 hover:underline">
               {label}
             </Link>
@@ -135,7 +146,24 @@ export function StatCard(props: StatCardProps) {
         </div>
       ) : null}
 
-      {footer ? <div className="mt-auto flex flex-col gap-2 border-t border-border-subtle pt-3">{footer}</div> : null}
-    </article>
+      {footer ? (
+        <div className="mt-auto flex flex-col gap-2 border-t border-border-subtle pt-3">{footer}</div>
+      ) : null}
+
+      {cardLink ? (
+        <span className={`${footer ? "" : "mt-auto "}inline-flex items-center gap-1 pt-1 font-semibold text-brand-700 group-hover:underline`}>
+          {cta}
+          <Icon name="arrow-right" size={16} />
+        </span>
+      ) : null}
+    </>
+  );
+
+  return cardLink ? (
+    <Link href={href} className={cardClass}>
+      {body}
+    </Link>
+  ) : (
+    <article className={cardClass}>{body}</article>
   );
 }

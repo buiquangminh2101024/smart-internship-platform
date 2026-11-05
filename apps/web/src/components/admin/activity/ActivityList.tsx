@@ -3,14 +3,39 @@
 import Link from "next/link";
 import { useState, type KeyboardEvent } from "react";
 import type { AuditActivityItem } from "@sip/shared-types";
-import { actionLabel, entityHref } from "@/lib/audit-activity";
-import { formatNumber, formatVnDate, formatVnTime } from "@/lib/dashboard-format";
+import { actionLabel, entityHref, formatIsoDate, shiftDate } from "@/lib/audit-activity";
+import { formatNumber, formatVnDate, formatVnTime, vnTodayIso } from "@/lib/dashboard-format";
 import { Icon } from "@/components/ui/Icon";
 import { BlockError } from "@/components/dashboard/BlockState";
 import { DashButton } from "@/components/dashboard/DashButton";
 import { ActorCell, GroupSwatch } from "./ActivityMeta";
 
 const SKELETON_ROWS = 8;
+
+/** Một ngày (giờ Việt Nam) của danh sách: các dòng liền nhau cùng ngày. */
+interface DayGroup {
+  date: string;
+  items: AuditActivityItem[];
+}
+
+/** Gom các dòng (đã xếp mới trước) theo ngày giờ Việt Nam, giữ nguyên thứ tự. */
+export function groupByVnDay(items: AuditActivityItem[]): DayGroup[] {
+  const groups: DayGroup[] = [];
+  for (const item of items) {
+    const date = vnTodayIso(new Date(item.createdAt));
+    const last = groups[groups.length - 1];
+    if (last && last.date === date) last.items.push(item);
+    else groups.push({ date, items: [item] });
+  }
+  return groups;
+}
+
+/** `Hôm nay · 04/11/2026`, `Hôm qua · 03/11/2026`, còn lại `02/11/2026`. */
+export function dayHeading(date: string, today: string = vnTodayIso()): string {
+  if (date === today) return `Hôm nay · ${formatIsoDate(date)}`;
+  if (date === shiftDate(today, -1)) return `Hôm qua · ${formatIsoDate(date)}`;
+  return formatIsoDate(date);
+}
 
 export function activityRowDomId(id: string): string {
   return `activity-row-${id}`;
@@ -53,7 +78,7 @@ export function ActivityRow({
   return (
     <li
       id={activityRowDomId(item.id)}
-      className={`relative grid grid-cols-[64px_minmax(0,1fr)] gap-x-3 gap-y-1 border-t border-border-subtle px-4 py-3 transition-colors duration-200 first:border-t-0 motion-reduce:transition-none lg:grid-cols-[96px_minmax(0,200px)_minmax(0,1fr)_auto] lg:gap-x-4 ${
+      className={`relative grid grid-cols-[48px_minmax(0,1fr)] gap-x-3 gap-y-1 border-t border-border-subtle px-4 py-3 transition-colors duration-200 first:border-t-0 motion-reduce:transition-none lg:grid-cols-[56px_minmax(0,200px)_minmax(0,1fr)_auto] lg:gap-x-4 ${
         highlighted ? "bg-brand-100" : active ? "bg-brand-50" : "hover:bg-surface-hover"
       }`}
     >
@@ -71,12 +96,12 @@ export function ActivityRow({
         </span>
       </button>
 
+      {/* Ngày nằm ở tiêu đề nhóm (N10), dòng chỉ còn giờ. */}
       <time
         dateTime={item.createdAt}
-        className="pointer-events-none row-span-3 grid content-start font-num text-[13px] text-text-body tabular-nums lg:row-span-1"
+        className="pointer-events-none row-span-3 font-num text-[13px] font-semibold text-text-strong tabular-nums lg:row-span-1"
       >
-        <span className="font-semibold text-text-strong">{formatVnTime(item.createdAt)}</span>
-        <span className="text-text-muted">{formatVnDate(item.createdAt)}</span>
+        {formatVnTime(item.createdAt)}
       </time>
 
       <div className="pointer-events-none min-w-0 text-[13px] lg:text-sm">
@@ -116,12 +141,15 @@ export function ActivityRow({
 }
 
 /**
- * Danh sách nhật ký dạng gọn, mới nhất trước, tải thêm theo lô 50. Có đủ trạng
- * thái đang tải (8 dòng khung), lỗi, rỗng.
+ * Danh sách nhật ký chia theo ngày (giờ Việt Nam), mới nhất trước, tải thêm theo
+ * lô 50. Số "N hoạt động" của tiêu đề ngày lấy từ `dayCounts` của server vì một
+ * ngày có thể bị cắt giữa hai lô; thiếu thì đếm các dòng đã tải. ↑/↓ chạy qua
+ * mọi dòng, bỏ qua tiêu đề ngày. Có đủ trạng thái đang tải, lỗi, rỗng.
  */
 export function ActivityList({
   items,
   total,
+  dayCounts,
   status,
   dimmed,
   hasMore,
@@ -138,6 +166,8 @@ export function ActivityList({
 }: {
   items: AuditActivityItem[];
   total: number | undefined;
+  /** Số dòng khớp bộ lọc theo ngày (`YYYY-MM-DD`), từ trang đầu. */
+  dayCounts: ReadonlyMap<string, number> | undefined;
   status: "pending" | "error" | "success";
   /** Đang tải theo bộ lọc mới, còn hiện kết quả cũ. */
   dimmed: boolean;
@@ -154,9 +184,10 @@ export function ActivityList({
   onClearFilters: () => void;
 }) {
   const [focusId, setFocusId] = useState<string | null>(null);
+  const today = vnTodayIso();
   const tabbableId = items.some((item) => item.id === focusId) ? focusId : (items[0]?.id ?? null);
 
-  function handleKeyDown(event: KeyboardEvent<HTMLUListElement>) {
+  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
     const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>("[data-row-button]"));
     const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
@@ -174,7 +205,7 @@ export function ActivityList({
         {Array.from({ length: SKELETON_ROWS }, (_, index) => (
           <li
             key={index}
-            className="grid grid-cols-[64px_minmax(0,1fr)] gap-3 border-t border-border-subtle px-4 py-3.5 first:border-t-0 lg:grid-cols-[96px_200px_minmax(0,1fr)_auto]"
+            className="grid grid-cols-[48px_minmax(0,1fr)] gap-3 border-t border-border-subtle px-4 py-3.5 first:border-t-0 lg:grid-cols-[56px_200px_minmax(0,1fr)_auto]"
           >
             <span className="h-9 rounded bg-surface-hover motion-safe:animate-pulse" />
             <span className="h-9 rounded bg-surface-hover motion-safe:animate-pulse" />
@@ -196,7 +227,7 @@ export function ActivityList({
         <p className="text-sm text-text-body">
           {archived
             ? "Không có dòng nào trong nhật ký đã lưu trữ khớp bộ lọc. Nhật ký chỉ được chuyển sang lưu trữ khi cũ hơn thời hạn giữ."
-            : "Không có sự kiện nào khớp bộ lọc. Bạn thử bỏ bớt bộ lọc hoặc mở rộng khoảng ngày."}
+            : "Không có hoạt động nào khớp bộ lọc. Bạn thử bỏ bớt bộ lọc hoặc mở rộng khoảng ngày."}
         </p>
         {hasFilters ? (
           <DashButton variant="secondary" size="sm" icon="x" onClick={onClearFilters}>
@@ -208,24 +239,42 @@ export function ActivityList({
   } else {
     body = (
       <>
-        <ul
-          aria-label="Các sự kiện, mới nhất trước. Dùng mũi tên lên xuống để chuyển dòng."
+        <div
           onKeyDown={handleKeyDown}
           className={`transition-opacity duration-150 motion-reduce:transition-none ${dimmed ? "opacity-60" : ""}`}
           aria-busy={dimmed || undefined}
         >
-          {items.map((item) => (
-            <ActivityRow
-              key={item.id}
-              item={item}
-              tabbable={item.id === tabbableId}
-              active={item.id === activeId}
-              highlighted={item.id === highlightId}
-              onOpen={onOpen}
-              onFocusRow={() => setFocusId(item.id)}
-            />
-          ))}
-        </ul>
+          {groupByVnDay(items).map((group) => {
+            const count = dayCounts?.get(group.date) ?? group.items.length;
+            const headingId = `activity-day-${group.date}`;
+            return (
+              <section key={group.date} aria-labelledby={headingId}>
+                <h3
+                  id={headingId}
+                  className="flex items-baseline justify-between gap-3 border-y border-border-subtle bg-surface-page px-4 py-2 text-[13px] font-bold text-text-strong"
+                >
+                  <span className="tabular-nums">{dayHeading(group.date, today)}</span>
+                  <span className="font-medium text-text-muted tabular-nums">{formatNumber(count)} hoạt động</span>
+                </h3>
+                <ul
+                  aria-label={`Hoạt động ngày ${formatIsoDate(group.date)}, mới nhất trước. Dùng mũi tên lên xuống để chuyển dòng.`}
+                >
+                  {group.items.map((item) => (
+                    <ActivityRow
+                      key={item.id}
+                      item={item}
+                      tabbable={item.id === tabbableId}
+                      active={item.id === activeId}
+                      highlighted={item.id === highlightId}
+                      onOpen={onOpen}
+                      onFocusRow={() => setFocusId(item.id)}
+                    />
+                  ))}
+                </ul>
+              </section>
+            );
+          })}
+        </div>
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle px-4 py-3">
           <p className="text-[13px] text-text-muted" aria-live="polite">
             Đang xem <b className="text-text-strong tabular-nums">{formatNumber(items.length)}</b>
@@ -235,7 +284,7 @@ export function ActivityList({
                 / <b className="text-text-strong tabular-nums">{formatNumber(total)}</b>
               </>
             ) : null}{" "}
-            sự kiện
+            hoạt động
           </p>
           {hasMore ? (
             <DashButton variant="secondary" size="sm" icon="chevrons-down" loading={loadingMore} onClick={onLoadMore}>

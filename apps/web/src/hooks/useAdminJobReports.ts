@@ -8,7 +8,7 @@ import type {
   AdminJobReportStats,
   JobReportActionRequest,
 } from "@sip/shared-types";
-import { apiFetch } from "@/lib/api-client";
+import { ApiError, apiFetch } from "@/lib/api-client";
 
 export const ADMIN_JOB_REPORTS_QUERY_KEY = ["adminJobReports"] as const;
 export const ADMIN_JOB_REPORT_STATS_QUERY_KEY = ["adminJobReportStats"] as const;
@@ -43,6 +43,8 @@ export function useAdminJobReportDetail(id: string | null) {
     queryKey: ["adminJobReportDetail", id],
     queryFn: () => apiFetch<AdminJobReportListItem>("admin", `/admin/job-reports/${id}`),
     enabled: Boolean(id),
+    // Id sai (link cũ, gõ tay) trả 4xx: báo ngay, không thử lại 3 lần.
+    retry: (failureCount, error) => !(error instanceof ApiError && error.status < 500) && failureCount < 3,
   });
 }
 
