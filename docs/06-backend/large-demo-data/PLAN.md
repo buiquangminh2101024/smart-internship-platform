@@ -47,7 +47,7 @@ Buổi demo sau có đủ dữ liệu để thấy hệ thống chọn lọc và
 |---|---|---|
 | Q1 | Thêm kỹ năng vào danh mục? | **Có**, ~80–120 kỹ năng `APPROVED` cho các lĩnh vực ngoài CNTT (kế toán, marketing, nhân sự, logistics, thiết kế, bán hàng…), tạo theo đường của `seed-match-demo.ts` (có embedding). Kỹ năng do script tạo được đánh dấu để `--reset` nhận ra; chỉ xoá khi không còn ai dùng. |
 | Q2 | Thêm ngành nghề (`Industry`) và thành phố? | **Có, ít**: thêm ~4–6 ngành nghề (ví dụ Kế toán – Kiểm toán, Nhân sự, Logistics, Thiết kế – Sáng tạo, Bán lẻ, Du lịch – Khách sạn) và ~2 thành phố (ví dụ Bình Dương, Huế). Hai bảng này không có cột người tạo, nên đánh dấu bằng tiền tố id; `--reset` chỉ xoá khi không còn tin / công ty / hồ sơ nào dùng. |
-| Q3 | Gộp 5 cặp kỹ năng trùng bằng cách nào? | **Chủ dự án gộp tay trên giao diện Admin** (trang quản lý kỹ năng, chức năng Gộp), làm trước khi chạy seed. Script seed không tự gộp danh mục. Lý do và cách làm ở mục "Gộp kỹ năng trùng" bên dưới. |
+| Q3 | Gộp 5 cặp kỹ năng trùng bằng cách nào? | **Bằng script riêng `merge-duplicate-skills`, chạy được nhiều lần** (đổi ngày 2026-11-08, cách B). Ban đầu định gộp tay trên giao diện Admin, nhưng kiểm lại thì giao diện **không làm được**: chỉ gộp được kỹ năng `PENDING` (`skills.service.ts:113` trả 409 với kỹ năng đã duyệt), và danh sách chỉ hiện 20 dòng mới nhất, không có "Xem thêm". Chi tiết ở mục "Gộp kỹ năng trùng" bên dưới. |
 | Q4 | Ai viết thư viện bộ chân dung và mẫu tin (bước 1)? | **Claude Code viết trực tiếp** thành file JSON trong phiên làm việc, chia nhiều đợt theo lĩnh vực, chủ dự án đọc rà từng đợt. Prompt và quy tắc viết lưu ở `docs/06-backend/large-demo-data/library-prompt.md` để làm lại được. Bộ chân dung là gì: mục "Bộ chân dung" bên dưới. |
 
 ## Gộp kỹ năng trùng (Q3)
@@ -64,9 +64,30 @@ Danh mục đang có 5 cặp **cùng một kỹ năng nhưng là hai mục riên
 
 Bộ chấm điểm so khớp theo `skillId`, không theo nghĩa. Tin yêu cầu "Node.js" mà ứng viên khai "NodeJS" thì bị tính là thiếu kỹ năng, điểm bị hạ oan.
 
-Chức năng **Gộp** của Admin (`SkillsRepository.merge`) giữ mục đích, chuyển mọi `JobPostSkill` và `CandidateSkill` của mục nguồn sang mục đích, rồi biến tên nguồn thành alias (sau này gõ "NodeJS" tự hiểu là "Node.js"). Hàm này đã chuyển liên kết đúng (H2 của `docs/06-backend/major-merge-fix/PLAN.md`) và có ghi nhật ký hoạt động.
+Phải gộp **trước** khi seed. Nếu không, script chọn lẫn cả hai mục và dữ liệu demo lệch điểm ngay từ đầu. Bộ kiểm của script seed sẽ dừng nếu thư viện còn tham chiếu tới tên đã thành alias.
 
-Phải gộp **trước** khi seed. Nếu không, script chọn lẫn cả hai mục và dữ liệu demo lệch điểm ngay từ đầu. Bộ kiểm của script sẽ dừng nếu thư viện còn tham chiếu tới tên đã thành alias.
+**Cách gộp (cách B):** script `apps/server/scripts/merge-duplicate-skills.ts`, npm script `merge-duplicate-skills`.
+
+- Gọi `SkillsRepository.merge(sourceId, targetId, "ADMIN_MERGE")`: chuyển `JobPostSkill`, `CandidateSkill` sang mục đích, biến tên nguồn thành alias (sau này gõ "NodeJS" tự hiểu là "Node.js"), xoá mục nguồn. Không đi qua `SkillsService.merge` vì hàm đó chỉ nhận mục `PENDING`.
+- Tìm nguồn/đích **theo tên** (không phân biệt hoa thường). Nguồn không còn thì in "đã gộp trước đó" và bỏ qua; đích không có thì dừng, không gộp gì. Nhờ vậy **chạy nhiều lần vẫn an toàn**.
+- `--dry-run`: chỉ in mỗi cặp có bao nhiêu hồ sơ / tin đang dùng mục nguồn, không ghi.
+- `seed-large-demo` gọi lại bước này ở đầu mỗi lần chạy (cùng mã), nên ai chạy seed cũng được gộp, không phải nhớ chạy riêng.
+
+**Mỗi người một DB Neon:** script chỉ đổi DB trong `.env` của người chạy. Người làm chung cần tự chạy trên DB của mình (hoặc chỉ cần chạy `seed-large-demo`). Code không đổi gì với người đó: không migration, không đổi API.
+
+**Lưu ý với `seed-match-demo`:** `scripts/data/match-demo.json` có "NodeJS", "ReactJS", "JS" trong `extraSkills`. Chạy lại `seed-match-demo` sau khi gộp sẽ **tạo lại** các mục trùng này (không báo lỗi). Không sửa file đó, để giữ nguyên bộ dữ liệu đánh giá Job Matcher. Gặp trường hợp này thì chạy lại `merge-duplicate-skills` (hoặc `seed-large-demo`).
+
+**Lỗi phát hiện khi đọc `SkillsRepository.merge` (sửa trong bước 0):** khi chuyển `JobPostSkill`, hàm chỉ chép `jobPostId` và `skillId`, nên **mất `importance` và `minYears`**: kỹ năng ưu tiên (`PREFERRED`) thành bắt buộc (`REQUIRED`, giá trị mặc định), số năm tối thiểu thành null. Lỗi cùng loại với lỗi gộp ngành. Cách sửa, cùng kiểu M2 của `major-merge-fix`: chép đủ hai trường; tin đã có sẵn mục đích thì giữ mức mạnh hơn (`REQUIRED` thắng `PREFERRED`), `minYears` lấy giá trị đã có của mục đích, mục đích null thì lấy của nguồn. Tách thành hàm thuần có unit test.
+
+### Kết quả bước 0 (✅ 2026-11-08)
+
+- **Code:** hàm thuần `src/modules/skills/skill-merge-plan.ts` (11 test trong `tests/unit/skill-merge-plan.test.ts`), `SkillsRepository.merge` dùng hàm này. Thêm so với dự kiến, cùng loại lỗi "gộp làm mất dữ liệu":
+  - hồ sơ đã có cả hai mục: `yearsOfExperience` lấy số lớn hơn (trước đây giữ của đích);
+  - alias đang trỏ vào mục nguồn được chuyển sang đích (trước đây bị cascade xoá cùng mục nguồn).
+- **Script:** `scripts/merge-duplicate-skills.ts`, phần dùng chung ở `scripts/lib/merge-duplicate-skills.ts` (`mergeDuplicateSkills`, `seed-large-demo` sẽ gọi hàm này). Kiểm đủ 5 mục đích (đúng 1 mục, `APPROVED`) trước khi gộp; thiếu là dừng, không gộp cặp nào.
+- **Đính chính hiện trạng:** dry-run cho thấy tin của bộ `@match-demo.local` **không** gắn "NodeJS"/"ReactJS"/"JS" (chỉ hồ sơ dùng). Mục nguồn dùng trên DB của chủ dự án: NodeJS, ReactJS, JS, MSSQL mỗi mục 1 hồ sơ; Apache Kafka 1 tin (`REQUIRED`, `minYears` 3 — hàm cũ sẽ làm mất số năm này). Không hồ sơ / tin nào gắn cả nguồn lẫn đích.
+- **Kiểm:** diễn tập trong transaction rồi rollback (DB trở lại y nguyên), sau đó chạy thật trên DB của chủ dự án. Sau khi chạy: không còn 5 mục nguồn; 5 alias `nodejs`, `reactjs`, `js`, `apache kafka`, `mssql` trỏ đúng mục đích; tin Kafka giữ `REQUIRED` / 3 năm; kỹ năng 67 → 62, liên kết hồ sơ (124) và tin (100) không đổi; chạy lại lần hai cả 5 cặp báo "đã gộp trước đó". Toàn bộ unit test (319) và `tsc` sạch.
+- **Người làm chung:** chưa chạy trên DB của họ; họ chạy `npm run merge-duplicate-skills --workspace server` (hoặc `seed-large-demo` khi có).
 
 ## Bộ chân dung (D2, Q4)
 
@@ -188,7 +209,7 @@ Tên file trên chỉ là đề xuất; giữ khuôn thư mục `scripts/lib/`, 
 
 ## Phần 3 — Các bước thực hiện
 
-0. **Điều kiện trước:** xong `major-merge-fix`; chủ dự án gộp 5 cặp kỹ năng trùng trên giao diện Admin (mục "Gộp kỹ năng trùng").
+0. ✅ **(Xong 2026-11-08, xem "Kết quả bước 0")** **Điều kiện trước:** xong `major-merge-fix` (✅ 2026-11-08). Sửa lỗi mất `importance`/`minYears` của `SkillsRepository.merge` (hàm thuần + unit test), viết `merge-duplicate-skills` (`--dry-run` trước, rồi chạy thật), kiểm 5 mục nguồn đã thành alias (mục "Gộp kỹ năng trùng"). Khoảng 1 giờ.
 1. **Thư viện dữ liệu** (`scripts/data/large-demo/`):
    - `positions.json`: ~30 vị trí × 3 cấp độ, mỗi vị trí gắn ngành nghề, nhóm ngành học, kỹ năng lõi / phụ.
    - `personas.json`: ~400 bộ chân dung (vị trí × cấp độ × 4–5 biến thể), mỗi bộ gồm tiêu đề, giới thiệu, kinh nghiệm, dự án, kỹ năng đi cùng nhau, cộng mảnh câu để ghép câu giới thiệu riêng từng người.

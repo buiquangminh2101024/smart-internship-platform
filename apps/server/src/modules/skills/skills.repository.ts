@@ -1,5 +1,6 @@
 import type { CatalogAliasSource, CatalogEntryStatus, Prisma, PrismaClient, Skill } from "@prisma/client";
 import type { SkillAliasRepository } from "./skill-alias.repository";
+import { planSkillMerge } from "./skill-merge-plan";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -127,9 +128,11 @@ export class SkillsRepository {
   }
 
   /**
-   * Gộp skill `sourceId` (PENDING) vào `targetId`: chuyển mọi liên kết sang skill
-   * đích, ghi lại tên cũ thành alias (feedback loop — lần sau gõ đúng tên đó sẽ
-   * khớp ngay ở bậc 0, không cần LLM), rồi xoá skill nguồn.
+   * Gộp skill `sourceId` vào `targetId`: chuyển mọi liên kết sang skill đích (giữ
+   * mức yêu cầu / số năm, xem skill-merge-plan.ts), chuyển alias của nguồn sang
+   * đích, ghi tên cũ thành alias (feedback loop — lần sau gõ đúng tên đó sẽ khớp
+   * ngay ở bậc 0, không cần LLM), rồi xoá skill nguồn. Đường Admin chỉ gọi với
+   * nguồn PENDING; script merge-duplicate-skills gọi với nguồn đã duyệt.
    */
   async merge(sourceId: string, targetId: string, aliasSource: CatalogAliasSource): Promise<void> {
     if (sourceId === targetId) return;
@@ -138,32 +141,59 @@ export class SkillsRepository {
       const source = await tx.skill.findUnique({ where: { id: sourceId }, select: { name: true } });
       if (!source) return;
 
-      // Tạo liên kết mới TRƯỚC khi xoá skill nguồn (xoá sẽ cascade mất liên kết
-      // cũ). skipDuplicates cho trường hợp tin/hồ sơ đã gắn sẵn skill đích.
-      const jobPostLinks = await tx.jobPostSkill.findMany({ where: { skillId: sourceId } });
-      if (jobPostLinks.length > 0) {
-        await tx.jobPostSkill.createMany({
-          data: jobPostLinks.map((link) => ({ jobPostId: link.jobPostId, skillId: targetId })),
-          skipDuplicates: true,
-        });
-      }
-
-      const candidateLinks = await tx.candidateSkill.findMany({ where: { skillId: sourceId } });
-      if (candidateLinks.length > 0) {
-        await tx.candidateSkill.createMany({
-          data: candidateLinks.map((link) => ({
-            candidateId: link.candidateId,
-            skillId: targetId,
-            yearsOfExperience: link.yearsOfExperience,
-          })),
-          skipDuplicates: true,
-        });
-      }
-
+      // Ghi liên kết mới TRƯỚC khi xoá skill nguồn (xoá sẽ cascade mất liên kết cũ).
+      await this.moveLinks(sourceId, targetId, tx);
+      // Alias đang trỏ vào nguồn cũng bị cascade xoá theo nếu không chuyển trước.
+      await tx.skillAlias.updateMany({ where: { skillId: sourceId }, data: { skillId: targetId } });
       await this.skillAliasRepository.upsert(source.name, targetId, aliasSource, tx);
       await this.detachPendingMatchReferences(sourceId, tx);
       await tx.skill.delete({ where: { id: sourceId } });
     });
+  }
+
+  private async moveLinks(sourceId: string, targetId: string, tx: Prisma.TransactionClient): Promise<void> {
+    const jobPostSelect = { jobPostId: true, importance: true, minYears: true } as const;
+    const candidateSelect = { candidateId: true, yearsOfExperience: true } as const;
+    const [sourceJobPosts, sourceCandidates] = await Promise.all([
+      tx.jobPostSkill.findMany({ where: { skillId: sourceId }, select: jobPostSelect }),
+      tx.candidateSkill.findMany({ where: { skillId: sourceId }, select: candidateSelect }),
+    ]);
+    if (sourceJobPosts.length === 0 && sourceCandidates.length === 0) return;
+
+    const [targetJobPosts, targetCandidates] = await Promise.all([
+      tx.jobPostSkill.findMany({
+        where: { skillId: targetId, jobPostId: { in: sourceJobPosts.map((link) => link.jobPostId) } },
+        select: jobPostSelect,
+      }),
+      tx.candidateSkill.findMany({
+        where: { skillId: targetId, candidateId: { in: sourceCandidates.map((link) => link.candidateId) } },
+        select: candidateSelect,
+      }),
+    ]);
+
+    const plan = planSkillMerge(
+      { jobPosts: sourceJobPosts, candidates: sourceCandidates },
+      { jobPosts: targetJobPosts, candidates: targetCandidates },
+    );
+
+    if (plan.jobPostCreates.length > 0) {
+      await tx.jobPostSkill.createMany({ data: plan.jobPostCreates.map((link) => ({ ...link, skillId: targetId })) });
+    }
+    for (const { jobPostId, importance, minYears } of plan.jobPostUpdates) {
+      await tx.jobPostSkill.update({
+        where: { jobPostId_skillId: { jobPostId, skillId: targetId } },
+        data: { importance, minYears },
+      });
+    }
+    if (plan.candidateCreates.length > 0) {
+      await tx.candidateSkill.createMany({ data: plan.candidateCreates.map((link) => ({ ...link, skillId: targetId })) });
+    }
+    for (const { candidateId, yearsOfExperience } of plan.candidateUpdates) {
+      await tx.candidateSkill.update({
+        where: { candidateId_skillId: { candidateId, skillId: targetId } },
+        data: { yearsOfExperience },
+      });
+    }
   }
 
   /**
