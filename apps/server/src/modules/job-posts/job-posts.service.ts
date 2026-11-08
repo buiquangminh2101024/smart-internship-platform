@@ -131,19 +131,28 @@ export class JobPostsService {
   async createDraft(userId: string, dto: CreateJobPostRequest): Promise<JobPostDto> {
     const { company, employer } = await this.requireVerifiedCompany(userId);
     await this.requireCreateQuota(company);
+    await this.assertRelationIdsExist(dto);
 
-    const created = await this.jobPostRepository.create({
-      companyId: company.id,
-      employerId: employer.employerId,
-      status: "DRAFT",
-      ...this.toWriteData(dto),
-      title: dto.title,
-      description: dto.description,
-      jobType: dto.jobType,
+    // Tạo tin và ghi kỹ năng/ngành cùng một transaction: lỗi giữa chừng thì
+    // không để lại tin nháp mồ côi (tin nháp tính vào quota tạo tin).
+    const created = await this.prisma.$transaction(async (tx) => {
+      const row = await this.jobPostRepository.create(
+        {
+          companyId: company.id,
+          employerId: employer.employerId,
+          status: "DRAFT",
+          ...this.toWriteData(dto),
+          title: dto.title,
+          description: dto.description,
+          jobType: dto.jobType,
+        },
+        tx,
+      );
+      await this.writeRelations(row.id, dto, tx);
+      return row;
     });
 
     if (dto.skillIds || dto.majors) {
-      await this.writeRelations(created.id, dto);
       return toJobPostDto(await this.requireJobPost(created.id));
     }
     return toJobPostDto(created);
@@ -157,38 +166,56 @@ export class JobPostsService {
       throw new AppError(409, "Only a draft job post can be edited");
     }
 
-    const updated = await this.jobPostRepository.update(id, this.toWriteData(dto));
+    await this.assertRelationIdsExist(dto);
+
     // skillIds nằm ở bảng nối nên phải ghi riêng, không đi qua JobPostWriteData.
     // undefined = form không đụng tới kỹ năng; mảng rỗng = cố ý xoá hết.
     // preferredSkillIds chỉ được ghi cùng skillIds (một khối) — client cũ chỉ
     // gửi skillIds sẽ xoá kỹ năng ưu tiên đã có (PLAN Job Matcher GĐ1 #6).
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const row = await this.jobPostRepository.update(id, this.toWriteData(dto), tx);
+      await this.writeRelations(id, dto, tx);
+      return row;
+    });
+
     if (dto.skillIds || dto.majors) {
-      await this.writeRelations(id, dto);
       return toJobPostDto(await this.requireJobPost(id));
     }
     return toJobPostDto(updated);
   }
 
-  /** Kỹ năng (kèm số năm) và ngành nằm ở bảng nối — ghi riêng, cùng một transaction. */
-  private async writeRelations(jobPostId: string, dto: UpdateJobPostRequest): Promise<void> {
-    if (dto.majors?.length) {
-      const existing = await this.jobPostRepository.findExistingMajorIds(dto.majors.map((major) => major.majorId));
-      if (existing.size !== dto.majors.length) {
-        throw new AppError(400, "One or more majors do not exist");
-      }
+  /**
+   * Kiểm id kỹ năng/ngành TRƯỚC khi ghi tin: sai thì 400 và chưa ghi gì.
+   * Kỹ năng: mọi trạng thái trong catalog; ngành: chỉ APPROVED
+   * (docs/06-backend/major-merge-fix/PLAN.md, M3).
+   */
+  private async assertRelationIdsExist(dto: UpdateJobPostRequest): Promise<void> {
+    const skillIds = dto.skillIds ? [...new Set([...dto.skillIds, ...(dto.preferredSkillIds ?? [])])] : [];
+    const majorIds = dto.majors?.map((major) => major.majorId) ?? [];
+    const [existingSkills, existingMajors] = await Promise.all([
+      this.jobPostRepository.findExistingSkillIds(skillIds),
+      this.jobPostRepository.findExistingMajorIds(majorIds),
+    ]);
+    if (existingSkills.size !== skillIds.length) {
+      throw new AppError(400, "One or more skills do not exist");
     }
-    await this.prisma.$transaction(async (tx) => {
-      if (dto.skillIds) {
-        await this.jobPostRepository.setSkills(
-          jobPostId,
-          this.toSkillRows(dto.skillIds, dto.preferredSkillIds, dto.skillMinYears),
-          tx,
-        );
-      }
-      if (dto.majors) {
-        await this.jobPostRepository.setMajors(jobPostId, dto.majors, tx);
-      }
-    });
+    if (existingMajors.size !== majorIds.length) {
+      throw new AppError(400, "One or more majors do not exist");
+    }
+  }
+
+  /** Kỹ năng (kèm số năm) và ngành nằm ở bảng nối — ghi riêng, trong transaction của nơi gọi. */
+  private async writeRelations(jobPostId: string, dto: UpdateJobPostRequest, tx: Prisma.TransactionClient): Promise<void> {
+    if (dto.skillIds) {
+      await this.jobPostRepository.setSkills(
+        jobPostId,
+        this.toSkillRows(dto.skillIds, dto.preferredSkillIds, dto.skillMinYears),
+        tx,
+      );
+    }
+    if (dto.majors) {
+      await this.jobPostRepository.setMajors(jobPostId, dto.majors, tx);
+    }
   }
 
   /** Hard delete, chỉ cho DRAFT — tin nháp chưa từng công khai nên không có hồ sơ ứng tuyển/hội thoại. */

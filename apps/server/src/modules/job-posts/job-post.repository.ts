@@ -245,9 +245,13 @@ export class JobPostRepository {
     return new Set(rows.map((row) => row.id));
   }
 
+  /**
+   * Id trong danh sách là ngành APPROVED. Ngành PENDING có thể bị từ chối hoặc
+   * bị cron gộp, nên không cho gắn vào tin (giao diện cũng chỉ liệt kê APPROVED).
+   */
   async findExistingMajorIds(ids: string[], db: Db = this.prisma): Promise<Set<string>> {
     if (ids.length === 0) return new Set();
-    const rows = await db.major.findMany({ where: { id: { in: ids } }, select: { id: true } });
+    const rows = await db.major.findMany({ where: { id: { in: ids }, status: "APPROVED" }, select: { id: true } });
     return new Set(rows.map((row) => row.id));
   }
 

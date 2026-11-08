@@ -20,11 +20,53 @@ Danh sách chức năng mà các nền tảng tuyển dụng thực tế (TopCV,
 
 ---
 
+## 0. Đăng tin, ứng tuyển và tự động hoá — theo nhận xét của giáo viên (demo 05/11/2026)
+
+Lập ngày 2026-11-08. Phần này tách riêng khỏi các mục bên dưới, vì là phần cốt lõi giáo viên yêu cầu làm lại trước buổi demo sau.
+
+**Tóm tắt nhận xét:**
+
+- Nhà tuyển dụng phải vào từng tin, tìm rồi mời từng người, nên chưa thấy hệ thống "thông minh" ở đâu.
+- Đăng tin xong thì hệ thống phải tự gợi ý ứng viên phù hợp và tự gửi lời mời.
+- Trang tổng quan không cho biết mỗi tin có bao nhiêu ứng viên phù hợp, và hồ sơ chờ 40–70 ngày mà hệ thống không làm gì.
+- Dữ liệu quá ít nên không thấy được hệ thống xếp ưu tiên ra sao. Lần sau phải demo với dữ liệu thật nhiều.
+- Hồ sơ và tin mới đổ vào liên tục, hệ thống phải tự xử lý được.
+
+**Hiện trạng kiểm trên trình duyệt (2026-11-08, `employer@match-demo.local` và `backend-node-02@match-demo.local`):**
+
+- Toàn hệ thống chỉ có 8 tin công khai, cùng một công ty. Tin nào cũng "Thỏa thuận", và chi tiết tin ghi "Chưa rõ địa điểm", "Ngành nghề: —".
+- Trang "Tìm ứng viên phù hợp" của tin Backend Node chỉ ra 1 người. Hạn mức lời mời là 3/ngày (`DEFAULT_OUTREACH_DAILY_QUOTA = 3`).
+- Trang tổng quan không có số liệu nào về độ phù hợp.
+- Danh sách hồ sơ theo tin mặc định xếp "Mới nhất" và hiện email thay cho tên. Trang `/employer/applications` chỉ có "Khớp x/2 kỹ năng", không có điểm %.
+- Trang "Việc làm phù hợp" của ứng viên trống, vì hai lý do. Thứ nhất, `job-recommendation.repository.ts` chỉ lấy tin đăng trong 30 ngày gần nhất (`RECOMMENDATION_RECENT_DAYS = 30`), mà tin demo phần lớn được duyệt từ tháng 9 tới đầu tháng 10. Thứ hai, tin đã ứng tuyển bị loại.
+- Danh mục kỹ năng bị trùng: `Node.js`/`NodeJS`, `React`/`ReactJS`, `JS`/`JavaScript`, `Kafka`/`Apache Kafka`, `MSSQL`/`MS SQL Server`.
+
+| # | Việc | Mức | Đã có | Còn thiếu | Ước lượng |
+|---|---|---|---|---|---|
+| 0.1 | Dữ liệu demo lớn (plan: `docs/06-backend/large-demo-data/PLAN.md`) | 🔴 | `seed-match-demo.ts` (21 ứng viên, 10 tin, 1 công ty), `seed-dashboard-demo.ts` | Script seed mới: 15–30 công ty; 100–200 tin trải nhiều ngành, thành phố, mức lương; 300–500 ứng viên có tên, CV, kỹ năng đa dạng; ngày đăng rải đều, có tin trong 30 ngày gần đây. Gộp kỹ năng trùng (dùng chức năng gộp của Admin). Kiểm thời gian và chi phí tính embedding cho vài trăm hồ sơ. | ~2–3 ngày |
+| 0.2 | Đăng tin xong, hệ thống tự gợi ý và tự gửi lời mời | 🔴 | Tìm ứng viên theo tin (lọc SQL rồi chấm hybrid, top 10), gửi lời mời có lưu điểm, hết hạn sau 14 ngày, thông báo, chấp nhận thì tạo hội thoại, hạn mức theo gói (`outreachInvitationDailyQuota`) | Nút "Mời tất cả gợi ý" (bước trung gian, làm trước). Cài đặt cho từng tin: ngưỡng điểm, số người cần tuyển, bật/tắt tự mời. Tin chuyển `PUBLISHED` thì tự chạy tìm và mời (việc nền). Tự mời thêm khi có người từ chối hoặc lời mời hết hạn. Nâng hạn mức mặc định. Đổi quy tắc AD-15 nên phải viết AD mới trước khi code; có thể cần migration. | ~3–4 ngày |
+| 0.3 | Số ứng viên phù hợp ở trang tổng quan và danh sách tin | 🔴 | Điểm từng hồ sơ đã nộp (`job-matching`); trang tổng quan có 4 thẻ và bảng "Hiệu quả tin" | Số ứng viên phù hợp cho từng tin. Tiến độ tuyển: phù hợp → đã mời → nhận lời → phỏng vấn → được nhận, so với chỉ tiêu. Không chấm hybrid mỗi lần mở trang được, nên cần lưu sẵn kết quả chấm (bảng điểm theo cặp tin–ứng viên, do việc nền cập nhật). Dùng chung với 0.2 và 0.6. | ~2 ngày |
+| 0.4 | Hệ thống tự xử lý hồ sơ chờ lâu | 🔴 | `/employer/applications` có thời gian chờ, nút Xem xét / Từ chối, ô chọn nhiều; trang hồ sơ theo tin có điểm % và sắp xếp "Phù hợp nhất"; cron nhắc lịch phỏng vấn | Đặt "Phù hợp nhất" làm mặc định; hiện tên thay cho email; hiện điểm % ở `/employer/applications`. Cron nhắc khi hồ sơ chờ quá N ngày. Gợi ý xử lý hàng loạt: chọn sẵn hồ sơ ≥ X% vào danh sách rút gọn, đề xuất từ chối hồ sơ < Y%, nhà tuyển dụng chỉ bấm xác nhận. | ~1,5–2 ngày |
+| 0.5 | Ứng viên thấy nhiều việc phù hợp, xếp theo ưu tiên | 🔴 | "Việc làm phù hợp" (top 10, có điểm và lý do), "Việc làm tương tự"; outbox email | Nới hoặc bỏ giới hạn 30 ngày. Hiện rõ vì sao tin này xếp trên tin kia (theo từng tiêu chí). Job alert: có tin mới phù hợp thì tự báo hoặc gửi email (trùng mục "Thông báo việc làm mới" ở mục 3, làm ở đây). | ~2 ngày |
+| 0.6 | Dữ liệu đổ vào liên tục, hệ thống tự chấm lại | 🟡 | Nhiều cron (hết hạn tin, nhắc lịch, outbox) | Ứng viên mới hoặc vừa sửa hồ sơ thì tự chấm lại với các tin đang mở; tin mới thì chấm với các ứng viên. Script mô phỏng thêm ứng viên và tin theo đợt, để demo trực tiếp việc hệ thống tự gợi ý và tự mời. Làm sau 0.2 và 0.3. | ~1–1,5 ngày |
+
+**Tổng ước lượng:** khoảng 11–14 ngày.
+
+**Thứ tự đề xuất trước buổi demo sau (khoảng 4–5 ngày):**
+
+1. 0.1: dữ liệu demo lớn.
+2. Phần nhẹ của 0.4 và 0.5: đặt mặc định "Phù hợp nhất", hiện tên thay cho email, hiện điểm %, nới giới hạn 30 ngày.
+3. Nút "Mời tất cả gợi ý" của 0.2.
+
+Phần tự động hoàn toàn (0.2, 0.3, 0.6) làm đợt sau. Mỗi việc cần `PLAN.md` riêng trước khi triển khai.
+
+---
+
 ## 1. Hoàn thiện phần đang dở
 
 | Việc | Mức | Ghi chú |
 |---|---|---|
-| Sửa lỗi: gộp ngành (`Major`) làm mất yêu cầu ngành của tin tuyển dụng | 🔴 | Thêm 2026-10-12, phát hiện khi rà sơ đồ lớp. `MajorRepository.merge` (`apps/server/src/modules/education-catalog/major.repository.ts`) chỉ chuyển `Education` và alias sang ngành đích rồi xoá ngành nguồn. `JobPostMajor` cascade theo `Major`, nên liên kết tin–ngành nguồn **bị xoá** thay vì chuyển sang ngành đích. `SkillsRepository.merge` có chuyển `JobPostSkill`, nên chỉ `Major` bị. Lỗi xảy ra khi ngành `PENDING` gắn được vào tin: `findExistingMajorIds` (`job-posts/job-post.repository.ts:192`) không lọc `status`; chưa kiểm giao diện có cho chọn ngành chờ duyệt không. Hướng sửa: chuyển `JobPostMajor` sang ngành đích trong cùng transaction (khoá chính ghép, nên tạo bản mới giữ nguyên `relevance` + bỏ trùng như `Skill`), không cần migration. |
+| ✅ Sửa lỗi: gộp ngành (`Major`) làm mất yêu cầu ngành của tin tuyển dụng | 🔴 | **Xong 2026-11-08** (plan `docs/06-backend/major-merge-fix/PLAN.md`): `merge` chuyển `JobPostMajor` sang ngành đích trong cùng transaction, giữ mức mạnh hơn (`PRIMARY` thắng `RELATED`); `findExistingMajorIds` chỉ nhận ngành `APPROVED`. Kiểm DB trước khi sửa: không tin nào mất ngành, không tin nào gắn ngành chờ duyệt. Sửa kèm: tạo/sửa tin nháp kiểm id kỹ năng/ngành trước khi ghi và ghi tin + liên kết trong một transaction (trước đây id sai vẫn để lại tin nháp tính quota). Ban đầu: thêm 2026-10-12, phát hiện khi rà sơ đồ lớp. `MajorRepository.merge` (`apps/server/src/modules/education-catalog/major.repository.ts`) chỉ chuyển `Education` và alias sang ngành đích rồi xoá ngành nguồn. `JobPostMajor` cascade theo `Major`, nên liên kết tin–ngành nguồn **bị xoá** thay vì chuyển sang ngành đích. `SkillsRepository.merge` có chuyển `JobPostSkill`, nên chỉ `Major` bị. Lỗi xảy ra khi ngành `PENDING` gắn được vào tin: `findExistingMajorIds` (`job-posts/job-post.repository.ts:192`) không lọc `status`; chưa kiểm giao diện có cho chọn ngành chờ duyệt không. Hướng sửa: chuyển `JobPostMajor` sang ngành đích trong cùng transaction (khoá chính ghép, nên tạo bản mới giữ nguyên `relevance` + bỏ trùng như `Skill`), không cần migration. |
 | Sửa lỗi: bấm mua gói mới làm mất gói đang dùng dù thanh toán thất bại | 🟡 | Thêm 2026-10-19, phát hiện khi soạn FAQ chatbot. `SubscriptionsService.checkout` (`apps/server/src/modules/subscriptions/subscriptions.service.ts`) gọi `cancelActiveOrPending` **ngay lúc tạo đơn**, trước khi cổng thanh toán xác nhận. Nếu thanh toán thất bại, người dùng bỏ ngang ở trang VNPay/MoMo, hoặc IPN không về, công ty mất gói `ACTIVE` cũ (và mất luôn quyền đăng tin, tìm và mời ứng viên; cron có thể chuyển tin đang hiển thị sang Hết hạn). Hướng sửa: lúc checkout chỉ huỷ đơn `PENDING` cũ; gói `ACTIVE` chỉ bị thay khi IPN xác nhận thành công (`PaymentsService` lúc kích hoạt gói mới), trong cùng transaction. Cần quyết thêm: gói mới bắt đầu ngay (bỏ phần còn lại của gói cũ, như hiện tại) hay nối tiếp sau gói cũ. FAQ `subscription-payment` đang ghi "mua gói mới sẽ thay thế gói hiện tại", sửa lỗi xong thì xem lại câu này. |
 | Phiên đăng nhập bền hơn khi mạng/server trục trặc | 🟢 | Thêm 2026-10-20, còn lại sau AD-22. (a) `refreshAccessToken` (`apps/web/src/lib/api-client.ts`) trả `null` cho **mọi** lỗi, kể cả mất mạng hay server 5xx, nên `endSession` xoá phiên dù refresh token còn hạn. Hướng sửa: chỉ xoá phiên khi `/auth/refresh` trả 401/403; lỗi mạng/5xx thì giữ phiên, báo lỗi tạm thời. (b) `apps/server/src/infrastructure/redis.ts` tạo client không có `commandTimeout`/`keepAlive`: kết nối Redis Cloud chết ngầm thì `authenticate` có thể treo tới khi TCP báo lỗi. Hướng sửa: đặt timeout + keepAlive và log sự kiện `error`. Cả hai là thay đổi auth, cần plan được duyệt trước. |
 | ✅ Cập nhật `PROJECT_STATUS.md` | 🔴 | **Xong** (kiểm 2026-10-20): Phase 8, 9, 10 đã ghi ✅ Hoàn thành; các khối AI nằm ở dòng Phase 11, dashboard và lịch phỏng vấn ở mục "Delta ngoài roadmap gốc". Còn một chỗ cũ: ghi chú dòng Phase 13 vẫn nói "chủ yếu `job-matching`", trong khi `apps/server/tests/unit/` giờ đã có test cho audit log, dashboard, interviews, employer applications… Ban đầu: Phase 8, 9, 10 vẫn ghi "Chưa bắt đầu", dù đã triển khai xong. Các khối AI và dashboard cũng chưa có trong bảng. |
