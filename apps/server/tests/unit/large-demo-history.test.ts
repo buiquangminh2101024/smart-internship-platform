@@ -7,13 +7,12 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { ApplicationStatus } from "@prisma/client";
 import { canTransition } from "../../src/modules/applications/applications.service";
-import { DEFAULT_OUTREACH_DAILY_QUOTA } from "../../src/modules/candidate-outreach/candidate-outreach.config";
 import {
   catalogAdditionsSchema, companiesFileSchema, jobTemplatesFileSchema, namesFileSchema, personasFileSchema,
   positionsFileSchema, showcaseFileSchema, type LargeDemoLibrary,
 } from "../../scripts/lib/large-demo/library";
 import { LARGE_DEMO_ID_PREFIX, generateLargeDemo, type GenerateCatalog, type GenerateOptions, type GeneratedLargeDemo } from "../../scripts/lib/large-demo/generate";
-import { generateLargeDemoHistory, type GeneratedHistory } from "../../scripts/lib/large-demo/history";
+import { HISTORY_DAILY_INVITATION_CAP, generateLargeDemoHistory, type GeneratedHistory } from "../../scripts/lib/large-demo/history";
 
 const DATA_DIR = path.join(__dirname, "..", "..", "scripts", "data", "large-demo");
 const read = (file: string): unknown => JSON.parse(readFileSync(path.join(DATA_DIR, file), "utf8"));
@@ -249,7 +248,7 @@ test("lời mời: đúng điều kiện mời, hạn mức 3/ngày/công ty, tr
     assert.ok(typeof inv.matchScore === "number" && inv.matchScore >= 0 && inv.matchScore <= 100);
     assert.equal(inv.matchWeightsVersion, "rule-v1");
   }
-  assert.ok([...perDay.values()].every((count) => count <= DEFAULT_OUTREACH_DAILY_QUOTA), "vượt hạn mức lời mời/ngày");
+  assert.ok([...perDay.values()].every((count) => count <= HISTORY_DAILY_INVITATION_CAP), "vượt hạn mức lời mời/ngày");
   const statuses = new Set(run.history.invitations.map((i) => i.status));
   for (const status of ["PENDING", "ACCEPTED", "DECLINED", "EXPIRED"]) assert.ok(statuses.has(status as never), `không có lời mời ${status}`);
 });

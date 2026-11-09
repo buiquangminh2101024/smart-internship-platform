@@ -49,7 +49,9 @@ export type NotificationType =
   | "SUPPORT_CONTACT_RECEIVED"
   // AD-18 — Admin kích hoạt thủ công, gửi hướng dẫn đặt lại mật khẩu
   | "ACCOUNT_ACTIVATED"
-  | "PASSWORD_RESET_SUGGESTED";
+  | "PASSWORD_RESET_SUGGESTED"
+  // AD-23 — hệ thống đã tự gửi lời mời cho tin (gộp tối đa 1 thông báo/tin/ngày)
+  | "AUTO_OUTREACH_SENT";
 
 /** Loại vấn đề của form /support (AD-17). */
 export type SupportCategory = "ACCOUNT_SUSPENDED" | "OTHER";
@@ -983,6 +985,11 @@ export interface CandidateSearchResultDto extends OutreachCandidateCardDto {
   match: MatchResult;
   /** Từng có lời mời cho tin này nhưng đã hết hạn — được mời lại. */
   previouslyInvitedExpired: boolean;
+  /**
+   * AD-23 — ứng viên đã nhận đủ lời mời trong hôm nay (mọi công ty). Vẫn hiện trong
+   * danh sách nhưng mời sẽ bị 409; mời lại được từ 0h UTC (7h sáng giờ Việt Nam).
+   */
+  cappedToday: boolean;
 }
 
 /** Danh sách "Đã mời" (D6) — không chấm lại điểm. */

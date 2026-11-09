@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { OutreachInvitationSource, PrismaClient } from "@prisma/client";
 import type {
   CandidateOutreachInvitationDto,
   CandidateSearchResultDto,
@@ -27,12 +27,19 @@ import type { MessagingService } from "../messaging/messaging.service";
 import type { NotificationsService } from "../notifications/notifications.service";
 import type { CompanySubscriptionRepository } from "../subscriptions/company-subscription.repository";
 import type { SubscriptionsService } from "../subscriptions/subscriptions.service";
-import type { CandidateOutreachRateLimitService } from "./candidate-outreach-rate-limit.service";
 import {
+  hasDailyRoom,
+  type CandidateOutreachRateLimitService,
+  type OutreachDailyLimit,
+} from "./candidate-outreach-rate-limit.service";
+import {
+  CANDIDATE_DAILY_INVITATION_CAP,
   DEFAULT_OUTREACH_DAILY_QUOTA,
+  DEFAULT_POOL_MULTIPLIER,
   INVITATION_EXPIRY_DAYS,
   PREFILTER_LIMIT,
   TOP_RESULT_COUNT,
+  TRIAL_OUTREACH_DAILY_QUOTA,
 } from "./candidate-outreach.config";
 import type { ListCompanyInvitationsQuery } from "./candidate-outreach.dto";
 import {
@@ -43,11 +50,44 @@ import {
 } from "./candidate-outreach.mapper";
 import type {
   CandidateOutreachRepository,
+  InvitationWithRelations,
   OutreachEmployer,
   OutreachJobPost,
 } from "./candidate-outreach.repository";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Hạn mức lời mời của công ty theo gói (AD-15 D4, AD-23 mục 4). Dùng thử chỉ mời
+ * tay nên không có hệ số mời; muốn đọc `poolMultiplier` phải kiểm `autoAllowed` trước.
+ */
+export type OutreachQuotaPolicy =
+  | { mode: "TRIAL"; dailyQuota: number; autoAllowed: false }
+  | { mode: "SUBSCRIBED"; dailyQuota: number; autoAllowed: true; poolMultiplier: number };
+
+/**
+ * Lý do không tạo được lời mời (AD-23). Mời tay đổi thành AppError; mời hàng loạt và
+ * tự động mời bỏ qua người đó, riêng QUOTA thì dừng hẳn.
+ */
+export type InvitationSkipReason = "NOT_FOUND" | "NOT_OPEN" | "APPLIED" | "BLOCKED" | "CANDIDATE_CAP" | "QUOTA";
+
+export type CreateInvitationResult =
+  | { created: true; invitation: InvitationWithRelations }
+  | { created: false; reason: InvitationSkipReason };
+
+export interface CreateInvitationInput {
+  /** Người đứng tên lời mời. Tự động mời dùng người đăng tin (AD-23 mục 9). */
+  sender: { employerId: string; companyId: string; companyName: string };
+  jobPost: Pick<OutreachJobPost, "id" | "title">;
+  candidateId: string;
+  source: OutreachInvitationSource;
+  limit: OutreachDailyLimit;
+  /**
+   * Điểm đã chấm sẵn (tự động mời chấm cả pool trước khi chọn người). Bỏ trống thì chấm
+   * lại riêng người này lúc gửi (D7).
+   */
+  match?: MatchResult | null;
+}
 
 /**
  * Tìm & mời ứng viên chưa ứng tuyển (B3, AD-15 — docs/06-backend/candidate-outreach/PLAN.md).
@@ -142,12 +182,19 @@ export class CandidateOutreachService {
       .sort((left, right) => (scores.get(right)!.score ?? -1) - (scores.get(left)!.score ?? -1))
       .slice(0, TOP_RESULT_COUNT);
 
-    const [cards, expiredIds] = await Promise.all([
+    const [cards, expiredIds, receivedToday] = await Promise.all([
       this.repository.findSearchCards(topIds),
       this.repository.findExpiredInvitedCandidateIds(jobPost.id, topIds),
+      this.repository.countReceivedTodayByCandidate(topIds),
     ]);
+    // AD-23 — người đã nhận đủ lời mời hôm nay vẫn hiện, frontend làm mờ nút mời.
     return cards.map((card) =>
-      toCandidateSearchResultDto(card, scores.get(card.candidateId)!, expiredIds.has(card.candidateId)),
+      toCandidateSearchResultDto(
+        card,
+        scores.get(card.candidateId)!,
+        expiredIds.has(card.candidateId),
+        (receivedToday.get(card.candidateId) ?? 0) >= CANDIDATE_DAILY_INVITATION_CAP,
+      ),
     );
   }
 
@@ -263,31 +310,65 @@ export class CandidateOutreachService {
     assertPublished(jobPost);
     const dailyQuota = await this.resolveDailyQuota(employer);
 
+    const result = await this.createInvitation({
+      sender: { employerId: employer.id, companyId: employer.companyId, companyName: employer.company.name },
+      jobPost,
+      candidateId,
+      source: "MANUAL",
+      limit: { daily: dailyQuota },
+    });
+    if (!result.created) throw inviteSkipError(result.reason, dailyQuota);
+
+    const [card] = await this.repository.findSearchCards([candidateId]);
+    // createInvitation vừa kiểm isOpenToOutreach = true ⇒ xem được hồ sơ.
+    return toSentOutreachInvitationDto(result.invitation, card ?? null, true);
+  }
+
+  /**
+   * Tạo một lời mời — dùng chung cho mời tay, "Mời tất cả gợi ý" và tự động mời (AD-23)
+   * để quy tắc không lệch giữa các đường. Không ném lỗi nghiệp vụ: trả lý do bỏ qua.
+   * Không kiểm quyền với tin hay tin còn PUBLISHED — nơi gọi lo.
+   *
+   * Thứ tự: kiểm rẻ ngoài transaction (để báo lỗi sớm và không chấm điểm vô ích) → chấm
+   * điểm (CPU, có thể tính embedding; không giữ khoá trong lúc này) → transaction: khoá
+   * theo ứng viên, kiểm LẠI lời mời đang chặn và trần trong ngày dưới khoá, tạo lời mời
+   * + thông báo → tăng bộ đếm hạn mức của công ty.
+   */
+  async createInvitation(input: CreateInvitationInput): Promise<CreateInvitationResult> {
+    const { sender, jobPost, candidateId, source, limit } = input;
     const candidate = await this.repository.findCandidateForInvite(candidateId);
-    if (!candidate) throw new AppError(404, "Không tìm thấy ứng viên.");
-    if (!candidate.isOpenToOutreach) {
-      throw new AppError(403, "Ứng viên không cho phép nhà tuyển dụng tìm kiếm và mời.");
-    }
-    const [applied, blocked] = await Promise.all([
+    if (!candidate) return skipped("NOT_FOUND");
+    if (!candidate.isOpenToOutreach) return skipped("NOT_OPEN");
+    const [applied, blocked, receivedToday, usage] = await Promise.all([
       this.repository.hasApplied(candidate.id, jobPost.id),
       this.repository.hasBlockingInvitation(candidate.id, jobPost.id),
+      this.repository.countReceivedToday(candidate.id),
+      this.rateLimit.getUsage(sender.companyId),
     ]);
-    if (applied) throw new AppError(409, "Ứng viên đã ứng tuyển tin này.");
+    if (applied) return skipped("APPLIED");
     // Q4 — chỉ lời mời EXPIRED mới cho mời lại.
-    if (blocked) throw new AppError(409, "Ứng viên đã được mời cho tin này.");
-    await this.rateLimit.assertWithinQuota(employer.companyId, dailyQuota);
+    if (blocked) return skipped("BLOCKED");
+    if (receivedToday >= CANDIDATE_DAILY_INVITATION_CAP) return skipped("CANDIDATE_CAP");
+    if (!hasDailyRoom(usage, limit, source)) return skipped("QUOTA");
 
-    const match = await this.scoreForInvitation(jobPost.id, candidate.id);
-    const invitation = await this.prisma.$transaction(async (tx) => {
+    const match = input.match !== undefined ? input.match : await this.scoreForInvitation(jobPost.id, candidate.id);
+    const result = await this.prisma.$transaction(async (tx): Promise<CreateInvitationResult> => {
+      await this.repository.lockCandidate(candidate.id, tx);
+      // Lượt mời khác (công ty khác, cron, tab khác) có thể vừa tạo lời mời trong lúc chấm điểm.
+      if (await this.repository.hasBlockingInvitation(candidate.id, jobPost.id, tx)) return skipped("BLOCKED");
+      if ((await this.repository.countReceivedToday(candidate.id, tx)) >= CANDIDATE_DAILY_INVITATION_CAP) {
+        return skipped("CANDIDATE_CAP");
+      }
       const created = await this.repository.create(
         {
-          companyId: employer.companyId,
-          employerId: employer.id,
+          companyId: sender.companyId,
+          employerId: sender.employerId,
           jobPostId: jobPost.id,
           candidateId: candidate.id,
           expiresAt: new Date(Date.now() + INVITATION_EXPIRY_DAYS * DAY_MS),
           matchScore: match?.score ?? null,
           matchWeightsVersion: match?.weightsVersion ?? null,
+          source,
         },
         tx,
       );
@@ -298,19 +379,16 @@ export class CandidateOutreachService {
           invitationId: created.id,
           jobPostId: jobPost.id,
           jobPostTitle: jobPost.title,
-          companyName: employer.company.name,
+          companyName: sender.companyName,
           expiresAt: created.expiresAt,
         },
         tx,
       );
-      return created;
+      return { created: true, invitation: created };
     });
     // Chỉ tính lượt khi lời mời đã được tạo.
-    await this.rateLimit.recordUsage(employer.companyId);
-
-    const [card] = await this.repository.findSearchCards([candidate.id]);
-    // Vừa kiểm isOpenToOutreach = true ở trên ⇒ xem được hồ sơ.
-    return toSentOutreachInvitationDto(invitation, card ?? null, true);
+    if (result.created) await this.rateLimit.recordUsage(sender.companyId, source);
+    return result;
   }
 
   // ─── Candidate ───────────────────────────────────────────────────────────
@@ -446,7 +524,7 @@ export class CandidateOutreachService {
   async getDailyQuotaStatus(employer: Pick<OutreachEmployer, "companyId" | "company">): Promise<OutreachDailyQuotaStatus> {
     const quota = await this.lookupDailyQuota(employer);
     if (!quota) return { mode: "BLOCKED" };
-    const usedToday = await this.rateLimit.getUsedToday(employer.companyId);
+    const { total: usedToday } = await this.rateLimit.getUsage(employer.companyId);
     return {
       mode: quota.mode,
       dailyQuota: quota.dailyQuota,
@@ -467,18 +545,24 @@ export class CandidateOutreachService {
     return quota.dailyQuota;
   }
 
-  /** null = BLOCKED (không có gói còn hiệu lực). */
-  private async lookupDailyQuota(
-    employer: Pick<OutreachEmployer, "companyId" | "company">,
-  ): Promise<{ mode: "TRIAL" | "SUBSCRIBED"; dailyQuota: number } | null> {
+  /**
+   * null = BLOCKED (không có gói còn hiệu lực). AD-23: gói Dùng thử chỉ mời tay
+   * (`autoAllowed = false`, không có hệ số mời); gói trả phí có tự động mời với hệ
+   * số mời H của gói.
+   */
+  async lookupDailyQuota(employer: Pick<OutreachEmployer, "companyId" | "company">): Promise<OutreachQuotaPolicy | null> {
     const access = await this.subscriptionsService.getCompanySubscriptionAccess(employer.company);
     if (access.mode === "BLOCKED") return null;
-    if (access.mode === "TRIAL") return { mode: "TRIAL", dailyQuota: DEFAULT_OUTREACH_DAILY_QUOTA };
+    if (access.mode === "TRIAL") {
+      return { mode: "TRIAL", dailyQuota: TRIAL_OUTREACH_DAILY_QUOTA, autoAllowed: false };
+    }
     // Summary của SubscriptionAccessStatus không mang hạn mức lời mời ⇒ đọc thẳng gói.
     const active = await this.companySubscriptionRepository.findActiveByCompany(employer.companyId);
     return {
       mode: "SUBSCRIBED",
       dailyQuota: active?.plan.outreachInvitationDailyQuota ?? DEFAULT_OUTREACH_DAILY_QUOTA,
+      autoAllowed: true,
+      poolMultiplier: active?.plan.outreachPoolMultiplier ?? DEFAULT_POOL_MULTIPLIER,
     };
   }
 
@@ -532,6 +616,31 @@ export function compareOutreachJobs(left: OutreachJobSummary, right: OutreachJob
     return left.expiresAt < right.expiresAt ? -1 : 1;
   }
   return left.title.localeCompare(right.title, "vi");
+}
+
+function skipped(reason: InvitationSkipReason): CreateInvitationResult {
+  return { created: false, reason };
+}
+
+/** Mời tay: lý do bỏ qua ⇒ lỗi HTTP, giữ nguyên mã và câu báo của AD-15. */
+export function inviteSkipError(reason: InvitationSkipReason, dailyQuota: number): AppError {
+  switch (reason) {
+    case "NOT_FOUND":
+      return new AppError(404, "Không tìm thấy ứng viên.");
+    case "NOT_OPEN":
+      return new AppError(403, "Ứng viên không cho phép nhà tuyển dụng tìm kiếm và mời.");
+    case "APPLIED":
+      return new AppError(409, "Ứng viên đã ứng tuyển tin này.");
+    case "BLOCKED":
+      return new AppError(409, "Ứng viên đã được mời cho tin này.");
+    case "CANDIDATE_CAP":
+      return new AppError(409, "Ứng viên đã nhận đủ lời mời trong hôm nay. Bạn mời lại được từ 7h sáng mai.");
+    case "QUOTA":
+      return new AppError(
+        429,
+        `Công ty đã gửi đủ ${dailyQuota} lời mời trong hôm nay. Hạn mức được làm mới vào 7h sáng mai.`,
+      );
+  }
 }
 
 /** Q2 — chỉ tìm/mời cho tin đang PUBLISHED. */

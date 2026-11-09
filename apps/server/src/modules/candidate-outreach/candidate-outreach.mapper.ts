@@ -16,8 +16,9 @@ export function toCandidateSearchResultDto(
   card: CandidateSearchCardRow,
   match: MatchResult,
   previouslyInvitedExpired: boolean,
+  cappedToday: boolean,
 ): CandidateSearchResultDto {
-  return { ...toCardDto(card), match, previouslyInvitedExpired };
+  return { ...toCardDto(card), match, previouslyInvitedExpired, cappedToday };
 }
 
 /**

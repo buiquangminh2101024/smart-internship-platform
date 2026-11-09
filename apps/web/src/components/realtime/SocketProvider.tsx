@@ -54,8 +54,12 @@ export function SocketProvider({
           void queryClient.invalidateQueries({ queryKey: ["candidate", "interviews"] });
           void queryClient.invalidateQueries({ queryKey: ["candidate", "applications"] });
         }
-        // Ứng viên trả lời lời mời: trạng thái dòng và số đếm ở trang "Lời mời" đã cũ.
-        if (area === "employer" && event.type === "CANDIDATE_OUTREACH_INVITATION_RESPONDED") {
+        // Ứng viên trả lời lời mời, hoặc hệ thống vừa tự gửi lời mời (AD-23):
+        // trạng thái dòng và số đếm ở trang "Lời mời" đã cũ.
+        if (
+          area === "employer" &&
+          (event.type === "CANDIDATE_OUTREACH_INVITATION_RESPONDED" || event.type === "AUTO_OUTREACH_SENT")
+        ) {
           void queryClient.invalidateQueries({ queryKey: OUTREACH_KEY });
         }
         showBrowserNotification(area, "system", {

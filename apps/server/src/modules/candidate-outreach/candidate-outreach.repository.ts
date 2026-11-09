@@ -1,4 +1,10 @@
-import { Prisma, type JobPostStatus, type OutreachInvitationStatus, type PrismaClient } from "@prisma/client";
+import {
+  Prisma,
+  type JobPostStatus,
+  type OutreachInvitationSource,
+  type OutreachInvitationStatus,
+  type PrismaClient,
+} from "@prisma/client";
 import { BLOCKING_INVITATION_STATUSES } from "./candidate-outreach.config";
 
 type Db = PrismaClient | Prisma.TransactionClient;
@@ -100,6 +106,16 @@ export interface CreateInvitationData {
   /** D7 — điểm lúc gửi; null khi không chấm được. */
   matchScore: number | null;
   matchWeightsVersion: string | null;
+  /** AD-23 — MANUAL (mời tay, "Mời tất cả gợi ý") hoặc AUTO (tự động mời). */
+  source: OutreachInvitationSource;
+}
+
+/**
+ * 0h UTC của ngày chứa `now` — mốc đếm trần lời mời của ứng viên (AD-23 mục 7). Cùng
+ * mốc với bộ đếm hạn mức Redis của công ty: làm mới lúc 7h sáng giờ Việt Nam.
+ */
+export function startOfUtcDay(now: Date = new Date()): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
 
 export class CandidateOutreachRepository {
@@ -235,12 +251,44 @@ export class CandidateOutreachRepository {
   }
 
   /** Q4 — lời mời PENDING/ACCEPTED/DECLINED của đúng cặp; chỉ EXPIRED mới cho mời lại. */
-  async hasBlockingInvitation(candidateId: string, jobPostId: string): Promise<boolean> {
-    const invitation = await this.prisma.candidateOutreachInvitation.findFirst({
+  async hasBlockingInvitation(candidateId: string, jobPostId: string, db: Db = this.prisma): Promise<boolean> {
+    const invitation = await db.candidateOutreachInvitation.findFirst({
       where: { candidateId, jobPostId, status: { in: BLOCKING_INVITATION_STATUSES } },
       select: { id: true },
     });
     return invitation !== null;
+  }
+
+  // ─── Trần lời mời của ứng viên (AD-23 mục 7) ──────────────────────────────
+
+  /**
+   * Q1 của plan 0.2 — khoá theo ứng viên tới hết transaction. Mọi đường tạo lời mời
+   * (mời tay, mời hàng loạt, tự động; mọi công ty) gọi hàm này trước khi kiểm lời mời
+   * đang chặn và trần trong ngày, nên hai lượt mời cùng một người chạy lần lượt: không
+   * thể có 2 lời mời cho một cặp ứng viên–tin, cũng không vượt trần khi nhiều công ty
+   * mời cùng lúc. Khoá xact tự nhả khi commit/rollback, chạy được qua pooler của Neon.
+   */
+  async lockCandidate(candidateId: string, tx: Prisma.TransactionClient): Promise<void> {
+    // $executeRaw thay vì $queryRaw: pg_advisory_xact_lock trả kiểu void, Prisma không đọc được.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${candidateId}))`;
+  }
+
+  /** Số lời mời ứng viên đã nhận từ 0h UTC hôm nay, mọi công ty, mọi nguồn, mọi trạng thái. */
+  countReceivedToday(candidateId: string, db: Db = this.prisma, now: Date = new Date()): Promise<number> {
+    return db.candidateOutreachInvitation.count({
+      where: { candidateId, createdAt: { gte: startOfUtcDay(now) } },
+    });
+  }
+
+  /** Như `countReceivedToday` cho nhiều người một lúc. Người chưa nhận lời mời nào không có trong Map. */
+  async countReceivedTodayByCandidate(candidateIds: string[], now: Date = new Date()): Promise<Map<string, number>> {
+    if (candidateIds.length === 0) return new Map();
+    const rows = await this.prisma.candidateOutreachInvitation.groupBy({
+      by: ["candidateId"],
+      where: { candidateId: { in: candidateIds }, createdAt: { gte: startOfUtcDay(now) } },
+      _count: { _all: true },
+    });
+    return new Map(rows.map((row) => [row.candidateId, row._count._all]));
   }
 
   // ─── CRUD lời mời ─────────────────────────────────────────────────────────

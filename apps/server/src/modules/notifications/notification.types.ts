@@ -50,6 +50,9 @@ export interface NotificationPayloadMap {
     candidateName: string | null;
     accepted: boolean;
   };
+  // AD-23 — tự động mời theo tin. Gửi bằng notifyOnce, khoá auto-outreach:<tin>:<ngày>,
+  // nên sentCount là số lời mời của lượt chạy đầu tiên trong ngày.
+  AUTO_OUTREACH_SENT: { jobPostId: string; jobPostTitle: string; sentCount: number };
   // AD-16 — dashboard Employer & Admin, docs/06-backend/dashboard-employer-admin/PLAN.md
   APPLICATION_RECEIVED: {
     applicationId: string;

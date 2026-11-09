@@ -4,7 +4,7 @@ Song song: `docs/05-frontend/phases/auto-outreach/PLAN.md`.
 Quyết định: **AD-23** trong `docs/02-architecture/ARCHITECTURE_DECISIONS.md` (sửa một phần AD-15).
 Nền tảng: `docs/06-backend/candidate-outreach/PLAN.md` (B3, D1–D7, Q1–Q5), `docs/06-backend/outreach-hub/PLAN.md`.
 
-**Trạng thái: ĐÃ LẬP KẾ HOẠCH (2026-11-09), CHỜ DUYỆT. Chưa code.** Q1–Q5 đã chốt 2026-11-09.
+**Trạng thái: ĐÃ DUYỆT (2026-11-09), ĐANG LÀM. Xong bước 0–2; migration đã áp lên Neon.** Q1–Q5 đã chốt 2026-11-09.
 
 ## Mục tiêu
 
@@ -256,7 +256,37 @@ Việc tách worker **không thuộc 0.2**, chỉ ghi kết quả đo và đề 
 
 ## Ghi chú triển khai
 
-(trống)
+**Bước 0 (2026-11-09)**
+
+- Migration `20261109120000_add_auto_outreach`. Phần DDL sinh bằng `prisma migrate diff --from-schema-datamodel <schema ở HEAD> --to-schema-datamodel prisma/schema.prisma`, không cần shadow DB. Thêm tay 3 câu `UPDATE subscription_plans`.
+- Trước khi áp, kiểm chỉ đọc trên Neon: `migrate status` thấy đủ 33 migration cũ, chỉ còn migration mới; `migrate diff --from-schema-datasource` so với schema ở HEAD ra rỗng (không lệch).
+- **Làm sớm phần thông báo của bước 6.** Thêm `AUTO_OUTREACH_SENT` vào enum thì các map `Record<NotificationType, …>` không còn biên dịch được, nên đã thêm luôn: payload `{ jobPostId, jobPostTitle, sentCount }`, nhóm `INVITATIONS`, template (chỉ trong app), `NotificationType` ở `shared-types`, nhóm và nhãn nút ở `apps/web/src/lib/notifications.ts`, và `SocketProvider` làm mới query lời mời khi nhận loại này. Các type khác của bước 6 vẫn để tới bước 6.
+- Không chạy `prisma format`: lệnh này căn lại cả các model không liên quan (Candidate, JobPost). Các trường mới được căn tay.
+- Đã áp lên Neon bằng `npm run db:deploy` (2026-11-09). Đọc lại: ba gói có 8/4, 14/5, 86/6; 333 lời mời cũ đều `MANUAL`; 422 tin đều tắt tự mời.
+
+**Bước 1 (2026-11-09)**
+
+- `candidate-outreach.config.ts`: thêm các hằng số như plan, kèm khối chú thích công thức và bảng số của các gói.
+- `CandidateOutreachRateLimitService`: `getUsedToday` được thay bằng `getUsage` → `{ total, auto }` (một lệnh `MGET`); `recordUsage(companyId, source)` bắt buộc truyền nguồn; khoá tự động là `candidate-outreach-quota:company:<id>:auto:day:<ngày UTC>`.
+- `lookupDailyQuota` chuyển sang `public` (bước 5 cần), trả kiểu `OutreachQuotaPolicy`. Đây là union: gói Dùng thử có `autoAllowed: false` và không có `poolMultiplier`, nên code phải kiểm `autoAllowed` trước khi đọc hệ số.
+- Script dữ liệu demo lớn (`scripts/lib/large-demo/history.ts`) trước đây giới hạn lời mời lịch sử bằng `DEFAULT_OUTREACH_DAILY_QUOTA`, nên đổi 3 → 8 sẽ làm chạy lại script ra bộ dữ liệu khác. Chủ dự án chọn giữ nguyên: thêm `HISTORY_DAILY_INVITATION_CAP = 3` riêng cho script (lịch sử mô phỏng giai đoạn trước 0.2), test của script dùng hằng số này.
+- `content/support-faq/07-quan-ly-ung-vien.md`: sửa số hạn mức (trước ghi "dùng thử: 3 lời mời/ngày").
+- Kiểm: typecheck server qua; 382/382 unit test qua; thử bộ đếm trên Redis thật bằng một company id giả (1 tay + 2 tự động ⇒ `{ total: 3, auto: 2 }`, TTL 2 ngày), rồi xoá key.
+
+**Bước 2 (2026-11-10)**
+
+- `CandidateOutreachService.createInvitation(input)` trả `{ created: true, invitation }` hoặc `{ created: false, reason }` với `reason` ∈ `NOT_FOUND | NOT_OPEN | APPLIED | BLOCKED | CANDIDATE_CAP | QUOTA`. Thứ tự:
+  1. kiểm rẻ ngoài transaction (ứng viên, opt-in, đã ứng tuyển, lời mời đang chặn, trần ứng viên, hạn mức), chạy song song;
+  2. chấm điểm nếu nơi gọi không truyền `match` (không giữ khoá lúc chấm);
+  3. transaction: `lockCandidate` → kiểm lại lời mời đang chặn và trần **dưới khoá** → tạo lời mời có `source` → thông báo;
+  4. `recordUsage(companyId, source)` khi đã tạo.
+- `invite` (mời tay) gọi `createInvitation`, đổi lý do thành lỗi bằng `inviteSkipError`: giữ nguyên mã và câu báo cũ; thêm `CANDIDATE_CAP` ⇒ 409.
+- `assertWithinQuota` được thay bằng hàm thuần `hasDailyRoom(usage, limit, source)` trong `candidate-outreach-rate-limit.service.ts`, vì `createInvitation` không ném lỗi. `limit.auto` là phần tự động (= daily × tỉ lệ %); bỏ trống ⇒ 0.
+- Repository: `lockCandidate` (`pg_advisory_xact_lock(hashtext(candidateId))`, gọi bằng `$executeRaw` vì hàm trả `void`), `countReceivedToday`, `countReceivedTodayByCandidate` (một câu `groupBy`), `startOfUtcDay`; `hasBlockingInvitation` nhận thêm `db` để chạy trong transaction.
+- `CandidateSearchResultDto.cappedToday` (shared-types + mapper). Thêm sớm vào shared-types (plan để ở bước 6) vì DTO cần ngay.
+- Kiểm:
+  - `tests/unit/outreach-create-invitation.test.ts` (17 test): thứ tự khoá/kiểm lại/tạo, từng lý do bỏ qua, kiểm lại dưới khoá, mời tay dùng được phần tự động, `invite` ⇒ 409, `cappedToday`. Cả bộ 399/399 qua.
+  - Thử trên Neon (không ghi dữ liệu): hai transaction khoá cùng một id ⇒ transaction sau chờ đúng tới khi transaction trước xong (~1,5 giây giữ khoá); hai id khác nhau ⇒ không chờ. Hai câu đếm chạy được.
 
 ## Phần 4 — Ghi chú của chủ dự án
 

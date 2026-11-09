@@ -6,7 +6,7 @@
 // đúng khuôn `createMany`. Dùng seed riêng (dẫn từ seed chung) nên đổi phần này không làm xê
 // dịch dữ liệu phần 2a. Chọn tin để nộp / người để mời bằng chính bộ chấm của Job Matcher.
 import type { ApplicationStatus, InterviewMode, NotificationType, OutreachInvitationStatus, Prisma } from "@prisma/client";
-import { DEFAULT_OUTREACH_DAILY_QUOTA, INVITATION_EXPIRY_DAYS } from "../../../src/modules/candidate-outreach/candidate-outreach.config";
+import { INVITATION_EXPIRY_DAYS } from "../../../src/modules/candidate-outreach/candidate-outreach.config";
 import { computeTotalExperienceYears } from "../../../src/modules/job-matching/candidate-experience.util";
 import { HYBRID_WEIGHTS_V2, RULE_WEIGHTS_V1 } from "../../../src/modules/job-matching/job-matching.config";
 import { ScoringJobMatcher } from "../../../src/modules/job-matching/scoring-job-matcher";
@@ -51,6 +51,13 @@ const APPLICATION_COUNT_WEIGHTS = { "0": 6, "1": 11, "2": 17, "3": 20, "4": 18, 
 const SAVED_COUNT_WEIGHTS = { "0": 20, "1": 15, "2": 20, "3": 20, "4": 15, "5": 10 } as const;
 /** Số lời mời mỗi tin từng hiển thị (PLAN: ~300); tin chính luôn 3. */
 const INVITATION_COUNT_WEIGHTS = { "0": 50, "1": 25, "2": 13, "3": 8, "4": 4 } as const;
+/**
+ * Số lời mời tối đa của một công ty trong một ngày (giờ VN) của lịch sử giả lập. Lịch sử
+ * này mô phỏng giai đoạn trước 0.2, khi hạn mức là 3 lời mời/ngày (AD-15). Cố ý không
+ * dùng DEFAULT_OUTREACH_DAILY_QUOTA (AD-23 đổi thành 8) để chạy lại script vẫn ra đúng
+ * bộ dữ liệu đã ghi.
+ */
+export const HISTORY_DAILY_INVITATION_CAP = 3;
 /** Tỉ lệ nộp thêm một tin lệch hẳn hồ sơ (không chung kỹ năng nào). */
 const OFF_TARGET_RATE = 0.1;
 
@@ -531,7 +538,7 @@ export function generateLargeDemoHistory(demo: GeneratedLargeDemo, options: Hist
   const takeQuota = (companyId: string, at: number) => {
     const key = `${companyId}|${vnDayKey(at)}`;
     const used = quotaUsed.get(key) ?? 0;
-    if (used >= DEFAULT_OUTREACH_DAILY_QUOTA) return false;
+    if (used >= HISTORY_DAILY_INVITATION_CAP) return false;
     quotaUsed.set(key, used + 1);
     return true;
   };

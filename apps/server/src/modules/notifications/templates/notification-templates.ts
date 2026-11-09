@@ -264,6 +264,15 @@ const templates: { [T in NotificationType]: Renderer<T> } = {
     };
   },
 
+  // AD-23. Cố ý không gửi email; tối đa 1 thông báo/tin/ngày (notifyOnce). Trang
+  // tìm ứng viên đọc ?tab=invited từ bước frontend F1.
+  AUTO_OUTREACH_SENT: (data) => ({
+    title: `Hệ thống đang tự mời ứng viên cho tin "${data.jobPostTitle}"`,
+    body: `Hôm nay hệ thống đã gửi lời mời cho ${data.sentCount} ứng viên phù hợp. Các lời mời gửi thêm trong ngày cũng hiện ở tab "Đã mời".`,
+    link: `/employer/jobs/${data.jobPostId}/candidate-search?tab=invited`,
+    email: null,
+  }),
+
   // AD-16 — dashboard. Cố ý không gửi email: chỉ hiển thị trong app, nhóm "Hồ sơ" có đánh dấu đã đọc hàng loạt.
   APPLICATION_RECEIVED: (data) => ({
     title: "Có hồ sơ ứng tuyển mới",

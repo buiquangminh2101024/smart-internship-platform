@@ -59,10 +59,13 @@ const paymentMethods: { displayName: string; processorType: "VNPAY" | "MOMO" }[]
   { displayName: "Momo", processorType: "MOMO" },
 ];
 
+// outreachInvitationDailyQuota / outreachPoolMultiplier: AD-23 mục 4,
+// hạn mức/ngày = max(S × C × H / T, C × H) với C = 2, T = 14. DB đã có gói thì
+// migration 20261109120000_add_auto_outreach cập nhật, vì upsert dưới đây không ghi đè.
 const subscriptionPlans = [
-  { name: "Cơ bản", description: "Phù hợp doanh nghiệp mới bắt đầu tuyển dụng", jobPostQuota: 5, durationDays: 30, price: 299000 },
-  { name: "Tiêu chuẩn", description: "Tuyển dụng thường xuyên, nhiều vị trí", jobPostQuota: 20, durationDays: 30, price: 799000 },
-  { name: "Doanh nghiệp", description: "Tuyển dụng quy mô lớn, không giới hạn theo tháng", jobPostQuota: 100, durationDays: 90, price: 1999000 },
+  { name: "Cơ bản", description: "Phù hợp doanh nghiệp mới bắt đầu tuyển dụng", jobPostQuota: 5, durationDays: 30, price: 299000, outreachInvitationDailyQuota: 8, outreachPoolMultiplier: 4 },
+  { name: "Tiêu chuẩn", description: "Tuyển dụng thường xuyên, nhiều vị trí", jobPostQuota: 20, durationDays: 30, price: 799000, outreachInvitationDailyQuota: 14, outreachPoolMultiplier: 5 },
+  { name: "Doanh nghiệp", description: "Tuyển dụng quy mô lớn, không giới hạn theo tháng", jobPostQuota: 100, durationDays: 90, price: 1999000, outreachInvitationDailyQuota: 86, outreachPoolMultiplier: 6 },
 ];
 
 async function seedCatalog<T>(name: string, values: T[], upsert: (value: T) => Promise<unknown>) {

@@ -84,6 +84,7 @@ enum NotificationType {
   SUPPORT_CONTACT_RECEIVED // AD-17 — Admin: có yêu cầu hỗ trợ mới từ trang /support
   ACCOUNT_ACTIVATED // AD-18 — người dùng: Admin kích hoạt thủ công tài khoản chưa xác thực
   PASSWORD_RESET_SUGGESTED // AD-18 — người dùng: Admin gửi hướng dẫn đặt lại mật khẩu (link /forgot-password)
+  AUTO_OUTREACH_SENT // AD-23 — employer: hệ thống đã tự gửi lời mời cho tin (gộp tối đa 1 thông báo/tin/ngày)
 }
 
 // AD-16 M2 — lịch phỏng vấn. "Đã diễn ra" suy ra từ scheduledAt, không lưu COMPLETED.
@@ -103,6 +104,21 @@ enum OutreachInvitationStatus {
   ACCEPTED
   DECLINED
   EXPIRED
+}
+
+// AD-23 — lời mời do nhà tuyển dụng tự bấm (MANUAL) hay do hệ thống tự gửi (AUTO).
+enum OutreachInvitationSource {
+  MANUAL
+  AUTO
+}
+
+// AD-23 — lý do tự động mời tạm dừng vì "hết ứng viên":
+// NO_MATCH = không còn ai đạt ngưỡng (kiểm lại sau vài giờ),
+// CANDIDATE_CAP = còn người đạt ngưỡng nhưng đều đã nhận đủ lời mời trong ngày
+// (kiểm lại sau 0h UTC = 7h sáng giờ Việt Nam).
+enum AutoOutreachExhaustedReason {
+  NO_MATCH
+  CANDIDATE_CAP
 }
 
 enum OutboxStatus {
@@ -526,6 +542,9 @@ model Company {
   // AD-16 D13 — lần nộp/nộp lại hồ sơ xác minh gần nhất; mốc chờ của hàng đợi
   // Admin (updatedAt đổi cả khi đổi logo/banner hay bật/tắt requiresApproval).
   verificationSubmittedAt DateTime?
+  // AD-23 — phần trăm hạn mức lời mời/ngày mà tự động mời được dùng (0–100).
+  // Mời tay dùng được mọi lượt còn lại của tổng hạn mức. Chỉ quản trị viên công ty sửa.
+  outreachAutoSharePercent Int @default(80)
 
   employers            Employer[]
   jobPosts             JobPost[]
@@ -579,6 +598,9 @@ model SubscriptionPlan {
   // AD-15 — null = dùng ngưỡng mặc định trong code (DEFAULT_OUTREACH_DAILY_QUOTA),
   // KHÔNG phải "không giới hạn".
   outreachInvitationDailyQuota Int?
+  // AD-23 — hệ số mời H: mỗi tin bật tự động mời giữ hiringTarget × H lời mời
+  // đang hoạt động. null = dùng DEFAULT_POOL_MULTIPLIER trong code.
+  outreachPoolMultiplier       Int?
 
   companySubscriptions CompanySubscription[]
 
@@ -705,6 +727,16 @@ model JobPost {
   createdAt               DateTime      @default(now())
   updatedAt               DateTime      @updatedAt
 
+  // AD-23 — tự động mời ứng viên theo tin (0.2). Sửa qua API riêng, không qua
+  // updateDraft, nên sửa được ở mọi trạng thái của tin.
+  autoOutreachEnabled         Boolean                      @default(false)
+  autoOutreachMinScore        Int                          @default(80)
+  // Số người cần tuyển; ngừng tự mời khi số đơn ACCEPTED của tin ≥ hiringTarget.
+  hiringTarget                Int                          @default(1)
+  // Dấu "hết ứng viên": null = đang chạy bình thường.
+  autoOutreachExhaustedAt     DateTime?
+  autoOutreachExhaustedReason AutoOutreachExhaustedReason?
+
   moderationActions   JobPostModerationAction[]
   reports             JobReport[]
   applications        Application[]
@@ -828,11 +860,15 @@ model CandidateOutreachInvitation {
   // KHÔNG phải điểm hiện tại. null khi lúc đó không chấm được / status ≠ SCORED.
   matchScore          Int?
   matchWeightsVersion String?
+  // AD-23 — lời mời cũ (trước 0.2) đều là MANUAL.
+  source              OutreachInvitationSource @default(MANUAL)
 
   @@index([candidateId, jobPostId, status])
   @@index([companyId, createdAt])
   // D6 — danh sách "Đã mời" theo từng tin, mới nhất trước.
   @@index([jobPostId, createdAt])
+  // AD-23 — đếm số lời mời ứng viên đã nhận trong ngày (trần 10 lời mời/ngày).
+  @@index([candidateId, createdAt])
   @@map("candidate_outreach_invitations")
 }
 
