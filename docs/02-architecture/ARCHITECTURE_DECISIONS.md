@@ -647,3 +647,70 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 - `apps/web/src/app/jobs/[id]/page.tsx` (thêm nút Báo cáo)
 - `apps/web/src/app/admin/(console)/job-reports/page.tsx` (trang Admin mới)
 - `apps/web/src/components/layout/AdminConsoleShell.tsx` (thêm nav item)
+
+---
+
+## AD-23 — Tự động mời ứng viên theo tin (0.2): chỉ tiêu tuyển, hạn mức tính theo gói, chia lượt giữa các tin (sửa một phần AD-15)
+
+**Ngày:** 2026-11-09 · **Phase liên quan:** không thuộc phase đánh số. Mục 0.2 của `docs/01-project/FEATURE_BACKLOG.md`, theo nhận xét của giáo viên ở buổi demo 05/11/2026. Kế hoạch chi tiết: `docs/06-backend/auto-outreach/PLAN.md`, `docs/05-frontend/phases/auto-outreach/PLAN.md`.
+
+> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-09, chủ dự án duyệt từng câu hỏi), CHƯA TRIỂN KHAI.**
+
+**Bối cảnh:** AD-15 chỉ cho mời tay từng người, hạn mức mặc định 3 lời mời/ngày/công ty và cả ba gói đều để `null`. Giáo viên yêu cầu: đăng tin xong thì hệ thống tự gợi ý và tự gửi lời mời, nhà tuyển dụng không phải vào từng tin để mời từng người.
+
+**Quyết định:**
+
+1. **Hai bước.** (a) Nút "Mời tất cả gợi ý" trên trang tìm ứng viên của một tin, có ở mọi gói kể cả Dùng thử. (b) Tự động mời: hệ thống tự tìm và tự gửi lời mời cho các tin đã bật. Gói Dùng thử **không** có tự động mời (tham khảo: Indeed chỉ cho "mời ứng tuyển" với tin Premium Sponsored).
+2. **Cài đặt theo từng tin, lưu thẳng trên `JobPost`:** `autoOutreachEnabled` (mặc định **tắt**), `autoOutreachMinScore` (ngưỡng điểm, mặc định 80, chủ dự án chọn), `hiringTarget` (số người cần tuyển, mặc định 1). Sửa được ở mọi trạng thái của tin, qua API riêng. Không đi qua `updateDraft`, vì tin đã gửi duyệt hoặc đang hiển thị thì không sửa nội dung được.
+3. **Mỗi tin giữ một số lời mời đang hoạt động:** mục tiêu = `hiringTarget × H` (H là hệ số mời của gói). "Đang hoạt động" là lời mời `PENDING` hoặc `ACCEPTED`. Có người từ chối hoặc lời mời hết hạn thì mời bù cho đủ. Hệ thống **dừng** khi số đơn `ACCEPTED` của tin ≥ `hiringTarget`, hoặc khi tin không còn `PUBLISHED`. Không còn ứng viên nào mời được thì tin được đánh dấu "hết ứng viên" (`autoOutreachExhaustedAt` + lý do). Có hai lý do: `CANDIDATE_CAP` (người phù hợp hôm nay đã nhận đủ lời mời) thì kiểm lại sau mốc đặt lại hằng ngày (7h sáng giờ Việt Nam); `NO_MATCH` (không ai đạt ngưỡng) thì kiểm lại mỗi 3 giờ, vì ứng viên mới hoặc hồ sơ thay đổi có thể đổi kết quả trong ngày. Nhà tuyển dụng hạ ngưỡng hoặc tăng số người cần tuyển thì bỏ dấu ngay.
+4. **Hạn mức/ngày tính theo gói:**
+
+   > hạn mức/ngày = max( S × C × H / T ,  C × H )
+
+   S là số tin của gói, C = 2 là số người cần tuyển trung bình một tin (**giả định**), H là hệ số mời của gói, T = 14 là số ngày hiệu lực của lời mời. Vế trái đủ để giữ đầy lời mời cho mọi tin, theo cách tính sức chứa: tổng số chỗ chia cho thời gian một lời mời chiếm chỗ. Vế phải là mức sàn, đủ để lấp đầy lời mời cho một tin ngay trong ngày đăng.
+
+   | Gói | S | H | Hạn mức/ngày |
+   |---|---|---|---|
+   | Dùng thử | 2 | 3 | 6 (chỉ mời tay) |
+   | Cơ bản | 5 | 4 | 8 |
+   | Tiêu chuẩn | 20 | 5 | 14 |
+   | Doanh nghiệp | 100 | 6 | 86 |
+
+   **Không có nguồn khoa học cho các con số cụ thể.** Đã tìm và không thấy bài báo hay tài liệu chính thức nào cho công thức hạn mức lời mời. Các bài tìm được chỉ ủng hộ việc **phải có giới hạn**: Arnosti, Johari & Kanoria (*Managing Congestion in Matching Markets*, MSOM) và Kanoria & Saban (*Management Science* 2021) về nghẽn thị trường; Coles, Kushnir & Niederle (*AEJ: Micro* 2013) về việc tín hiệu bị giới hạn thì mới đáng tin. H = 5 ở giữa dựa trên số liệu phễu tuyển dụng do các công ty bán công cụ tuyển dụng tự công bố (khoảng 15–20% ứng viên trả lời). H = 3/4/6 là **lựa chọn kinh doanh**, để gói cao giữ nhiều lời mời hơn cho mỗi tin. C, H và T đều là tham số có thể chỉnh.
+5. **Hạn mức dùng chung cho mời tay và tự động, công ty chỉnh tỉ lệ.** Thêm `Company.outreachAutoSharePercent` (0–100, mặc định 80; chỉ quản trị viên công ty được sửa). Tự động chỉ được gửi khi số đã gửi tự động hôm nay < hạn mức × tỉ lệ **và** tổng số đã gửi hôm nay < hạn mức. Mời tay dùng được mọi lượt còn lại của tổng hạn mức. Không tách hai hạn mức, vì công thức ở mục 4 chỉ tính ra một con số; tham khảo LinkedIn Hiring Assistant cũng trừ chung vào hạn mức InMail. Mức 80% là giá trị mặc định do thiết kế, không có nguồn.
+6. **Chia lượt giữa các tin khi không đủ hạn mức:** chia lần lượt, mỗi vòng một lời mời cho mỗi tin còn thiếu. Tin thiếu nhiều nhất **theo tỉ lệ** (thiếu / mục tiêu) đi trước, bằng nhau thì tin sắp hết hạn trước. Trong một tin, mời người điểm cao nhất mà đạt ngưỡng trước.
+7. **Mỗi ứng viên nhận tối đa 10 lời mời/ngày**, tính trên mọi công ty và cả mời tay lẫn tự động. Gặp người đã đủ thì tự động mời bỏ qua, chuyển sang người kế tiếp; mời tay thì trả 409. Lý do: tránh làm phiền và tránh lời mời dồn vào một nhóm nhỏ ứng viên điểm cao (Pizzato và cộng sự về quá tải người nhận; Mashayekhi và cộng sự, *ReCon*, RecSys 2023 về nghẽn trong gợi ý việc làm). Con số 10 do chủ dự án chọn.
+8. **Chạy nền ngay trong process hiện tại, không thêm hạ tầng.** Có ba lối kích hoạt: (a) tin vừa chuyển `PUBLISHED`, gồm tự đăng khi công ty không cần duyệt và Admin duyệt tin; (b) ứng viên từ chối lời mời; (c) cron `node-cron` mỗi 15 phút, quét mọi công ty có tin đang bật tự mời. Cron lo luôn việc mời bù khi lời mời hết hạn, mời ứng viên mới đổ vào, và chạy lại nếu (a)/(b) lỗi. (a) và (b) chạy **sau khi transaction xong**, không chờ kết quả, lỗi chỉ ghi log. Mỗi công ty chỉ có một lượt chạy cùng lúc, nhờ khoá Redis. Bảo vệ tải: lọc phần thiếu bằng một câu SQL gộp trước khi chấm điểm, giới hạn 60 giây mỗi lượt cron, không chạy chồng, nhường lượt cho request web giữa các tin, xoay vòng công ty theo lần chạy gần nhất. Người đã đủ trần trong ngày bị loại ngay ở bước lọc SQL. Tạo lời mời dùng advisory lock của Postgres theo ứng viên để không tạo trùng và không vượt trần khi chạy đồng thời. Có cần tách worker hay không sẽ quyết định theo số đo độ trễ event loop (bước 7 của plan backend); nếu cần thì viết AD riêng.
+9. **Lời mời ghi nguồn gửi:** thêm `CandidateOutreachInvitation.source` (`MANUAL`/`AUTO`). Lời mời tự động đứng tên người đăng tin (`employerId = jobPost.employerId`). Ứng viên nhận lời mời như cũ, không thấy khác biệt.
+10. **Báo cho nhà tuyển dụng gộp theo ngày:** loại thông báo mới `AUTO_OUTREACH_SENT`, gửi qua `notifyOnce` với khoá `auto-outreach:<jobPostId>:<ngày>`. Mỗi tin tối đa một thông báo/ngày, không gửi một thông báo cho mỗi lời mời.
+11. **Chưa có bảng điểm lưu sẵn.** Mỗi lượt chạy chấm lại lúc chạy, như trang tìm ứng viên (lọc SQL ≤ 50 người rồi chấm hybrid). Bảng điểm theo cặp tin–ứng viên để mục 0.3 làm.
+
+**Sửa so với AD-15:** mục 5 (hạn mức mặc định 3 lời mời/ngày, cả ba gói `null`) được thay bằng mục 4–5 ở trên. Mục 4 của AD-15 (không mời lại nếu đã có lời mời `PENDING`) và Q4 (đã `DECLINED` thì không mời lại cùng tin) giữ nguyên, áp dụng cho cả lời mời tự động. Opt-in bắt buộc (AD-15 mục 1) giữ nguyên: chỉ ứng viên tự bật `isOpenToOutreach` mới được mời.
+
+**Phương án không chọn:**
+
+- *Tách hạn mức tự động và mời tay:* cần hai con số cho mỗi gói nhưng con số cho mời tay không có căn cứ, và lượt không dùng ở bên này thì bên kia không dùng được.
+- *Hạn mức tính theo tháng có cộng dồn (như Indeed, LinkedIn):* phải làm lại bộ đếm Redis theo ngày đang có. Không đáng công cho khoá luận.
+- *Hàng đợi việc nền riêng (BullMQ...):* CLAUDE.md không cho thêm hạ tầng khi chưa có lý do. Cron cùng process đủ dùng cho quy mô demo.
+- *Dồn hết hạn mức cho tin thiếu nhiều nhất:* một tin mới đăng sẽ ăn hết lượt trong ngày, các tin chỉ cần mời bù 1–2 người lại không được gì.
+- *Tự động mời bật sẵn cho tin mới:* gửi lời mời thay mặt nhà tuyển dụng nên để họ chủ động bật.
+
+**Ảnh hưởng:**
+
+- `schema.prisma` + 1 migration viết tay:
+  - `JobPost`: `autoOutreachEnabled`, `autoOutreachMinScore`, `hiringTarget`, `autoOutreachExhaustedAt`, `autoOutreachExhaustedReason` (enum mới);
+  - `Company.outreachAutoSharePercent`;
+  - `SubscriptionPlan.outreachPoolMultiplier`;
+  - enum `OutreachInvitationSource` + cột `source`;
+  - `NotificationType.AUTO_OUTREACH_SENT`;
+  - index `(candidateId, createdAt)` trên bảng lời mời;
+  - cập nhật hạn mức và hệ số của ba gói theo tên.
+- `apps/server/src/modules/candidate-outreach/`: thêm service, cron và bộ chia lượt cho tự động mời; sửa bộ đếm hạn mức và `invite`.
+- `job-posts.service.ts`: gọi lối kích hoạt (a) sau khi tin chuyển `PUBLISHED`.
+- `notifications`: thêm 1 khoá template.
+- `main.ts`: khởi động cron mới.
+- `packages/shared-types`: thêm type mới.
+- Frontend:
+  - trang tìm ứng viên của tin: nút "Mời tất cả gợi ý";
+  - trang chi tiết tin: thẻ "Tự động mời ứng viên";
+  - trang "Lời mời": cài đặt tỉ lệ và nhãn "Tự động".
