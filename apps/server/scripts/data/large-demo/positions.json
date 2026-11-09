@@ -1,0 +1,585 @@
+{
+  "levels": [
+    {
+      "key": "nam-3",
+      "label": "Sinh viên năm 3, chưa đi làm (đồ án, câu lạc bộ, tự học)",
+      "studyYear": 3,
+      "experienceYears": [0, 0.5],
+      "birthYears": [2004, 2005],
+      "jobTypes": ["INTERNSHIP", "PART_TIME"]
+    },
+    {
+      "key": "nam-cuoi",
+      "label": "Sinh viên năm cuối, đã thực tập hoặc làm thêm 3–9 tháng",
+      "studyYear": 4,
+      "experienceYears": [0.5, 1],
+      "birthYears": [2003, 2004],
+      "jobTypes": ["INTERNSHIP", "PART_TIME", "FULL_TIME"]
+    },
+    {
+      "key": "moi-tot-nghiep",
+      "label": "Mới tốt nghiệp, đã đi làm 1–2 năm",
+      "studyYear": null,
+      "experienceYears": [1, 2.5],
+      "birthYears": [2001, 2002],
+      "jobTypes": ["FULL_TIME", "CONTRACT", "PART_TIME"]
+    }
+  ],
+  "salaryBands": {
+    "it": {
+      "INTERNSHIP": [3000000, 6000000],
+      "PART_TIME": [4000000, 8000000],
+      "FULL_TIME": [9000000, 18000000],
+      "CONTRACT": [8000000, 15000000]
+    },
+    "office": {
+      "INTERNSHIP": [2000000, 4000000],
+      "PART_TIME": [3000000, 6000000],
+      "FULL_TIME": [7000000, 12000000],
+      "CONTRACT": [6000000, 10000000]
+    },
+    "service": {
+      "INTERNSHIP": [2000000, 3500000],
+      "PART_TIME": [3000000, 5500000],
+      "FULL_TIME": [6500000, 10000000],
+      "CONTRACT": [6000000, 9000000]
+    },
+    "engineering": {
+      "INTERNSHIP": [2500000, 5000000],
+      "PART_TIME": [3500000, 6500000],
+      "FULL_TIME": [8000000, 14000000],
+      "CONTRACT": [7000000, 12000000]
+    }
+  },
+  "softSkills": ["Giao tiếp", "Làm việc nhóm", "Quản lý thời gian", "Thuyết trình", "Tiếng Anh giao tiếp", "Giải quyết vấn đề"],
+  "positions": [
+    {
+      "key": "backend-nodejs",
+      "name": "Lập trình viên Backend Node.js",
+      "domain": "cntt",
+      "industries": ["Công nghệ thông tin", "Thương mại điện tử", "Tài chính - Ngân hàng"],
+      "majors": {
+        "primary": ["Công nghệ thông tin", "Kỹ thuật phần mềm", "Khoa học máy tính", "Công nghệ phần mềm", "Hệ thống thông tin"],
+        "related": ["Kỹ thuật máy tính", "Toán tin", "Khoa học dữ liệu", "Mạng máy tính và truyền thông dữ liệu"]
+      },
+      "skills": {
+        "core": ["Node.js", "Express", "JavaScript", "PostgreSQL", "REST API"],
+        "extra": ["TypeScript", "MongoDB", "Redis", "Docker", "Git", "Mysql", "RabbitMQ", "Linux"]
+      },
+      "salaryBand": "it",
+      "adjacent": ["fullstack-js", "backend-java"]
+    },
+    {
+      "key": "backend-java",
+      "name": "Lập trình viên Backend Java",
+      "domain": "cntt",
+      "industries": ["Công nghệ thông tin", "Tài chính - Ngân hàng", "Thương mại điện tử"],
+      "majors": {
+        "primary": ["Công nghệ thông tin", "Kỹ thuật phần mềm", "Khoa học máy tính", "Công nghệ phần mềm", "Hệ thống thông tin"],
+        "related": ["Kỹ thuật máy tính", "Toán tin", "Hệ thống thông tin quản lý"]
+      },
+      "skills": {
+        "core": ["Java", "Spring Boot", "SQL", "REST API"],
+        "extra": ["Mysql", "PostgreSQL", "Oracle", "Hibernate", "Docker", "Git", "Kafka", "Redis", "Microservices"]
+      },
+      "salaryBand": "it",
+      "adjacent": ["backend-nodejs", "backend-dotnet"]
+    },
+    {
+      "key": "backend-dotnet",
+      "name": "Lập trình viên .NET",
+      "domain": "cntt",
+      "industries": ["Công nghệ thông tin", "Sản xuất", "Tài chính - Ngân hàng"],
+      "majors": {
+        "primary": ["Công nghệ thông tin", "Kỹ thuật phần mềm", "Khoa học máy tính", "Công nghệ phần mềm"],
+        "related": ["Hệ thống thông tin", "Kỹ thuật máy tính", "Hệ thống thông tin quản lý"]
+      },
+      "skills": {
+        "core": ["C#", ".NET", "ASP.NET Core", "MS SQL Server"],
+        "extra": ["Entity Framework", "REST API", "Git", "Angular", "Docker", "Redis", "Azure"]
+      },
+      "salaryBand": "it",
+      "adjacent": ["backend-java"]
+    },
+    {
+      "key": "frontend-react",
+      "name": "Lập trình viên Frontend React",
+      "domain": "cntt",
+      "industries": ["Công nghệ thông tin", "Thương mại điện tử", "Giáo dục"],
+      "majors": {
+        "primary": ["Công nghệ thông tin", "Kỹ thuật phần mềm", "Khoa học máy tính", "Công nghệ phần mềm"],
+        "related": ["Hệ thống thông tin", "Công nghệ đa phương tiện", "Truyền thông đa phương tiện"]
+      },
+      "skills": {
+        "core": ["React", "JavaScript", "HTML", "CSS"],
+        "extra": ["TypeScript", "Next.js", "Redux", "Tailwind CSS", "Git", "REST API", "Figma", "Jest"]
+      },
+      "salaryBand": "it",
+      "adjacent": ["frontend-vue", "fullstack-js", "ui-ux"]
+    },
+    {
+      "key": "frontend-vue",
+      "name": "Lập trình viên Frontend Vue.js / Angular",
+      "domain": "cntt",
+      "industries": ["Công nghệ thông tin", "Thương mại điện tử", "Tài chính - Ngân hàng"],
+      "majors": {
+        "primary": ["Công nghệ thông tin", "Kỹ thuật phần mềm", "Khoa học máy tính", "Công nghệ phần mềm"],
+        "related": ["Hệ thống thông tin", "Công nghệ đa phương tiện", "Kỹ thuật máy tính"]
+      },
+      "skills": {
+        "core": ["Vue.js", "JavaScript", "HTML", "CSS"],
+        "extra": ["TypeScript", "Angular", "Tailwind CSS", "Git", "REST API", "Figma", "Jest"]
+      },
+      "salaryBand": "it",
+      "adjacent": ["frontend-react"]
+    },
+    {
+      "key": "fullstack-js",
+      "name": "Lập trình viên Fullstack JavaScript",
+      "domain": "cntt",
+      "industries": ["Công nghệ thông tin", "Thương mại điện tử", "Giáo dục"],
+      "majors": {
+        "primary": ["Công nghệ thông tin", "Kỹ thuật phần mềm", "Khoa học máy tính", "Công nghệ phần mềm"],
+        "related": ["Hệ thống thông tin", "Kỹ thuật máy tính", "Toán tin"]
+      },
+      "skills": {
+        "core": ["JavaScript", "Node.js", "React", "SQL"],
+        "extra": ["TypeScript", "Next.js", "Express", "PostgreSQL", "MongoDB", "Docker", "Git", "REST API"]
+      },
+      "salaryBand": "it",
+      "adjacent": ["backend-nodejs", "frontend-react"]
+    },
+    {
+      "key": "mobile-app",
+      "name": "Lập trình viên Mobile (Flutter / React Native)",
+      "domain": "cntt",
+      "industries": ["Công nghệ thông tin", "Thương mại điện tử", "Tài chính - Ngân hàng"],
+      "majors": {
+        "primary": ["Công nghệ thông tin", "Kỹ thuật phần mềm", "Khoa học máy tính", "Công nghệ phần mềm"],
+        "related": ["Kỹ thuật máy tính", "Hệ thống thông tin", "Công nghệ đa phương tiện"]
+      },
+      "skills": {
+        "core": ["Flutter", "Dart", "REST API"],
+        "extra": ["Firebase", "React Native", "Kotlin", "Swift", "Git", "JavaScript", "Figma"]
+      },
+      "salaryBand": "it",
+      "adjacent": ["frontend-react"]
+    },
+    {
+      "key": "tester",
+      "name": "Kiểm thử phần mềm (Tester / QA)",
+      "domain": "cntt",
+      "industries": ["Công nghệ thông tin", "Tài chính - Ngân hàng", "Thương mại điện tử"],
+      "majors": {
+        "primary": ["Công nghệ thông tin", "Kỹ thuật phần mềm", "Hệ thống thông tin", "Công nghệ phần mềm"],
+        "related": ["Toán tin", "Hệ thống thông tin quản lý", "Kỹ thuật máy tính"]
+      },
+      "skills": {
+        "core": ["Manual Testing", "Viết test case", "SQL", "Postman"],
+        "extra": ["Selenium", "Jira", "Cypress", "JavaScript", "Python", "Git", "Agile/Scrum"]
+      },
+      "salaryBand": "it",
+      "adjacent": ["business-analyst"]
+    },
+    {
+      "key": "devops",
+      "name": "Kỹ sư DevOps / Cloud",
+      "domain": "cntt",
+      "industries": ["Công nghệ thông tin", "Tài chính - Ngân hàng", "Thương mại điện tử"],
+      "majors": {
+        "primary": ["Công nghệ thông tin", "Mạng máy tính và truyền thông dữ liệu", "Kỹ thuật máy tính", "Khoa học máy tính"],
+        "related": ["An toàn thông tin", "Kỹ thuật phần mềm", "Quản trị mạng và an toàn thông tin"]
+      },
+      "skills": {
+        "core": ["Linux", "Docker", "Git", "CI/CD"],
+        "extra": ["Kubernetes", "AWS", "Nginx", "Terraform", "Bash", "DevOps", "Python", "Go"]
+      },
+      "salaryBand": "it",
+      "adjacent": ["it-support", "backend-nodejs"]
+    },
+    {
+      "key": "data-analyst",
+      "name": "Chuyên viên Phân tích dữ liệu",
+      "domain": "cntt",
+      "industries": ["Công nghệ thông tin", "Thương mại điện tử", "Tài chính - Ngân hàng", "Bán lẻ"],
+      "majors": {
+        "primary": ["Khoa học dữ liệu", "Hệ thống thông tin quản lý", "Thống kê", "Toán ứng dụng", "Phân tích dữ liệu kinh doanh"],
+        "related": ["Công nghệ thông tin", "Kinh tế", "Toán Kinh tế", "Quản trị kinh doanh", "Tài chính - Ngân hàng"]
+      },
+      "skills": {
+        "core": ["SQL", "Excel", "Power BI", "Python"],
+        "extra": ["Pandas", "Tableau", "Thống kê", "Google Analytics", "Looker Studio"]
+      },
+      "salaryBand": "it",
+      "adjacent": ["ai-ml", "business-analyst", "financial-analyst"]
+    },
+    {
+      "key": "ai-ml",
+      "name": "Kỹ sư AI / Machine Learning",
+      "domain": "cntt",
+      "industries": ["Công nghệ thông tin", "Tài chính - Ngân hàng", "Thương mại điện tử"],
+      "majors": {
+        "primary": ["Trí tuệ nhân tạo", "Khoa học dữ liệu", "Khoa học máy tính", "Khoa học dữ liệu và trí tuệ nhân tạo"],
+        "related": ["Toán tin", "Toán ứng dụng", "Công nghệ thông tin", "Kỹ thuật robot và trí tuệ nhân tạo"]
+      },
+      "skills": {
+        "core": ["Python", "Machine Learning", "Pandas", "Thống kê"],
+        "extra": ["Deep Learning", "PyTorch", "TensorFlow", "Scikit-learn", "SQL", "Xử lý ngôn ngữ tự nhiên", "Docker", "Git"]
+      },
+      "salaryBand": "it",
+      "adjacent": ["data-analyst"]
+    },
+    {
+      "key": "business-analyst",
+      "name": "Chuyên viên Phân tích nghiệp vụ (BA)",
+      "domain": "cntt",
+      "industries": ["Công nghệ thông tin", "Tài chính - Ngân hàng", "Thương mại điện tử"],
+      "majors": {
+        "primary": ["Hệ thống thông tin quản lý", "Hệ thống thông tin", "Phân tích kinh doanh", "Công nghệ thông tin"],
+        "related": ["Quản trị kinh doanh", "Thương mại điện tử", "Kinh tế", "Kỹ thuật phần mềm"]
+      },
+      "skills": {
+        "core": ["Phân tích nghiệp vụ", "Viết tài liệu đặc tả", "SQL", "Giao tiếp"],
+        "extra": ["UML", "Figma", "Jira", "Agile/Scrum", "Excel", "Power BI", "Thuyết trình", "Tiếng Anh giao tiếp"]
+      },
+      "salaryBand": "it",
+      "adjacent": ["tester", "data-analyst"]
+    },
+    {
+      "key": "it-support",
+      "name": "Kỹ thuật viên IT Helpdesk / Quản trị mạng",
+      "domain": "cntt",
+      "industries": ["Công nghệ thông tin", "Sản xuất", "Giáo dục", "Bán lẻ"],
+      "majors": {
+        "primary": ["Mạng máy tính và truyền thông dữ liệu", "Quản trị mạng và an toàn thông tin", "An toàn thông tin", "Công nghệ thông tin"],
+        "related": ["Kỹ thuật máy tính", "Kỹ thuật điện tử viễn thông", "Công nghệ kỹ thuật máy tính"]
+      },
+      "skills": {
+        "core": ["IT Helpdesk", "Mạng máy tính", "Windows Server", "Linux"],
+        "extra": ["Active Directory", "Tin học văn phòng", "Bash", "Bảo mật mạng", "Docker", "Tiếng Anh giao tiếp"]
+      },
+      "salaryBand": "office",
+      "adjacent": ["devops"]
+    },
+    {
+      "key": "ui-ux",
+      "name": "UI/UX Designer",
+      "domain": "thiet-ke",
+      "industries": ["Công nghệ thông tin", "Thương mại điện tử", "Thiết kế - Sáng tạo"],
+      "majors": {
+        "primary": ["Thiết kế đồ họa", "Công nghệ đa phương tiện", "Thiết kế công nghiệp và đồ họa", "Thiết kế mỹ thuật số"],
+        "related": ["Công nghệ thông tin", "Truyền thông đa phương tiện", "Đồ họa máy tính", "Kỹ thuật phần mềm"]
+      },
+      "skills": {
+        "core": ["Figma", "UI/UX Design", "Wireframe", "User Research"],
+        "extra": ["Prototyping", "Design System", "Photoshop", "Illustrator", "HTML", "CSS", "Typography"]
+      },
+      "salaryBand": "it",
+      "adjacent": ["graphic-design", "frontend-react"]
+    },
+    {
+      "key": "graphic-design",
+      "name": "Nhân viên Thiết kế đồ hoạ",
+      "domain": "thiet-ke",
+      "industries": ["Thiết kế - Sáng tạo", "Marketing & Truyền thông", "Thương mại điện tử", "Bán lẻ"],
+      "majors": {
+        "primary": ["Thiết kế đồ họa", "Thiết kế đồ họa số", "Đồ họa", "Thiết kế công nghiệp và đồ họa"],
+        "related": ["Truyền thông đa phương tiện", "Công nghệ đa phương tiện", "Marketing", "Thiết kế thời trang"]
+      },
+      "skills": {
+        "core": ["Photoshop", "Illustrator", "Thiết kế nhận diện thương hiệu", "Typography"],
+        "extra": ["Canva", "InDesign", "After Effects", "Premiere Pro", "Figma", "CorelDRAW"]
+      },
+      "salaryBand": "office",
+      "adjacent": ["ui-ux", "content-marketing"]
+    },
+    {
+      "key": "digital-ads",
+      "name": "Chuyên viên Digital Marketing (Quảng cáo)",
+      "domain": "marketing",
+      "industries": ["Marketing & Truyền thông", "Thương mại điện tử", "Bán lẻ", "Giáo dục"],
+      "majors": {
+        "primary": ["Marketing", "Digital Marketing", "Marketing số", "Truyền thông Marketing", "Quản trị marketing"],
+        "related": ["Quản trị kinh doanh", "Thương mại điện tử", "Truyền thông đa phương tiện", "Kinh doanh thương mại"]
+      },
+      "skills": {
+        "core": ["Facebook Ads", "Google Ads", "Google Analytics", "Excel"],
+        "extra": ["TikTok Ads", "Content Marketing", "SEO", "Email Marketing", "Canva", "Copywriting", "Looker Studio"]
+      },
+      "salaryBand": "office",
+      "adjacent": ["content-marketing", "seo", "ecommerce-ops"]
+    },
+    {
+      "key": "content-marketing",
+      "name": "Nhân viên Content Marketing",
+      "domain": "marketing",
+      "industries": ["Marketing & Truyền thông", "Thương mại điện tử", "Giáo dục", "Bán lẻ", "Du lịch - Khách sạn"],
+      "majors": {
+        "primary": ["Marketing", "Truyền thông đa phương tiện", "Báo chí", "Truyền thông Marketing", "Quan hệ công chúng"],
+        "related": ["Ngôn ngữ Anh", "Truyền thông đại chúng", "Quản trị kinh doanh", "Văn hoá học - Văn hóa truyền thông"]
+      },
+      "skills": {
+        "core": ["Content Marketing", "Copywriting", "Quản lý mạng xã hội", "Canva"],
+        "extra": ["SEO", "CapCut", "Photoshop", "Email Marketing", "Facebook Ads", "WordPress", "Tiếng Anh giao tiếp"]
+      },
+      "salaryBand": "office",
+      "adjacent": ["digital-ads", "pr-events", "seo"]
+    },
+    {
+      "key": "seo",
+      "name": "Chuyên viên SEO",
+      "domain": "marketing",
+      "industries": ["Marketing & Truyền thông", "Thương mại điện tử", "Công nghệ thông tin"],
+      "majors": {
+        "primary": ["Marketing", "Marketing số", "Digital Marketing", "Thương mại điện tử"],
+        "related": ["Công nghệ thông tin", "Truyền thông đa phương tiện", "Báo chí", "Hệ thống thông tin quản lý"]
+      },
+      "skills": {
+        "core": ["SEO", "Google Search Console", "Nghiên cứu từ khoá", "WordPress"],
+        "extra": ["Google Analytics", "Ahrefs", "Content Marketing", "Copywriting", "HTML", "Excel", "Looker Studio"]
+      },
+      "salaryBand": "office",
+      "adjacent": ["content-marketing", "digital-ads"]
+    },
+    {
+      "key": "pr-events",
+      "name": "Nhân viên Truyền thông - PR & Sự kiện",
+      "domain": "marketing",
+      "industries": ["Marketing & Truyền thông", "Du lịch - Khách sạn", "Giáo dục", "Bán lẻ"],
+      "majors": {
+        "primary": ["Quan hệ công chúng", "Truyền thông đại chúng", "Báo chí", "Marketing và tổ chức sự kiện", "Quản trị sự kiện"],
+        "related": ["Marketing", "Truyền thông Marketing", "Ngôn ngữ Anh", "Quản trị kinh doanh"]
+      },
+      "skills": {
+        "core": ["Quan hệ báo chí", "Viết thông cáo báo chí", "Tổ chức sự kiện", "Lập kế hoạch truyền thông"],
+        "extra": ["Thuyết trình", "Copywriting", "Quản lý mạng xã hội", "Canva", "Giao tiếp", "Tiếng Anh giao tiếp", "Đàm phán"]
+      },
+      "salaryBand": "office",
+      "adjacent": ["content-marketing"]
+    },
+    {
+      "key": "accountant",
+      "name": "Nhân viên Kế toán",
+      "domain": "tai-chinh",
+      "industries": ["Kế toán - Kiểm toán", "Sản xuất", "Bán lẻ", "Thương mại điện tử", "Tài chính - Ngân hàng"],
+      "majors": {
+        "primary": ["Kế toán", "Kế toán doanh nghiệp", "Kế toán kiểm toán", "Tài chính - Kế toán", "Kế toán tài chính"],
+        "related": ["Kiểm toán", "Tài chính - Ngân hàng", "Quản trị kinh doanh", "Kinh tế"]
+      },
+      "skills": {
+        "core": ["Kế toán tổng hợp", "MISA", "Excel", "Kế toán thuế"],
+        "extra": ["Báo cáo tài chính", "Kế toán công nợ", "Chuẩn mực kế toán Việt Nam (VAS)", "Hoá đơn điện tử", "Fast Accounting", "Tin học văn phòng", "Tiếng Anh giao tiếp"]
+      },
+      "salaryBand": "office",
+      "adjacent": ["auditor", "hr-admin"]
+    },
+    {
+      "key": "auditor",
+      "name": "Trợ lý Kiểm toán",
+      "domain": "tai-chinh",
+      "industries": ["Kế toán - Kiểm toán", "Tài chính - Ngân hàng"],
+      "majors": {
+        "primary": ["Kiểm toán", "Kế toán kiểm toán", "Kế toán", "Kế toán định hướng ACCA"],
+        "related": ["Tài chính - Ngân hàng", "Tài chính doanh nghiệp", "Kinh tế"]
+      },
+      "skills": {
+        "core": ["Kiểm toán báo cáo tài chính", "Excel", "Báo cáo tài chính", "Chuẩn mực kế toán Việt Nam (VAS)"],
+        "extra": ["IFRS", "Kiểm soát nội bộ", "Kế toán tổng hợp", "Phân tích tài chính", "Tiếng Anh giao tiếp", "Làm việc nhóm"]
+      },
+      "salaryBand": "office",
+      "adjacent": ["accountant", "financial-analyst"]
+    },
+    {
+      "key": "financial-analyst",
+      "name": "Chuyên viên Phân tích tài chính",
+      "domain": "tai-chinh",
+      "industries": ["Tài chính - Ngân hàng", "Kế toán - Kiểm toán", "Sản xuất"],
+      "majors": {
+        "primary": ["Tài chính - Ngân hàng", "Phân tích tài chính", "Tài chính doanh nghiệp", "Đầu tư tài chính", "Tài chính"],
+        "related": ["Kinh tế", "Toán tài chính", "Kế toán", "Thống kê kinh tế", "Kinh tế đầu tư"]
+      },
+      "skills": {
+        "core": ["Phân tích tài chính", "Excel", "Báo cáo tài chính", "Mô hình tài chính"],
+        "extra": ["Định giá doanh nghiệp", "Power BI", "SQL", "Thuyết trình", "Tiếng Anh giao tiếp", "Python"]
+      },
+      "salaryBand": "office",
+      "adjacent": ["auditor", "data-analyst"]
+    },
+    {
+      "key": "bank-credit",
+      "name": "Chuyên viên Quan hệ khách hàng - Tín dụng ngân hàng",
+      "domain": "tai-chinh",
+      "industries": ["Tài chính - Ngân hàng"],
+      "majors": {
+        "primary": ["Ngân hàng", "Tài chính - Ngân hàng", "Tài chính", "Quản trị tài chính ngân hàng"],
+        "related": ["Kinh tế", "Kế toán", "Quản trị kinh doanh", "Bảo hiểm"]
+      },
+      "skills": {
+        "core": ["Thẩm định tín dụng", "Tư vấn sản phẩm tài chính", "Giao tiếp", "Excel"],
+        "extra": ["Phân tích tài chính", "Chăm sóc khách hàng", "Đàm phán", "Tin học văn phòng", "Tiếng Anh giao tiếp", "Thuyết trình", "CRM"]
+      },
+      "salaryBand": "office",
+      "adjacent": ["financial-analyst", "sales-b2b"]
+    },
+    {
+      "key": "recruiter",
+      "name": "Nhân viên Tuyển dụng",
+      "domain": "nhan-su",
+      "industries": ["Nhân sự - Tuyển dụng", "Công nghệ thông tin", "Sản xuất", "Bán lẻ"],
+      "majors": {
+        "primary": ["Quản trị nhân lực", "Quản trị nguồn nhân lực", "Kinh tế và quản lý nguồn nhân lực", "Tâm lý học"],
+        "related": ["Quản trị kinh doanh", "Quản trị văn phòng", "Xã hội học", "Luật"]
+      },
+      "skills": {
+        "core": ["Tuyển dụng", "Sàng lọc hồ sơ", "Phỏng vấn ứng viên", "Giao tiếp"],
+        "extra": ["Employer Branding", "Tin học văn phòng", "Luật lao động", "Onboarding nhân viên", "Quản lý thời gian", "Tiếng Anh giao tiếp", "Đàm phán"]
+      },
+      "salaryBand": "office",
+      "adjacent": ["hr-admin"]
+    },
+    {
+      "key": "hr-admin",
+      "name": "Nhân viên Hành chính - Nhân sự (C&B)",
+      "domain": "nhan-su",
+      "industries": ["Nhân sự - Tuyển dụng", "Sản xuất", "Bán lẻ", "Giáo dục"],
+      "majors": {
+        "primary": ["Quản trị nhân lực", "Quản trị nguồn nhân lực", "Quản trị văn phòng", "Kinh tế và quản lý nguồn nhân lực"],
+        "related": ["Luật", "Kế toán", "Quản trị kinh doanh"]
+      },
+      "skills": {
+        "core": ["Tính lương (C&B)", "Bảo hiểm xã hội", "Luật lao động", "Excel"],
+        "extra": ["Quản lý hồ sơ nhân sự", "Tin học văn phòng", "Onboarding nhân viên", "MISA", "Giao tiếp", "Quản lý thời gian"]
+      },
+      "salaryBand": "office",
+      "adjacent": ["recruiter", "accountant"]
+    },
+    {
+      "key": "import-export",
+      "name": "Nhân viên Xuất nhập khẩu",
+      "domain": "logistics",
+      "industries": ["Vận tải - Logistics", "Sản xuất", "Thương mại điện tử"],
+      "majors": {
+        "primary": ["Logistics và quản lý chuỗi cung ứng", "Kinh doanh quốc tế", "Hải quan và Logistics", "Kinh tế ngoại thương", "Kinh tế quốc tế"],
+        "related": ["Ngôn ngữ Anh", "Quản trị kinh doanh", "Kinh tế vận tải biển", "Tiếng Anh thương mại"]
+      },
+      "skills": {
+        "core": ["Chứng từ xuất nhập khẩu", "Khai báo hải quan", "Incoterms", "Tiếng Anh giao tiếp"],
+        "extra": ["Thanh toán quốc tế", "Excel", "Đàm phán", "Tin học văn phòng", "Tiếng Trung", "Quản lý kho"]
+      },
+      "salaryBand": "office",
+      "adjacent": ["supply-chain"]
+    },
+    {
+      "key": "supply-chain",
+      "name": "Nhân viên Mua hàng - Chuỗi cung ứng",
+      "domain": "logistics",
+      "industries": ["Vận tải - Logistics", "Sản xuất", "Bán lẻ", "Thương mại điện tử"],
+      "majors": {
+        "primary": ["Logistics và quản lý chuỗi cung ứng", "Logistics", "Quản lý logistics và chuỗi cung ứng", "Kỹ thuật hệ thống công nghiệp"],
+        "related": ["Quản trị kinh doanh", "Kinh doanh quốc tế", "Kinh tế", "Quản lý công nghiệp"]
+      },
+      "skills": {
+        "core": ["Mua hàng", "Quản lý nhà cung cấp", "Excel", "Đàm phán"],
+        "extra": ["Quản lý kho", "ERP", "Incoterms", "Tiếng Anh giao tiếp", "Power BI", "Tin học văn phòng"]
+      },
+      "salaryBand": "office",
+      "adjacent": ["import-export"]
+    },
+    {
+      "key": "sales-b2b",
+      "name": "Nhân viên Kinh doanh (Sales B2B)",
+      "domain": "kinh-doanh",
+      "industries": ["Công nghệ thông tin", "Sản xuất", "Vận tải - Logistics", "Tài chính - Ngân hàng", "Bán lẻ"],
+      "majors": {
+        "primary": ["Quản trị kinh doanh", "Kinh doanh thương mại", "Marketing", "Kinh doanh quốc tế"],
+        "related": ["Kinh tế", "Thương mại điện tử", "Ngôn ngữ Anh", "Quản trị kinh doanh thương mại"]
+      },
+      "skills": {
+        "core": ["Tư vấn bán hàng", "Đàm phán", "Giao tiếp", "CRM"],
+        "extra": ["Telesales", "Thuyết trình", "Chăm sóc khách hàng", "Excel", "Tiếng Anh giao tiếp", "Quản lý thời gian"]
+      },
+      "salaryBand": "service",
+      "adjacent": ["customer-service", "bank-credit"]
+    },
+    {
+      "key": "ecommerce-ops",
+      "name": "Nhân viên Vận hành sàn Thương mại điện tử",
+      "domain": "kinh-doanh",
+      "industries": ["Thương mại điện tử", "Bán lẻ"],
+      "majors": {
+        "primary": ["Thương mại điện tử", "Kinh doanh số", "Marketing", "Quản trị kinh doanh"],
+        "related": ["Marketing số", "Logistics và quản lý chuỗi cung ứng", "Hệ thống thông tin quản lý", "Kinh doanh thương mại"]
+      },
+      "skills": {
+        "core": ["Vận hành sàn TMĐT", "Quản lý đơn hàng", "Excel", "Canva"],
+        "extra": ["Livestream bán hàng", "TikTok Ads", "Facebook Ads", "Chăm sóc khách hàng", "Content Marketing", "Google Analytics", "Quản lý kho"]
+      },
+      "salaryBand": "office",
+      "adjacent": ["digital-ads", "customer-service"]
+    },
+    {
+      "key": "customer-service",
+      "name": "Nhân viên Chăm sóc khách hàng",
+      "domain": "kinh-doanh",
+      "industries": ["Thương mại điện tử", "Bán lẻ", "Tài chính - Ngân hàng", "Công nghệ thông tin", "Giáo dục"],
+      "majors": {
+        "primary": ["Quản trị kinh doanh", "Marketing", "Ngôn ngữ Anh", "Quản trị văn phòng"],
+        "related": ["Thương mại điện tử", "Tâm lý học", "Quản trị dịch vụ du lịch và lữ hành"]
+      },
+      "skills": {
+        "core": ["Chăm sóc khách hàng", "Giao tiếp", "Xử lý khiếu nại", "Tin học văn phòng"],
+        "extra": ["CRM", "Telesales", "Tiếng Anh giao tiếp", "Quản lý thời gian", "Tư vấn bán hàng", "Làm việc nhóm"]
+      },
+      "salaryBand": "service",
+      "adjacent": ["sales-b2b", "ecommerce-ops"]
+    },
+    {
+      "key": "hospitality",
+      "name": "Nhân viên Lễ tân khách sạn - Điều hành tour",
+      "domain": "du-lich",
+      "industries": ["Du lịch - Khách sạn"],
+      "majors": {
+        "primary": ["Quản trị khách sạn", "Quản trị du lịch và khách sạn", "Quản trị dịch vụ du lịch và lữ hành", "Du lịch", "Quản trị Khách sạn - Nhà hàng"],
+        "related": ["Ngôn ngữ Anh", "Ngôn ngữ Hàn Quốc", "Ngôn ngữ Trung Quốc", "Quản trị kinh doanh"]
+      },
+      "skills": {
+        "core": ["Lễ tân khách sạn", "Tiếng Anh giao tiếp", "Chăm sóc khách hàng", "Opera PMS"],
+        "extra": ["Điều hành tour", "Tiếng Trung", "Tiếng Hàn", "Tiếng Nhật", "Xử lý khiếu nại", "Tin học văn phòng"]
+      },
+      "salaryBand": "service",
+      "adjacent": ["customer-service"]
+    },
+    {
+      "key": "english-ta",
+      "name": "Trợ giảng tiếng Anh",
+      "domain": "giao-duc",
+      "industries": ["Giáo dục"],
+      "majors": {
+        "primary": ["Sư phạm Tiếng Anh", "Ngôn ngữ Anh", "Ngôn ngữ Anh Chất lượng cao", "Tiếng Anh thương mại"],
+        "related": ["Giáo dục Tiểu học - SP Tiếng Anh", "Quản lý giáo dục", "Giáo dục học"]
+      },
+      "skills": {
+        "core": ["Giảng dạy tiếng Anh", "IELTS", "Soạn giáo án", "Quản lý lớp học"],
+        "extra": ["Thuyết trình", "Canva", "Tin học văn phòng", "TOEIC", "Giao tiếp"]
+      },
+      "salaryBand": "service",
+      "adjacent": ["customer-service"]
+    },
+    {
+      "key": "automation-engineer",
+      "name": "Kỹ sư Tự động hoá - Bảo trì",
+      "domain": "ky-thuat",
+      "industries": ["Sản xuất"],
+      "majors": {
+        "primary": ["Kỹ thuật điều khiển và tự động hóa", "Công nghệ kỹ thuật điều khiển và tự động hóa", "Kỹ thuật cơ điện tử", "Kỹ thuật điện, điện tử"],
+        "related": ["Kỹ thuật cơ khí", "Công nghệ kỹ thuật cơ khí", "Kỹ thuật công nghiệp", "Công nghệ kỹ thuật điện tử - viễn thông"]
+      },
+      "skills": {
+        "core": ["PLC", "AutoCAD", "Đọc bản vẽ kỹ thuật", "Điện công nghiệp"],
+        "extra": ["SCADA", "SolidWorks", "Bảo trì thiết bị", "Lean / 5S", "Tiếng Anh giao tiếp", "Excel", "C++"]
+      },
+      "salaryBand": "engineering",
+      "adjacent": ["it-support"]
+    }
+  ]
+}

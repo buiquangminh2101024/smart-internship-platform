@@ -1,0 +1,56 @@
+{
+  "familyNames": [
+    { "name": "Nguyễn", "weight": 380 },
+    { "name": "Trần", "weight": 110 },
+    { "name": "Lê", "weight": 95 },
+    { "name": "Phạm", "weight": 70 },
+    { "name": "Hoàng", "weight": 50 },
+    { "name": "Phan", "weight": 45 },
+    { "name": "Vũ", "weight": 39 },
+    { "name": "Huỳnh", "weight": 25 },
+    { "name": "Võ", "weight": 25 },
+    { "name": "Đặng", "weight": 21 },
+    { "name": "Bùi", "weight": 20 },
+    { "name": "Đỗ", "weight": 14 },
+    { "name": "Hồ", "weight": 13 },
+    { "name": "Ngô", "weight": 13 },
+    { "name": "Dương", "weight": 10 },
+    { "name": "Đinh", "weight": 10 },
+    { "name": "Trương", "weight": 10 },
+    { "name": "Đoàn", "weight": 8 },
+    { "name": "Trịnh", "weight": 5 },
+    { "name": "Lý", "weight": 5 },
+    { "name": "Lâm", "weight": 5 },
+    { "name": "Mai", "weight": 5 },
+    { "name": "Hà", "weight": 5 },
+    { "name": "Cao", "weight": 4 },
+    { "name": "Lương", "weight": 4 },
+    { "name": "Châu", "weight": 3 },
+    { "name": "Tạ", "weight": 3 },
+    { "name": "Tô", "weight": 2 },
+    { "name": "Kiều", "weight": 2 },
+    { "name": "Quách", "weight": 1 }
+  ],
+  "middleNames": {
+    "MALE": ["Văn", "Đức", "Minh", "Quang", "Hoàng", "Thành", "Hữu", "Công", "Anh", "Trung", "Gia", "Tuấn", "Đình", "Quốc", "Xuân", "Thanh", "Nhật", "Bảo"],
+    "FEMALE": ["Thị", "Ngọc", "Thu", "Thanh", "Minh", "Phương", "Khánh", "Bảo", "Hồng", "Mai", "Thùy", "Diệu", "Kim", "Hoài", "Như", "Quỳnh", "Hải", "Ánh"]
+  },
+  "givenNames": {
+    "MALE": [
+      "An", "Anh", "Bảo", "Bình", "Cường", "Danh", "Dũng", "Duy", "Dương", "Đạt",
+      "Đông", "Đức", "Giang", "Hải", "Hào", "Hiếu", "Hiển", "Hoàng", "Huy", "Hùng",
+      "Hưng", "Khang", "Khánh", "Khoa", "Khôi", "Kiên", "Kiệt", "Lâm", "Long", "Lộc",
+      "Luân", "Mạnh", "Minh", "Nam", "Nghĩa", "Nhân", "Phát", "Phong", "Phúc", "Quân",
+      "Quang", "Sơn", "Tài", "Tâm", "Thái", "Thắng", "Thành", "Thịnh", "Thuận", "Tiến",
+      "Toàn", "Trí", "Trọng", "Trung", "Tú", "Tuấn", "Tùng", "Vinh", "Việt", "Vũ"
+    ],
+    "FEMALE": [
+      "An", "Anh", "Ánh", "Bích", "Châu", "Chi", "Diệp", "Dung", "Duyên", "Giang",
+      "Hà", "Hân", "Hằng", "Hạnh", "Hậu", "Hiền", "Hoa", "Huyền", "Hương", "Khánh",
+      "Kiều", "Lan", "Liên", "Linh", "Loan", "Ly", "Mai", "My", "Nga", "Ngân",
+      "Ngọc", "Nhàn", "Nhi", "Nhung", "Oanh", "Phương", "Quyên", "Quỳnh", "Tâm", "Thảo",
+      "Thơ", "Thu", "Thủy", "Thư", "Trang", "Trâm", "Trinh", "Tú", "Uyên", "Vân",
+      "Vy", "Xuân", "Yến", "Hồng", "Diệu", "Như", "Thanh", "Khuê", "Lam", "Mỹ"
+    ]
+  }
+}

@@ -21,6 +21,8 @@
     "seed-dashboard-demo": "dotenv -e ../../.env -- tsx scripts/seed-dashboard-demo.ts",
     "seed-activity-demo": "dotenv -e ../../.env -- tsx scripts/seed-activity-demo.ts",
     "merge-duplicate-skills": "dotenv -e ../../.env -- tsx scripts/merge-duplicate-skills.ts",
+    "check-large-demo-library": "dotenv -e ../../.env -- tsx scripts/check-large-demo-library.ts",
+    "seed-large-demo": "dotenv -e ../../.env -- tsx scripts/seed-large-demo.ts",
     "eval-job-matching": "dotenv -e ../../.env -- tsx scripts/eval-job-matching.ts",
     "support-chat:index": "dotenv -e ../../.env -- tsx scripts/support-chat-index.ts",
     "support-chat:eval": "dotenv -e ../../.env -- tsx scripts/support-chat-eval.ts",
