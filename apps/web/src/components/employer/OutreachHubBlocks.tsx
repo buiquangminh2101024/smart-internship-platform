@@ -1,6 +1,14 @@
 import Link from "next/link";
+import { type FormEvent, useState } from "react";
 import type { EmployerOutreachSummary, OutreachInvitationStatus, OutreachJobSummary } from "@sip/shared-types";
-import { type CompanyInvitationFilter, useCompanyOutreachInvitations } from "@/hooks/useCandidateOutreach";
+import {
+  type CompanyInvitationFilter,
+  useCompanyOutreachInvitations,
+  useCompanyOutreachSettings,
+  useUpdateCompanyOutreachSettings,
+} from "@/hooks/useCandidateOutreach";
+import { useEmployerMe } from "@/hooks/useEmployerMe";
+import { ApiError } from "@/lib/api-client";
 import { formatNumber } from "@/lib/dashboard-format";
 import { formatDeadline, JOB_STATUS_LABEL } from "@/lib/job-post-display";
 import { Select } from "@/components/ui/Select";
@@ -43,7 +51,25 @@ export function OutreachStats({ summary }: { summary: EmployerOutreachSummary })
           value={formatNumber(quota.remainingToday)}
           unit={`/ ${formatNumber(quota.dailyQuota)} lời mời`}
           hint={quota.mode === "TRIAL" ? "Đang dùng thử, đặt lại lúc 07:00 mỗi ngày" : "Đặt lại lúc 07:00 mỗi ngày"}
-          footer={<QuotaBar used={quota.usedToday} total={quota.dailyQuota} />}
+          footer={
+            <QuotaBar
+              used={quota.usedToday}
+              total={quota.dailyQuota}
+              // AD-23 — phần hệ thống tự mời đã dùng trong hạn mức của công ty.
+              {...(quota.autoAllowed
+                ? {
+                    extra: {
+                      label: (
+                        <>
+                          Tự động: <Num value={quota.autoUsedToday} />/<Num value={quota.autoLimitToday} /> · Tổng:{" "}
+                          <Num value={quota.usedToday} />/<Num value={quota.dailyQuota} /> hôm nay
+                        </>
+                      ),
+                    },
+                  }
+                : {})}
+            />
+          }
         />
       )}
 
@@ -72,6 +98,150 @@ export function OutreachStats({ summary }: { summary: EmployerOutreachSummary })
         }
       />
     </section>
+  );
+}
+
+// ─── Tỉ lệ hạn mức dành cho tự động mời (AD-23 mục 5) ──────────────────────
+
+const AUTO_SHARE_TITLE_ID = "outreach-auto-share-title";
+const AUTO_SHARE_INPUT_ID = "outreach-auto-share";
+
+/** Số nguyên 0–100, khớp `updateCompanyOutreachSettingsSchema` của backend; sai thì null. */
+function parseSharePercent(value: string): number | null {
+  if (!/^\d{1,3}$/.test(value.trim())) return null;
+  const percent = Number(value.trim());
+  return percent <= 100 ? percent : null;
+}
+
+/**
+ * Chỉ hiện khi gói có tự động mời (không hiện ở gói Dùng thử). Quản trị viên công ty sửa
+ * được, người khác chỉ xem. Số lượt tính như backend: `floor(hạn mức × tỉ lệ / 100)`.
+ */
+export function AutoShareSettingsPanel({ dailyQuota }: { dailyQuota: number }) {
+  const settings = useCompanyOutreachSettings(true);
+  const update = useUpdateCompanyOutreachSettings();
+  const { data: me } = useEmployerMe();
+  const isAdmin = me?.employer?.isCompanyAdmin ?? false;
+  const [draft, setDraft] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  const head = (
+    <PanelHead
+      as="h2"
+      id={AUTO_SHARE_TITLE_ID}
+      title="Tự động mời"
+      subtitle="Phần hạn mức mỗi ngày hệ thống được dùng để tự mời ứng viên cho các tin bật tự động mời."
+    />
+  );
+
+  if (settings.isPending) {
+    return (
+      <Panel labelledBy={AUTO_SHARE_TITLE_ID}>
+        {head}
+        <BlockSkeleton height={96} />
+      </Panel>
+    );
+  }
+  if (settings.isError) {
+    return (
+      <Panel labelledBy={AUTO_SHARE_TITLE_ID}>
+        {head}
+        <BlockError what="cài đặt tự động mời" onRetry={() => void settings.refetch()} retrying={settings.isFetching} />
+      </Panel>
+    );
+  }
+
+  const current = settings.data.autoSharePercent;
+  const input = draft ?? String(current);
+  const percent = parseSharePercent(input);
+  const shown = percent ?? current;
+  const autoLimit = Math.floor((dailyQuota * shown) / 100);
+  const manualLeft = dailyQuota - autoLimit;
+  const error = percent === null ? "Nhập số nguyên từ 0 đến 100." : undefined;
+  const changed = percent !== null && percent !== current;
+
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    if (percent === null || !changed) return;
+    update.mutate(
+      { autoSharePercent: percent },
+      {
+        onSuccess: () => {
+          setDraft(null);
+          setSaved(true);
+        },
+      },
+    );
+  }
+
+  return (
+    <Panel labelledBy={AUTO_SHARE_TITLE_ID}>
+      {head}
+      {isAdmin ? (
+        <form onSubmit={submit} className="grid gap-2" noValidate>
+          <div className="flex flex-wrap items-center gap-2 text-text-body">
+            <label htmlFor={AUTO_SHARE_INPUT_ID}>Tự động mời được dùng tối đa</label>
+            <input
+              id={AUTO_SHARE_INPUT_ID}
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={100}
+              step={1}
+              value={input}
+              aria-invalid={error ? true : undefined}
+              aria-describedby={`${AUTO_SHARE_INPUT_ID}-calc`}
+              onChange={(event) => {
+                setDraft(event.target.value);
+                setSaved(false);
+                update.reset();
+              }}
+              className={[
+                "h-9 w-24 rounded-lg border bg-white px-3 text-right font-num tabular-nums outline-none transition-colors",
+                "focus:border-brand-500 focus:ring-2 focus:ring-brand-100",
+                error ? "border-red-400" : "border-border-default",
+              ].join(" ")}
+            />
+            <span>% hạn mức mỗi ngày</span>
+          </div>
+          {error ? <p className="text-red-600">{error}</p> : null}
+          <p id={`${AUTO_SHARE_INPUT_ID}-calc`} className="text-text-body">
+            → <Num value={autoLimit} /> / <Num value={dailyQuota} /> lời mời. Còn ít nhất <Num value={manualLeft} /> lượt
+            để bạn tự mời.
+          </p>
+          {shown === 100 ? (
+            <p className="rounded-lg border-l-[3px] border-marigold-500 bg-marigold-100 px-3 py-2 text-marigold-800" role="status">
+              Tự động có thể dùng hết lượt, bạn sẽ không mời tay được trong ngày.
+            </p>
+          ) : null}
+          <p className="text-text-muted">
+            Đề xuất: 80%. Hệ thống tự mời phần lớn, bạn vẫn còn lượt để mời thêm người mình chọn.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <DashButton type="submit" size="sm" disabled={!changed} loading={update.isPending}>
+              Lưu tỉ lệ
+            </DashButton>
+            {update.isError ? (
+              <p className="text-red-600" role="alert">
+                {update.error instanceof ApiError ? update.error.message : "Không lưu được tỉ lệ, vui lòng thử lại."}
+              </p>
+            ) : saved ? (
+              <p className="text-success-700" role="status">
+                Đã lưu tỉ lệ {current}%.
+              </p>
+            ) : null}
+          </div>
+        </form>
+      ) : (
+        <div className="grid gap-1 text-text-body">
+          <p>
+            Tự động mời được dùng tối đa <Num value={current} />% hạn mức mỗi ngày → <Num value={autoLimit} /> /{" "}
+            <Num value={dailyQuota} /> lời mời.
+          </p>
+          <p className="text-text-muted">Chỉ quản trị viên công ty đổi được tỉ lệ này.</p>
+        </div>
+      )}
+    </Panel>
   );
 }
 

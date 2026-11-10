@@ -14,6 +14,14 @@ import { Icon } from "@/components/ui/Icon";
 
 const SKILL_PREVIEW = 6;
 
+/**
+ * Trần lời mời/ngày của ứng viên đặt lại lúc 0h UTC = 7h sáng giờ Việt Nam (AD-23).
+ * Từ 0h đến trước 7h giờ Việt Nam (17h–24h UTC) thì lượt mới có ngay sáng nay.
+ */
+export function cappedUntilLabel(now: Date = new Date()): string {
+  return now.getUTCHours() >= 17 ? "7h sáng nay" : "7h sáng mai";
+}
+
 export function outreachCandidateName(candidate: Pick<OutreachCandidateCardDto, "fullName">): string {
   return candidate.fullName?.trim() || "Ứng viên chưa đặt tên";
 }
@@ -86,11 +94,24 @@ export function CandidateSearchCard({
           >
             Xem hồ sơ
           </Button>
-          <Button type="button" size="sm" icon="send" disabled={disabled} onClick={() => onInvite(candidate)}>
+          <Button
+            type="button"
+            size="sm"
+            icon="send"
+            disabled={disabled || candidate.cappedToday}
+            onClick={() => onInvite(candidate)}
+          >
             Gửi lời mời
           </Button>
         </div>
       </div>
+
+      {candidate.cappedToday ? (
+        <p className="flex items-start gap-1.5 text-[13px] text-text-muted">
+          <Icon name="clock" size={14} className="mt-0.5 shrink-0" />
+          Đã nhận đủ lời mời hôm nay, mời lại được từ {cappedUntilLabel()}.
+        </p>
+      ) : null}
 
       <div className="grid gap-2">
         <div className="flex flex-wrap items-center gap-2 text-sm text-text-muted">

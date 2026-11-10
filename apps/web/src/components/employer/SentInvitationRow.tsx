@@ -57,6 +57,8 @@ export function SentInvitationRow({ invitation, jobPost, sentByMe = false }: Sen
       <div className="grid justify-items-start gap-1.5 text-sm sm:justify-items-end">
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone={status.tone}>{status.label}</Badge>
+          {/* AD-23 mục 9 — lời mời hệ thống tự gửi theo cài đặt của tin. */}
+          {invitation.source === "AUTO" ? <Badge tone="neutral">Tự động</Badge> : null}
           {invitation.status === "PENDING" ? (
             <span className="text-xs text-text-muted">{pendingExpiry(invitation.expiresAt)}</span>
           ) : null}

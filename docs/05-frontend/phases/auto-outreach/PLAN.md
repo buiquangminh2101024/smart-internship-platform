@@ -3,7 +3,7 @@
 Song song: `docs/06-backend/auto-outreach/PLAN.md` (API, câu hỏi Q1–Q5).
 Quyết định: **AD-23**. Quy ước giao diện: `.claude/skills/sip-ui/SKILL.md`. Bắt buộc đọc skill này trước khi code.
 
-**Trạng thái: ĐÃ LẬP KẾ HOẠCH (2026-11-09), CHỜ DUYỆT. Chưa code.** Làm sau khi backend xong bước tương ứng.
+**Trạng thái: ĐÃ DUYỆT (2026-11-10), ĐANG LÀM ĐỢT A (F1 + F4).** Backend xong 2026-11-10.
 
 ## Phần 1 — Công nghệ / package / kiến trúc
 
@@ -23,6 +23,13 @@ Quyết định: **AD-23**. Quy ước giao diện: `.claude/skills/sip-ui/SKILL
 Bấm mời hàng loạt hoặc lưu cài đặt xong thì làm mới các query: tìm ứng viên của tin, "Đã mời" của tin, summary của trang "Lời mời", cài đặt tự mời của tin.
 
 ## Phần 3 — Các bước thực hiện
+
+Các bước F1–F4 giữ nguyên bên dưới. Chủ dự án chọn làm theo hai đợt (2026-11-10), mỗi đợt kiểm trên trình duyệt phần của nó ngay sau khi code:
+
+| Đợt | Bước | Kiểm (mục của F5) | Lý do gộp |
+|---|---|---|---|
+| A | F1 + F4 | 1, 5 | Cùng là danh sách lời mời và hạn mức: nhãn "Tự động", số lượt tự động, các query cần làm mới sau khi mời |
+| B | F2 + F3 | 2, 3, 4, 6 | Cùng API `GET`/`PATCH …/auto-outreach`, cùng hook và cách kiểm số người cần tuyển 1–100, ngưỡng 0–100 |
 
 ### Bước F1 — Nút "Mời tất cả gợi ý" (`candidate-search`)
 

@@ -1,10 +1,12 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import { useParams } from "next/navigation";
-import type { CandidateSearchResultDto } from "@sip/shared-types";
+import { Suspense, useCallback, useState } from "react";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
+import type { BulkInviteResponse, CandidateSearchResultDto, OutreachInviteSkipReason } from "@sip/shared-types";
 import {
+  useBulkInviteOutreach,
   useCandidateSearch,
+  useOutreachSummary,
   useSendOutreachInvitation,
   useSentOutreachInvitations,
 } from "@/hooks/useCandidateOutreach";
@@ -22,6 +24,32 @@ import { ToastViewport, type ToastData } from "@/components/ui/Toast";
 // (quyết định 1, 6, 7). "Gợi ý" không tự tìm lại (hybrid, tốn) — chỉ khi bấm "Tìm lại".
 
 type Tab = "suggested" | "invited";
+
+// AD-23 — tab nằm trên URL (?tab=invited) để link trong thông báo AUTO_OUTREACH_SENT mở thẳng "Đã mời".
+function parseTab(value: string | null): Tab {
+  return value === "invited" ? "invited" : "suggested";
+}
+
+const SKIP_REASON_LABEL: Record<OutreachInviteSkipReason, string> = {
+  QUOTA: "hết lượt mời hôm nay",
+  CANDIDATE_CAP: "đã nhận đủ lời mời hôm nay",
+  APPLIED: "đã ứng tuyển tin này",
+  BLOCKED: "đã có lời mời cho tin này",
+  NOT_OPEN: "đã tắt cho phép nhà tuyển dụng mời",
+  NOT_FOUND: "không còn hồ sơ",
+};
+
+/** "Đã mời 8 người. Bỏ qua 2 người: 1 hết lượt mời hôm nay, 1 đã ứng tuyển tin này." */
+function bulkInviteSummary(result: BulkInviteResponse): string {
+  const invited = result.invited.length;
+  const head = invited > 0 ? `Đã mời ${invited} người.` : "Chưa mời được ai.";
+  if (result.skipped.length === 0) return `${head} Xem tiến trình ở tab "Đã mời".`;
+
+  const counts = new Map<OutreachInviteSkipReason, number>();
+  for (const item of result.skipped) counts.set(item.reason, (counts.get(item.reason) ?? 0) + 1);
+  const reasons = [...counts.entries()].map(([reason, count]) => `${count} ${SKIP_REASON_LABEL[reason]}`).join(", ");
+  return `${head} Bỏ qua ${result.skipped.length} người: ${reasons}.`;
+}
 
 // ─── Toast helper (cùng khuôn SavedJobsClient) ─────────────────────────────
 
@@ -84,11 +112,30 @@ function SearchBlockedCard({ error }: { error: unknown }) {
 }
 
 export default function EmployerCandidateSearchPage() {
+  // useSearchParams() cần Suspense boundary khi Next prerender route.
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto grid w-full max-w-4xl gap-5 px-6 py-12">
+          <ListSkeleton />
+        </div>
+      }
+    >
+      <CandidateSearchContent />
+    </Suspense>
+  );
+}
+
+function CandidateSearchContent() {
   const params = useParams();
   const jobId = params.id as string;
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
 
-  const [tab, setTab] = useState<Tab>("suggested");
+  const tab = parseTab(searchParams.get("tab"));
   const [inviting, setInviting] = useState<CandidateSearchResultDto | null>(null);
+  const [confirmingBulk, setConfirmingBulk] = useState(false);
   const [invitedCount, setInvitedCount] = useState(0);
   const { toasts, push, dismiss } = useToast();
 
@@ -96,6 +143,47 @@ export default function EmployerCandidateSearchPage() {
   const search = useCandidateSearch(jobId);
   const sent = useSentOutreachInvitations(jobId);
   const sendInvitation = useSendOutreachInvitation(jobId);
+  const bulkInvite = useBulkInviteOutreach(jobId);
+  const summary = useOutreachSummary();
+
+  // "Mời tất cả" chỉ gửi người chưa đủ trần lời mời hôm nay, theo thứ tự điểm đang hiện.
+  const invitable = search.data?.filter((candidate) => !candidate.cappedToday) ?? [];
+  const quota = summary.data?.quota;
+  const remaining = quota && quota.mode !== "BLOCKED" ? quota.remainingToday : null;
+  const busy = sendInvitation.isPending || bulkInvite.isPending;
+
+  function setTab(next: Tab) {
+    const query = new URLSearchParams(searchParams.toString());
+    if (next === "invited") query.set("tab", "invited");
+    else query.delete("tab");
+    const qs = query.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }
+
+  function confirmBulkInvite() {
+    const ids = invitable.map((candidate) => candidate.candidateId);
+    bulkInvite.mutate(ids, {
+      onSuccess: (result) => {
+        setConfirmingBulk(false);
+        setInvitedCount((count) => count + result.invited.length);
+        push(result.invited.length > 0 ? "success" : "danger", bulkInviteSummary(result));
+        if (result.invited.length > 0) setTab("invited");
+      },
+      onError: (cause) => {
+        setConfirmingBulk(false);
+        push("danger", cause instanceof ApiError ? cause.message : "Không gửi được lời mời, vui lòng thử lại.");
+      },
+    });
+  }
+
+  function bulkMessage(): string {
+    const n = invitable.length;
+    if (remaining === null) return "Ứng viên sẽ nhận thông báo kèm tên công ty và tin này. Mỗi lời mời có hiệu lực 14 ngày.";
+    const parts = [`Hôm nay công ty còn ${remaining} lượt mời.`];
+    if (n > remaining) parts.push(`Chỉ ${remaining} người điểm cao nhất được mời.`);
+    parts.push("Mỗi lời mời có hiệu lực 14 ngày.");
+    return parts.join(" ");
+  }
 
   function confirmInvite() {
     if (!inviting) return;
@@ -159,18 +247,38 @@ export default function EmployerCandidateSearchPage() {
           ))}
         </div>
         {tab === "suggested" && !search.isError ? (
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            icon="refresh-cw"
-            loading={search.isFetching}
-            onClick={() => void search.refetch()}
-          >
-            Tìm lại
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              icon="refresh-cw"
+              loading={search.isFetching}
+              disabled={busy}
+              onClick={() => void search.refetch()}
+            >
+              Tìm lại
+            </Button>
+            {invitable.length > 0 ? (
+              <Button
+                type="button"
+                size="sm"
+                icon="send"
+                disabled={busy || search.isFetching || remaining === 0}
+                onClick={() => setConfirmingBulk(true)}
+              >
+                Mời tất cả ({invitable.length})
+              </Button>
+            ) : null}
+          </div>
         ) : null}
       </div>
+
+      {tab === "suggested" && invitable.length > 0 && remaining === 0 ? (
+        <p className="text-[13px] text-text-muted">
+          Hôm nay công ty đã dùng hết lượt mời. Lượt mới có từ 7h sáng mỗi ngày.
+        </p>
+      ) : null}
 
       {tab === "suggested" ? (
         search.isError ? (
@@ -201,7 +309,7 @@ export default function EmployerCandidateSearchPage() {
               <CandidateSearchCard
                 key={candidate.candidateId}
                 candidate={candidate}
-                disabled={sendInvitation.isPending}
+                disabled={busy}
                 onInvite={setInviting}
               />
             ))}
@@ -238,6 +346,15 @@ export default function EmployerCandidateSearchPage() {
         isConfirming={sendInvitation.isPending}
         onConfirm={confirmInvite}
         onCancel={() => setInviting(null)}
+      />
+      <ConfirmDialog
+        isOpen={confirmingBulk}
+        title={`Gửi lời mời cho ${invitable.length} ứng viên?`}
+        message={bulkMessage()}
+        confirmLabel="Gửi lời mời"
+        isConfirming={bulkInvite.isPending}
+        onConfirm={confirmBulkInvite}
+        onCancel={() => setConfirmingBulk(false)}
       />
       <ToastViewport toasts={toasts} onDismiss={dismiss} />
     </div>
