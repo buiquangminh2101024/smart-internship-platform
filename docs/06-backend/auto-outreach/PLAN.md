@@ -4,7 +4,7 @@ Song song: `docs/05-frontend/phases/auto-outreach/PLAN.md`.
 Quyết định: **AD-23** trong `docs/02-architecture/ARCHITECTURE_DECISIONS.md` (sửa một phần AD-15).
 Nền tảng: `docs/06-backend/candidate-outreach/PLAN.md` (B3, D1–D7, Q1–Q5), `docs/06-backend/outreach-hub/PLAN.md`.
 
-**Trạng thái: ĐÃ DUYỆT (2026-11-09), ĐANG LÀM. Xong bước 0–6; migration đã áp lên Neon.** Q1–Q5 đã chốt 2026-11-09.
+**Trạng thái: ĐÃ DUYỆT (2026-11-09). BACKEND XONG (bước 0–8, 2026-11-10); migration đã áp lên Neon. Còn frontend F1–F5 (`docs/05-frontend/phases/auto-outreach/PLAN.md`).** Q1–Q5 đã chốt 2026-11-09.
 
 ## Mục tiêu
 
@@ -356,6 +356,76 @@ Việc tách worker **không thuộc 0.2**, chỉ ghi kết quả đo và đề 
 - `main.ts`: gọi `startAutoOutreachJob({ autoOutreachRepository, autoOutreachRunStore, autoOutreachService, logger })` ngay sau `startCandidateOutreachExpiryJob`. Từ đây cron 15 phút chạy cùng server; hiện chưa tin nào bật tự mời nên mỗi lượt chỉ chạy một câu `SELECT DISTINCT` rồi dừng, không ghi log.
 - `AutoOutreachService` lấy phụ thuộc ngay trong constructor, nên resolve lúc khởi động kéo theo `candidateOutreachService`, `notificationsService`… Đã kiểm bằng script tạm (dựng container và mount router đúng thứ tự `main.ts`, không chạy cron, không ghi DB): resolve được `autoOutreachRepository`, `autoOutreachRunStore`, `autoOutreachService`, `jobPostsService`, `candidateOutreachService`. Script đã xoá.
 - Kiểm: cả bộ 437/437 qua; typecheck server qua.
+
+**Bước 7 (2026-11-10)**
+
+*7a. Unit test.* Các mục plan liệt kê đã có từ bước 4–5 (`auto-outreach-run.test.ts`, `auto-outreach-settings.test.ts`). Riêng "công thức hạn mức `dailyQuotaForPlan`": code không có hàm này, hạn mức lấy thẳng từ cột `outreachInvitationDailyQuota` của gói (Dùng thử là hằng `TRIAL_OUTREACH_DAILY_QUOTA = 6`), nên kiểm bằng dữ liệu thay vì unit test. Đọc trên Neon: Cơ bản 8 (H = 4), Tiêu chuẩn 14 (H = 5), Doanh nghiệp 86 (H = 6), đúng AD-23.
+
+*Q2: tin dễ rơi vào `NO_MATCH` ở ngưỡng 80.* Chấm thử (chỉ đọc, không tính embedding mới) 15 tin đang mở chưa có lời mời của Mây Xanh, pool 50 người. Số người đạt ≥ 80 từ 0 đến 32. `clargedemojob0025` (Business Analyst part-time) không có ai đạt 80 (cao nhất 78) nên sẽ vào `NO_MATCH`. Hai tin BA `0312` và `0067` chỉ có 2 người đạt. Tin kỹ thuật (Frontend, Java, Data) có 16–32 người.
+
+*7b. Kiểm chức năng trên Neon* (chủ dự án duyệt ghi, công ty Mây Xanh, gói Doanh nghiệp; script tạm gọi đúng các service, đã xoá; bắt đầu 2026-11-10 03:33 UTC):
+
+- Bật tự mời cho `clargedemojob0138` (Thực tập sinh Java Backend) bằng `updateJobSettings` với `hiringTarget = 2` ⇒ `PATCH` trả `RUNNING`, target 12. Lượt chạy do `PATCH` kích hoạt gửi đúng **12 lời mời AUTO** (điểm 90–96, đều ≥ 80), đều đứng tên người đăng tin. Người đăng nhận 1 thông báo `AUTO_OUTREACH_SENT` (dedupe `auto-outreach:clargedemojob0138:2026-11-10`, link `?tab=invited`). Hạn mức: `{ total: 12, auto: 12 }`. Lượt chạy mất 15,3 s.
+- Ứng viên `clargedemocand0953` từ chối ⇒ lượt chạy do từ chối kích hoạt gửi **1 lời mời bù** (`clargedemocand0031`, điểm 89) sau 2,7 s; số lời mời PENDING của tin lại là 12.
+- Trần 10 lời mời/ngày và advisory lock (ứng viên `cmub8c39u002qyg7s782pleql`, tài khoản demo cũ `@match-demo.local`, đã có 1 lời mời AUTO):
+  - 2 yêu cầu mời cùng lúc, cùng ứng viên, cùng tin ⇒ 1 lời mời được tạo, yêu cầu kia nhận 409 "đã được mời".
+  - Mời tay qua các tin khác tới 9 lời mời. Ở mức 9, 2 yêu cầu cùng lúc trên **hai tin khác nhau** ⇒ chỉ 1 được tạo, yêu cầu kia nhận 409 "đã nhận đủ lời mời trong hôm nay": advisory lock theo ứng viên chặn đúng trường hợp vượt trần khi chạy đồng thời.
+  - Lần thứ 11 ⇒ 409 như trên. Trang tìm ứng viên của `clargedemojob0293` hiện ứng viên này với `cappedToday = true`. Pool của tự mời (`excludeCappedToday`) không còn người này, pool thường vẫn còn.
+- Tổng ghi lên Neon: 22 lời mời (12 AUTO PENDING, 1 AUTO DECLINED, 9 MANUAL PENDING), 22 thông báo lời mời cho ứng viên, 1 thông báo từ chối và 1 `AUTO_OUTREACH_SENT` cho người đăng. Hạn mức hôm nay của Mây Xanh: `{ total: 22, auto: 13 }`.
+- Sau khi kiểm:
+  - Giữ lời mời làm dữ liệu demo. Tin 0138 được tắt tự mời và `hiringTarget` về 1, để cron không tự mời bù khi chạy server dev.
+  - 22 email lời mời trong outbox (12 tới `@large-demo.local`, 10 tới `backend-java-01@match-demo.local`) được chuyển `FAILED` kèm `lastError` ghi lý do, nên không bao giờ được gửi.
+- Gửi lời mời mất khoảng 1,1 s mỗi lời mời từ máy dev tới Neon (transaction có advisory lock, thông báo, outbox). Một công ty dùng hết R = 68 sẽ mất khoảng 75 s ở phần gửi, vẫn dưới TTL 300 s của khoá.
+- Build `shared-types` và typecheck server qua.
+
+*7c. Đo tải* (script tạm, đã xoá; **không ghi Neon**):
+
+- Cách đo:
+  - Một process chạy cả Express (đủ router như `main.ts`) lẫn lượt tự mời.
+  - Hai vòng gọi liên tục `GET /api/health` và `GET /api/job-posts?page=1&limit=20`.
+  - Độ trễ event loop đo bằng `monitorEventLoopDelay` (resolution 10 ms).
+- Phạm vi dữ liệu:
+  - Lượt cron dùng đúng `runAutoOutreachCycle` và `runForCompany`, cho 10 công ty gói Doanh nghiệp có nhiều tin đang mở nhất (127 tin), coi như mọi tin đều bật tự mời (trường hợp xấu).
+  - `createInvitation` được thay bằng các câu đọc của chính nó (không tạo lời mời). Đặt/xoá dấu, thông báo và khoá Redis là bản giả.
+  - Chấm điểm với 0 embedding mới; phần embedding đo riêng bằng cách gọi thẳng model.
+- Số đo:
+
+| Tình huống | Thời gian | Event loop p50 / p99 / max | `/api/health` p50 / p95 | `/api/job-posts` p50 / p95 |
+|---|---|---|---|---|
+| Nền (không tự mời) | 20 s | 15,5 / 22,0 / 25,3 ms | 44 / 49 ms | 477 / 498 ms |
+| Một lượt cron, 10 công ty | 62,9 s | 15,4 / 22,4 / 25,3 ms | 50 / 58 ms | 525 / 592 ms |
+| Nền lần 2 | 20 s | 15,4 / 21,9 / 84,9 ms | 48 / 55 ms | 507 / 599 ms |
+| 30 embedding mới liên tiếp (3 lần) | 1,0–1,1 s | p99 57,8–87,9 ms | 129–144 / 153–177 ms (7–8 mẫu) | 603–620 ms (2 mẫu) |
+| 50 embedding mới liên tiếp (3 lần) | 1,3–1,7 s | p99 41,9–71,6 ms, max 119,3 ms | 114–128 / 142–220 ms (12–13 mẫu) | 578–669 ms (3 mẫu) |
+
+- Lượt cron:
+  - 60 giây xử lý được 4/10 công ty (38 tin), 6 công ty để lượt sau.
+  - Chấm một tin (pool 50) mất p50 936 ms, p95 1.371 ms, gần như toàn bộ là chờ I/O tới Neon: event loop không tăng.
+  - 1.900 hồ sơ được chấm, chỉ 1 hồ sơ thiếu vector. Dữ liệu demo đã tính sẵn embedding.
+  - 191 lời mời (giả); công ty Gia Hòa dừng đúng ở R = 68 (86 × 80%). Không tin nào bị đặt dấu.
+  - Lượt dài 62,9 s, vượt mốc 60 s vì phần gửi không xét mốc dừng (xem ghi chú bước 5).
+- Một embedding mới mất p50 33 ms, p95 52 ms (model `Xenova/paraphrase-multilingual-MiniLM-L12-v2`, nạp model lần đầu 3 s).
+- Giới hạn của số đo:
+  - Máy dev Windows: timer khoảng 15 ms nên p50 của event loop luôn ≈ 15 ms.
+  - Client gọi API chạy chung process nên làm số đo xấu đi một chút.
+  - Thời gian chấm phụ thuộc độ trễ mạng tới Neon.
+  - Mẫu lúc tính embedding ít vì mỗi đợt chỉ kéo dài khoảng 1 giây.
+
+*7d. Kết luận: giữ chạy chung process, không tách worker, không viết AD mới.*
+
+- Lượt cron (trường hợp thường, vector đã có) đạt cả hai ngưỡng: event loop p99 22 ms (< 100 ms); API nhẹ chậm thêm khoảng 14% (p50 44 → 50 ms), API danh sách tin khoảng 10%.
+- Khi phải tính nhiều embedding mới, API nhẹ chậm khoảng 2,3–2,9 lần trong 1–1,7 giây (vượt ngưỡng 2 lần), event loop p99 vẫn dưới 100 ms.
+  - Plan gợi ý hạ `AUTO_OUTREACH_MAX_NEW_EMBEDDINGS`. Đo 30 so với 50 thì mức chậm lúc cao điểm như nhau; hạ xuống chỉ rút ngắn thời gian bị chậm từ khoảng 1,6 s xuống khoảng 1 s.
+  - Trang tìm ứng viên hiện có cũng tính tới 30 embedding trong một request web (`MAX_NEW_EMBEDDINGS_PER_REQUEST`). Vậy đây là đặc điểm của việc chạy model embedding trong process, không riêng gì tự mời.
+  - Việc này chỉ xảy ra với hồ sơ mới hoặc vừa sửa.
+  - **Giữ 50**: hạ xuống làm nhiều người trong pool chỉ có điểm theo luật, không đổi được mức chậm.
+- Điều cần theo dõi là **thông lượng**, không phải độ trễ: 60 giây chấm được khoảng 38 tin. Trường hợp xấu (cả 127 tin cùng bật) cần khoảng 4 lượt cron (khoảng 1 giờ) để xét hết. Chấp nhận được vì lúc đăng tin, ứng viên từ chối và đổi cài đặt đều đã chạy ngay; cron chỉ là lưới an toàn. Nếu sau này cần nhanh hơn, hướng đúng là bảng điểm lưu sẵn của 0.3 (không phải chấm lại mỗi lượt), không phải tách worker.
+
+**Bước 8 (2026-11-10)**
+
+- `FEATURE_BACKLOG.md`: dòng 0.2 ghi backend xong, còn frontend F1–F5; giữ 📌 vì chưa xong cả mục.
+- AD-23: trạng thái "backend đã triển khai, frontend chưa làm", thêm "Ghi chú triển khai backend" (lối kích hoạt thứ tư khi `PATCH`, bảo vệ tải, kết quả đo giữ mục 8, hạn mức đọc từ cột của gói).
+- 7d không cần tách worker nên không thêm dòng backlog hay AD mới.
 
 ## Phần 4 — Ghi chú của chủ dự án
 

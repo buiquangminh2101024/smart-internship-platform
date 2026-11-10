@@ -654,7 +654,7 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 
 **Ngày:** 2026-11-09 · **Phase liên quan:** không thuộc phase đánh số. Mục 0.2 của `docs/01-project/FEATURE_BACKLOG.md`, theo nhận xét của giáo viên ở buổi demo 05/11/2026. Kế hoạch chi tiết: `docs/06-backend/auto-outreach/PLAN.md`, `docs/05-frontend/phases/auto-outreach/PLAN.md`.
 
-> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-09, chủ dự án duyệt từng câu hỏi), CHƯA TRIỂN KHAI.**
+> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-09, chủ dự án duyệt từng câu hỏi). BACKEND ĐÃ TRIỂN KHAI (2026-11-10), đã kiểm trên Neon; FRONTEND CHƯA LÀM.** Ghi chú triển khai chi tiết ở `docs/06-backend/auto-outreach/PLAN.md`.
 
 **Bối cảnh:** AD-15 chỉ cho mời tay từng người, hạn mức mặc định 3 lời mời/ngày/công ty và cả ba gói đều để `null`. Giáo viên yêu cầu: đăng tin xong thì hệ thống tự gợi ý và tự gửi lời mời, nhà tuyển dụng không phải vào từng tin để mời từng người.
 
@@ -714,3 +714,13 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
   - trang tìm ứng viên của tin: nút "Mời tất cả gợi ý";
   - trang chi tiết tin: thẻ "Tự động mời ứng viên";
   - trang "Lời mời": cài đặt tỉ lệ và nhãn "Tự động".
+
+**Ghi chú triển khai backend (2026-11-10):**
+
+- Thêm lối kích hoạt thứ tư ngoài ba lối ở mục 8: `PATCH` cài đặt tự mời của tin, khi bật lại, hạ ngưỡng điểm hoặc tăng số người cần tuyển lúc tin đang `PUBLISHED`.
+- Bảo vệ tải (plan Q4): lọc rẻ bằng một câu SQL; mỗi lượt cron tối đa 60 giây; khoá Redis theo công ty để không chạy chồng; nhường event loop giữa các tin; cron xoay vòng công ty theo lần chạy gần nhất. Tin không còn ai đạt ngưỡng được đánh dấu "hết ứng viên" (`NO_MATCH` kiểm lại sau 3 giờ, `CANDIDATE_CAP` sau mốc đặt lại hằng ngày).
+- Mục 8 được giữ sau khi đo (plan bước 7c–7d):
+  - Lượt cron cho 10 công ty: event loop p99 22 ms như lúc không chạy; API nhẹ chậm thêm khoảng 14%.
+  - Lúc phải tính nhiều embedding mới: API nhẹ chậm khoảng 2,5 lần trong 1–1,7 giây. Trang tìm ứng viên hiện có cũng gây mức này, nên không phải lý do riêng để tách.
+  - Không tách worker, không cần AD mới.
+- Mục 4: hạn mức không tính bằng hàm mà đọc từ cột `outreachInvitationDailyQuota` của gói; đã kiểm trên Neon ra đúng 8 / 14 / 86 (Dùng thử là hằng số 6 trong code).
