@@ -67,3 +67,83 @@ export function reopensAutoOutreach(
     (patch.hiringTarget !== undefined && patch.hiringTarget > current.hiringTarget)
   );
 }
+
+// ─── Lượt chạy nền (bước 5) ──────────────────────────────────────────────────
+
+/** Tin có dấu "hết ứng viên" và chưa tới lúc kiểm lại ⇒ lượt chạy bỏ qua tin này. */
+export function isAwaitingRecheck(
+  job: { exhaustedAt: Date | null; exhaustedReason: AutoOutreachExhaustedReason | null },
+  now: Date = new Date(),
+): boolean {
+  if (!job.exhaustedAt || !job.exhaustedReason) return false;
+  return autoOutreachRecheckAt(job.exhaustedReason, job.exhaustedAt) > now;
+}
+
+/**
+ * Số lời mời tự động còn gửi được hôm nay (bước 5, mục 3):
+ * R = min(⌊quota × share / 100⌋ − autoUsed, quota − totalUsed), không âm.
+ * Mời tay dùng chung tổng hạn mức nên có thể làm R nhỏ hơn phần tự động còn lại.
+ */
+export function autoRunRemaining(dailyQuota: number, autoLimit: number, usage: { total: number; auto: number }): number {
+  return Math.max(0, Math.min(autoLimit - usage.auto, dailyQuota - usage.total));
+}
+
+export interface AllocationJob {
+  jobPostId: string;
+  /** Số lời mời còn thiếu (target − active), > 0. */
+  deficit: number;
+  /** hiringTarget × H, > 0. */
+  target: number;
+  expiresAt: Date | null;
+  /** Số ứng viên đạt ngưỡng còn trong hàng chờ của tin. */
+  available: number;
+}
+
+/**
+ * AD-23 mục 3 — chia R lượt cho các tin theo vòng: mỗi vòng cấp 1 lượt cho mỗi tin còn
+ * thiếu và còn ứng viên. Thứ tự trong một vòng: tỉ lệ thiếu (deficit / target) giảm dần,
+ * rồi tin hết hạn sớm trước (không có hạn xếp cuối), rồi id để kết quả cố định.
+ * Trả về dãy id tin theo đúng thứ tự gửi; độ dài ≤ R. Ví dụ AD-23: R = 12, thiếu
+ * 10/3/1 (đủ ứng viên) ⇒ 8/3/1.
+ */
+export function allocateRoundRobin(jobs: AllocationJob[], remaining: number): string[] {
+  const ordered = [...jobs].sort(compareAllocationJobs);
+  const capacity = new Map(ordered.map((job) => [job.jobPostId, Math.max(0, Math.min(job.deficit, job.available))]));
+  const slots: string[] = [];
+  let progressed = true;
+  while (slots.length < remaining && progressed) {
+    progressed = false;
+    for (const job of ordered) {
+      if (slots.length >= remaining) break;
+      const left = capacity.get(job.jobPostId)!;
+      if (left <= 0) continue;
+      capacity.set(job.jobPostId, left - 1);
+      slots.push(job.jobPostId);
+      progressed = true;
+    }
+  }
+  return slots;
+}
+
+function compareAllocationJobs(left: AllocationJob, right: AllocationJob): number {
+  const ratio = right.deficit / right.target - left.deficit / left.target;
+  if (ratio !== 0) return ratio;
+  if (left.expiresAt?.getTime() !== right.expiresAt?.getTime()) {
+    if (!left.expiresAt) return 1;
+    if (!right.expiresAt) return -1;
+    return left.expiresAt.getTime() - right.expiresAt.getTime();
+  }
+  return left.jobPostId < right.jobPostId ? -1 : left.jobPostId > right.jobPostId ? 1 : 0;
+}
+
+/**
+ * Q4 — thứ tự công ty trong một lượt cron: lần chạy gần nhất cũ nhất trước, công ty chưa
+ * chạy bao giờ đứng đầu, để công ty không tới lượt (hết thời gian) được ưu tiên lượt sau.
+ */
+export function orderCompaniesByLastRun(companyIds: string[], lastRunAt: Map<string, number>): string[] {
+  return [...companyIds].sort((left, right) => {
+    const diff = (lastRunAt.get(left) ?? -Infinity) - (lastRunAt.get(right) ?? -Infinity);
+    if (diff !== 0 && !Number.isNaN(diff)) return diff;
+    return left < right ? -1 : left > right ? 1 : 0;
+  });
+}

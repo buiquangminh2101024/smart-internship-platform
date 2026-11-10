@@ -36,6 +36,10 @@ import { candidateInsightsRouter } from "./modules/candidate-insights/candidate-
 import { candidateOutreachRouter } from "./modules/candidate-outreach/candidate-outreach.routes";
 import { startCandidateOutreachExpiryJob } from "./modules/candidate-outreach/candidate-outreach-expiry.job";
 import type { CandidateOutreachRepository } from "./modules/candidate-outreach/candidate-outreach.repository";
+import { startAutoOutreachJob } from "./modules/candidate-outreach/auto-outreach.job";
+import type { AutoOutreachRepository } from "./modules/candidate-outreach/auto-outreach.repository";
+import type { AutoOutreachRunStore } from "./modules/candidate-outreach/auto-outreach-run-store";
+import type { AutoOutreachService } from "./modules/candidate-outreach/auto-outreach.service";
 
 import { messagingRoutes } from "./modules/messaging/messaging.routes";
 
@@ -145,6 +149,15 @@ startCandidateOutreachExpiryJob(
   container.resolve<CandidateOutreachRepository>("candidateOutreachRepository"),
   logger,
 );
+// Tự động mời theo tin (AD-23) — mỗi 15 phút, lưới an toàn cho các lối kích hoạt
+// tức thì và nơi mời bù khi lời mời hết hạn. Resolve sau notificationsRouter vì
+// autoOutreachService cần notificationsService.
+startAutoOutreachJob({
+  autoOutreachRepository: container.resolve<AutoOutreachRepository>("autoOutreachRepository"),
+  autoOutreachRunStore: container.resolve<AutoOutreachRunStore>("autoOutreachRunStore"),
+  autoOutreachService: container.resolve<AutoOutreachService>("autoOutreachService"),
+  logger,
+});
 // Báo tin sắp hết hạn (3 ngày) và gói sắp hết hạn (7 ngày) — 08:00 giờ Việt
 // Nam hằng ngày, mỗi đối tượng chỉ báo một lần nhờ Notification.dedupeKey (AD-16).
 startJobPostExpiringNoticeJob({

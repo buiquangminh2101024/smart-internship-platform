@@ -29,6 +29,7 @@ import type { MessagingService } from "../messaging/messaging.service";
 import type { NotificationsService } from "../notifications/notifications.service";
 import type { CompanySubscriptionRepository } from "../subscriptions/company-subscription.repository";
 import type { SubscriptionsService } from "../subscriptions/subscriptions.service";
+import type { AutoOutreachTrigger } from "./auto-outreach.service";
 import {
   autoDailyLimit,
   hasDailyRoom,
@@ -113,6 +114,7 @@ export class CandidateOutreachService {
   private readonly messagingService: MessagingService;
   private readonly notificationsService: NotificationsService;
   private readonly logger: Logger;
+  private readonly autoOutreachTrigger: AutoOutreachTrigger;
   private readonly mode: JobMatcherMode;
 
   constructor({
@@ -130,6 +132,7 @@ export class CandidateOutreachService {
     messagingService,
     notificationsService,
     logger,
+    autoOutreachTrigger,
     config,
   }: {
     prisma: PrismaClient;
@@ -146,6 +149,7 @@ export class CandidateOutreachService {
     messagingService: MessagingService;
     notificationsService: NotificationsService;
     logger: Logger;
+    autoOutreachTrigger: AutoOutreachTrigger;
     config: { JOB_MATCHER_MODE: JobMatcherMode };
   }) {
     this.prisma = prisma;
@@ -162,6 +166,7 @@ export class CandidateOutreachService {
     this.messagingService = messagingService;
     this.notificationsService = notificationsService;
     this.logger = logger;
+    this.autoOutreachTrigger = autoOutreachTrigger;
     this.mode = config.JOB_MATCHER_MODE;
   }
 
@@ -500,7 +505,12 @@ export class CandidateOutreachService {
       );
     });
 
-    if (status === "DECLINED") return { status, conversationId: null };
+    if (status === "DECLINED") {
+      // AD-23 — tin vừa trống một chỗ ⇒ mời bù ngay (không chờ). Công ty không có tin
+      // nào đang bật tự mời thì lượt chạy dừng ở câu lọc rẻ.
+      this.autoOutreachTrigger(invitation.companyId);
+      return { status, conversationId: null };
+    }
 
     // Ngoài transaction: createConversation dùng client riêng và tự trả hội thoại cũ nếu
     // đã có. Lỗi ở đây không hoàn tác Accept — Candidate vẫn tự mở hội thoại được từ tin.
@@ -523,6 +533,15 @@ export class CandidateOutreachService {
   }
 
   // ─── Chấm điểm ───────────────────────────────────────────────────────────
+
+  /**
+   * Tự động mời (AD-23, bước 5): chấm cả pool của một tin, cùng bộ chấm với trang tìm
+   * ứng viên. Lỗi (kể cả tin không còn hồ sơ chấm) ném ra cho lượt chạy bỏ qua tin này.
+   */
+  async scorePool(jobPostId: string, candidateIds: string[], maxNewEmbeddings: number): Promise<Map<string, MatchResult>> {
+    const job = await this.requireJobProfile(jobPostId);
+    return this.scoreCandidates(job, candidateIds, maxNewEmbeddings);
+  }
 
   /**
    * D7 — chấm lại riêng ứng viên này lúc gửi. Lỗi ⇒ null (lời mời vẫn được tạo,

@@ -19,6 +19,7 @@ import type {
 } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
 import type { AuditLogService } from "../audit-log/audit-log.service";
+import type { AutoOutreachTrigger } from "../candidate-outreach/auto-outreach.service";
 import type { CompanyRepository } from "../companies/company.repository";
 import type { EmployerRepository } from "../employers/employer.repository";
 import type { EmployerIdentity, EmployerIdentityCache } from "../employers/employer-identity-cache";
@@ -47,6 +48,7 @@ export class JobPostsService {
   private readonly notificationsService: NotificationsService;
   private readonly userRepository: UserRepository;
   private readonly auditLogService: AuditLogService;
+  private readonly autoOutreachTrigger: AutoOutreachTrigger;
 
   constructor({
     prisma,
@@ -58,6 +60,7 @@ export class JobPostsService {
     notificationsService,
     userRepository,
     auditLogService,
+    autoOutreachTrigger,
   }: {
     prisma: PrismaClient;
     jobPostRepository: JobPostRepository;
@@ -68,6 +71,7 @@ export class JobPostsService {
     notificationsService: NotificationsService;
     userRepository: UserRepository;
     auditLogService: AuditLogService;
+    autoOutreachTrigger: AutoOutreachTrigger;
   }) {
     this.prisma = prisma;
     this.jobPostRepository = jobPostRepository;
@@ -78,6 +82,7 @@ export class JobPostsService {
     this.notificationsService = notificationsService;
     this.userRepository = userRepository;
     this.auditLogService = auditLogService;
+    this.autoOutreachTrigger = autoOutreachTrigger;
   }
 
   // ─── Public (Guest) ──────────────────────────────────────────────────────
@@ -289,6 +294,8 @@ export class JobPostsService {
       return this.jobPostRepository.update(id, { status: "PUBLISHED", publishedAt: new Date() }, tx);
     });
 
+    // AD-23 — tin vừa hiển thị và đã bật tự mời (đặt lúc tạo tin) ⇒ mời ngay, không chờ.
+    if (autoPublished && updated.autoOutreachEnabled) this.autoOutreachTrigger(updated.companyId);
     return { jobPost: toJobPostDto(updated), autoPublished };
   }
 
@@ -345,6 +352,8 @@ export class JobPostsService {
       );
       return result;
     });
+    // AD-23 — như submitForApproval khi tự đăng: chạy sau khi transaction đã commit.
+    if (updated.autoOutreachEnabled) this.autoOutreachTrigger(updated.companyId);
     return toJobPostDto(updated);
   }
 

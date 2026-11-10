@@ -4,7 +4,7 @@ Song song: `docs/05-frontend/phases/auto-outreach/PLAN.md`.
 Quyết định: **AD-23** trong `docs/02-architecture/ARCHITECTURE_DECISIONS.md` (sửa một phần AD-15).
 Nền tảng: `docs/06-backend/candidate-outreach/PLAN.md` (B3, D1–D7, Q1–Q5), `docs/06-backend/outreach-hub/PLAN.md`.
 
-**Trạng thái: ĐÃ DUYỆT (2026-11-09), ĐANG LÀM. Xong bước 0–4; migration đã áp lên Neon.** Q1–Q5 đã chốt 2026-11-09.
+**Trạng thái: ĐÃ DUYỆT (2026-11-09), ĐANG LÀM. Xong bước 0–6; migration đã áp lên Neon.** Q1–Q5 đã chốt 2026-11-09.
 
 ## Mục tiêu
 
@@ -320,6 +320,42 @@ Việc tách worker **không thuộc 0.2**, chỉ ghi kết quả đo và đề 
 - Kiểm:
   - `tests/unit/auto-outreach-settings.test.ts` (13 test): phần tự động của hạn mức, lúc kiểm lại, thứ tự trạng thái, khi nào xoá dấu, schema, quyền 404/403, Dùng thử sửa được số người cần tuyển, quyền sửa tỉ lệ. Sửa `outreach-bulk-invite.test.ts` theo các trường hạn mức mới. Cả bộ 419/419 qua; typecheck server và web qua.
   - Thử trên Neon, chỉ đọc: `findJob`, `countJob`, `findAutoSharePercent` chạy đúng trên tin có nhiều lời mời nhất (3 ACCEPTED + 1 EXPIRED ⇒ `pending 0`, `acceptedInvitations 3`; đơn không có ACCEPTED ⇒ `hiredCount 0`). Chưa gọi `PATCH` thật.
+
+**Bước 5 (2026-11-10)**
+
+- `AutoOutreachService.runForCompany(companyId, deadline)` (`deadline` là epoch ms), trả `AutoOutreachRunResult`: `LOCKED`, `SKIPPED` (`NO_COMPANY` | `PLAN_NOT_ALLOWED` | `NO_ROOM` | `NO_JOB`) hoặc `DONE` kèm số tin đã xét / chờ kiểm lại / để lượt sau / vừa đặt dấu, số lời mời đã gửi, số người bị bỏ qua theo lý do, `stoppedByQuota`. Kết quả `DONE` được ghi log cùng thời gian chạy.
+- File mới:
+  - `auto-outreach-run-store.ts`: khoá `auto-outreach:lock:<công ty>` (`SET … EX 300 NX`, nhả bằng `DEL` trong `finally`, cùng cách khoá của module CV) và mốc `auto-outreach:last-run:<công ty>` (TTL 7 ngày, chỉ dùng để xếp thứ tự). Mốc được ghi cả khi lượt dừng sớm.
+  - `auto-outreach.job.ts`: `runAutoOutreachCycle` và `startAutoOutreachJob` (`*/15 * * * *`, cờ trong process để không chạy chồng). **Chưa gọi trong `main.ts`**: việc này thuộc bước 6, nên hiện cron chưa chạy.
+- Hàm thuần mới trong `auto-outreach.policy.ts`: `isAwaitingRecheck`, `autoRunRemaining` (R), `allocateRoundRobin`, `orderCompaniesByLastRun`.
+- Repository:
+  - `AutoOutreachRepository.findRunnableJobs`: câu lọc rẻ, thêm điều kiện tin còn hạn (`expiresAt` null hoặc chưa qua) và cột `posterSuspended` (`users.status = 'SUSPENDED'`, AD-17).
+  - `markExhausted` / `clearExhausted` ghi bằng SQL nên **không** đổi `updatedAt` của tin (việc của hệ thống, không phải người đăng sửa tin). `clearExhausted` chỉ ghi khi tin đang có dấu.
+  - `hasCappedSkillMatch`: câu đoán lý do; không lọc kỹ năng `APPROVED` vì chỉ là ước đoán.
+  - `findCompaniesWithAutoJobs` cho cron.
+  - `CandidateOutreachRepository.searchCandidatePool` thêm `{ excludeCappedToday }`. Mốc ngày tính trong SQL (`date_trunc('day', now() AT TIME ZONE 'UTC')`, export `START_OF_UTC_DAY`), không truyền `Date` làm tham số, vì cột lưu UTC không múi giờ.
+- `CandidateOutreachService.scorePool` (public): chấm cả pool của một tin bằng bộ chấm hiện có; lỗi thì ném ra, lượt chạy bỏ qua tin đó (không đặt dấu).
+- Khác hoặc chi tiết hơn plan:
+  - Các tin được xét theo tỉ lệ thiếu giảm dần, để khi hết giờ giữa chừng thì tin cần nhất đã được xét.
+  - Phần **gửi** không xét mốc dừng: đã bị chặn bởi R (tối đa 68 với gói Doanh nghiệp ở 80%), và dừng giữa chừng thì phí phần chấm điểm vừa làm. Phần tìm + chấm vẫn dừng đúng mốc.
+  - Hàng chờ của một tin có thể cạn vì người trong đó bị bỏ qua. Khi đó lượt đã cấp cho tin này bị dư; vòng lặp chia lại phần dư cho các tin còn người, dừng khi một vòng không gửi được ai.
+  - Lời mời đứng tên người đăng tin (`employerId` của tin), tên công ty lấy một lần đầu lượt.
+  - Thông báo `AUTO_OUTREACH_SENT` dùng `notifyOnce` theo tin theo ngày, nên `sentCount` là số của lượt đầu tiên trong ngày; câu thông báo đã ghi các lời mời gửi thêm cũng hiện ở tab "Đã mời". Lỗi thông báo chỉ ghi log.
+- Lối kích hoạt (`autoOutreachTrigger`, đăng ký bằng `asValue` trong `candidate-outreach.routes.ts`, resolve `autoOutreachService` lúc gọi ⇒ không có vòng phụ thuộc awilix):
+  - `JobPostsService.submitForApproval` khi tự đăng, và `approve`: chỉ khi tin đã bật tự mời; gọi sau khi transaction trả về.
+  - `CandidateOutreachService.respond` khi từ chối: luôn gọi (dữ liệu lời mời không có cờ của tin); công ty không có tin nào bật thì lượt dừng ở câu lọc rẻ.
+  - `PATCH …/auto-outreach`: khi `reopensAutoOutreach`, tin `PUBLISHED`, đang bật và gói có tự động mời.
+- Kiểm:
+  - `tests/unit/auto-outreach-run.test.ts` (18 test): ví dụ AD-23 (R = 12, thiếu 10/3/1 ⇒ 8/3/1), đủ lượt, R = 0, tin hết ứng viên giữa chừng, thứ tự khi bằng tỉ lệ; R với tỉ lệ 0/80/100% và khi mời tay dùng gần hết; chờ kiểm lại; thứ tự công ty; `runForCompany` (khoá, dừng sớm, lọc rẻ, bỏ qua người không mời được, đặt/xoá dấu, chấm lỗi, R, QUOTA, chia lại phần dư, quá mốc dừng); lượt cron (thứ tự, lỗi một công ty, hết giờ); các lối kích hoạt (từ chối/nhận lời, tự đăng/chờ duyệt/chưa bật). `auto-outreach-settings.test.ts` thêm kiểm `PATCH` có/không kích hoạt. Cả bộ 437/437 qua; typecheck server và web qua.
+  - Thử trên Neon, chỉ đọc: chưa tin nào bật tự mời ⇒ `findCompaniesWithAutoJobs` và `findRunnableJobs` rỗng. Cùng câu lọc rẻ chạy trên tin có nhiều lời mời nhất (bỏ điều kiện đang bật) ra đúng kiểu dữ liệu (`active 4`, `hired 0`, `posterSuspended false`). Pool có và không loại người đủ trần đều 50 người (hôm nay chưa ai đủ trần); `hasCappedSkillMatch` = false. Hai câu `UPDATE` chỉ chạy `EXPLAIN` (không thực thi) để kiểm tên cột và ép kiểu enum.
+  - **Chưa** chạy lượt nào trên dữ liệu thật: lượt chạy tạo lời mời và thông báo. Để tới bước 7b.
+
+**Bước 6 (2026-11-10)**
+
+- Phần lớn bước 6 đã làm sớm: thông báo `AUTO_OUTREACH_SENT` (bước 0), các type trong `shared-types` gồm `cappedToday`, `BulkInviteRequest`/`BulkInviteResponse` và phần tự động của `OutreachDailyQuotaStatus` (bước 3–4), đăng ký service và 5 route mới (bước 4–5). Đã rà lại: đủ các type plan liệt kê.
+- `main.ts`: gọi `startAutoOutreachJob({ autoOutreachRepository, autoOutreachRunStore, autoOutreachService, logger })` ngay sau `startCandidateOutreachExpiryJob`. Từ đây cron 15 phút chạy cùng server; hiện chưa tin nào bật tự mời nên mỗi lượt chỉ chạy một câu `SELECT DISTINCT` rồi dừng, không ghi log.
+- `AutoOutreachService` lấy phụ thuộc ngay trong constructor, nên resolve lúc khởi động kéo theo `candidateOutreachService`, `notificationsService`… Đã kiểm bằng script tạm (dựng container và mount router đúng thứ tự `main.ts`, không chạy cron, không ghi DB): resolve được `autoOutreachRepository`, `autoOutreachRunStore`, `autoOutreachService`, `jobPostsService`, `candidateOutreachService`. Script đã xoá.
+- Kiểm: cả bộ 437/437 qua; typecheck server qua.
 
 ## Phần 4 — Ghi chú của chủ dự án
 

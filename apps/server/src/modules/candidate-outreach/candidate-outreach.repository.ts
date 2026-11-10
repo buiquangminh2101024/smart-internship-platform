@@ -5,7 +5,7 @@ import {
   type OutreachInvitationStatus,
   type PrismaClient,
 } from "@prisma/client";
-import { BLOCKING_INVITATION_STATUSES } from "./candidate-outreach.config";
+import { BLOCKING_INVITATION_STATUSES, CANDIDATE_DAILY_INVITATION_CAP } from "./candidate-outreach.config";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -75,7 +75,9 @@ export interface OutreachJobRow {
 }
 
 // Các cột DateTime lưu UTC không múi giờ ⇒ so với now() quy về UTC (giống dashboard.repository).
-const NOW_UTC = Prisma.sql`(now() AT TIME ZONE 'UTC')`;
+export const NOW_UTC = Prisma.sql`(now() AT TIME ZONE 'UTC')`;
+/** 0h UTC hôm nay trong SQL — cùng mốc với `startOfUtcDay` (trần lời mời của ứng viên). */
+export const START_OF_UTC_DAY = Prisma.sql`date_trunc('day', ${NOW_UTC})`;
 
 /**
  * Trạng thái hiển thị trong SQL — cùng quy tắc với `effectiveStatus` của mapper:
@@ -149,8 +151,22 @@ export class CandidateOutreachRepository {
    * năng APPROVED với tin (REQUIRED ∪ PREFERRED). Nhiều kỹ năng giao hơn xếp trước
    * để LIMIT không cắt mất người khớp nhất. Không lọc theo ngành/kinh nghiệm — để
    * hybrid ở giai đoạn B phản ánh qua điểm.
+   *
+   * `excludeCappedToday` (tự động mời, AD-23 mục 7): bỏ người đã nhận đủ
+   * CANDIDATE_DAILY_INVITATION_CAP lời mời từ 0h UTC hôm nay. Trang tìm ứng viên (mời tay)
+   * không bật cờ này: người đủ trần vẫn hiện, kèm `cappedToday`.
    */
-  async searchCandidatePool(jobPostId: string, limit: number): Promise<string[]> {
+  async searchCandidatePool(
+    jobPostId: string,
+    limit: number,
+    options: { excludeCappedToday?: boolean } = {},
+  ): Promise<string[]> {
+    const cappedFilter = options.excludeCappedToday
+      ? Prisma.sql`AND (
+        SELECT COUNT(*) FROM candidate_outreach_invitations r
+        WHERE r."candidateId" = cs."candidateId" AND r."createdAt" >= ${START_OF_UTC_DAY}
+      ) < ${CANDIDATE_DAILY_INVITATION_CAP}`
+      : Prisma.empty;
     const rows = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
       SELECT cs."candidateId" AS id
       FROM candidate_skills cs
@@ -166,6 +182,7 @@ export class CandidateOutreachRepository {
         WHERE i."candidateId" = cs."candidateId" AND i."jobPostId" = ${jobPostId}
           AND i."status"::text IN (${Prisma.join(BLOCKING_INVITATION_STATUSES)})
       )
+      ${cappedFilter}
       GROUP BY cs."candidateId"
       ORDER BY COUNT(*) DESC, cs."candidateId"
       LIMIT ${limit}

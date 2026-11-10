@@ -127,8 +127,17 @@ function buildService(options: Options = {}) {
     ...options.job,
   };
   const updates: JobAutoOutreachPatch[] = [];
+  // Lượt chạy kích hoạt từ PATCH (bước 5): khoá trả false ⇒ lượt dừng ngay, chỉ ghi công ty.
+  const triggered: string[] = [];
   let sharePercent = 80;
   const service = new AutoOutreachService({
+    autoOutreachRunStore: {
+      tryLock: async (companyId: string) => {
+        triggered.push(companyId);
+        return false;
+      },
+    },
+    logger: { info: () => {}, warn: () => {}, error: () => {} },
     employerIdentityCache: { require: async () => ({ employerId: "emp-1", companyId: "co-1" }) },
     candidateOutreachRepository: {
       findOutreachCompany: async () => ({ id: "co-1", name: "Công ty A", verifiedAt: new Date() }),
@@ -158,7 +167,7 @@ function buildService(options: Options = {}) {
       countJob: async () => ({ pending: 7, acceptedInvitations: 3, hiredCount: 0, autoSentToday: 4 }),
     },
   } as unknown as ConstructorParameters<typeof AutoOutreachService>[0]);
-  return { service, updates, sharePercent: () => sharePercent };
+  return { service, updates, triggered, sharePercent: () => sharePercent };
 }
 
 async function statusOf(promise: Promise<unknown>): Promise<number> {
@@ -223,23 +232,31 @@ test("PATCH: bật lại / hạ ngưỡng / tăng số người cần tuyển �
   assert.equal(raised.updates[0]!.clearExhausted, false);
   assert.equal(kept.state, "NO_MATCH");
   assert.ok(kept.status.nextCheckAt);
+  assert.deepEqual(raised.triggered, [], "tăng ngưỡng ⇒ không chạy lượt mới");
 
   const lowered = buildService({ job: exhausted });
   const reopened = await lowered.service.updateJobSettings("user-emp-1", "job-1", { minScore: 70 });
   assert.equal(lowered.updates[0]!.clearExhausted, true);
   assert.equal(reopened.state, "RUNNING");
   assert.equal(reopened.minScore, 70);
+  assert.deepEqual(lowered.triggered, ["co-1"], "tin PUBLISHED đang bật ⇒ chạy một lượt ngay");
 
   const enabled = buildService({ job: { ...exhausted, autoOutreachEnabled: false } });
   await enabled.service.updateJobSettings("user-emp-1", "job-1", { enabled: true });
   assert.equal(enabled.updates[0]!.clearExhausted, true);
+  assert.deepEqual(enabled.triggered, ["co-1"]);
 });
 
 test("PATCH: sửa được khi tin không PUBLISHED; tắt thì state OFF", async () => {
-  const { service } = buildService({ job: { status: "DRAFT", autoOutreachEnabled: true } });
+  const { service, triggered } = buildService({ job: { status: "DRAFT", autoOutreachEnabled: true } });
   const dto = await service.updateJobSettings("user-emp-1", "job-1", { enabled: false, hiringTarget: 4 });
   assert.equal(dto.state, "OFF");
   assert.equal(dto.hiringTarget, 4);
+  assert.deepEqual(triggered, []);
+
+  const draft = buildService({ job: { status: "DRAFT" } });
+  await draft.service.updateJobSettings("user-emp-1", "job-1", { enabled: true });
+  assert.deepEqual(draft.triggered, [], "tin chưa hiển thị ⇒ chờ lúc đăng tin mới chạy");
 });
 
 test("cài đặt công ty: ai cũng xem được; chỉ quản trị viên được sửa", async () => {

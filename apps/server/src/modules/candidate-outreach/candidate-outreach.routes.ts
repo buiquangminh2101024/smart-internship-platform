@@ -1,11 +1,12 @@
 import { Router } from "express";
-import { asClass, type AwilixContainer } from "awilix";
+import { asClass, asValue, type AwilixContainer } from "awilix";
 import { authenticate } from "../../shared/middleware/authenticate";
 import { authorize } from "../../shared/middleware/authorize";
 import { validate } from "../../shared/middleware/validate";
 import { AutoOutreachController } from "./auto-outreach.controller";
 import { AutoOutreachRepository } from "./auto-outreach.repository";
-import { AutoOutreachService } from "./auto-outreach.service";
+import { AutoOutreachRunStore } from "./auto-outreach-run-store";
+import { AutoOutreachService, type AutoOutreachTrigger } from "./auto-outreach.service";
 import { CandidateOutreachController } from "./candidate-outreach.controller";
 import {
   bulkInviteSchema,
@@ -33,8 +34,14 @@ export function candidateOutreachRouter(container: AwilixContainer): Router {
     candidateOutreachController: asClass(CandidateOutreachController).singleton(),
     // AD-23 — tự động mời theo tin (phụ thuộc candidateOutreachService, không ngược lại).
     autoOutreachRepository: asClass(AutoOutreachRepository).singleton(),
+    autoOutreachRunStore: asClass(AutoOutreachRunStore).singleton(),
     autoOutreachService: asClass(AutoOutreachService).singleton(),
     autoOutreachController: asClass(AutoOutreachController).singleton(),
+    // Lối kích hoạt cho JobPostsService (đăng tin) và CandidateOutreachService (từ chối):
+    // resolve autoOutreachService lúc gọi ⇒ không có vòng phụ thuộc khi dựng service.
+    autoOutreachTrigger: asValue<AutoOutreachTrigger>((companyId) => {
+      container.resolve<AutoOutreachService>("autoOutreachService").trigger(companyId);
+    }),
   });
 
   const router = Router();
