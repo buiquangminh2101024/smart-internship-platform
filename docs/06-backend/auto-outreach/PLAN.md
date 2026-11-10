@@ -4,7 +4,7 @@ Song song: `docs/05-frontend/phases/auto-outreach/PLAN.md`.
 Quyết định: **AD-23** trong `docs/02-architecture/ARCHITECTURE_DECISIONS.md` (sửa một phần AD-15).
 Nền tảng: `docs/06-backend/candidate-outreach/PLAN.md` (B3, D1–D7, Q1–Q5), `docs/06-backend/outreach-hub/PLAN.md`.
 
-**Trạng thái: ĐÃ DUYỆT (2026-11-09), ĐANG LÀM. Xong bước 0–2; migration đã áp lên Neon.** Q1–Q5 đã chốt 2026-11-09.
+**Trạng thái: ĐÃ DUYỆT (2026-11-09), ĐANG LÀM. Xong bước 0–4; migration đã áp lên Neon.** Q1–Q5 đã chốt 2026-11-09.
 
 ## Mục tiêu
 
@@ -287,6 +287,39 @@ Việc tách worker **không thuộc 0.2**, chỉ ghi kết quả đo và đề 
 - Kiểm:
   - `tests/unit/outreach-create-invitation.test.ts` (17 test): thứ tự khoá/kiểm lại/tạo, từng lý do bỏ qua, kiểm lại dưới khoá, mời tay dùng được phần tự động, `invite` ⇒ 409, `cappedToday`. Cả bộ 399/399 qua.
   - Thử trên Neon (không ghi dữ liệu): hai transaction khoá cùng một id ⇒ transaction sau chờ đúng tới khi transaction trước xong (~1,5 giây giữ khoá); hai id khác nhau ⇒ không chờ. Hai câu đếm chạy được.
+
+**Bước 3 (2026-11-10)**
+
+- `POST /employer/job-posts/:jobId/invitations/bulk`, body `bulkInviteSchema` (1–10 id). Trả 200 kèm `BulkInviteResponse` (shared-types, cùng `OutreachInviteSkipReason`). `InvitationSkipReason` ở server giờ là alias của type này.
+- `bulkInvite`:
+  - gộp id trùng, giữ thứ tự gửi lên;
+  - hết lượt ngay từ đầu thì trả mọi người là `QUOTA`, không chấm điểm;
+  - còn lượt thì **chấm một lô** (`scoreManyForInvitation`: nạp tin một lần, embedding một lô, tối đa `MAX_NEW_EMBEDDINGS_PER_REQUEST`), rồi truyền điểm xuống `createInvitation`. Chấm lô lỗi thì để từng lời mời tự chấm;
+  - gặp `QUOTA` thì dừng: người đó và mọi người sau đều vào `skipped` với lý do `QUOTA`.
+- Kiểm: `tests/unit/outreach-bulk-invite.test.ts` (7 test). Cả bộ 406/406 qua; typecheck server và web qua. **Chưa** gọi API thật, vì sẽ tạo lời mời và thông báo trên dữ liệu Neon; để tới bước 7b.
+
+**Bước 4 (2026-11-10)**
+
+- File mới trong `candidate-outreach/`:
+  - `auto-outreach.policy.ts`: hàm thuần `autoOutreachRecheckAt`, `resolveAutoOutreachState`, `reopensAutoOutreach`. Bước 5 dùng lại;
+  - `auto-outreach.repository.ts`: đọc/ghi các cột tự mời của tin, đếm số liệu của thẻ;
+  - `auto-outreach.service.ts`, `auto-outreach.controller.ts`.
+- `AutoOutreachService` phụ thuộc một chiều vào `CandidateOutreachService` (`lookupDailyQuota`, bước 5 thêm `createInvitation`). Cài đặt của tin nằm ở đây chứ không ở `CandidateOutreachService`, để bước 5 gọi `runForCompany` từ `PATCH` mà không tạo vòng phụ thuộc trong awilix.
+- 4 route: `GET`/`PATCH /employer/job-posts/:jobId/auto-outreach`, `GET`/`PATCH /employer/outreach/settings`, đăng ký trong `candidate-outreach.routes.ts`.
+- Cài đặt của tin:
+  - `state` xét theo thứ tự `PLAN_NOT_ALLOWED` → `OFF` → `TARGET_MET` → `NOT_PUBLISHED` → `NO_MATCH`/`CANDIDATES_CAPPED` → `RUNNING`. `TARGET_MET` đứng trước `NOT_PUBLISHED` để tin đã đóng mà tuyển đủ vẫn hiện "đã tuyển đủ". Dấu "hết ứng viên" đã qua lúc kiểm lại thì trả `RUNNING` (lượt cron kế tiếp xét lại).
+  - `active` gồm cả lời mời tay lẫn tự động. `pending` chỉ đếm PENDING chưa quá `expiresAt`, cùng quy tắc với trạng thái hiển thị. `target = null` khi gói không có tự động mời.
+  - `PATCH` chỉ trả 403 khi **bật** ở gói Dùng thử hoặc khi không có gói; các trường khác vẫn sửa được (form tạo tin của gói Dùng thử vẫn lưu số người cần tuyển, F3). Trả lại cả cài đặt lẫn trạng thái. Câu báo 403: "Tự động mời ứng viên có từ gói Cơ bản. Gói Dùng thử chỉ mời tay."
+  - Bật lại, hạ ngưỡng hoặc tăng số người cần tuyển thì xoá dấu "hết ứng viên". Việc **kích hoạt lượt chạy ngay** để bước 5, vì `runForCompany` chưa có; điều kiện là tin `PUBLISHED`, đang bật và `reopensAutoOutreach`.
+  - `jobPost.update` làm Prisma cập nhật `JobPost.updatedAt`. Hiện web không hiển thị cột này.
+- Cài đặt của công ty: mọi employer của công ty xem được; chỉ `isCompanyAdmin` sửa được, người khác nhận 403. Đổi tỉ lệ không kích hoạt lượt chạy; cron 15 phút sẽ xét.
+- `OutreachDailyQuotaStatus` thêm `autoAllowed`, `autoLimitToday` (= `autoDailyLimit(dailyQuota, tỉ lệ)`, làm tròn xuống: 14 × 80% ⇒ 11), `autoUsedToday`. Vì là cùng một type nên dashboard Employer và kết quả "Mời tất cả gợi ý" cũng có các trường này. Dùng thử: `autoAllowed = false`, `autoLimitToday = 0`.
+- `SentOutreachInvitationDto` (và `CompanyOutreachInvitationDto` kế thừa) thêm `source`.
+- Thêm sớm vào shared-types (plan để ở bước 6): `AutoOutreachSettings`, `UpdateAutoOutreachSettingsRequest`, `AutoOutreachState`, `AutoOutreachStatus`, `JobAutoOutreachDto`, `CompanyOutreachSettings`, `OutreachInvitationSource`.
+- `HIRING_TARGET_MAX = 100` trong config; schema `updateJobAutoOutreachSchema` (cần ít nhất một trường, số nguyên) và `updateCompanyOutreachSettingsSchema` (0–100).
+- Kiểm:
+  - `tests/unit/auto-outreach-settings.test.ts` (13 test): phần tự động của hạn mức, lúc kiểm lại, thứ tự trạng thái, khi nào xoá dấu, schema, quyền 404/403, Dùng thử sửa được số người cần tuyển, quyền sửa tỉ lệ. Sửa `outreach-bulk-invite.test.ts` theo các trường hạn mức mới. Cả bộ 419/419 qua; typecheck server và web qua.
+  - Thử trên Neon, chỉ đọc: `findJob`, `countJob`, `findAutoSharePercent` chạy đúng trên tin có nhiều lời mời nhất (3 ACCEPTED + 1 EXPIRED ⇒ `pending 0`, `acceptedInvitations 3`; đơn không có ACCEPTED ⇒ `hiredCount 0`). Chưa gọi `PATCH` thật.
 
 ## Phần 4 — Ghi chú của chủ dự án
 

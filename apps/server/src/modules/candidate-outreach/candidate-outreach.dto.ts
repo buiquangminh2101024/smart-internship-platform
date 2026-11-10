@@ -1,8 +1,32 @@
 import { z } from "zod";
+import { HIRING_TARGET_MAX, TOP_RESULT_COUNT } from "./candidate-outreach.config";
 
 // POST /candidate/outreach-invitations/:id/respond
 export const respondOutreachInvitationSchema = z.object({
   action: z.enum(["ACCEPT", "DECLINE"]),
+});
+
+// POST /employer/job-posts/:jobId/invitations/bulk — "Mời tất cả gợi ý" (AD-23).
+// Tối đa bằng số người của tab "Gợi ý"; id trùng được gộp ở service.
+export const bulkInviteSchema = z.object({
+  candidateIds: z.array(z.string().min(1)).min(1).max(TOP_RESULT_COUNT),
+});
+
+// PATCH /employer/job-posts/:jobId/auto-outreach (AD-23 mục 2) — gửi ít nhất một trường.
+export const updateJobAutoOutreachSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    minScore: z.number().int().min(0).max(100).optional(),
+    hiringTarget: z.number().int().min(1).max(HIRING_TARGET_MAX).optional(),
+  })
+  .refine((body) => body.enabled !== undefined || body.minScore !== undefined || body.hiringTarget !== undefined, {
+    message: "Cần gửi ít nhất một trong enabled, minScore, hiringTarget.",
+  });
+export type UpdateJobAutoOutreachInput = z.infer<typeof updateJobAutoOutreachSchema>;
+
+// PATCH /employer/outreach/settings (AD-23 mục 5).
+export const updateCompanyOutreachSettingsSchema = z.object({
+  autoSharePercent: z.number().int().min(0).max(100),
 });
 
 // PATCH /candidate/outreach-settings — chỉ ghi đúng 1 cột isOpenToOutreach.

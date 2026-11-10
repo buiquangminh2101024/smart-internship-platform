@@ -51,6 +51,7 @@ export function toSentOutreachInvitationDto(
     matchScore: invitation.matchScore,
     matchWeightsVersion: invitation.matchWeightsVersion,
     canViewProfile,
+    source: invitation.source,
   };
 }
 

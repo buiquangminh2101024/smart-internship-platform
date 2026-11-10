@@ -29,6 +29,14 @@ export function hasDailyRoom(usage: OutreachUsage, limit: OutreachDailyLimit, so
 }
 
 /**
+ * Phần hạn mức/ngày tự động mời được dùng (AD-23 mục 5), làm tròn xuống:
+ * 14 lượt × 80% ⇒ 11, phần còn lại (ít nhất 3) để mời tay.
+ */
+export function autoDailyLimit(dailyQuota: number, sharePercent: number): number {
+  return Math.floor((dailyQuota * sharePercent) / 100);
+}
+
+/**
  * Hạn mức gửi lời mời/ngày (D4) — tính chung cho cả công ty, khoá theo
  * `companyId`. Cùng khuôn kiểm trước/tăng sau với RequirementExtractionRateLimitService;
  * khác ở chỗ ngưỡng không cố định mà do service truyền vào theo gói Subscription.

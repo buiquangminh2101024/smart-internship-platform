@@ -1003,6 +1003,93 @@ export interface SentOutreachInvitationDto extends OutreachCandidateCardDto {
   matchScore: number | null;
   matchWeightsVersion: string | null;
   canViewProfile: boolean;
+  /** AD-23 mục 9 — MANUAL: mời tay hoặc "Mời tất cả gợi ý"; AUTO: hệ thống tự mời. */
+  source: OutreachInvitationSource;
+}
+
+export type OutreachInvitationSource = "MANUAL" | "AUTO";
+
+/**
+ * AD-23 — lý do một ứng viên không được mời: không còn hồ sơ, tắt cho phép mời, đã ứng
+ * tuyển, đã có lời mời cho tin (Q4), đã nhận đủ lời mời hôm nay, công ty hết hạn mức.
+ */
+export type OutreachInviteSkipReason = "NOT_FOUND" | "NOT_OPEN" | "APPLIED" | "BLOCKED" | "CANDIDATE_CAP" | "QUOTA";
+
+/** POST /employer/job-posts/:jobId/invitations/bulk — "Mời tất cả gợi ý" (AD-23 mục 1a). */
+export interface BulkInviteRequest {
+  /** Danh sách đang hiện ở tab "Gợi ý", tối đa 10 id, thứ tự = thứ tự mời. */
+  candidateIds: string[];
+}
+
+export interface BulkInviteResponse {
+  /** Lời mời đã tạo, theo thứ tự gửi lên. */
+  invited: SentOutreachInvitationDto[];
+  /** Người không được mời. Hết hạn mức giữa chừng thì người đó và mọi người sau đều là QUOTA. */
+  skipped: { candidateId: string; reason: OutreachInviteSkipReason }[];
+  /** Hạn mức sau khi mời. */
+  quota: OutreachDailyQuotaStatus;
+}
+
+// ─── Tự động mời theo tin (AD-23) — docs/06-backend/auto-outreach/PLAN.md ──
+
+/** Cài đặt tự động mời của một tin, lưu trên JobPost. */
+export interface AutoOutreachSettings {
+  enabled: boolean;
+  /** Ngưỡng điểm phù hợp 0–100, mặc định 80. */
+  minScore: number;
+  /** Số người cần tuyển 1–100, mặc định 1. Ngừng tự mời khi số đơn ACCEPTED ≥ số này. */
+  hiringTarget: number;
+}
+
+/** PATCH /employer/job-posts/:jobId/auto-outreach — gửi ít nhất một trường. */
+export type UpdateAutoOutreachSettingsRequest = Partial<AutoOutreachSettings>;
+
+/**
+ * Trạng thái hiển thị của thẻ "Tự động mời ứng viên", xét theo thứ tự:
+ * - `PLAN_NOT_ALLOWED`: công ty dùng thử hoặc không có gói còn hiệu lực;
+ * - `OFF`: chưa bật;
+ * - `TARGET_MET`: số đơn ACCEPTED ≥ hiringTarget, hệ thống ngừng mời;
+ * - `NOT_PUBLISHED`: tin không ở trạng thái PUBLISHED;
+ * - `NO_MATCH` / `CANDIDATES_CAPPED`: tạm dừng vì hết ứng viên, tới `nextCheckAt` thì kiểm lại;
+ * - `RUNNING`: đang giữ đủ lời mời và tự mời bù.
+ */
+export type AutoOutreachState =
+  | "OFF"
+  | "RUNNING"
+  | "TARGET_MET"
+  | "NO_MATCH"
+  | "CANDIDATES_CAPPED"
+  | "NOT_PUBLISHED"
+  | "PLAN_NOT_ALLOWED";
+
+/** Số liệu của tin. Lời mời tay và tự động đều được tính. */
+export interface AutoOutreachStatus {
+  /** Số lời mời đang hoạt động cần giữ = hiringTarget × hệ số mời của gói; null khi gói không có tự động mời. */
+  target: number | null;
+  /** Lời mời đang hoạt động = pending + acceptedInvitations. */
+  active: number;
+  /** Lời mời PENDING chưa quá hạn. */
+  pending: number;
+  /** Lời mời ứng viên đã nhận lời. */
+  acceptedInvitations: number;
+  /** Số đơn ứng tuyển của tin ở trạng thái ACCEPTED. */
+  hiredCount: number;
+  /** Lời mời tự động của tin gửi từ 0h UTC (7h sáng giờ Việt Nam) hôm nay. */
+  autoSentToday: number;
+  /** Chỉ có khi state là NO_MATCH hoặc CANDIDATES_CAPPED (ISO). */
+  nextCheckAt: string | null;
+}
+
+/** GET/PATCH /employer/job-posts/:jobId/auto-outreach — chỉ người đăng tin. */
+export interface JobAutoOutreachDto extends AutoOutreachSettings {
+  state: AutoOutreachState;
+  status: AutoOutreachStatus;
+}
+
+/** GET/PATCH /employer/outreach/settings — chỉ quản trị viên công ty được sửa. */
+export interface CompanyOutreachSettings {
+  /** Phần trăm hạn mức/ngày tự động mời được dùng, 0–100, mặc định 80. */
+  autoSharePercent: number;
 }
 
 /** Hộp lời mời của Candidate. */
@@ -1623,10 +1710,22 @@ export interface JobPostWaitBuckets {
 /**
  * Hạn mức lời mời ứng viên hôm nay của công ty (AD-15). BLOCKED = không có gói
  * còn hiệu lực. Bộ đếm làm mới lúc 7h sáng giờ Việt Nam.
+ *
+ * AD-23 mục 5 — mời tay và tự động dùng chung `dailyQuota`; tự động chỉ được dùng
+ * `autoLimitToday` lượt (= dailyQuota × tỉ lệ của công ty, làm tròn xuống).
+ * `usedToday` đã gồm `autoUsedToday`. Dùng thử: `autoAllowed = false`, `autoLimitToday = 0`.
  */
 export type OutreachDailyQuotaStatus =
   | { mode: "BLOCKED" }
-  | { mode: "TRIAL" | "SUBSCRIBED"; dailyQuota: number; usedToday: number; remainingToday: number };
+  | {
+      mode: "TRIAL" | "SUBSCRIBED";
+      dailyQuota: number;
+      usedToday: number;
+      remainingToday: number;
+      autoAllowed: boolean;
+      autoLimitToday: number;
+      autoUsedToday: number;
+    };
 
 /** GET /employer/dashboard/overview — số liệu của cả công ty, trừ `messages` (của riêng employer). */
 export interface EmployerDashboardOverview {

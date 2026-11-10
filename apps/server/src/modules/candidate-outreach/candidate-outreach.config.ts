@@ -63,3 +63,5 @@ export const AUTO_OUTREACH_MAX_NEW_EMBEDDINGS = 50;
 export const AUTO_OUTREACH_RUN_BUDGET_MS = 60_000;
 /** Q5 — tin dừng vì NO_MATCH được kiểm lại sau N giờ. CANDIDATE_CAP chờ tới 0h UTC kế tiếp. */
 export const AUTO_OUTREACH_NO_MATCH_RECHECK_HOURS = 3;
+/** Số người cần tuyển tối đa của một tin (hiringTarget 1–100). */
+export const HIRING_TARGET_MAX = 100;

@@ -1,6 +1,8 @@
 import type { NextFunction, Request, Response } from "express";
 import type {
   ApiResponse,
+  BulkInviteRequest,
+  BulkInviteResponse,
   CandidateOutreachInvitationDto,
   CandidateSearchResultDto,
   CompanyOutreachInvitationDto,
@@ -75,6 +77,17 @@ export class CandidateOutreachController {
       );
       const body: ApiResponse<SentOutreachInvitationDto> = { success: true, data: result };
       res.status(201).json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  bulkInvite = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { candidateIds } = req.body as BulkInviteRequest;
+      const result = await this.candidateOutreachService.bulkInvite(req.user!.id, req.params.jobId as string, candidateIds);
+      const body: ApiResponse<BulkInviteResponse> = { success: true, data: result };
+      res.json(body);
     } catch (error) {
       next(error);
     }

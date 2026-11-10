@@ -1,5 +1,6 @@
 import type { OutreachInvitationSource, PrismaClient } from "@prisma/client";
 import type {
+  BulkInviteResponse,
   CandidateOutreachInvitationDto,
   CandidateSearchResultDto,
   CompanyOutreachInvitationDto,
@@ -7,6 +8,7 @@ import type {
   MatchResult,
   OutreachDailyQuotaStatus,
   OutreachInvitationAction,
+  OutreachInviteSkipReason,
   OutreachJobSummary,
   OutreachSettings,
   PaginatedResponse,
@@ -28,6 +30,7 @@ import type { NotificationsService } from "../notifications/notifications.servic
 import type { CompanySubscriptionRepository } from "../subscriptions/company-subscription.repository";
 import type { SubscriptionsService } from "../subscriptions/subscriptions.service";
 import {
+  autoDailyLimit,
   hasDailyRoom,
   type CandidateOutreachRateLimitService,
   type OutreachDailyLimit,
@@ -69,7 +72,7 @@ export type OutreachQuotaPolicy =
  * Lý do không tạo được lời mời (AD-23). Mời tay đổi thành AppError; mời hàng loạt và
  * tự động mời bỏ qua người đó, riêng QUOTA thì dừng hẳn.
  */
-export type InvitationSkipReason = "NOT_FOUND" | "NOT_OPEN" | "APPLIED" | "BLOCKED" | "CANDIDATE_CAP" | "QUOTA";
+export type InvitationSkipReason = OutreachInviteSkipReason;
 
 export type CreateInvitationResult =
   | { created: true; invitation: InvitationWithRelations }
@@ -86,7 +89,7 @@ export interface CreateInvitationInput {
    * Điểm đã chấm sẵn (tự động mời chấm cả pool trước khi chọn người). Bỏ trống thì chấm
    * lại riêng người này lúc gửi (D7).
    */
-  match?: MatchResult | null;
+  match?: MatchResult | null | undefined;
 }
 
 /**
@@ -325,6 +328,63 @@ export class CandidateOutreachService {
   }
 
   /**
+   * "Mời tất cả gợi ý" (AD-23 mục 1a, bước 3). Client gửi đúng danh sách đang hiện ở
+   * tab "Gợi ý"; server kiểm lại từng người bằng createInvitation (nguồn MANUAL), nên id
+   * cũ hay id ngoài danh sách gợi ý cũng chỉ được mời nếu hợp lệ. Có ở mọi gói, kể cả
+   * Dùng thử. Gửi lần lượt, không song song: cần dừng đúng lúc hết hạn mức.
+   */
+  async bulkInvite(userId: string, jobPostId: string, candidateIds: string[]): Promise<BulkInviteResponse> {
+    const employer = await this.requireEmployer(userId);
+    const jobPost = await this.requireOwnedJobPost(employer, jobPostId);
+    assertPublished(jobPost);
+    const dailyQuota = await this.resolveDailyQuota(employer);
+    const limit: OutreachDailyLimit = { daily: dailyQuota };
+    const ids = [...new Set(candidateIds)];
+
+    const invited: InvitationWithRelations[] = [];
+    const skipped: BulkInviteResponse["skipped"] = [];
+    // Hết lượt từ đầu thì khỏi chấm điểm.
+    const hasRoom = hasDailyRoom(await this.rateLimit.getUsage(employer.companyId), limit, "MANUAL");
+    const scores = hasRoom ? await this.scoreManyForInvitation(jobPost.id, ids) : null;
+    for (const [index, candidateId] of ids.entries()) {
+      const result = hasRoom
+        ? await this.createInvitation({
+            sender: { employerId: employer.id, companyId: employer.companyId, companyName: employer.company.name },
+            jobPost,
+            candidateId,
+            source: "MANUAL",
+            limit,
+            // Chấm lô lỗi ⇒ để createInvitation tự chấm từng người (D7).
+            match: scores ? (scores.get(candidateId) ?? null) : undefined,
+          })
+        : ({ created: false, reason: "QUOTA" } as const);
+      if (result.created) {
+        invited.push(result.invitation);
+        continue;
+      }
+      if (result.reason === "QUOTA") {
+        skipped.push(...ids.slice(index).map((id) => ({ candidateId: id, reason: "QUOTA" as const })));
+        break;
+      }
+      skipped.push({ candidateId, reason: result.reason });
+    }
+
+    const [cards, quota] = await Promise.all([
+      this.repository.findSearchCards(invited.map((invitation) => invitation.candidateId)),
+      this.getDailyQuotaStatus(employer),
+    ]);
+    const cardById = new Map(cards.map((card) => [card.candidateId, card]));
+    return {
+      // createInvitation vừa kiểm isOpenToOutreach = true ⇒ xem được hồ sơ.
+      invited: invited.map((invitation) =>
+        toSentOutreachInvitationDto(invitation, cardById.get(invitation.candidateId) ?? null, true),
+      ),
+      skipped,
+      quota,
+    };
+  }
+
+  /**
    * Tạo một lời mời — dùng chung cho mời tay, "Mời tất cả gợi ý" và tự động mời (AD-23)
    * để quy tắc không lệch giữa các đường. Không ném lỗi nghiệp vụ: trả lý do bỏ qua.
    * Không kiểm quyền với tin hay tin còn PUBLISHED — nơi gọi lo.
@@ -482,6 +542,23 @@ export class CandidateOutreachService {
     }
   }
 
+  /**
+   * Như scoreForInvitation cho nhiều người: nạp tin một lần, tính embedding một lô.
+   * Lỗi ⇒ null, nơi gọi để từng lời mời tự chấm lại.
+   */
+  private async scoreManyForInvitation(jobPostId: string, candidateIds: string[]): Promise<Map<string, MatchResult> | null> {
+    try {
+      const job = await this.requireJobProfile(jobPostId);
+      return await this.scoreCandidates(job, candidateIds, MAX_NEW_EMBEDDINGS_PER_REQUEST);
+    } catch (error) {
+      this.logger.error("Bulk outreach scoring failed — scoring each invitation separately", {
+        jobPostId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    }
+  }
+
   /** Giai đoạn B. Id không còn hồ sơ bị bỏ khỏi Map kết quả. */
   private async scoreCandidates(
     job: JobMatchProfile,
@@ -520,16 +597,25 @@ export class CandidateOutreachService {
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
 
-  /** Hạn mức lời mời hôm nay của công ty — chỉ đọc, dùng cho dashboard Employer (AD-16). */
+  /**
+   * Hạn mức lời mời hôm nay của công ty — chỉ đọc, dùng cho dashboard Employer (AD-16),
+   * trang "Lời mời" và kết quả "Mời tất cả gợi ý". Kèm phần tự động (AD-23 mục 5).
+   */
   async getDailyQuotaStatus(employer: Pick<OutreachEmployer, "companyId" | "company">): Promise<OutreachDailyQuotaStatus> {
     const quota = await this.lookupDailyQuota(employer);
     if (!quota) return { mode: "BLOCKED" };
-    const { total: usedToday } = await this.rateLimit.getUsage(employer.companyId);
+    const [usage, sharePercent] = await Promise.all([
+      this.rateLimit.getUsage(employer.companyId),
+      quota.autoAllowed ? this.repository.findAutoSharePercent(employer.companyId) : Promise.resolve(0),
+    ]);
     return {
       mode: quota.mode,
       dailyQuota: quota.dailyQuota,
-      usedToday,
-      remainingToday: Math.max(0, quota.dailyQuota - usedToday),
+      usedToday: usage.total,
+      remainingToday: Math.max(0, quota.dailyQuota - usage.total),
+      autoAllowed: quota.autoAllowed,
+      autoLimitToday: quota.autoAllowed ? autoDailyLimit(quota.dailyQuota, sharePercent ?? 0) : 0,
+      autoUsedToday: usage.auto,
     };
   }
 

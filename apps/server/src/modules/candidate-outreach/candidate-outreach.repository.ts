@@ -449,6 +449,26 @@ export class CandidateOutreachRepository {
     return candidate?.id ?? null;
   }
 
+  // ─── Cài đặt của công ty (AD-23 mục 5) ────────────────────────────────────
+
+  /** Phần trăm hạn mức/ngày dành cho tự động mời; null khi không có công ty. */
+  async findAutoSharePercent(companyId: string): Promise<number | null> {
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { outreachAutoSharePercent: true },
+    });
+    return company?.outreachAutoSharePercent ?? null;
+  }
+
+  async updateAutoSharePercent(companyId: string, percent: number): Promise<number> {
+    const company = await this.prisma.company.update({
+      where: { id: companyId },
+      data: { outreachAutoSharePercent: percent },
+      select: { outreachAutoSharePercent: true },
+    });
+    return company.outreachAutoSharePercent;
+  }
+
   /** Chỉ ghi đúng 1 cột. Q5: không đụng tới lời mời PENDING hiện có. */
   async updateOpenToOutreach(candidateId: string, isOpenToOutreach: boolean): Promise<boolean> {
     const row = await this.prisma.candidate.update({
