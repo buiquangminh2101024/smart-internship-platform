@@ -4,7 +4,7 @@ Song song: `docs/05-frontend/phases/auto-outreach/PLAN.md`.
 Quyết định: **AD-23** trong `docs/02-architecture/ARCHITECTURE_DECISIONS.md` (sửa một phần AD-15).
 Nền tảng: `docs/06-backend/candidate-outreach/PLAN.md` (B3, D1–D7, Q1–Q5), `docs/06-backend/outreach-hub/PLAN.md`.
 
-**Trạng thái: ĐÃ DUYỆT (2026-11-09). BACKEND XONG (bước 0–8, 2026-11-10); migration đã áp lên Neon. Còn frontend F1–F5 (`docs/05-frontend/phases/auto-outreach/PLAN.md`).** Q1–Q5 đã chốt 2026-11-09.
+**Trạng thái: XONG (2026-11-10).** Đã duyệt 2026-11-09. Backend xong bước 0–8 và migration đã áp lên Neon. Frontend F1–F5 cũng xong cùng ngày (`docs/05-frontend/phases/auto-outreach/PLAN.md`). Q1–Q5 đã chốt 2026-11-09.
 
 ## Mục tiêu
 
@@ -181,7 +181,7 @@ Mọi thay đổi đều thêm mới, có mặc định. Lời mời cũ nhận 
 
 - `notification.types.ts` và `notification-templates.ts`: thêm `AUTO_OUTREACH_SENT`.
   - Tiêu đề: "Hệ thống đang tự mời ứng viên cho tin «X»".
-  - Link: `/employer/jobs/<id>/candidate-search?tab=invited`. Trang này hiện giữ tab bằng state cục bộ; frontend bước F1 thêm việc đọc `?tab=`.
+  - Link: `/employer/jobs/<id>/candidate-search?tab=invited`. Lúc lập plan, trang này giữ tab bằng state cục bộ. Frontend bước F1 đã thêm việc đọc và ghi `?tab=`.
   - Chỉ báo trong app, không gửi email.
 - `packages/shared-types`: thêm `AutoOutreachSettings`, `AutoOutreachStatus`, `AutoOutreachState`, `BulkInviteRequest`, `BulkInviteResponse`, `CompanyOutreachSettings`, `OutreachInvitationSource`; mở rộng `OutreachDailyQuotaStatus` và `CandidateSearchResultDto` (`cappedToday`).
 - `main.ts`: thêm `startAutoOutreachJob(...)` cạnh `startCandidateOutreachExpiryJob`.

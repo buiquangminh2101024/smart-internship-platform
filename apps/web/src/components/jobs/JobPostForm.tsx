@@ -37,6 +37,8 @@ export interface JobPostFormProps {
   error?: string | null;
   /** Banner phía trên form (trạng thái xác minh công ty, quota còn lại...). */
   notice?: ReactNode;
+  /** Nhóm thêm ở cuối form, ngay trên các nút (form tạo tin: cài đặt tự động mời — AD-23). */
+  beforeActions?: ReactNode;
   onAction: (dto: CreateJobPostRequest, action: JobPostFormAction) => void;
   onCancel?: (() => void) | undefined;
 }
@@ -154,7 +156,15 @@ type TextSnapshot = { title: string; description: string; requirements: string }
  * field cùng lúc (thay vì dừng lại ở lỗi đầu tiên) — action "draft" dùng
  * schema lỏng, "preview"/"submit" dùng schema đủ ràng buộc (xem actionRef).
  */
-export function JobPostForm({ initial, saving = false, error, notice, onAction, onCancel }: JobPostFormProps) {
+export function JobPostForm({
+  initial,
+  saving = false,
+  error,
+  notice,
+  beforeActions,
+  onAction,
+  onCancel,
+}: JobPostFormProps) {
   const actionRef = useRef<JobPostFormAction>("draft");
   // Kỹ năng nằm ở bảng nối nên không đi cùng FormValues (toàn string) — giữ
   // state riêng, gom vào `skillIds` (Bắt buộc) / `preferredSkillIds` (Ưu tiên)
@@ -548,6 +558,8 @@ export function JobPostForm({ initial, saving = false, error, notice, onAction, 
           reanalyzing={extract.isPending}
         />
       ) : null}
+
+      {beforeActions}
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
 

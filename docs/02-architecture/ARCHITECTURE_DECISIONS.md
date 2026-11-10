@@ -654,7 +654,7 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 
 **Ngày:** 2026-11-09 · **Phase liên quan:** không thuộc phase đánh số. Mục 0.2 của `docs/01-project/FEATURE_BACKLOG.md`, theo nhận xét của giáo viên ở buổi demo 05/11/2026. Kế hoạch chi tiết: `docs/06-backend/auto-outreach/PLAN.md`, `docs/05-frontend/phases/auto-outreach/PLAN.md`.
 
-> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-09, chủ dự án duyệt từng câu hỏi). BACKEND ĐÃ TRIỂN KHAI (2026-11-10), đã kiểm trên Neon; FRONTEND CHƯA LÀM.** Ghi chú triển khai chi tiết ở `docs/06-backend/auto-outreach/PLAN.md`.
+> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-09, chủ dự án duyệt từng câu hỏi). ĐÃ TRIỂN KHAI ĐỦ BACKEND VÀ FRONTEND (2026-11-10), đã kiểm trên Neon.** Ghi chú triển khai chi tiết ở `docs/06-backend/auto-outreach/PLAN.md` (backend) và `docs/05-frontend/phases/auto-outreach/PLAN.md` (frontend, kết quả kiểm F5).
 
 **Bối cảnh:** AD-15 chỉ cho mời tay từng người, hạn mức mặc định 3 lời mời/ngày/công ty và cả ba gói đều để `null`. Giáo viên yêu cầu: đăng tin xong thì hệ thống tự gợi ý và tự gửi lời mời, nhà tuyển dụng không phải vào từng tin để mời từng người.
 

@@ -3,7 +3,7 @@
 Song song: `docs/06-backend/auto-outreach/PLAN.md` (API, câu hỏi Q1–Q5).
 Quyết định: **AD-23**. Quy ước giao diện: `.claude/skills/sip-ui/SKILL.md`. Bắt buộc đọc skill này trước khi code.
 
-**Trạng thái: ĐÃ DUYỆT (2026-11-10), ĐANG LÀM ĐỢT A (F1 + F4).** Backend xong 2026-11-10.
+**Trạng thái: XONG (2026-11-10).** Đã duyệt 2026-11-10, làm theo hai đợt: A (F1 + F4) và B (F2 + F3). F5 đã kiểm đủ 6 mục trên trình duyệt và trên Neon (xem "Ghi chú triển khai"). Backend xong cùng ngày.
 
 ## Phần 1 — Công nghệ / package / kiến trúc
 
@@ -104,6 +104,38 @@ Dùng bộ dữ liệu demo lớn (0.1), tài khoản nhà tuyển dụng của 
 4. Đặt tỉ lệ 0% ⇒ tự mời dừng, mời tay vẫn được.
 5. Ứng viên đã nhận đủ 10 lời mời trong ngày: nút mời trên trang tìm ứng viên bị mờ, có chữ giải thích.
 6. Kiểm màn hình điện thoại (theo sip-ui) và trạng thái lỗi / đang tải.
+
+### Ghi chú triển khai (2026-11-10)
+
+Đợt A:
+
+- "Mời tất cả" chỉ gửi người chưa đủ trần hôm nay. Sau khi mời, cache "Gợi ý" được cập nhật tại chỗ: bỏ người đã được mời hoặc không còn mời được cho tin, đánh dấu `cappedToday` cho người bị bỏ qua vì đủ trần, giữ nguyên người bị bỏ qua vì hết lượt.
+- Giờ mời lại của ứng viên đủ trần ghi "7h sáng nay" nếu đang từ 0h đến trước 7h giờ Việt Nam, còn lại ghi "7h sáng mai".
+- Đã kiểm trên Neon: "Mời tất cả" trên tin `clargedemojob0138` tạo 10 lời mời MANUAL, giữ lại làm dữ liệu demo. 10 email gửi tới `@large-demo.local` được chuyển sang FAILED kèm lý do.
+
+Đợt B:
+
+- Hook ở `hooks/useAutoOutreach.ts`. Key của thẻ nằm dưới `OUTREACH_KEY`, nên khi có `AUTO_OUTREACH_SENT` hoặc ứng viên trả lời lời mời, `SocketProvider` làm mới luôn thẻ.
+- Lưu xong thì thẻ đọc lại mỗi 3 giây, trong tối đa 30 giây, cho tới khi giữ đủ lời mời. Lý do: lượt chạy nền chạy sau khi API đã trả về.
+- Thẻ không hiện khi API trả 404 (người xem không phải người đăng tin), và không hiện ở tin Đã đóng, Hết hạn hoặc Đã hạ, vì cài đặt không còn tác dụng.
+- Form tạo tin: thêm một chỗ trống tuỳ chọn `beforeActions` vào `JobPostForm` (trang sửa tin không dùng). Chỉ gọi PATCH khi cài đặt khác mặc định hoặc khác lần lưu trước. Nếu PATCH lỗi thì nháp vẫn còn, form báo lỗi và dừng thao tác để người dùng thử lại hoặc tắt tự mời.
+- Công tắc chỉ hiện khi gói ở chế độ `SUBSCRIBED`. Dùng thử và chưa có gói đều ẩn.
+- Lưu cài đặt của tin xong thì làm mới "Gợi ý" và "Đã mời" của tin (key bắt đầu bằng `["employer", "job-posts", jobId]`) cùng số liệu trang "Lời mời", theo Phần 2. "Gợi ý" chỉ tìm lại khi mở trang đó lần sau.
+- Bộ dữ liệu demo không có công ty nào đang dùng thử, nên chưa xem được trạng thái `PLAN_NOT_ALLOWED` trên trình duyệt.
+- Dòng hạn mức ở trang "Lời mời": khi hạ tỉ lệ sau khi đã tự mời trong ngày, số đã gửi vượt giới hạn mới. Lúc đó dòng ghi "Tự động: 26 đã gửi, giới hạn mới 0 nên hôm nay ngừng tự mời" thay cho "26/0".
+
+Kết quả F5 trên Neon (2026-11-10). Chủ dự án tự bấm các mục 2–4, tin `clargedemojob0340` của Mây Xanh (gói Doanh nghiệp, H = 6):
+
+| Mục | Kết quả |
+|---|---|
+| 2 | Bật tự mời với `hiringTarget = 2` ⇒ 12 lời mời AUTO (điểm 90–100), gửi trong khoảng 13 giây (09:02:59–09:03:12 UTC). Thẻ tự lên "Đang giữ 12/12 lời mời · 0 đã nhận lời · Đã tuyển 0/2", tab "Đã mời" có 12 dòng nhãn "Tự động". 1 thông báo `AUTO_OUTREACH_SENT`. |
+| 3 | Ứng viên `ung-vien-0862` từ chối lúc 09:12:16 ⇒ có 1 lời mời bù (điểm 90) sau 3,2 giây, tab "Đã mời" thành 13 dòng. |
+| 4 | Đặt tỉ lệ 0% lúc 09:13:41. Ứng viên từ chối lúc 09:43:42 ⇒ thẻ xuống 11/12 và không có lời mời AUTO bù. Mời tay lúc 09:45:57 (MANUAL, điểm 86) vẫn được ⇒ thẻ lên lại 12/12. |
+| 5, 6 | Đã kiểm ở đợt A và đợt B: nút mờ khi ứng viên đủ trần, màn hình 375px không cuộn ngang. |
+
+Dọn dẹp: 14 email gửi tới `@large-demo.local` được chuyển sang FAILED kèm lý do. Lời mời được giữ lại làm dữ liệu demo.
+
+Điểm còn có thể cải thiện (chưa làm): khi tỉ lệ công ty là 0%, thẻ vẫn ở `RUNNING` và ghi "Hệ thống tự mời bù…", dù hệ thống sẽ không mời bù. Lý do là `state` của backend không xét tỉ lệ công ty.
 
 ## Ngoài phạm vi
 

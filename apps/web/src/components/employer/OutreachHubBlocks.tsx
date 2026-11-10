@@ -59,12 +59,20 @@ export function OutreachStats({ summary }: { summary: EmployerOutreachSummary })
               {...(quota.autoAllowed
                 ? {
                     extra: {
-                      label: (
-                        <>
-                          Tự động: <Num value={quota.autoUsedToday} />/<Num value={quota.autoLimitToday} /> · Tổng:{" "}
-                          <Num value={quota.usedToday} />/<Num value={quota.dailyQuota} /> hôm nay
-                        </>
-                      ),
+                      label:
+                        // Hạ tỉ lệ sau khi đã tự mời trong ngày ⇒ đã dùng vượt giới hạn mới, ghi rõ thay vì "26/0".
+                        quota.autoUsedToday > quota.autoLimitToday ? (
+                          <>
+                            Tự động: <Num value={quota.autoUsedToday} /> đã gửi, giới hạn mới{" "}
+                            <Num value={quota.autoLimitToday} /> nên hôm nay ngừng tự mời · Tổng:{" "}
+                            <Num value={quota.usedToday} />/<Num value={quota.dailyQuota} />
+                          </>
+                        ) : (
+                          <>
+                            Tự động: <Num value={quota.autoUsedToday} />/<Num value={quota.autoLimitToday} /> · Tổng:{" "}
+                            <Num value={quota.usedToday} />/<Num value={quota.dailyQuota} /> hôm nay
+                          </>
+                        ),
                     },
                   }
                 : {})}

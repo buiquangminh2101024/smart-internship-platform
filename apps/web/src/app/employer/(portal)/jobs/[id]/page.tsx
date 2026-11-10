@@ -12,6 +12,7 @@ import { JobPostForm, type JobPostFormAction } from "@/components/jobs/JobPostFo
 import { JobPostSubmitResult } from "@/components/jobs/JobPostSubmitResult";
 import { ModerationBanner } from "@/components/jobs/ModerationBanner";
 import { EmployerJobQuotaNotice } from "@/components/jobs/EmployerJobQuotaNotice";
+import { AutoOutreachCard } from "@/components/employer/AutoOutreachCard";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -266,6 +267,11 @@ function EmployerJobDetail({ params }: { params: Promise<{ id: string }> }) {
                 }, "Không xóa được tin nháp, vui lòng thử lại")
               }
             />
+
+            {/* AD-23 — tin đã kết thúc thì cài đặt không còn tác dụng nên không hiện. */}
+            {job.status === "DRAFT" || job.status === "PENDING" || job.status === "PUBLISHED" ? (
+              <AutoOutreachCard jobId={job.id} published={job.status === "PUBLISHED"} />
+            ) : null}
 
             <Card padding="md" className="grid gap-3">
               <h2 className="text-xs font-semibold tracking-wide text-text-subtle uppercase">Ứng viên</h2>
