@@ -3,6 +3,7 @@ import { AppError } from "../../shared/errors/AppError";
 import type { Logger } from "../../shared/logger";
 import type { EmployerIdentityCache } from "../employers/employer-identity-cache";
 import type { EmployerRepository } from "../employers/employer.repository";
+import type { MatchScoreRepository } from "../match-scores/match-score.repository";
 import type { NotificationsService } from "../notifications/notifications.service";
 import {
   allocateRoundRobin,
@@ -90,6 +91,7 @@ export class AutoOutreachService {
   private readonly runStore: AutoOutreachRunStore;
   private readonly rateLimit: CandidateOutreachRateLimitService;
   private readonly notificationsService: NotificationsService;
+  private readonly matchScoreRepository: MatchScoreRepository;
   private readonly logger: Logger;
 
   constructor({
@@ -101,6 +103,7 @@ export class AutoOutreachService {
     autoOutreachRunStore,
     candidateOutreachRateLimitService,
     notificationsService,
+    matchScoreRepository,
     logger,
   }: {
     autoOutreachRepository: AutoOutreachRepository;
@@ -111,6 +114,7 @@ export class AutoOutreachService {
     autoOutreachRunStore: AutoOutreachRunStore;
     candidateOutreachRateLimitService: CandidateOutreachRateLimitService;
     notificationsService: NotificationsService;
+    matchScoreRepository: MatchScoreRepository;
     logger: Logger;
   }) {
     this.repository = autoOutreachRepository;
@@ -121,6 +125,7 @@ export class AutoOutreachService {
     this.runStore = autoOutreachRunStore;
     this.rateLimit = candidateOutreachRateLimitService;
     this.notificationsService = notificationsService;
+    this.matchScoreRepository = matchScoreRepository;
     this.logger = logger;
   }
 
@@ -383,7 +388,11 @@ export class AutoOutreachService {
 
   private async toJobDto(job: JobAutoOutreachRow, policy: OutreachQuotaPolicy | null): Promise<JobAutoOutreachDto> {
     const now = new Date();
-    const counts = await this.repository.countJob(job.id, now);
+    // Số Phù hợp đọc từ bảng điểm lưu sẵn (0.3), không chấm lúc mở thẻ.
+    const [counts, progress] = await Promise.all([
+      this.repository.countJob(job.id, now),
+      this.matchScoreRepository.progressForJob(job.id),
+    ]);
     const { state, nextCheckAt } = resolveAutoOutreachState(
       {
         autoAllowed: policy?.autoAllowed ?? false,
@@ -407,6 +416,10 @@ export class AutoOutreachService {
         hiredCount: counts.hiredCount,
         autoSentToday: counts.autoSentToday,
         nextCheckAt: nextCheckAt ? nextCheckAt.toISOString() : null,
+        matched: progress?.matched ?? 0,
+        matchedApplied: progress?.matchedApplied ?? 0,
+        interviewing: progress?.interviewing ?? 0,
+        matchScoresAt: progress?.matchScoresAt?.toISOString() ?? null,
       },
     };
   }

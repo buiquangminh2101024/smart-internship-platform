@@ -24,3 +24,10 @@ export const MATCH_SCORE_PROFILE_LOAD_BATCH = 500;
  * dữ liệu lớn. Số do thiết kế, không có nguồn.
  */
 export const MATCH_SCORE_PROFILE_CACHE_MAX = 20_000;
+
+/**
+ * Thời gian tối đa một lượt chấm đêm. Ước tính hiện ≈ 2–3 phút (bước 0); 45 phút là dư
+ * địa khi dữ liệu tăng, không phải thời gian mong đợi. Hết thời gian thì dừng; tin chưa
+ * chấm có `matchScoresAt` cũ nhất nên đêm sau được chấm trước.
+ */
+export const MATCH_SCORE_NIGHTLY_BUDGET_MS = 45 * 60 * 1000;

@@ -6,6 +6,7 @@ import type {
   ApiResponse,
   EmployerDashboardAnalytics,
   EmployerDashboardOverview,
+  EmployerHiringProgress,
 } from "@sip/shared-types";
 import type { AdminDashboardService } from "./admin-dashboard.service";
 import type { DashboardAnalyticsQuery } from "./dashboard.dto";
@@ -43,6 +44,16 @@ export class DashboardController {
       const { range } = req.query as unknown as DashboardAnalyticsQuery;
       const result = await this.employerDashboardService.analytics(req.user!.id, range);
       const body: ApiResponse<EmployerDashboardAnalytics> = { success: true, data: result };
+      res.json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  employerHiringProgress = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await this.employerDashboardService.hiringProgress(req.user!.id);
+      const body: ApiResponse<EmployerHiringProgress> = { success: true, data: result };
       res.json(body);
     } catch (error) {
       next(error);

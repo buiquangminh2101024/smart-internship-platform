@@ -9,6 +9,8 @@ import type { CandidateMatchProfile, JobMatchProfile } from "../../src/shared/po
 import { CandidateProfileCache } from "../../src/modules/match-scores/candidate-profile-cache";
 import type { MatchScoreRow } from "../../src/modules/match-scores/match-score.repository";
 import { MatchScoreService } from "../../src/modules/match-scores/match-score.service";
+import { runMatchScoreNightly } from "../../src/modules/match-scores/match-score.job";
+import { MATCH_SCORE_NIGHTLY_BUDGET_MS } from "../../src/modules/match-scores/match-scores.config";
 
 const profile = (candidateId: string) => ({ candidateId }) as unknown as CandidateMatchProfile;
 
@@ -235,4 +237,28 @@ test("rescoreAll: lọc theo tin; đang có lượt khác ⇒ LOCKED", async () 
   const result = await first;
   assert.equal(result.status === "DONE" && result.jobsTotal, 1);
   assert.deepEqual([...written.keys()], ["job-2"]);
+});
+
+// ─── Job đêm ───────────────────────────────────────────────────────────────
+
+test("job đêm: xoá điểm của tin hết hiển thị trước, rồi chấm lại với budget 45 phút", async () => {
+  const calls: string[] = [];
+  const result = await runMatchScoreNightly({
+    matchScoreRepository: {
+      deleteForInactiveJobs: async () => {
+        calls.push("cleanup");
+        return { deletedRows: 12, resetJobs: 2 };
+      },
+    },
+    matchScoreService: {
+      rescoreAll: async (options: { budgetMs: number }) => {
+        calls.push(`rescore:${options.budgetMs}`);
+        return { status: "LOCKED" as const };
+      },
+    },
+    logger: { info: () => {}, warn: () => {}, error: () => {} },
+  } as unknown as Parameters<typeof runMatchScoreNightly>[0]);
+  assert.deepEqual(calls, ["cleanup", `rescore:${MATCH_SCORE_NIGHTLY_BUDGET_MS}`]);
+  assert.equal(MATCH_SCORE_NIGHTLY_BUDGET_MS, 45 * 60 * 1000);
+  assert.deepEqual(result.cleaned, { deletedRows: 12, resetJobs: 2 });
 });

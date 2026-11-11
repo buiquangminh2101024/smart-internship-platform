@@ -38,6 +38,9 @@ import { startCandidateOutreachExpiryJob } from "./modules/candidate-outreach/ca
 import type { CandidateOutreachRepository } from "./modules/candidate-outreach/candidate-outreach.repository";
 import { startAutoOutreachJob } from "./modules/candidate-outreach/auto-outreach.job";
 import { registerMatchScores } from "./modules/match-scores/match-scores.module";
+import { startMatchScoreJob } from "./modules/match-scores/match-score.job";
+import type { MatchScoreRepository } from "./modules/match-scores/match-score.repository";
+import type { MatchScoreService } from "./modules/match-scores/match-score.service";
 import type { AutoOutreachRepository } from "./modules/candidate-outreach/auto-outreach.repository";
 import type { AutoOutreachRunStore } from "./modules/candidate-outreach/auto-outreach-run-store";
 import type { AutoOutreachService } from "./modules/candidate-outreach/auto-outreach.service";
@@ -193,6 +196,13 @@ startAuditLogRetentionJob({
   auditLogRepository: container.resolve<AuditLogRepository>("auditLogRepository"),
   logger,
   retentionDays: config.AUDIT_RETENTION_DAYS,
+});
+// Bảng điểm lưu sẵn (AD-24) — 03:30 giờ Việt Nam: xoá điểm của tin hết hiển thị, chấm
+// lại mọi tin đang hiển thị với một cache hồ sơ cho cả lượt, tối đa 45 phút.
+startMatchScoreJob({
+  matchScoreRepository: container.resolve<MatchScoreRepository>("matchScoreRepository"),
+  matchScoreService: container.resolve<MatchScoreService>("matchScoreService"),
+  logger,
 });
 // Transactional Outbox cho email notification — quét mỗi phút (AD-8).
 startOutboxJob(

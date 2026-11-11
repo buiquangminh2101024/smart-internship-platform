@@ -52,6 +52,8 @@ export interface RescoreAllOptions {
   budgetMs: number;
   companyId?: string;
   jobPostId?: string;
+  /** Gọi sau mỗi tin (script chạy tay in tiến độ). `result` null ⇒ tin lỗi. */
+  onJobDone?: (jobPostId: string, result: RescoreJobResult | null) => void;
 }
 
 const yieldToEventLoop = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
@@ -187,6 +189,7 @@ export class MatchScoreService {
         }
         try {
           const outcome = await this.rescoreJob(job.id, cache);
+          options.onJobDone?.(job.id, outcome);
           if (outcome.status === "DONE") {
             result.jobsScored += 1;
             result.rows += outcome.rows;
@@ -196,6 +199,7 @@ export class MatchScoreService {
           }
         } catch (error) {
           result.jobsFailed += 1;
+          options.onJobDone?.(job.id, null);
           this.logger.error("Match score rescoring failed", {
             jobPostId: job.id,
             error: error instanceof Error ? error.message : String(error),

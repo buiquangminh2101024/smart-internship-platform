@@ -1,6 +1,6 @@
 # Số ứng viên phù hợp và tiến độ tuyển theo tin (0.3) — Backend
 
-> **Trạng thái: XONG BƯỚC 0 (2026-11-11).** Đã đo trên Neon (chỉ đọc) và ghi AD-24 vào `docs/02-architecture/ARCHITECTURE_DECISIONS.md`. Chủ dự án chốt cách nạp hồ sơ ứng viên một lần mỗi lượt (quyết định #10, bước 3–4). Chưa code bước 1.
+> **Trạng thái: XONG BƯỚC 0–5 (2026-11-11).** Bảng điểm đã nạp lần đầu lên Neon. Đã có job đêm 3h30, `GET /employer/dashboard/hiring-progress` và số Phù hợp trên thẻ tự mời. Còn bước 6 (không bắt buộc), 7 (chỉ tiêu cho dữ liệu demo), 8, 9. Chi tiết ở mục Ghi chú triển khai.
 
 Mục 0.3 của `docs/01-project/FEATURE_BACKLOG.md`. Frontend: `docs/05-frontend/phases/hiring-progress/PLAN.md`.
 
@@ -419,7 +419,109 @@ Kiểm thử:
   - số embedding và `embeddedAt` mới nhất không đổi trước và sau, tức không ghi gì;
   - thời gian chấm ở lần chạy này chưa có ý nghĩa để so: cả hai lối đều nạp hồ sơ lần đầu, và độ trễ tới Neon dao động. Thời gian thật của lượt đêm sẽ đo ở lần nạp đầu của bước 4.
 
-### Bước 4 trở đi
+### Bước 4 — Job đêm, script chạy tay, nạp lần đầu (2026-11-11)
+
+Các file:
+
+- `match-score.job.ts`:
+  - `runMatchScoreNightly(deps, { budgetMs, onJobDone })`: gọi `deleteForInactiveJobs` rồi `rescoreAll`;
+  - `startMatchScoreJob`: `"30 3 * * *"`, timezone `Asia/Ho_Chi_Minh`, ghi log tổng; `LOCKED` thì chỉ warn.
+- `match-scores.config.ts`: thêm `MATCH_SCORE_NIGHTLY_BUDGET_MS = 45 phút`.
+- `match-score.service.ts`: `rescoreAll` nhận thêm `onJobDone(jobPostId, result | null)`, để script in tiến độ.
+- `main.ts`: `startMatchScoreJob(...)` đặt ngay trước outbox job.
+- `scripts/rescore-match-scores.ts` + `npm run rescore-match-scores --workspace=apps/server`:
+  - không có bộ lọc: gọi đúng `runMatchScoreNightly` như job đêm, nhưng không giới hạn thời gian;
+  - `--company <id>` / `--job <id>`: chỉ `rescoreAll` theo bộ lọc, không dọn gì;
+  - `--dry-run`: in số tin, phân bố pool và tổng số cặp; không chấm, không ghi.
+  - Cuối lượt in số dòng và dung lượng bảng.
+
+Khác plan:
+
+- **Script không dựng cả container** (không có script nào trong repo làm vậy; dựng container phải mount gần hết router). Script tự tạo đúng các phụ thuộc mà `loadJobProfile` / `scoreProfiles` dùng, cùng cấu hình với `job-matching.routes.ts`. Các phụ thuộc còn lại của `CandidateOutreachService` (mời, thông báo, hạn mức) để trống, kèm chú thích.
+- **Khoá chống chạy trùng chỉ có tác dụng trong một process.** Script chạy cùng lúc với job đêm của server thì một tin có thể bị chấm hai lần. Không sai dữ liệu, vì mỗi lần thay trọn điểm của tin trong một transaction. Đã ghi ở đầu script.
+- Log tổng dùng `pendingRows` thay cho "số embedding mới" (xem bước 3).
+
+Kiểm thử:
+
+- Unit test thêm 1 test cho `runMatchScoreNightly`: dọn trước rồi chấm, budget 45 phút. `match-scores.test.ts` có 14 test. Cả bộ unit test xanh, `tsc` sạch (kể cả script và test, kiểm bằng tsconfig tạm).
+- `--dry-run` trên Neon: 311 tin, pool min 22 / trung vị 438 / p95 698 / max 882, 131.928 cặp. Khớp số đo bước 0.
+
+**Nạp lần đầu lên Neon** (chủ dự án xác nhận, 2026-11-11 03:48–03:53 UTC, `npm run rescore-match-scores`):
+
+- 311/311 tin, không bỏ qua, không lỗi. 131.928 dòng, 0 dòng rule-only. 1.523 hồ sơ nạp đúng một lần.
+- Bảng 22 MB (ước 34 MB). Cả DB 57 MB.
+- **Thời gian 301 giây**, so với ước 2–3 phút. Lệch khoảng 2–3 phút, dưới ngưỡng dừng 10 phút của bước 8. Đã tách bằng một lượt chấm cả 311 tin mà không ghi (chỉ đọc, `measure-score-only.ts`), tổng 183 giây:
+
+  | Phần | Thời gian |
+  |---|---|
+  | `findScoringPool` | 17 s |
+  | `loadJobProfile` (311 lần, mỗi lần vài câu tới Neon) | 73 s |
+  | Nạp hồ sơ ứng viên (một lần cho cả lượt) | 23 s |
+  | `scoreProfiles` (tra hash, cosine, chấm) | 71 s |
+  | Phần ghi `replaceForJob` (suy ra: 301 − 183) | ≈ 118 s |
+
+  Ước tính ở bước 0 chỉ đo phần chấm có nạp hồ sơ ứng viên, chưa tính phần ghi và phần nạp hồ sơ tin. Không cần tối ưu: 5 phút còn rất xa giới hạn 45 phút. Nếu sau này cần nhanh hơn, chỗ dễ làm nhất là nạp hồ sơ tin theo lô.
+
+**Kiểm sau khi nạp, chỉ đọc** (`.claude-workspace/scratch/verify-first-load.ts`):
+
+- 311 tin hiển thị đều có `matchScoresAt`. Không tin ẩn nào có `matchScoresAt`. Có đúng một `weightsVersion`.
+- **`updatedAt` không đổi:** 0 tin có `updatedAt` ≥ lúc bắt đầu chấm.
+- **Số dòng mỗi tin = kích thước pool** ở cả 311 tin: không người nào có điểm null.
+- **`matched` / `matchedApplied` của `progressForJob` khớp đếm bằng Prisma trên điểm thật**, ở 3 tin có nhiều trạng thái đơn nhất: 45/3, 4/2, 10/1 (ngưỡng 80). Đây là mục đối chiếu tay của bước 8.
+- **Điểm đã lưu khớp chấm lại bằng `scorePool`** (lối cũ, `maxNewEmbeddings = 0`) ở 3 tin pool 698 / 313 / 474: lệch 0.
+- Phân bố: 7.587 cặp ≥ 80 điểm, trung vị 33 điểm.
+- `progressForCompany` với bảng đã đầy (Mây Xanh, 32 tin): 141 ms lần đầu, ≈ 60 ms các lần sau.
+
+### Bước 5 — API (2026-11-11)
+
+Các file:
+
+- `packages/shared-types`: thêm `HiringProgressItem`, `EmployerHiringProgress`; `AutoOutreachStatus` thêm `matched`, `matchedApplied`, `interviewing`, `matchScoresAt`.
+- `dashboard/hiring-progress.policy.ts` (hàm thuần, không đọc DB):
+  - `compareHiringProgress(a, b, now)`: thứ tự "cần chú ý" của 5a, dùng `ATTENTION_EXPIRING_DAYS` của job-posts (cùng mốc 7 ngày với "Tin cần chú ý");
+  - `buildHiringProgress(rows, viewerEmployerId, now)`: tổng, cắt `HIRING_PROGRESS_LIMIT = 5` tin, `scoredAt`, `ownedByViewer`.
+- `EmployerDashboardService.hiringProgress(userId)`: id lấy từ `employerIdentityCache` (AD-19, không hỏi DB), một câu `progressForCompany`, rồi `buildHiringProgress`.
+- `GET /employer/dashboard/hiring-progress` trong `dashboard.routes.ts`, quyền `EMPLOYER`, endpoint riêng.
+- `AutoOutreachService.toJobDto`: đọc `progressForJob` song song với `countJob`.
+
+Các điểm chốt khi làm, plan chưa nói rõ:
+
+- **`totals` tính trên mọi tin đang hiển thị của công ty**, không chỉ 5 tin ở `items`. `totals.matched` cộng theo tin: một ứng viên hợp nhiều tin được đếm ở từng tin. Đã ghi trong shared types.
+- **`scoredAt` bỏ qua tin chưa chấm.** Là lần chấm cũ nhất trong các tin ở `items` đã có `matchScoresAt`. Null chỉ khi không tin nào được chấm. Tin chưa chấm vẫn có `matchScoresAt = null` của riêng nó, để frontend hiện "Đang chấm…".
+- **Thứ tự:**
+  - Quy tắc 2 (≤ 7 ngày tới hạn) chỉ áp cho tin chưa đạt chỉ tiêu, đúng chữ "trong đó" của 5a.
+  - Tin đã đạt chỉ tiêu xếp theo tỉ lệ rồi theo hạn nộp.
+  - Tin không có hạn nộp xếp sau cùng ở quy tắc 4 và không được coi là sắp hết hạn.
+  - Hoà hết thì xếp theo id, để thứ tự không đổi giữa các lần tải.
+- **Response không có `employerId`** của tin. Chỉ trả `ownedByViewer`.
+- **Thẻ tự mời, tin không hiển thị:** job đêm đã xoá điểm của tin, nên `matched = 0`, `matchScoresAt = null`.
+
+Kiểm thử:
+
+- `tests/unit/hiring-progress.test.ts`: 8 test, gồm:
+  - các quy tắc thứ tự;
+  - tổng tính trên mọi tin, cắt 5 tin;
+  - `scoredAt`;
+  - chuyển trường và `ownedByViewer`;
+  - service đọc theo công ty của người xem.
+- `auto-outreach-settings.test.ts`:
+  - test GET cài đặt tin kiểm thêm 4 trường mới;
+  - thêm 1 test cho tin chưa chấm hoặc không hiển thị.
+- Cả bộ unit test xanh (460 test).
+- `tsc` sạch cho server (kể cả test đã sửa), shared-types và web.
+- Đã build lại `packages/shared-types`, vì server đọc bản build của gói này.
+
+**Trên Neon, chỉ đọc** (`.claude-workspace/scratch/verify-hiring-progress-api.ts`). Gọi các service qua container thật, với công ty Mây Xanh (32 tin):
+
+- `totals`: 32 tin, 497 phù hợp, đã tuyển 7 / chỉ tiêu 33. Khớp tổng cộng tay từ `progressForCompany`.
+- Chỉ tiêu toàn 1 nên trông giả; bước 7 sửa.
+- Thời gian `hiringProgress`: 110 ms lần đầu, ≈ 60 ms các lần sau.
+- 5 tin trả về đều chưa đạt chỉ tiêu, xếp theo hạn nộp từ 20/11 đến 01/12. Không tin nào còn ≤ 7 ngày.
+- Với hai employer khác nhau của công ty, `ownedByViewer` đúng theo người đăng tin. Response không có `employerId`.
+- Thẻ tự mời của một tin: `matched` 10, `matchedApplied` 2, `interviewing` 1, `hiredCount` 0. Khớp `progressForJob`.
+- Thẻ tự mời của một tin DRAFT: `matched` 0, `matchScoresAt` null.
+
+### Bước 6 trở đi
 
 Điền khi làm.
 

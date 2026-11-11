@@ -13,6 +13,7 @@ import {
   updateJobAutoOutreachSchema,
 } from "../../src/modules/candidate-outreach/candidate-outreach.dto";
 import type { OutreachQuotaPolicy } from "../../src/modules/candidate-outreach/candidate-outreach.service";
+import type { HiringProgressRow } from "../../src/modules/match-scores/match-score.repository";
 import { AppError } from "../../src/shared/errors/AppError";
 
 // ─── Quy tắc thuần ─────────────────────────────────────────────────────────
@@ -110,7 +111,16 @@ interface Options {
   policy?: OutreachQuotaPolicy | null;
   job?: Partial<JobAutoOutreachRow>;
   isCompanyAdmin?: boolean;
+  /** Dòng progressForJob của bảng điểm (0.3); null = tin chưa chấm / không hiển thị. */
+  progress?: Partial<HiringProgressRow> | null;
 }
+
+const PROGRESS: Partial<HiringProgressRow> = {
+  matched: 12,
+  matchedApplied: 4,
+  interviewing: 2,
+  matchScoresAt: new Date("2026-11-11T03:53:00.000Z"),
+};
 
 function buildService(options: Options = {}) {
   let job: JobAutoOutreachRow = {
@@ -148,6 +158,7 @@ function buildService(options: Options = {}) {
       },
     },
     candidateOutreachService: { lookupDailyQuota: async () => (options.policy === undefined ? SUBSCRIBED : options.policy) },
+    matchScoreRepository: { progressForJob: async () => (options.progress === undefined ? PROGRESS : options.progress) },
     employerRepository: {
       findByUserId: async () => ({ id: "emp-1", companyId: "co-1", isCompanyAdmin: options.isCompanyAdmin ?? true }),
     },
@@ -188,8 +199,29 @@ test("GET cài đặt tin: target = hiringTarget × H, active = pending + đã n
     minScore: 80,
     hiringTarget: 2,
     state: "RUNNING",
-    status: { target: 10, active: 10, pending: 7, acceptedInvitations: 3, hiredCount: 0, autoSentToday: 4, nextCheckAt: null },
+    status: {
+      target: 10,
+      active: 10,
+      pending: 7,
+      acceptedInvitations: 3,
+      hiredCount: 0,
+      autoSentToday: 4,
+      nextCheckAt: null,
+      matched: 12,
+      matchedApplied: 4,
+      interviewing: 2,
+      matchScoresAt: "2026-11-11T03:53:00.000Z",
+    },
   });
+});
+
+test("GET cài đặt tin: tin chưa chấm hoặc không hiển thị ⇒ Phù hợp 0, matchScoresAt null", async () => {
+  const { service } = buildService({ job: { status: "CLOSED" }, progress: null });
+  const { status } = await service.getJobSettings("user-emp-1", "job-1");
+  assert.deepEqual(
+    { matched: status.matched, matchedApplied: status.matchedApplied, interviewing: status.interviewing, matchScoresAt: status.matchScoresAt },
+    { matched: 0, matchedApplied: 0, interviewing: 0, matchScoresAt: null },
+  );
 });
 
 test("GET cài đặt tin: Dùng thử ⇒ PLAN_NOT_ALLOWED, không có target; không có gói cũng vậy", async () => {

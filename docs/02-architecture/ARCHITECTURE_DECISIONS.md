@@ -758,6 +758,7 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 - 131.928 cặp. Ước bảng ≈ 34 MB, cả DB hiện là 35 MB.
 - 1.521/1.523 hồ sơ đã có embedding đúng hash.
 - Chi tiết ở Ghi chú triển khai của plan backend.
+- **Lần nạp đầu (2026-11-11, có ghi):** 311 tin, 131.928 dòng, bảng thật 22 MB (thấp hơn ước 34 MB), chạy 301 giây. Dài hơn ước 2–3 phút ở mục 6 vì ước tính đó chưa tính phần ghi (≈ 118 giây) và phần nạp hồ sơ tin (≈ 73 giây). Vẫn rất xa giới hạn 45 phút.
 
 **Phương án không chọn:**
 

@@ -1078,6 +1078,17 @@ export interface AutoOutreachStatus {
   autoSentToday: number;
   /** Chỉ có khi state là NO_MATCH hoặc CANDIDATES_CAPPED (ISO). */
   nextCheckAt: string | null;
+  /**
+   * Số ứng viên phù hợp, đọc từ bảng điểm lưu sẵn (0.3), cùng định nghĩa với
+   * `HiringProgressItem.matched`. Tin không hiển thị thì không có điểm, nên là 0.
+   */
+  matched: number;
+  /** Phần của `matched` đã có đơn đang xét hoặc đã tuyển. */
+  matchedApplied: number;
+  /** Số đơn của tin ở trạng thái INTERVIEWING. */
+  interviewing: number;
+  /** Lần chấm gần nhất của tin (ISO); null ⇒ chưa chấm hoặc tin không hiển thị. */
+  matchScoresAt: string | null;
 }
 
 /** GET/PATCH /employer/job-posts/:jobId/auto-outreach — chỉ người đăng tin. */
@@ -1771,6 +1782,54 @@ export interface EmployerDashboardAnalytics {
   range: DashboardRange;
   applicationsDaily: DailyPoint[];
   viewsDaily: DailyPoint[];
+}
+
+/**
+ * Tiến độ tuyển của một tin đang hiển thị (0.3, AD-24). Số "Phù hợp" đọc từ bảng điểm
+ * lưu sẵn, so với ngưỡng tự mời của tin lúc đọc (`autoOutreachMinScore`, mặc định 80):
+ * - người bật cho liên hệ và chưa có đơn nào vào tin;
+ * - người có đơn đang xét hoặc đã tuyển (không phải CANCELLED / REJECTED) — `matchedApplied`.
+ */
+export interface HiringProgressItem {
+  jobPostId: string;
+  title: string;
+  /** ISO, null = không có hạn nộp. */
+  expiresAt: string | null;
+  /** Đã gồm `matchedApplied`. */
+  matched: number;
+  matchedApplied: number;
+  /** Mọi lời mời của tin: cả tay lẫn tự động, mọi trạng thái. */
+  invited: number;
+  acceptedInvitations: number;
+  /** Đơn INTERVIEWING. */
+  interviewing: number;
+  /** Đơn ACCEPTED. */
+  hired: number;
+  hiringTarget: number;
+  autoOutreachEnabled: boolean;
+  /** Người xem là người đăng tin ⇒ frontend được hiện link "Bật tự mời". */
+  ownedByViewer: boolean;
+  /** ISO. null ⇒ tin chưa được chấm lần nào (vừa đăng, đang chấm). */
+  matchScoresAt: string | null;
+}
+
+/** GET /employer/dashboard/hiring-progress — số liệu của cả công ty. */
+export interface EmployerHiringProgress {
+  /** Tổng trên mọi tin đang hiển thị của công ty, không chỉ các tin ở `items`. */
+  totals: {
+    publishedJobs: number;
+    /** Cộng theo tin: một ứng viên hợp nhiều tin được đếm ở từng tin. */
+    matched: number;
+    hired: number;
+    hiringTarget: number;
+  };
+  /**
+   * Tối đa 5 tin, "cần chú ý" trước: chưa đạt chỉ tiêu → còn ≤ 7 ngày tới hạn →
+   * tỉ lệ đã tuyển / chỉ tiêu thấp → hạn nộp gần.
+   */
+  items: HiringProgressItem[];
+  /** Lần chấm cũ nhất trong các tin ở `items` đã được chấm (ISO), null khi chưa tin nào được chấm. */
+  scoredAt: string | null;
 }
 
 /** GET /admin/dashboard/overview — `oldestSince`: mốc bắt đầu chờ của mục chờ lâu nhất (ISO), null nếu hàng chờ trống. */

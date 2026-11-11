@@ -24,6 +24,7 @@
     "check-large-demo-library": "dotenv -e ../../.env -- tsx scripts/check-large-demo-library.ts",
     "seed-large-demo": "dotenv -e ../../.env -- tsx scripts/seed-large-demo.ts",
     "eval-job-matching": "dotenv -e ../../.env -- tsx scripts/eval-job-matching.ts",
+    "rescore-match-scores": "dotenv -e ../../.env -- tsx scripts/rescore-match-scores.ts",
     "support-chat:index": "dotenv -e ../../.env -- tsx scripts/support-chat-index.ts",
     "support-chat:eval": "dotenv -e ../../.env -- tsx scripts/support-chat-eval.ts",
     "audit:archive": "dotenv -e ../../.env -- tsx scripts/audit-archive.ts",
