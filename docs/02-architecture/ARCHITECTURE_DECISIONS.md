@@ -729,7 +729,7 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 
 **Ngày:** 2026-11-11 · **Phase liên quan:** không thuộc phase đánh số. Mục 0.3 của `docs/01-project/FEATURE_BACKLOG.md`, theo nhận xét của giáo viên ở buổi demo 05/11/2026. Kế hoạch chi tiết: `docs/06-backend/hiring-progress/PLAN.md`, `docs/05-frontend/phases/hiring-progress/PLAN.md`.
 
-> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-10), ĐÃ ĐO TRÊN NEON (2026-11-11). Chưa triển khai.** Mục 6 chốt 2026-11-11, sau số đo.
+> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-10). ĐÃ TRIỂN KHAI BACKEND (2026-11-11), đã nạp bảng và kiểm trên Neon.** Mục 6 chốt 2026-11-11, sau số đo. Frontend (F1–F5) chưa làm. Ghi chú triển khai chi tiết ở `docs/06-backend/hiring-progress/PLAN.md`.
 
 **Bối cảnh:** trang tổng quan của nhà tuyển dụng cần số ứng viên phù hợp cho mọi tin đang hiển thị. Hiện chưa có điểm nào được lưu: trang tìm ứng viên và tự mời (AD-23) đều lọc SQL ≤ 50 người rồi chấm hybrid lúc chạy (khoảng 1 giây cho 50 người). Đo ngày 2026-11-11: 309/311 tin có hơn 50 người chung kỹ năng, nên muốn đếm đúng thì phải chấm cả pool. Trung vị pool là 438 người, chấm một tin mất khoảng 5 giây. Không chấm lúc mở trang được.
 
@@ -759,6 +759,12 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 - 1.521/1.523 hồ sơ đã có embedding đúng hash.
 - Chi tiết ở Ghi chú triển khai của plan backend.
 - **Lần nạp đầu (2026-11-11, có ghi):** 311 tin, 131.928 dòng, bảng thật 22 MB (thấp hơn ước 34 MB), chạy 301 giây. Dài hơn ước 2–3 phút ở mục 6 vì ước tính đó chưa tính phần ghi (≈ 118 giây) và phần nạp hồ sơ tin (≈ 73 giây). Vẫn rất xa giới hạn 45 phút.
+- **Kiểm thử (2026-11-11, bước 8 của plan backend):**
+  - mục 4 đúng: top 10 của bảng trùng trang tìm ứng viên ở tin có ≤ 50 người được tìm; ở 8 tin lớn nhất, 10/10 người trang tìm ứng viên trả về có cùng điểm trong bảng;
+  - mục 3 đúng: đổi ngưỡng 80 → 70 thì số Phù hợp đổi ngay (19 → 46), không chấm lại;
+  - mục 5a: tin có điểm khoảng 4 giây sau khi Admin bắt đầu duyệt;
+  - mục 5b: một lượt đêm chạy 291 giây cho 312 tin, không làm chậm web (event loop p99 22,4 → 22,6 ms, `/api/health` p50 giữ 48 ms, danh sách tin công khai p50 475 → 485 ms). Giữ chạy chung process;
+  - mục 7: giới hạn 50 của trang tìm ứng viên bỏ sót 8/114 người phù hợp (≈ 7%) ở 8 tin lớn nhất. Lợi ích chính của việc chuyển sang đọc bảng sau 0.6 là nhanh hơn.
 
 **Phương án không chọn:**
 
@@ -773,5 +779,5 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 - 1 bảng mới, `JobPost.matchScoresAt`, 1 migration viết tay.
 - Module mới `apps/server/src/modules/match-scores/`, 1 cron, 1 script chạy tay.
 - `job-posts.service.ts`: gọi lối kích hoạt (a).
-- 1 endpoint dashboard; mở rộng `AutoOutreachStatus` trong `packages/shared-types`.
+- 1 endpoint dashboard; mở rộng `AutoOutreachStatus` và thêm `JobPost.matchedCount` (danh sách tin của Employer) trong `packages/shared-types`.
 - `candidate-outreach.service.ts`: tách `scoreProfiles` và thêm `loadJobProfile` public (mục 6). Hành vi của trang tìm ứng viên, tự mời và chấm lúc gửi lời mời không đổi.

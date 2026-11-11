@@ -1,6 +1,6 @@
 # Số ứng viên phù hợp và tiến độ tuyển theo tin (0.3) — Backend
 
-> **Trạng thái: XONG BƯỚC 0–7 (2026-11-11).** Bảng điểm đã nạp lần đầu lên Neon. Đã có job đêm 3h30, `GET /employer/dashboard/hiring-progress`, số Phù hợp trên thẻ tự mời và trong danh sách tin. Tin demo đã có chỉ tiêu 1–10 trên Neon. Còn bước 8, 9. Chi tiết ở mục Ghi chú triển khai.
+> **Trạng thái: XONG BACKEND, BƯỚC 0–9 (2026-11-11).** Bảng điểm đã nạp lần đầu lên Neon. Đã có job đêm 3h30, `GET /employer/dashboard/hiring-progress`, số Phù hợp trên thẻ tự mời và trong danh sách tin. Tin demo đã có chỉ tiêu 1–10 trên Neon. Bước 8 (kiểm thử) đạt hết. Đã cập nhật backlog và AD-24 (bước 9). Tiếp theo là frontend (F1–F5). Chi tiết ở mục Ghi chú triển khai.
 
 Mục 0.3 của `docs/01-project/FEATURE_BACKLOG.md`. Frontend: `docs/05-frontend/phases/hiring-progress/PLAN.md`.
 
@@ -211,7 +211,7 @@ Một endpoint riêng, không nhét vào `overview`, để khối này tải và
 ### Bước 7 — Dữ liệu demo
 
 - Tin của bộ demo lớn đều có `hiringTarget = 1` (mặc định), nên cột "Đã tuyển a/b" sẽ trông giả.
-- Sửa thư viện `scripts/data/large-demo/` để tin mới sinh có chỉ tiêu 1–10 (theo cấp bậc tin).
+- Sửa thư viện `scripts/data/large-demo/` để tin mới sinh có chỉ tiêu 1–10 (theo loại tin `jobType`: thực tập, bán thời gian, toàn thời gian, hợp đồng).
 - Thêm tuỳ chọn `--targets-only` cho `seed-large-demo` để gán lại chỉ tiêu cho các tin `@large-demo.local` hiện có, không đụng dữ liệu khác.
 - Xin xác nhận trước khi ghi lên Neon.
 
@@ -552,7 +552,7 @@ Kiểm thử:
 Các file:
 
 - File mới `apps/server/scripts/lib/large-demo/hiring-targets.ts`:
-  - `HIRING_TARGET_WEIGHTS`: phân bố chỉ tiêu theo loại tin, là "cấp bậc" của tin vì schema không có cột cấp bậc riêng.
+  - `HIRING_TARGET_WEIGHTS`: phân bố chỉ tiêu theo loại tin (`jobType`). Chủ dự án chốt dùng loại tin (2026-11-11); schema không có cột cấp bậc (Intern / Fresher / Junior...).
   - `baseHiringTarget(id, jobType)`: lấy giá trị theo trọng số.
   - `hiringTargetFor(id, jobType, hired)` và `raiseTargetsToHired(jobPosts, applications)`: chỉ tiêu không nhỏ hơn số đơn `ACCEPTED`.
 - `generate.ts`: mỗi tin sinh ra có `hiringTarget = baseHiringTarget(...)`.
@@ -605,8 +605,93 @@ Kiểm thử:
   - không tin nào đổi `updatedAt`, không tin nào có số đã tuyển vượt chỉ tiêu;
   - 5 tin "cần chú ý" của Mây Xanh, ví dụ: "Thực tập sinh Phân tích dữ liệu", Phù hợp 23, đã tuyển 0/6.
 
-### Bước 8 trở đi
+### Bước 8 — Kiểm thử (2026-11-11)
 
-Điền khi làm.
+Các mục đã làm ở bước trước, không làm lại:
+
+| Mục | Đã làm ở |
+| --- | --- |
+| Unit: xếp "cần chú ý" | bước 5 (`hiring-progress.test.ts`) |
+| Unit: chia khúc 1.000, bỏ tin không hiển thị, cache hồ sơ | bước 3 (`match-scores.test.ts`) |
+| Nạp lần đầu, thời gian, số dòng | bước 4 (301 s, 131.928 dòng) |
+| Tách hàm chấm không đổi điểm | bước 3 (lệch 0 trên 3 tin) |
+| Đối chiếu tay số `matched` | bước 2 (CTE) và bước 4 (điểm thật) |
+
+**(a) Kiểm đúng bộ chấm. ĐẠT.** Chỉ đọc, `.claude-workspace/scratch/verify-step8-search.ts`.
+
+- Trang tìm ứng viên được mô phỏng đúng như `searchCandidates`: `searchCandidatePool(50)`, `scorePool` không tính embedding mới, xếp ổn định, lấy 10.
+- Phía bảng lấy người bật liên hệ, chưa nộp, chưa có lời mời chặn.
+- Trong 311 tin, chỉ có 2 tin có nhóm được tìm ≤ 50 người: `clargedemojob0323` (16 người) và `clargedemojob0345` (9 người). Ở cả 2 tin, top 10 trùng hoàn toàn cả người lẫn điểm.
+- Ở 8 tin có nhóm được tìm lớn nhất (518–626 người), cả 10 người trang tìm ứng viên trả về đều có cùng điểm trong bảng (10/10). Không có ngoại lệ `semanticPending`.
+
+**(b) Mức bỏ sót của `LIMIT 50`** (chỉ ghi số). 8 tin trên, ngưỡng 80:
+
+| Tin | Pool bảng | Nhóm được tìm | Phù hợp | Phù hợp chưa nộp, được tìm | Ngoài nhóm 50 | Top 10 bảng ∩ top 10 tìm | Điểm thứ 10 bảng / tìm |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `clargedemojob0343` | 882 | 626 | 19 | 17 | 2 | 9/10 | 85 / 85 |
+| `clargedemojob0085` | 882 | 623 | 16 | 14 | 1 | 9/10 | 82 / 82 |
+| `clargedemojob0099` | 882 | 622 | 22 | 18 | 1 | 9/10 | 88 / 87 |
+| `clargedemojob0076` | 882 | 621 | 15 | 14 | 1 | 9/10 | 83 / 82 |
+| `clargedemojob0090` | 882 | 620 | 21 | 20 | 2 | 9/10 | 88 / 86 |
+| `clargedemojob0133` | 713 | 520 | 3 | 3 | 1 | 6/10 | 70 / 67 |
+| `clargedemojob0193` | 718 | 520 | 16 | 12 | 0 | 10/10 | 81 / 81 |
+| `clargedemojob0372` | 718 | 518 | 19 | 16 | 0 | 10/10 | 90 / 90 |
+
+Nhận xét:
+
+- Lọc thô theo số kỹ năng chung giữ được phần lớn người điểm cao. Trong số người phù hợp mà trang tìm ứng viên được phép thấy, chỉ 0–2 người mỗi tin nằm ngoài nhóm 50 (tổng 8/114, ≈ 7%).
+- Khi có bỏ sót thì thường chỉ lệch một người ở top 10. Điểm thứ 10 của trang tìm ứng viên thấp hơn bảng 0–3 điểm.
+- Riêng `clargedemojob0133` (chỉ 3 người phù hợp) lệch 4/10 ở top 10. Trong 4 người lệch:
+  - 1 người đạt ngưỡng, chính là người nằm ngoài nhóm 50;
+  - 3 người còn lại dưới ngưỡng (điểm thứ 10 của bảng là 70).
+- Căn cứ cho 0.6: chuyển trang tìm ứng viên và tự mời sang đọc bảng chủ yếu là để nhanh hơn. Mời đúng người hơn chỉ là lợi ích nhỏ ở quy mô này (≈ 1 người phù hợp bị bỏ sót mỗi tin lớn). Kết luận này chỉ đúng với bộ demo hiện tại (khoảng 1.500 ứng viên). Khi số ứng viên tăng, nhóm 50 sẽ bỏ sót nhiều hơn.
+
+**(c) Đổi ngưỡng 80 → 70. ĐẠT.** `verify-threshold-change.ts`: đổi ngưỡng trong một transaction, đọc qua `MatchScoreRepository` dựng trên chính transaction đó, rồi rollback.
+
+- Tin `clargedemojob0343`: số Phù hợp 19 → 46, khớp đếm tay (46). Số đã nộp giữ là 1.
+- `matchScoresAt` không đổi, tức không chấm lại.
+- Sau rollback, ngưỡng vẫn là 80, số Phù hợp 19.
+
+**(d) Admin duyệt tin mới. ĐẠT.** Chủ dự án xác nhận ghi.
+
+- Tin `clargedemojob0093` (PENDING) được duyệt bằng `JobPostsService.approve` thật: có `matchScoreTrigger` thật và audit log.
+- Thông báo được thay bằng bản giả, vì `.env` đang để `DEV_SKIP_EMAIL_SENDING=false`.
+- `approve` mất 2,0 s. **4,2 s** sau khi bắt đầu duyệt thì tin có `matchScoresAt`, 145 dòng điểm, Phù hợp 9, chỉ tiêu 8.
+- Outbox giữ 82, thông báo giữ 233.
+- Tin này giờ ở trạng thái PUBLISHED trên Neon (303 → 304 tin demo đang hiển thị).
+
+**(e) Tải khi job đêm chạy. ĐẠT: không làm web chậm.** Chủ dự án xác nhận ghi.
+
+Script tạm `load-test-nightly.ts`, đo như 7c của 0.2:
+
+- Một process chạy Express (phần đầu của `main.ts`, đủ router, không bật cron) trên cổng 4999, đồng thời chạy `runMatchScoreNightly` thật (ghi Neon).
+- Hai vòng gọi liên tục `GET /api/health` và `GET /api/job-posts?page=1&limit=20`.
+- Event loop đo bằng `monitorEventLoopDelay` (resolution 10 ms).
+
+| Tình huống | Thời gian | Event loop p50 / p99 / max | `/api/health` p50 / p95 (số mẫu) | `/api/job-posts` p50 / p95 (số mẫu) | Lỗi |
+| --- | --- | --- | --- | --- | --- |
+| Nền | 20,3 s | 15,5 / 22,4 / 31,1 ms | 48 / 51 ms (411) | 475 / 507 ms (41) | 0 |
+| Job đêm | 291,5 s | 15,3 / 22,6 / 29,7 ms | 48 / 51 ms (5.978) | 485 / 528 ms (591) | 0 |
+| Nền lần 2 | 20,4 s | 15,4 / 21,5 / 23,4 ms | 49 / 51 ms (398) | 488 / 510 ms (41) | 0 |
+
+- Lượt đêm: chấm 312/312 tin (gồm tin vừa duyệt ở (d)), không lỗi. Ghi 132.073 dòng, 0 dòng rule-only, nạp 1.523 hồ sơ. Không có tin ẩn nào cần dọn.
+- Outbox giữ nguyên 82.
+- Event loop và `/api/health` không đổi. `/api/job-posts` chậm thêm khoảng 2–4% (p50 475 → 485 ms, p95 507 → 528 ms), nằm trong mức dao động giữa hai lần đo nền. Job đêm gần như chỉ chờ I/O tới Neon, nên chạy chung process với web là được, không cần tách worker.
+- Giới hạn của số đo, giống 7c:
+  - máy dev Windows có timer khoảng 15 ms, nên p50 của event loop luôn ≈ 15 ms;
+  - client gọi API chạy chung process;
+  - không có embedding mới nào phải tính (dữ liệu demo đã tính sẵn). Tính embedding là phần làm tăng event loop ở 0.2, và job đêm giới hạn tối đa 200 embedding mới mỗi khúc 1.000 hồ sơ.
+
+**Build:** `npm run build` của `shared-types` và server đều qua. `tsc --noEmit` của server sạch.
+
+**Kết luận bước 8:** mọi mục đạt. Dữ liệu trên Neon thay đổi so với trước bước 8 ở hai chỗ:
+
+- tin `clargedemojob0093` đã được duyệt;
+- bảng điểm đã được chấm lại lúc 09:29–09:34 UTC ngày 2026-11-11.
+
+### Bước 9 — Tài liệu (2026-11-11)
+
+- `FEATURE_BACKLOG.md` dòng 0.3: thêm đường dẫn plan và AD-24, ghi "Backend xong 2026-11-11; frontend (F1–F5) chưa làm" kèm tóm tắt những gì đã có và số đo. Chưa đánh dấu ✅ vì frontend chưa làm.
+- AD-24: trạng thái đổi thành "đã triển khai backend"; mục Số đo thêm kết quả kiểm thử của bước 8; mục Ảnh hưởng thêm `JobPost.matchedCount`.
 
 ## Phần 4 — Ghi chú của chủ dự án
