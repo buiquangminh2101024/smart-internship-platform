@@ -578,6 +578,14 @@ export class CandidateOutreachService {
     }
   }
 
+  /**
+   * Hồ sơ chấm của một tin; tin không còn ⇒ AppError 404. Bảng điểm lưu sẵn (0.3,
+   * AD-24) nạp tin một lần rồi chấm nhiều khúc hồ sơ bằng `scoreProfiles`.
+   */
+  loadJobProfile(jobPostId: string): Promise<JobMatchProfile> {
+    return this.requireJobProfile(jobPostId);
+  }
+
   /** Giai đoạn B. Id không còn hồ sơ bị bỏ khỏi Map kết quả. */
   private async scoreCandidates(
     job: JobMatchProfile,
@@ -585,6 +593,19 @@ export class CandidateOutreachService {
     maxNewEmbeddings: number,
   ): Promise<Map<string, MatchResult>> {
     const profiles = [...(await this.candidateMatchProfileLoader.loadMany(candidateIds)).values()];
+    return this.scoreProfiles(job, profiles, maxNewEmbeddings);
+  }
+
+  /**
+   * Chấm các hồ sơ đã nạp sẵn: một lần tính cosine cho cả danh sách, rồi `score()` từng
+   * người. Tách khỏi `scoreCandidates` để job đêm của bảng điểm lưu sẵn (AD-24 mục 6)
+   * nạp hồ sơ một lần mỗi lượt và dùng lại cho mọi tin.
+   */
+  async scoreProfiles(
+    job: JobMatchProfile,
+    profiles: CandidateMatchProfile[],
+    maxNewEmbeddings: number,
+  ): Promise<Map<string, MatchResult>> {
     const similarities =
       this.mode === "hybrid"
         ? await this.matchEmbeddingService.similarityForCandidates(

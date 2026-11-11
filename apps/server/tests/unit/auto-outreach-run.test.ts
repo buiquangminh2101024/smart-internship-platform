@@ -452,12 +452,14 @@ test("ứng viên từ chối lời mời ⇒ kích hoạt lượt tự mời c�
 });
 
 test("tự đăng tin đã bật tự mời ⇒ kích hoạt; tin chưa bật hoặc phải chờ duyệt ⇒ không", async () => {
-  for (const [requiresApproval, autoOutreachEnabled, expected] of [
-    [false, true, ["co-1"]],
-    [false, false, []],
-    [true, true, []],
+  // Cột cuối: bảng điểm lưu sẵn (AD-24) chấm MỌI tin vừa hiển thị, bật tự mời hay không.
+  for (const [requiresApproval, autoOutreachEnabled, expected, expectedRescored] of [
+    [false, true, ["co-1"], ["job-1"]],
+    [false, false, [], ["job-1"]],
+    [true, true, [], []],
   ] as const) {
     const triggered: string[] = [];
+    const rescored: string[] = [];
     const company = { id: "co-1", name: "Công ty A", isVerified: true, requiresApproval, verifiedAt: new Date() };
     const jobPost = {
       id: "job-1",
@@ -507,8 +509,10 @@ test("tự đăng tin đã bật tự mời ⇒ kích hoạt; tin chưa bật ho
       userRepository: { findAdminIds: async () => [] },
       auditLogService: { record: async () => {} },
       autoOutreachTrigger: (companyId: string) => triggered.push(companyId),
+      matchScoreTrigger: (jobPostId: string) => rescored.push(jobPostId),
     } as unknown as ConstructorParameters<typeof JobPostsService>[0]);
     await service.submitForApproval("user-emp-1", "job-1");
     assert.deepEqual(triggered, expected, `requiresApproval=${requiresApproval}, enabled=${autoOutreachEnabled}`);
+    assert.deepEqual(rescored, expectedRescored, `bảng điểm: requiresApproval=${requiresApproval}, enabled=${autoOutreachEnabled}`);
   }
 });

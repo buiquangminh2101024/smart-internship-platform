@@ -9,8 +9,9 @@ Mục 0.3 của `docs/01-project/FEATURE_BACKLOG.md`. Frontend: `docs/05-fronten
 Trả lời câu giáo viên hỏi ở buổi demo 05/11: "tuyển được hay chưa, có bao nhiêu ứng viên phù hợp?".
 
 - Mỗi tin đang hiển thị có số **Phù hợp**: số ứng viên đạt ngưỡng tự mời của tin (`autoOutreachMinScore`, mặc định 80), gồm hai nhóm:
-  - người bật cho liên hệ (`isOpenToOutreach`) chưa nộp đơn vào tin;
-  - người đã nộp đơn vào tin (đơn chưa huỷ, có chung ≥ 1 kỹ năng với tin), hiện tách số, ví dụ "32 (12 đã nộp)".
+  - người bật cho liên hệ (`isOpenToOutreach`) và **chưa có đơn nào** vào tin: đúng nhóm mà trang tìm ứng viên và tự mời 0.2 lấy ra;
+  - người có đơn **đang xét hoặc đã tuyển** vào tin (không phải `CANCELLED` / `REJECTED`, có chung ≥ 1 kỹ năng với tin), hiện tách số, ví dụ "32 (12 đã nộp)".
+  - Người đã huỷ đơn hoặc bị từ chối thì không đếm (chốt 2026-11-11).
 - Tiến độ tuyển của mỗi tin: Phù hợp → Đã mời → Nhận lời → Phỏng vấn → Đã tuyển / chỉ tiêu (`hiringTarget`).
 - Không chấm hybrid lúc mở trang: điểm lấy từ **bảng điểm lưu sẵn**.
 
@@ -18,7 +19,7 @@ Trả lời câu giáo viên hỏi ở buổi demo 05/11: "tuyển được hay 
 
 | # | Vấn đề | Chốt |
 |---|---|---|
-| 1 | "Phù hợp" đếm ai | Hai nhóm ở trên, cùng điều kiện điểm ≥ ngưỡng của tin. Người không bật liên hệ và chưa nộp đơn thì không đếm (không liên hệ được) |
+| 1 | "Phù hợp" đếm ai | Hai nhóm ở trên, cùng điều kiện điểm ≥ ngưỡng của tin. Người không bật liên hệ và chưa nộp đơn thì không đếm (không liên hệ được). *Sửa 2026-11-11:* nhóm đã nộp chỉ gồm đơn đang xét hoặc đã tuyển; người huỷ đơn hoặc bị từ chối không đếm ở nhóm nào, kể cả khi có bật liên hệ, vì hệ thống không mời lại họ. Người đã tuyển (`ACCEPTED`) vẫn đếm |
 | 2 | Bảng điểm chấm bao nhiêu cặp | Mọi ứng viên có chung ≥ 1 kỹ năng đã duyệt với tin, kể cả người đã nộp đơn. **Không** giới hạn 50 như `searchCandidatePool`. Người đã nộp đơn nhưng không có kỹ năng chung thì **không** chấm (gần như luôn dưới ngưỡng) |
 | 9 | "Đã mời" | Mọi lời mời đã gửi cho tin (cả tay lẫn tự động, mọi trạng thái), vì đây là phễu. "Đang giữ" vẫn là việc của thẻ 0.2 |
 | 3 | Phỏng vấn / Đã tuyển | Theo trạng thái đơn: `INTERVIEWING` / `ACCEPTED`. Khớp `hiredCount` của thẻ 0.2 |
@@ -112,8 +113,8 @@ model JobCandidateMatchScore {
 - `replaceForJob(jobPostId, rows, scoredAt)`: trong 1 transaction, xoá các dòng cũ của tin, `createMany` theo lô 1.000, cập nhật `JobPost.matchScoresAt`. Người đọc không bao giờ thấy bảng của tin bị trống giữa chừng.
 - `deleteForInactiveJobs()`: xoá dòng của tin không còn `PUBLISHED`, để bảng không phình. Job đêm gọi.
 - `progressForCompany(companyId)` và `progressForJob(jobPostId)`: một câu SQL gộp cho mỗi tin trả về:
-  - `matched`: dòng có `score ≥ j."autoOutreachMinScore"` và (ứng viên bật liên hệ **hoặc** có đơn chưa huỷ vào tin);
-  - `matchedApplied`: phần có đơn chưa huỷ;
+  - `matched`: dòng có `score ≥ j."autoOutreachMinScore"` và (bật liên hệ **và không có đơn** vào tin, **hoặc** có đơn không phải `CANCELLED` / `REJECTED`);
+  - `matchedApplied`: phần có đơn không phải `CANCELLED` / `REJECTED`;
   - `invited`: số lời mời của tin (mọi trạng thái, cả tay lẫn tự động);
   - `acceptedInvitations`: lời mời `ACCEPTED`;
   - `interviewing`: đơn `INTERVIEWING`;
@@ -334,7 +335,91 @@ Mỗi ứng viên ở pool của gần 1/3 số tin. Nguyên nhân là chỉ c�
   - đọc được bảng mới: 0 dòng; 422 tin đều có `matchScoresAt = null`.
   - Bảng được nạp ở bước 4 bằng script `rescore-match-scores`.
 
-### Bước 2 trở đi
+### Bước 2 — `MatchScoreRepository` (2026-11-11)
+
+File `apps/server/src/modules/match-scores/match-score.repository.ts`. Chưa đăng ký awilix: bước 3 đăng ký cùng service.
+
+- **"Tin đang hiển thị"** = `PUBLISHED` và chưa quá `expiresAt`. Cùng điều kiện với tìm kiếm công khai và câu lọc của tự mời 0.2. Lý do: job chuyển `EXPIRED` chạy theo lịch, nên có lúc tin đã quá hạn mà vẫn `PUBLISHED`.
+- **Có thêm hai hàm ngoài danh sách của plan**, cần cho bước 3:
+  - `isJobVisible(jobPostId)`;
+  - `findJobsToRescore({ companyId?, jobPostId? })`: tin chưa chấm (null) xếp trước, rồi tới tin chấm lâu nhất.
+- **`replaceForJob`:**
+  - Transaction tương tác, timeout 30 giây (mặc định 5 giây không chắc đủ với Neon).
+  - Ghi `matchScoresAt` bằng SQL để **không đổi `updatedAt`** của tin, cùng lý do với `markExhausted` của 0.2.
+  - Nếu tin thôi hiển thị trong lúc chấm thì không ghi, chỉ xoá dòng cũ, và trả `false`.
+  - Ứng viên bị xoá giữa lúc chấm và lúc ghi thì khoá ngoại báo lỗi, cả transaction huỷ. Tin đó giữ điểm cũ và được chấm lại lượt sau.
+- **`deleteForInactiveJobs`:** xoá dòng của tin không còn hiển thị, đồng thời đặt `matchScoresAt = null`. Nhờ vậy tin hiển thị lại thì được coi là chưa chấm: frontend hiện "Đang chấm…" thay vì 0.
+- **`progressForCompany` / `progressForJob`:** một câu SQL với 3 `CROSS JOIN LATERAL` (điểm, lời mời, đơn).
+  - Định nghĩa `matched` sửa ngày 2026-11-11 (chốt #1):
+    - Bản đầu tính "bật liên hệ **hoặc** đơn chưa huỷ". Như vậy đơn `REJECTED` vẫn được đếm, và người đã huỷ hoặc bị từ chối mà có bật liên hệ cũng lọt qua nhánh opt-in, dù trang tìm ứng viên và tự mời loại mọi người đã có đơn.
+    - Bản mới dùng `LEFT JOIN applications` (unique `jobPostId + candidateId` nên không nhân dòng): nhóm chưa nộp là `a.id IS NULL AND isOpenToOutreach`; nhóm đã nộp là `a.status NOT IN ('CANCELLED','REJECTED')`.
+    - Kiểm trên Neon, chỉ đọc (`verify-matched.ts`): thay bảng điểm bằng CTE cho mọi người trong pool 100 điểm, rồi so với cách đếm bằng Prisma trên 3 tin có đủ 7 trạng thái đơn. Kết quả khớp cả 3 tin: 301/12, 422/10, 247/12. Ở tin đầu, 12 trên 26 đơn trong pool là `REJECTED`, nên bản cũ thổi số "đã nộp" lên gấp đôi.
+  - `progressForJob` không lọc trạng thái tin, vì thẻ 0.2 hiện ở mọi trạng thái.
+  - Hàm `matchedCounts` của bước 6 chưa làm.
+- **Kiểm trên Neon, chỉ đọc** (`.claude-workspace/scratch/verify-match-repo.ts`):
+  - `findJobsToRescore` ra 311 tin, đúng bằng số tin `PUBLISHED`, tất cả `matchScoresAt = null`.
+  - Pool của tin Business Analyst có 538 người, không trùng, chạy 122 ms.
+  - `isJobVisible` đúng với cả id có thật lẫn id không tồn tại.
+  - `progressForCompany` cho Mây Xanh: 32 tin, khoảng 100–130 ms. `hired`, `interviewing`, `invited`, `acceptedInvitations` khớp với đếm bằng Prisma.
+  - `progressForJob` với id không tồn tại trả `null`.
+  - Bảng còn rỗng nên `matched` đều bằng 0. Phần đếm `matched` / `matchedApplied` sẽ đối chiếu sau khi nạp bảng ở bước 4 (bước 8 đã có mục đối chiếu tay).
+  - Chưa gọi `replaceForJob` / `deleteForInactiveJobs` trên Neon, vì đó là thao tác ghi. Sẽ kiểm ở bước 4, khi nạp lần đầu.
+- `tsc --noEmit` của server sạch.
+
+### Bước 3 — `MatchScoreService` và lối kích hoạt (2026-11-11)
+
+Các file:
+
+- `candidate-outreach.service.ts`:
+  - thêm public `scoreProfiles(job, profiles, maxNew)` và `loadJobProfile(jobPostId)`;
+  - `scoreCandidates` giờ chỉ nạp hồ sơ rồi gọi `scoreProfiles`, nên trang tìm ứng viên, tự mời và chấm lúc gửi lời mời không đổi hành vi;
+  - `scorePool` giữ nguyên.
+- Module `match-scores`:
+  - `match-scores.config.ts`: `MATCH_SCORE_MAX_NEW_EMBEDDINGS = 200`, `MATCH_SCORE_CHUNK_SIZE = 1_000`, `MATCH_SCORE_PROFILE_LOAD_BATCH = 500`, `MATCH_SCORE_PROFILE_CACHE_MAX = 20_000`;
+  - `candidate-profile-cache.ts`;
+  - `match-score.service.ts`;
+  - `match-scores.module.ts`.
+- `job-posts.service.ts`: gọi `matchScoreTrigger(id)` khi tự đăng (`autoPublished`) và khi Admin duyệt, cho **mọi** tin, sau khi transaction đã commit.
+- `main.ts`: `registerMatchScores(container)` ngay sau `candidateOutreachRouter`.
+
+Khác hoặc thêm so với plan:
+
+- **Đăng ký awilix bằng `registerMatchScores`** (file `match-scores.module.ts`), không qua một router. Module chưa có route riêng: API của bước 5 nằm ở `dashboard.routes.ts` và thẻ tự mời. Script dựng container (bước 4) cũng phải gọi hàm này.
+- **`rescoreAll` có khoá riêng:** đang có lượt khác thì trả `{ status: "LOCKED" }`. Job đêm và script chạy tay vì vậy không chạy chồng nhau, nên bước 4 không cần khoá riêng. `Set` chống chạy trùng theo tin vẫn giữ, để lối kích hoạt và job đêm không chấm cùng một tin một lúc.
+- **Tổng kết lượt không có "số embedding mới".** `similarityForCandidates` không trả con số này. Thay bằng `pendingRows`: số dòng rule-only vì chưa có embedding. Số này cho biết lượt sau còn bao nhiêu người cần embed, và đủ cho log của bước 4.
+- **Giới hạn embedding mới tính theo khúc 1.000 hồ sơ**, không theo tin. Pool lớn nhất hiện là 882 nên hai cách như nhau.
+- **`scoredAt` / `matchScoresAt` lấy lúc bắt đầu chấm tin**, không phải lúc ghi. Hồ sơ dùng để chấm là hồ sơ ở khoảng thời điểm đó.
+- **Kết quả `rescoreJob`:**
+  - `SKIPPED` với lý do `RUNNING` hoặc `NOT_VISIBLE`;
+  - `GONE`: tin thôi hiển thị trong lúc chấm;
+  - `DONE`: kèm `pool`, `rows`, `pendingRows`, `durationMs`.
+  - Lỗi thì ném ra. `rescoreAll` bắt lỗi từng tin, ghi log rồi đi tiếp.
+- **Cache:** vượt trần thì xoá sạch, rồi nạp lại **toàn bộ** danh sách đang cần, kể cả id vừa có trong cache. Id không còn hồ sơ thì không lưu, nên lần sau vẫn hỏi lại loader.
+
+Kiểm thử:
+
+- `tests/unit/match-scores.test.ts`: 13 test, gồm 3 cho cache và 10 cho service (bản giả của repository, loader và bộ chấm):
+  - nạp theo lô, bỏ trùng, giữ thứ tự, trần;
+  - bỏ điểm null, `semanticPending`;
+  - `NOT_VISIBLE` / `GONE`;
+  - chấm theo khúc 1.000;
+  - chống chạy trùng và nhả khoá khi lỗi;
+  - một cache cho cả lượt (ứng viên chung giữa các tin chỉ nạp một lần);
+  - lỗi một tin thì đi tiếp;
+  - hết thời gian thì `jobsDeferred`;
+  - `LOCKED`.
+- Hai test có sẵn dựng `JobPostsService` được truyền thêm `matchScoreTrigger`:
+  - `job-post-resubmit.test.ts`: no-op;
+  - `auto-outreach-run.test.ts`: kiểm tin tự đăng được chấm **cả khi không bật tự mời**, còn tin phải chờ duyệt thì không.
+- Cả bộ unit test 450/450 xanh. `tsc --noEmit` của server sạch.
+- **Đối chiếu trên Neon, chỉ đọc** (`.claude-workspace/scratch/verify-score-profiles.ts`, `maxNewEmbeddings = 0`, không gọi `replaceForJob`):
+  - container dựng được `matchScoreService`, `matchScoreTrigger` và `jobPostsService`;
+  - so từng người giữa `scorePool` (lối cũ) và `cache.getMany` + `scoreProfiles` (lối mới, một cache cho 3 tin) trên 3 tin pool 22 / 438 / 882;
+  - **lệch 0** về điểm, trạng thái, `weightsVersion` và `semantic` ở cả 3 tin. Có 1 người `semanticPending` ở tin pool 438, khớp với số 1.521/1.523 ứng viên có embedding đúng hash ở bước 0;
+  - số embedding và `embeddedAt` mới nhất không đổi trước và sau, tức không ghi gì;
+  - thời gian chấm ở lần chạy này chưa có ý nghĩa để so: cả hai lối đều nạp hồ sơ lần đầu, và độ trễ tới Neon dao động. Thời gian thật của lượt đêm sẽ đo ở lần nạp đầu của bước 4.
+
+### Bước 4 trở đi
 
 Điền khi làm.
 

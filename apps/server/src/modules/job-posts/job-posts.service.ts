@@ -23,6 +23,7 @@ import type { AutoOutreachTrigger } from "../candidate-outreach/auto-outreach.se
 import type { CompanyRepository } from "../companies/company.repository";
 import type { EmployerRepository } from "../employers/employer.repository";
 import type { EmployerIdentity, EmployerIdentityCache } from "../employers/employer-identity-cache";
+import type { MatchScoreTrigger } from "../match-scores/match-score.service";
 import type { NotificationPayloadMap } from "../notifications/notification.types";
 import type { NotificationsService } from "../notifications/notifications.service";
 import type { SubscriptionsService } from "../subscriptions/subscriptions.service";
@@ -49,6 +50,7 @@ export class JobPostsService {
   private readonly userRepository: UserRepository;
   private readonly auditLogService: AuditLogService;
   private readonly autoOutreachTrigger: AutoOutreachTrigger;
+  private readonly matchScoreTrigger: MatchScoreTrigger;
 
   constructor({
     prisma,
@@ -61,6 +63,7 @@ export class JobPostsService {
     userRepository,
     auditLogService,
     autoOutreachTrigger,
+    matchScoreTrigger,
   }: {
     prisma: PrismaClient;
     jobPostRepository: JobPostRepository;
@@ -72,6 +75,7 @@ export class JobPostsService {
     userRepository: UserRepository;
     auditLogService: AuditLogService;
     autoOutreachTrigger: AutoOutreachTrigger;
+    matchScoreTrigger: MatchScoreTrigger;
   }) {
     this.prisma = prisma;
     this.jobPostRepository = jobPostRepository;
@@ -83,6 +87,7 @@ export class JobPostsService {
     this.userRepository = userRepository;
     this.auditLogService = auditLogService;
     this.autoOutreachTrigger = autoOutreachTrigger;
+    this.matchScoreTrigger = matchScoreTrigger;
   }
 
   // ─── Public (Guest) ──────────────────────────────────────────────────────
@@ -296,6 +301,8 @@ export class JobPostsService {
 
     // AD-23 — tin vừa hiển thị và đã bật tự mời (đặt lúc tạo tin) ⇒ mời ngay, không chờ.
     if (autoPublished && updated.autoOutreachEnabled) this.autoOutreachTrigger(updated.companyId);
+    // AD-24 — mọi tin vừa hiển thị: chấm bảng điểm lưu sẵn ngay, không chờ job đêm.
+    if (autoPublished) this.matchScoreTrigger(updated.id);
     return { jobPost: toJobPostDto(updated), autoPublished };
   }
 
@@ -354,6 +361,7 @@ export class JobPostsService {
     });
     // AD-23 — như submitForApproval khi tự đăng: chạy sau khi transaction đã commit.
     if (updated.autoOutreachEnabled) this.autoOutreachTrigger(updated.companyId);
+    this.matchScoreTrigger(updated.id);
     return toJobPostDto(updated);
   }
 

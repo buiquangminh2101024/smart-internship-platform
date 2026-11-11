@@ -37,6 +37,7 @@ import { candidateOutreachRouter } from "./modules/candidate-outreach/candidate-
 import { startCandidateOutreachExpiryJob } from "./modules/candidate-outreach/candidate-outreach-expiry.job";
 import type { CandidateOutreachRepository } from "./modules/candidate-outreach/candidate-outreach.repository";
 import { startAutoOutreachJob } from "./modules/candidate-outreach/auto-outreach.job";
+import { registerMatchScores } from "./modules/match-scores/match-scores.module";
 import type { AutoOutreachRepository } from "./modules/candidate-outreach/auto-outreach.repository";
 import type { AutoOutreachRunStore } from "./modules/candidate-outreach/auto-outreach-run-store";
 import type { AutoOutreachService } from "./modules/candidate-outreach/auto-outreach.service";
@@ -115,6 +116,8 @@ app.use("/api", jobMatchingRouter(container));
 app.use("/api", candidateInsightsRouter(container));
 // Sau jobMatchingRouter: dùng ruleJobMatcher/hybridJobMatcher/matchEmbeddingService/loader do router đó đăng ký.
 app.use("/api", candidateOutreachRouter(container));
+// Bảng điểm lưu sẵn (AD-24): dùng candidateOutreachService/candidateMatchProfileLoader, chưa có route riêng.
+registerMatchScores(container);
 
 app.use("/api/conversations", messagingRoutes(container));
 
