@@ -753,6 +753,12 @@ export interface JobPost {
   latestModerationAction: JobPostModerationActionDto | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * Số ứng viên phù hợp (0.3), cùng định nghĩa với `HiringProgressItem.matched`. Chỉ có ở
+   * GET /employer/job-posts và chỉ với tin đang hiển thị (PUBLISHED, chưa quá hạn); tin
+   * khác trạng thái thì không có trường này.
+   */
+  matchedCount?: number;
 }
 
 export interface CreateJobPostRequest {

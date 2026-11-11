@@ -13,6 +13,9 @@ import {
   FULL_SCALE, LARGE_DEMO_EMAIL_DOMAIN, LARGE_DEMO_ID_PREFIX, createRng, generateLargeDemo,
   type GenerateCatalog, type GenerateOptions, type GeneratedLargeDemo,
 } from "../../scripts/lib/large-demo/generate";
+import {
+  baseHiringTarget, HIRING_TARGET_WEIGHTS, hiringTargetFor, raiseTargetsToHired,
+} from "../../scripts/lib/large-demo/hiring-targets";
 
 const DATA_DIR = path.join(__dirname, "..", "..", "scripts", "data", "large-demo");
 const read = (file: string): unknown => JSON.parse(readFileSync(path.join(DATA_DIR, file), "utf8"));
@@ -279,4 +282,51 @@ test("dời mốc thời gian: chạy sau một năm học thì khoá học và 
   const exp = later.workExperiences.find((e) => e.candidateId === facts.id)!;
   // Kinh nghiệm viết 2026-03 → dời 11 tháng (2026-11 → 2027-10) thành 2027-02.
   assert.equal((exp.startDate as Date).toISOString().slice(0, 7), "2027-01"); // đầu tháng giờ VN = 17:00 UTC ngày cuối tháng trước
+});
+
+// ─── 0.3 bước 7: chỉ tiêu tuyển ─────────────────────────────────────────────
+
+test("chỉ tiêu: mỗi tin lấy giá trị của loại tin (1–10), đủ trải giá trị, không đổi theo --seed", () => {
+  for (const weights of Object.values(HIRING_TARGET_WEIGHTS)) {
+    assert.equal(Object.values(weights).reduce((sum, w) => sum + w, 0), 100);
+    for (const value of Object.keys(weights).map(Number)) assert.ok(value >= 1 && value <= 10);
+  }
+  const demo = full();
+  const byType = new Map<string, number[]>();
+  for (const job of demo.jobPosts) {
+    assert.ok(String(job.hiringTarget) in HIRING_TARGET_WEIGHTS[job.jobType!], `${job.id} ${job.jobType} = ${job.hiringTarget}`);
+    assert.equal(job.hiringTarget, baseHiringTarget(job.id!, job.jobType!));
+    byType.set(job.jobType!, [...(byType.get(job.jobType!) ?? []), job.hiringTarget!]);
+  }
+  // ~280 tin thực tập phải dùng gần đủ 8 giá trị, phần lớn là số nhỏ.
+  const internship = byType.get("INTERNSHIP")!;
+  assert.ok(new Set(internship).size >= 7, `thực tập chỉ có ${[...new Set(internship)]}`);
+  const mean = internship.reduce((sum, v) => sum + v, 0) / internship.length;
+  assert.ok(mean > 2.5 && mean < 4.5, `chỉ tiêu thực tập trung bình ${mean}`);
+  assert.ok(new Set(byType.get("FULL_TIME")).size >= 2);
+
+  // Băm từ id ⇒ đổi seed không đổi chỉ tiêu của cùng một tin (tin chính có id cố định).
+  const other = generateLargeDemo(LIBRARY, catalog(), { ...OPTIONS, seed: 7, scale: 0.1 });
+  const target = new Map(demo.jobPosts.map((job) => [job.id, job.hiringTarget]));
+  const showcase = other.jobPosts.filter((job) => job.id!.includes("sc"));
+  assert.ok(showcase.length > 0);
+  for (const job of showcase) assert.equal(job.hiringTarget, target.get(job.id));
+});
+
+test("chỉ tiêu: không nhỏ hơn số đơn ACCEPTED; không hạ chỉ tiêu đang cao hơn", () => {
+  assert.equal(hiringTargetFor("x", "CONTRACT", 0), baseHiringTarget("x", "CONTRACT"));
+  assert.equal(hiringTargetFor("x", "CONTRACT", 7), 7);
+
+  const jobs = [
+    { id: "a", hiringTarget: 1 },
+    { id: "b", hiringTarget: 5 },
+    { id: "c", hiringTarget: 2 },
+  ] as Parameters<typeof raiseTargetsToHired>[0];
+  const app = (jobPostId: string, status: string) => ({ jobPostId, status }) as Parameters<typeof raiseTargetsToHired>[1][number];
+  raiseTargetsToHired(jobs, [
+    app("a", "ACCEPTED"), app("a", "ACCEPTED"), app("a", "ACCEPTED"), app("a", "REJECTED"),
+    app("b", "ACCEPTED"),
+    app("c", "INTERVIEWING"), app("c", "INTERVIEWING"), app("c", "INTERVIEWING"),
+  ]);
+  assert.deepEqual(jobs.map((job) => job.hiringTarget), [3, 5, 2]);
 });

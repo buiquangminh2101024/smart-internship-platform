@@ -7,6 +7,7 @@
 // không gọi Date.now() (giờ chạy truyền vào `now`) → cùng đầu vào ra đúng cùng kết quả.
 // Lịch sử (đơn ứng tuyển, lời mời, phỏng vấn, hội thoại, tin đã lưu) thuộc phần 2b.
 import type { Prisma } from "@prisma/client";
+import { baseHiringTarget } from "./hiring-targets";
 import { mentionedNames, type Company, type LargeDemoLibrary, type Persona, type Position, type ShowcaseCandidate, type ShowcaseJob } from "./library";
 
 export const LARGE_DEMO_ID_PREFIX = "clargedemo";
@@ -381,6 +382,9 @@ export function generateLargeDemo(library: LargeDemoLibrary, catalog: GenerateCa
       industryId: resolve.industry(input.ref.company.industry),
       publishedAt: input.publishedAt, expiresAt: input.expiresAt, closedAt: input.closedAt,
       minExperienceYears: input.minExperienceYears, createdAt: input.createdAt, updatedAt: lastTouch,
+      // 0.3 bước 7: chỉ tiêu theo loại tin, băm từ id (không lấy số từ `rng`); seed-large-demo nâng lên
+      // bằng số đơn ACCEPTED sau khi sinh lịch sử.
+      hiringTarget: baseHiringTarget(input.id, input.jobType),
     });
     const skills: JobFacts["skills"] = [
       ...variant.skills.required.map((name) => ({ name, importance: "REQUIRED" as const })),

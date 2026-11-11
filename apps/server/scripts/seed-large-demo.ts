@@ -5,8 +5,9 @@
 //   npm run seed-large-demo --workspace server                   xoá phần demo cũ rồi tạo lại
 //   npm run seed-large-demo --workspace server -- --reset        chỉ xoá phần demo (kèm mục danh mục không còn ai dùng)
 //   npm run seed-large-demo --workspace server -- --embed-only   chỉ tính embedding còn thiếu cho phần demo đang có
+//   npm run seed-large-demo --workspace server -- --targets-only gán chỉ tiêu tuyển cho tin demo đang có (0.3 bước 7)
 //   thêm `--scale 0.1` để chạy thử nhỏ, `--seed <số>` để đổi bộ (mặc định 20261109),
-//   `--no-embed` để ghi mà không tính embedding ngay; `--dry-run` dùng kèm được với --reset / --embed-only
+//   `--no-embed` để ghi mà không tính embedding ngay; `--dry-run` dùng kèm được với --reset / --embed-only / --targets-only
 //
 // Phạm vi: mọi dòng script tạo có id bắt đầu bằng "clargedemo", email @large-demo.local.
 // Xoá / --reset chỉ xoá các dòng đó và những gì gắn vào chúng (ví dụ đơn ai đó nộp thử
@@ -18,13 +19,14 @@
 //
 // Embedding (bước 4): sau khi ghi, tính sẵn vector cho kỹ năng seed thêm, mọi tin và hồ sơ demo
 // (lib/large-demo/embed.ts). Vector khớp hash thì bỏ qua, nên bị ngắt thì chạy --embed-only để tính tiếp.
-import { PrismaClient, type Prisma } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { generateLargeDemo, LARGE_DEMO_EMAIL_DOMAIN, LARGE_DEMO_ID_PREFIX, type GenerateCatalog } from "./lib/large-demo/generate";
 import { embedLargeDemo, type EmbedSummary } from "./lib/large-demo/embed";
 import { generateLargeDemoHistory } from "./lib/large-demo/history";
+import { hiringTargetFor, HIRING_TARGET_WEIGHTS, raiseTargetsToHired } from "./lib/large-demo/hiring-targets";
 import { validateLargeDemoLibrary, type LargeDemoLibraryRaw } from "./lib/large-demo/library";
 import {
   catalogAdditionIds, chunk, estimateBytes, formatMb, MAX_DATABASE_BYTES, preflightIssues, writeGroups,
@@ -53,7 +55,7 @@ function fail(message: string): never {
 // ─── Tham số ────────────────────────────────────────────────────────────────
 
 interface Args {
-  mode: "write" | "reset" | "embed-only";
+  mode: "write" | "reset" | "embed-only" | "targets-only";
   dryRun: boolean;
   /** Tính embedding ngay sau khi ghi (tắt bằng --no-embed). */
   embed: boolean;
@@ -64,7 +66,7 @@ interface Args {
 function parseArgs(argv: readonly string[]): Args {
   const args: Args = { mode: "write", dryRun: false, embed: true, scale: 1, seed: DEFAULT_SEED };
   const setMode = (mode: Args["mode"]) => {
-    if (args.mode !== "write" && args.mode !== mode) fail("Chỉ chọn một trong --reset / --embed-only");
+    if (args.mode !== "write" && args.mode !== mode) fail("Chỉ chọn một trong --reset / --embed-only / --targets-only");
     args.mode = mode;
   };
   for (let i = 0; i < argv.length; i++) {
@@ -72,13 +74,14 @@ function parseArgs(argv: readonly string[]): Args {
     if (arg === "--dry-run") args.dryRun = true;
     else if (arg === "--reset") setMode("reset");
     else if (arg === "--embed-only") setMode("embed-only");
+    else if (arg === "--targets-only") setMode("targets-only");
     else if (arg === "--no-embed") args.embed = false;
     else if (arg === "--scale" || arg === "--seed") {
       const value = Number(argv[++i]);
       if (!Number.isFinite(value)) fail(`${arg} cần một số`);
       if (arg === "--scale") args.scale = value;
       else args.seed = Math.trunc(value);
-    } else fail(`Không hiểu tham số "${arg}". Dùng: --dry-run | --reset | --embed-only | --no-embed | --scale <0..1> | --seed <số>`);
+    } else fail(`Không hiểu tham số "${arg}". Dùng: --dry-run | --reset | --embed-only | --targets-only | --no-embed | --scale <0..1> | --seed <số>`);
   }
   if (!(args.scale > 0 && args.scale <= 1)) fail(`--scale phải trong (0, 1], đang là ${args.scale}`);
   return args;
@@ -437,9 +440,85 @@ async function runEmbedding(dryRun: boolean): Promise<EmbedSummary> {
 
 // ─── Luồng chạy ─────────────────────────────────────────────────────────────
 
+// ─── Chỉ tiêu tuyển (--targets-only) ───────────────────────────────────────
+
+interface TargetRow {
+  id: string;
+  jobType: keyof typeof HIRING_TARGET_WEIGHTS;
+  status: string;
+  hiringTarget: number;
+  autoOutreachEnabled: boolean;
+  hired: number;
+}
+
+/**
+ * Gán chỉ tiêu cho tin demo đang có, không sinh lại bộ dữ liệu (0.3 bước 7). Chỉ đổi tin còn
+ * chỉ tiêu mặc định 1: tin đã có người sửa chỉ tiêu (qua cài đặt tự mời) thì giữ nguyên. Ghi
+ * bằng SQL để không đổi `updatedAt` của tin, vì đây không phải người đăng tin sửa tin.
+ * Chạy lại an toàn: lần sau chỉ còn tin có chỉ tiêu gốc đúng bằng 1.
+ */
+async function runTargetsOnly(dryRun: boolean): Promise<void> {
+  const rows = await prisma.$queryRaw<TargetRow[]>`
+    SELECT j."id", j."jobType", j."status", j."hiringTarget", j."autoOutreachEnabled",
+      (SELECT COUNT(*)::int FROM applications a WHERE a."jobPostId" = j."id" AND a."status" = 'ACCEPTED') AS "hired"
+    FROM job_posts j
+    WHERE j."id" LIKE ${`${LARGE_DEMO_ID_PREFIX}%`} OR j."companyId" LIKE ${`${LARGE_DEMO_ID_PREFIX}%`}
+    ORDER BY j."id"`;
+  // `next` = chỉ tiêu sau khi chạy: tin đã khác 1 giữ nguyên, tin còn 1 lấy theo id + số đã tuyển.
+  const planned = rows.map((row) => ({ ...row, next: row.hiringTarget === 1 ? hiringTargetFor(row.id, row.jobType, row.hired) : row.hiringTarget }));
+  const kept = rows.filter((row) => row.hiringTarget !== 1);
+  const changes = planned.filter((row) => row.next !== row.hiringTarget);
+
+  console.log(`\nTin demo: ${rows.length}. Sẽ đổi chỉ tiêu: ${changes.length}. Giữ nguyên vì đã khác 1: ${kept.length}` +
+    (kept.length > 0 ? ` (${kept.slice(0, 5).map((row) => `${row.id} = ${row.hiringTarget}`).join(", ")}` +
+      `${kept.length > 5 ? `, … và ${kept.length - 5} tin khác` : ""})` : "") + ".");
+  console.log("Chỉ tiêu sau khi chạy, theo loại tin (giá trị×số tin):");
+  for (const jobType of Object.keys(HIRING_TARGET_WEIGHTS)) {
+    const ofType = planned.filter((row) => row.jobType === jobType);
+    const histogram = new Map<number, number>();
+    for (const row of ofType) histogram.set(row.next, (histogram.get(row.next) ?? 0) + 1);
+    const spread = [...histogram].sort(([a], [b]) => a - b).map(([value, count]) => `${value}×${count}`).join(" ");
+    const mean = ofType.reduce((sum, row) => sum + row.next, 0) / Math.max(1, ofType.length);
+    console.log(`  ${jobType.padEnd(10)} ${String(ofType.length).padStart(3)} tin, TB ${mean.toFixed(1)}: ${spread}`);
+  }
+  const published = planned.filter((row) => row.status === "PUBLISHED");
+  const met = published.filter((row) => row.hired >= row.next).length;
+  const raised = changes.filter((row) => row.hired > 1 && row.next === row.hired).length;
+  console.log(`Tin PUBLISHED (${published.length}): đã tuyển ${published.reduce((sum, row) => sum + row.hired, 0)} / chỉ tiêu ` +
+    `${published.reduce((sum, row) => sum + row.next, 0)}; ${met} tin đạt chỉ tiêu; ${raised} tin được nâng chỉ tiêu lên bằng số đã tuyển.`);
+  const autoOutreach = changes.filter((row) => row.autoOutreachEnabled).length;
+  console.log(autoOutreach > 0
+    ? `⚠ ${autoOutreach} tin đang bật tự mời: chỉ tiêu lớn hơn ⇒ lượt tự mời sau sẽ giữ nhiều lời mời hơn (hiringTarget × H).`
+    : "Không tin nào đang bật tự mời ⇒ đổi chỉ tiêu không làm phát sinh lời mời.");
+
+  if (dryRun) {
+    console.log("\nDRY RUN xong — không ghi gì.");
+    return;
+  }
+  if (changes.length === 0) return;
+  const started = Date.now();
+  const byTarget = new Map<number, string[]>();
+  for (const row of changes) byTarget.set(row.next, [...(byTarget.get(row.next) ?? []), row.id]);
+  // Mỗi giá trị chỉ tiêu một câu UPDATE (≤ 10 câu), cả nhóm trong một transaction.
+  // `"hiringTarget" = 1` lặp lại điều kiện lúc đọc: tin ai đó vừa sửa trong lúc chạy thì không bị ghi đè.
+  const updated = await prisma.$transaction(async (tx) => {
+    let total = 0;
+    for (const [target, ids] of byTarget) {
+      total += await tx.$executeRaw`
+        UPDATE job_posts SET "hiringTarget" = ${target}
+        WHERE "id" IN (${Prisma.join(ids)}) AND "hiringTarget" = 1`;
+    }
+    return total;
+  });
+  console.log(`\n✓ Đã đổi chỉ tiêu ${updated} tin (${seconds(started)}).`);
+}
+
 async function run(args: Args): Promise<void> {
   const { dryRun } = args;
-  const action = { write: "xoá phần demo lớn cũ rồi ghi lại", reset: "chỉ xoá phần demo lớn", "embed-only": "chỉ tính embedding" }[args.mode];
+  const action = {
+    write: "xoá phần demo lớn cũ rồi ghi lại", reset: "chỉ xoá phần demo lớn", "embed-only": "chỉ tính embedding",
+    "targets-only": "chỉ gán chỉ tiêu tuyển cho tin demo",
+  }[args.mode];
   console.log(`DB: ${databaseHost()} — ${action}${dryRun ? " (DRY RUN, chỉ đọc)" : ""}`);
   const sizeBefore = await databaseSize(prisma);
   console.log(`Dung lượng DB hiện tại: ${formatMb(sizeBefore)}`);
@@ -448,6 +527,11 @@ async function run(args: Args): Promise<void> {
     console.log("\nEmbedding:");
     await runEmbedding(dryRun);
     if (!dryRun) console.log(`Dung lượng DB: ${formatMb(sizeBefore)} → ${formatMb(await databaseSize(prisma))}.`);
+    return;
+  }
+
+  if (args.mode === "targets-only") {
+    await runTargetsOnly(dryRun);
     return;
   }
 
@@ -487,6 +571,7 @@ async function run(args: Args): Promise<void> {
     planId: ctx.planId, adminUserId: ctx.adminUserId,
   });
   const history = generateLargeDemoHistory(demo, { seed: args.seed, now });
+  raiseTargetsToHired(demo.jobPosts, history.applications);
   const groups = writeGroups(demo, history);
   console.log(`Sinh dữ liệu (seed ${args.seed}, scale ${args.scale}): ${seconds(started)}.`);
 

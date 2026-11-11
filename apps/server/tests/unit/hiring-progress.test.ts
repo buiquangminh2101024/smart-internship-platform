@@ -1,7 +1,8 @@
 // Chạy: node --import tsx --test tests/unit/hiring-progress.test.ts (từ apps/server)
 // 0.3 bước 5a (docs/06-backend/hiring-progress/PLAN.md): thứ tự "cần chú ý", tổng của công
 // ty, cắt 5 tin, `scoredAt`, `ownedByViewer`, và EmployerDashboardService.hiringProgress với
-// repository giả. SQL của progressForCompany không được kiểm ở đây (đã đối chiếu trên Neon).
+// repository giả. Bước 6: `matchedCount` trong danh sách tin của Employer. SQL của
+// progressForCompany / matchedCounts không được kiểm ở đây (đã đối chiếu trên Neon).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -10,6 +11,7 @@ import {
   HIRING_PROGRESS_LIMIT,
 } from "../../src/modules/dashboard/hiring-progress.policy";
 import { EmployerDashboardService } from "../../src/modules/dashboard/employer-dashboard.service";
+import { JobPostsService } from "../../src/modules/job-posts/job-posts.service";
 import type { HiringProgressRow } from "../../src/modules/match-scores/match-score.repository";
 
 const NOW = new Date("2026-11-11T05:00:00.000Z");
@@ -141,4 +143,83 @@ test("EmployerDashboardService.hiringProgress: đọc tiến độ theo công ty
       ["j2", true],
     ],
   );
+});
+
+// ─── Bước 6: danh sách tin ─────────────────────────────────────────────────
+
+function jobPostRow(id: string, status: string) {
+  return {
+    id,
+    companyId: "co-1",
+    company: { id: "co-1", name: "Công ty A", logoUrl: null, website: null, isVerified: true, industryId: null, cityId: null, address: null, taxCode: null, description: null },
+    title: `Tin ${id}`,
+    description: "Mô tả",
+    jobType: "INTERNSHIP",
+    status,
+    salaryMin: null,
+    salaryMax: null,
+    isNegotiable: true,
+    requirements: null,
+    benefits: null,
+    cityId: null,
+    city: null,
+    address: null,
+    industryId: null,
+    industry: null,
+    publishedAt: null,
+    expiresAt: null,
+    closedAt: null,
+    viewCount: 0,
+    minExperienceYears: null,
+    requirementsExtra: null,
+    requirementsConfirmedAt: null,
+    moderationActions: [],
+    skills: [],
+    majors: [],
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+}
+
+function buildJobPostsService(items: ReturnType<typeof jobPostRow>[], counts: Record<string, number>) {
+  const asked: string[][] = [];
+  const service = new JobPostsService({
+    employerIdentityCache: { require: async () => ({ employerId: "emp-1", userId: "user-1", companyId: "co-1" }) },
+    jobPostRepository: { findOwnedByCompany: async () => ({ items, hasMore: true, nextCursor: "c2" }) },
+    matchScoreRepository: {
+      matchedCounts: async (ids: string[]) => {
+        asked.push(ids);
+        return new Map(Object.entries(counts).filter(([id]) => ids.includes(id)));
+      },
+    },
+  } as unknown as ConstructorParameters<typeof JobPostsService>[0]);
+  return { service, asked };
+}
+
+test("listOwn: matchedCount chỉ cho tin PUBLISHED có trong kết quả đếm, một lần gọi cho cả trang", async () => {
+  const { service, asked } = buildJobPostsService(
+    [jobPostRow("live", "PUBLISHED"), jobPostRow("draft", "DRAFT"), jobPostRow("expired", "PUBLISHED"), jobPostRow("closed", "CLOSED")],
+    // "expired": PUBLISHED nhưng đã quá hạn ⇒ repository không trả về.
+    { live: 32 },
+  );
+  const page = await service.listOwn("user-1", {});
+  assert.deepEqual(asked, [["live", "expired"]]);
+  assert.deepEqual(
+    page.items.map((item) => [item.id, "matchedCount" in item ? item.matchedCount : "—"]),
+    [
+      ["live", 32],
+      ["draft", "—"],
+      ["expired", "—"],
+      ["closed", "—"],
+    ],
+  );
+  assert.equal(page.hasMore, true);
+  assert.equal(page.nextCursor, "c2");
+});
+
+test("listOwn: trang không có tin PUBLISHED ⇒ không hỏi bảng điểm", async () => {
+  const { service, asked } = buildJobPostsService([jobPostRow("draft", "DRAFT")], {});
+  const page = await service.listOwn("user-1", {});
+  assert.deepEqual(asked, []);
+  assert.equal("matchedCount" in page.items[0]!, false);
 });

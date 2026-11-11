@@ -23,6 +23,7 @@ import type { AutoOutreachTrigger } from "../candidate-outreach/auto-outreach.se
 import type { CompanyRepository } from "../companies/company.repository";
 import type { EmployerRepository } from "../employers/employer.repository";
 import type { EmployerIdentity, EmployerIdentityCache } from "../employers/employer-identity-cache";
+import type { MatchScoreRepository } from "../match-scores/match-score.repository";
 import type { MatchScoreTrigger } from "../match-scores/match-score.service";
 import type { NotificationPayloadMap } from "../notifications/notification.types";
 import type { NotificationsService } from "../notifications/notifications.service";
@@ -51,6 +52,7 @@ export class JobPostsService {
   private readonly auditLogService: AuditLogService;
   private readonly autoOutreachTrigger: AutoOutreachTrigger;
   private readonly matchScoreTrigger: MatchScoreTrigger;
+  private readonly matchScoreRepository: MatchScoreRepository;
 
   constructor({
     prisma,
@@ -64,6 +66,7 @@ export class JobPostsService {
     auditLogService,
     autoOutreachTrigger,
     matchScoreTrigger,
+    matchScoreRepository,
   }: {
     prisma: PrismaClient;
     jobPostRepository: JobPostRepository;
@@ -76,6 +79,7 @@ export class JobPostsService {
     auditLogService: AuditLogService;
     autoOutreachTrigger: AutoOutreachTrigger;
     matchScoreTrigger: MatchScoreTrigger;
+    matchScoreRepository: MatchScoreRepository;
   }) {
     this.prisma = prisma;
     this.jobPostRepository = jobPostRepository;
@@ -88,6 +92,7 @@ export class JobPostsService {
     this.auditLogService = auditLogService;
     this.autoOutreachTrigger = autoOutreachTrigger;
     this.matchScoreTrigger = matchScoreTrigger;
+    this.matchScoreRepository = matchScoreRepository;
   }
 
   // ─── Public (Guest) ──────────────────────────────────────────────────────
@@ -118,7 +123,19 @@ export class JobPostsService {
       { ...filter, attention: attention === "1" },
       cursor,
     );
-    return this.toPage(page);
+    const result = this.toPage(page);
+    // Số Phù hợp (0.3 bước 6): một câu gộp cho các tin PUBLISHED trong trang. Tin đã quá
+    // hạn nhưng chưa đóng không có trong Map nên cũng không có trường này.
+    const publishedIds = page.items.filter((item) => item.status === "PUBLISHED").map((item) => item.id);
+    if (publishedIds.length === 0) return result;
+    const matched = await this.matchScoreRepository.matchedCounts(publishedIds);
+    return {
+      ...result,
+      items: result.items.map((item) => {
+        const count = matched.get(item.id);
+        return count === undefined ? item : { ...item, matchedCount: count };
+      }),
+    };
   }
 
   async ownStats(userId: string): Promise<JobPostStats> {

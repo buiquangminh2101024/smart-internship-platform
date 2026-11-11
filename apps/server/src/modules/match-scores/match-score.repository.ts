@@ -11,6 +11,24 @@ const INSERT_CHUNK_SIZE = 1_000;
 /** Tin "đang hiển thị": PUBLISHED và chưa quá hạn, cùng điều kiện với tìm kiếm công khai. */
 const VISIBLE_JOB = Prisma.sql`j."status" = 'PUBLISHED' AND (j."expiresAt" IS NULL OR j."expiresAt" > ${NOW_UTC})`;
 
+/**
+ * Đếm Phù hợp của tin `j` (định nghĩa ở `HiringProgressRow`). Dùng làm LATERAL subquery,
+ * chung cho tiến độ tuyển (bước 5) và danh sách tin (bước 6), để hai nơi luôn ra cùng số.
+ * Mỗi ứng viên có tối đa một đơn vào một tin (unique jobPostId + candidateId).
+ */
+const MATCHED_COUNTS = Prisma.sql`
+  SELECT
+    COUNT(*) FILTER (
+      WHERE (a."id" IS NULL AND c."isOpenToOutreach")
+         OR a."status" NOT IN ('CANCELLED', 'REJECTED')
+    )::int AS "matched",
+    COUNT(*) FILTER (WHERE a."status" NOT IN ('CANCELLED', 'REJECTED'))::int AS "matchedApplied"
+  FROM job_candidate_match_scores s
+  JOIN candidates c ON c."id" = s."candidateId"
+  LEFT JOIN applications a ON a."jobPostId" = s."jobPostId" AND a."candidateId" = s."candidateId"
+  WHERE s."jobPostId" = j."id" AND s."score" >= j."autoOutreachMinScore"
+`;
+
 export interface MatchScoreRow {
   candidateId: string;
   score: number;
@@ -169,6 +187,21 @@ export class MatchScoreRepository {
   }
 
   /**
+   * Số Phù hợp của các tin trong một trang danh sách tin (bước 6), một câu gộp. Chỉ tin
+   * đang hiển thị có trong Map; tin khác trạng thái thì không có khoá.
+   */
+  async matchedCounts(jobPostIds: string[]): Promise<Map<string, number>> {
+    if (jobPostIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<Array<{ jobPostId: string; matched: number }>>(Prisma.sql`
+      SELECT j."id" AS "jobPostId", m."matched"
+      FROM job_posts j
+      CROSS JOIN LATERAL (${MATCHED_COUNTS}) m
+      WHERE j."id" IN (${Prisma.join(jobPostIds)}) AND ${VISIBLE_JOB}
+    `);
+    return new Map(rows.map((row) => [row.jobPostId, row.matched]));
+  }
+
+  /**
    * Một câu gộp cho mọi tin thoả `where`. Phần đếm điểm dùng index (jobPostId, score);
    * đơn tra theo unique (jobPostId, candidateId), nên LEFT JOIN không nhân đôi dòng.
    */
@@ -181,19 +214,7 @@ export class MatchScoreRepository {
         inv."invited", inv."acceptedInvitations",
         app."interviewing", app."hired"
       FROM job_posts j
-      CROSS JOIN LATERAL (
-        SELECT
-          COUNT(*) FILTER (
-            WHERE (a."id" IS NULL AND c."isOpenToOutreach")
-               OR a."status" NOT IN ('CANCELLED', 'REJECTED')
-          )::int AS "matched",
-          COUNT(*) FILTER (WHERE a."status" NOT IN ('CANCELLED', 'REJECTED'))::int AS "matchedApplied"
-        FROM job_candidate_match_scores s
-        JOIN candidates c ON c."id" = s."candidateId"
-        -- Mỗi ứng viên có tối đa một đơn vào một tin (unique jobPostId + candidateId).
-        LEFT JOIN applications a ON a."jobPostId" = s."jobPostId" AND a."candidateId" = s."candidateId"
-        WHERE s."jobPostId" = j."id" AND s."score" >= j."autoOutreachMinScore"
-      ) m
+      CROSS JOIN LATERAL (${MATCHED_COUNTS}) m
       CROSS JOIN LATERAL (
         SELECT
           COUNT(*)::int AS "invited",

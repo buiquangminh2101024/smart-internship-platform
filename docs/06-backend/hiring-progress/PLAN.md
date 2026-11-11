@@ -1,6 +1,6 @@
 # Số ứng viên phù hợp và tiến độ tuyển theo tin (0.3) — Backend
 
-> **Trạng thái: XONG BƯỚC 0–5 (2026-11-11).** Bảng điểm đã nạp lần đầu lên Neon. Đã có job đêm 3h30, `GET /employer/dashboard/hiring-progress` và số Phù hợp trên thẻ tự mời. Còn bước 6 (không bắt buộc), 7 (chỉ tiêu cho dữ liệu demo), 8, 9. Chi tiết ở mục Ghi chú triển khai.
+> **Trạng thái: XONG BƯỚC 0–7 (2026-11-11).** Bảng điểm đã nạp lần đầu lên Neon. Đã có job đêm 3h30, `GET /employer/dashboard/hiring-progress`, số Phù hợp trên thẻ tự mời và trong danh sách tin. Tin demo đã có chỉ tiêu 1–10 trên Neon. Còn bước 8, 9. Chi tiết ở mục Ghi chú triển khai.
 
 Mục 0.3 của `docs/01-project/FEATURE_BACKLOG.md`. Frontend: `docs/05-frontend/phases/hiring-progress/PLAN.md`.
 
@@ -521,7 +521,91 @@ Kiểm thử:
 - Thẻ tự mời của một tin: `matched` 10, `matchedApplied` 2, `interviewing` 1, `hiredCount` 0. Khớp `progressForJob`.
 - Thẻ tự mời của một tin DRAFT: `matched` 0, `matchScoresAt` null.
 
-### Bước 6 trở đi
+### Bước 6 — Số Phù hợp trong danh sách tin (2026-11-11)
+
+Các file:
+
+- `MatchScoreRepository.matchedCounts(jobPostIds)`: một câu gộp cho các id trong trang, trả `Map<jobPostId, matched>`. Chỉ tin đang hiển thị có trong Map.
+- Phần đếm Phù hợp tách thành hằng `MATCHED_COUNTS` (một LATERAL subquery). `progress` (bước 5) và `matchedCounts` dùng chung hằng này, nên hai nơi luôn ra cùng một số.
+- `JobPostsService.listOwn` gọi `matchedCounts` với các tin `PUBLISHED` trong trang, rồi gắn `matchedCount` vào DTO.
+  - Trang không có tin `PUBLISHED` thì không gọi.
+  - Tin `PUBLISHED` đã quá hạn nhưng chưa bị job đóng thì không có trong Map, nên không có trường này.
+- Shared types: `JobPost.matchedCount?: number`. Chỉ `GET /employer/job-posts` điền trường này; API công khai không có.
+
+Kiểm thử:
+
+- `hiring-progress.test.ts` thêm 2 test cho `listOwn`:
+  - chỉ tin `PUBLISHED` có trong kết quả đếm mới có `matchedCount`;
+  - một lần gọi cho cả trang;
+  - giữ phân trang;
+  - trang không có tin `PUBLISHED` thì không hỏi bảng điểm.
+- Cả bộ unit test xanh (462 test). `tsc` sạch cho server, test, shared-types và web.
+- **Trên Neon, chỉ đọc** (`verify-matched-counts.ts`), với công ty Mây Xanh, duyệt hết 3 trang (43 tin):
+  - 32 tin `PUBLISHED` có `matchedCount`, khớp `progressForCompany` ở cả 32 tin;
+  - không tin nào ở trạng thái khác có trường này;
+  - tổng Phù hợp sau khi tách `MATCHED_COUNTS` vẫn là 497, như bước 5;
+  - `matchedCounts` cho 16 tin mất ≈ 55 ms;
+  - cả trang `listOwn` mất 0,6–1,8 s từ máy tới Neon, chủ yếu là phần sẵn có (tin kèm kỹ năng, ngành, kiểm duyệt).
+
+### Bước 7 — Chỉ tiêu cho dữ liệu demo (2026-11-11)
+
+Các file:
+
+- File mới `apps/server/scripts/lib/large-demo/hiring-targets.ts`:
+  - `HIRING_TARGET_WEIGHTS`: phân bố chỉ tiêu theo loại tin, là "cấp bậc" của tin vì schema không có cột cấp bậc riêng.
+  - `baseHiringTarget(id, jobType)`: lấy giá trị theo trọng số.
+  - `hiringTargetFor(id, jobType, hired)` và `raiseTargetsToHired(jobPosts, applications)`: chỉ tiêu không nhỏ hơn số đơn `ACCEPTED`.
+- `generate.ts`: mỗi tin sinh ra có `hiringTarget = baseHiringTarget(...)`.
+- `seed-large-demo.ts`:
+  - gọi `raiseTargetsToHired` sau khi sinh lịch sử;
+  - thêm `--targets-only`, chạy kèm được `--dry-run`.
+
+Các điểm tự chốt:
+
+- **Đặt phân bố trong code, không đặt trong `scripts/data/large-demo/`.** Bảng phân bố chỉ có 4 dòng. Thêm vào JSON thì phải sửa schema thư viện (`library.ts`) và bộ kiểm thư viện, mà không được gì thêm.
+- **Chỉ tiêu băm từ id tin (FNV-1a), không lấy từ `rng` của bộ sinh.**
+  - Thêm chỉ tiêu không làm lệch phần còn lại của bộ demo.
+  - `--targets-only` ra đúng số mà một lần seed đầy đủ sẽ sinh, không phụ thuộc `--seed`.
+- **Phân bố lệch về số nhỏ, không rải đều 1–10.** Lịch sử demo chỉ có 0–3 đơn `ACCEPTED` mỗi tin.
+  - Bản đầu rải đều: thực tập 2–10, trung bình 6. Chạy thử ra 42/1.417 và chỉ 1 tin đạt, gần như tin nào cũng hiện "0/7".
+  - Bản chốt:
+
+    | Loại tin | Phân bố chỉ tiêu |
+    | --- | --- |
+    | Thực tập | 2–4 là chính, một số đợt 5–10 |
+    | Bán thời gian | 1–5 |
+    | Toàn thời gian | 1–3 |
+    | Hợp đồng | 1–2 |
+
+- **Không để tin có số đã tuyển vượt chỉ tiêu.** Số đã tuyển lớn hơn chỉ tiêu gốc thì nâng chỉ tiêu lên bằng số đã tuyển, để không có tin "Đã tuyển 3/2".
+- **`--targets-only` chỉ đổi tin còn chỉ tiêu mặc định 1.**
+  - Tin đã được sửa chỉ tiêu thì giữ nguyên. Hiện có `clargedemojob0340` = 2.
+  - Câu `UPDATE` lặp lại điều kiện `"hiringTarget" = 1`, nên tin ai đó vừa sửa trong lúc chạy không bị ghi đè.
+  - Chạy lại thì không đổi gì thêm.
+- **Ghi bằng SQL, không đổi `updatedAt`.** Cùng lý do với `matchScoresAt`.
+- **Script in trước số tin đang bật tự mời.** Chỉ tiêu tăng thì lượt tự mời sau sẽ giữ nhiều lời mời hơn (`hiringTarget × H`). Hiện không có tin demo nào bật tự mời.
+
+Kiểm thử:
+
+- `large-demo-generate.test.ts` thêm 2 test:
+  - mỗi tin lấy giá trị của loại tin, trọng số cộng lại 100, các giá trị trong 1–10;
+  - thực tập dùng ≥ 7 giá trị, trung bình 2,5–4,5;
+  - đổi `--seed` không đổi chỉ tiêu của tin chính;
+  - nâng chỉ tiêu bằng số `ACCEPTED`, không hạ chỉ tiêu đang cao hơn.
+- Cả bộ unit test xanh (464 test). `tsc` sạch cho `src`, `tests` và phần script demo.
+- **Chạy thử trên Neon, chỉ đọc** (`--targets-only --dry-run`):
+  - 400 tin demo: sẽ đổi 318 tin, giữ 1 tin, 81 tin lấy đúng giá trị 1;
+  - chỉ tiêu trung bình: thực tập 3,6, bán thời gian 2,1, toàn thời gian 1,7, hợp đồng 1,4;
+  - 303 tin `PUBLISHED`: đã tuyển 45 / chỉ tiêu 926, có 7 tin đạt chỉ tiêu, 3 tin được nâng chỉ tiêu lên bằng số đã tuyển;
+  - Mây Xanh: đã tuyển 7 / chỉ tiêu 33 → 7 / 82.
+- **Đã ghi lên Neon (có xác nhận):** đổi 318 tin trong 0,9 s. Kiểm lại sau khi ghi:
+  - chạy lại `--dry-run` ra 0 tin cần đổi;
+  - 400 tin demo có chỉ tiêu 1–10, tổng 1.227;
+  - 22 tin ngoài bộ demo vẫn là 1;
+  - không tin nào đổi `updatedAt`, không tin nào có số đã tuyển vượt chỉ tiêu;
+  - 5 tin "cần chú ý" của Mây Xanh, ví dụ: "Thực tập sinh Phân tích dữ liệu", Phù hợp 23, đã tuyển 0/6.
+
+### Bước 8 trở đi
 
 Điền khi làm.
 
