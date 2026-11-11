@@ -12,7 +12,7 @@ import { BlockError } from "@/components/dashboard/BlockState";
 import { DashButton } from "@/components/dashboard/DashButton";
 import { EmployerSummaryCards, EmployerSummaryCardsSkeleton } from "@/components/dashboard/employer/EmployerSummaryCards";
 import { ApplicationsTrendPanel } from "@/components/dashboard/employer/ApplicationsTrendPanel";
-import { JobPerformancePanel } from "@/components/dashboard/employer/JobPerformancePanel";
+import { HiringProgressPanel } from "@/components/dashboard/employer/HiringProgressPanel";
 import { SubscriptionReminder } from "@/components/dashboard/employer/SubscriptionReminder";
 import { NotificationCenter } from "@/components/dashboard/NotificationCenter";
 
@@ -33,7 +33,8 @@ function useToast() {
 /**
  * Tổng quan của Employer (docs/05-frontend/phases/employer-dashboard-v2/PLAN.md):
  * dòng nhắc gói dịch vụ (chỉ khi cần) → 4 thẻ việc đang chờ (bấm sang trang quản lý) →
- * biểu đồ hồ sơ theo ngày → hiệu quả tin đang hiển thị → trung tâm thông báo.
+ * biểu đồ hồ sơ theo ngày → tiến độ tuyển theo tin (0.3, thay "Hiệu quả tin đang hiển thị",
+ * docs/05-frontend/phases/hiring-progress/PLAN.md) → trung tâm thông báo.
  * Mỗi khối tải và báo lỗi độc lập.
  */
 export default function EmployerDashboardPage() {
@@ -87,7 +88,7 @@ export default function EmployerDashboardPage() {
 
       {notVerified ? null : <ApplicationsTrendPanel />}
 
-      {overview.data && !notVerified ? <JobPerformancePanel publishedTotal={overview.data.jobs.published} /> : null}
+      {overview.data && !notVerified ? <HiringProgressPanel /> : null}
 
       <NotificationCenter area="employer" limit={5} notify={push} />
 
