@@ -282,8 +282,17 @@ function EmployerJobDetail({ params }: { params: Promise<{ id: string }> }) {
               <Button as="a" href={`/employer/jobs/${job.id}/applications`} variant="secondary" className="w-full">
                 Xem danh sách
               </Button>
-              {/* B3 — tin nháp/chờ duyệt chưa thể có lời mời nào. */}
-              {job.status !== "DRAFT" && job.status !== "PENDING" ? (
+              {/* B3 — tin nháp/chờ duyệt chưa thể có lời mời nào. Chỉ người đăng tin tìm / mời được
+                  (API trả 404 cho người khác cùng công ty), nên người khác thấy nút khoá kèm lý do,
+                  giống trang "Lời mời". */}
+              {job.status === "DRAFT" || job.status === "PENDING" ? null : job.isOwner === false ? (
+                <div className="grid gap-1">
+                  <Button variant="ghost" icon="lock" className="w-full" disabled>
+                    Tìm ứng viên phù hợp
+                  </Button>
+                  <p className="text-center text-sm text-text-muted">Chỉ người đăng tin mới tìm và mời được.</p>
+                </div>
+              ) : (
                 <Button
                   as="a"
                   href={`/employer/jobs/${job.id}/candidate-search`}
@@ -293,7 +302,7 @@ function EmployerJobDetail({ params }: { params: Promise<{ id: string }> }) {
                 >
                   Tìm ứng viên phù hợp
                 </Button>
-              ) : null}
+              )}
             </Card>
 
             <Card padding="md" className="grid gap-2">

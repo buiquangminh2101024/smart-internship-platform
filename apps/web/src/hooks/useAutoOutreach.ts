@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { JobAutoOutreachDto, UpdateAutoOutreachSettingsRequest } from "@sip/shared-types";
 import { apiFetch } from "@/lib/api-client";
 import { OUTREACH_KEY } from "@/hooks/useCandidateOutreach";
+import { HIRING_PROGRESS_KEY } from "@/hooks/useEmployerDashboard";
 
 // Tự động mời theo tin (AD-23) — docs/05-frontend/phases/auto-outreach/PLAN.md (F2, F3).
 
@@ -64,6 +65,10 @@ export function useUpdateJobAutoOutreach() {
       // "Gợi ý" có staleTime vô hạn nên chỉ tìm lại khi mở trang đó lần sau, không tìm ngay.
       void queryClient.invalidateQueries({ queryKey: ["employer", "job-posts", jobId] });
       void queryClient.invalidateQueries({ queryKey: [...OUTREACH_KEY, "summary"] });
+      // 0.3: số Phù hợp so với ngưỡng lúc đọc, và chỉ tiêu nằm trong "Đã tuyển a/b" ⇒ khối tiến độ
+      // tuyển ở trang tổng quan và "Phù hợp N" ở danh sách tin đã cũ ngay sau khi lưu.
+      void queryClient.invalidateQueries({ queryKey: HIRING_PROGRESS_KEY });
+      void queryClient.invalidateQueries({ queryKey: ["employerJobPosts"] });
     },
   });
 }

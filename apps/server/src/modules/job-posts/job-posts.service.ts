@@ -116,14 +116,17 @@ export class JobPostsService {
   // ─── Employer ────────────────────────────────────────────────────────────
 
   async listOwn(userId: string, query: EmployerJobPostListQuery): Promise<PaginatedResponse<JobPostDto>> {
-    const { companyId } = await this.requireEmployer(userId);
+    const { companyId, employerId } = await this.requireEmployer(userId);
     const { cursor, attention, ...filter } = query;
     const page = await this.jobPostRepository.findOwnedByCompany(
       companyId,
       { ...filter, attention: attention === "1" },
       cursor,
     );
-    const result = this.toPage(page);
+    // Danh sách gồm tin của cả công ty; `isOwner` cho frontend biết tin nào người xem tìm / mời được.
+    const ownerOf = new Map(page.items.map((item) => [item.id, item.employerId === employerId]));
+    const paged = this.toPage(page);
+    const result = { ...paged, items: paged.items.map((item) => ({ ...item, isOwner: ownerOf.get(item.id) === true })) };
     // Số Phù hợp (0.3 bước 6): một câu gộp cho các tin PUBLISHED trong trang. Tin đã quá
     // hạn nhưng chưa đóng không có trong Map nên cũng không có trường này.
     const publishedIds = page.items.filter((item) => item.status === "PUBLISHED").map((item) => item.id);
@@ -150,9 +153,9 @@ export class JobPostsService {
   }
 
   async getOwn(userId: string, id: string): Promise<JobPostDto> {
-    const { companyId } = await this.requireEmployer(userId);
+    const { companyId, employerId } = await this.requireEmployer(userId);
     const jobPost = await this.requireOwnedJobPost(companyId, id);
-    return toJobPostDto(jobPost);
+    return { ...toJobPostDto(jobPost), isOwner: jobPost.employerId === employerId };
   }
 
   async createDraft(userId: string, dto: CreateJobPostRequest): Promise<JobPostDto> {

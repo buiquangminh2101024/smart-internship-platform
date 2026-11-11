@@ -1,6 +1,6 @@
 # Số ứng viên phù hợp và tiến độ tuyển theo tin (0.3) — Backend
 
-> **Trạng thái: XONG BACKEND, BƯỚC 0–9 (2026-11-11).** Bảng điểm đã nạp lần đầu lên Neon. Đã có job đêm 3h30, `GET /employer/dashboard/hiring-progress`, số Phù hợp trên thẻ tự mời và trong danh sách tin. Tin demo đã có chỉ tiêu 1–10 trên Neon. Bước 8 (kiểm thử) đạt hết. Đã cập nhật backlog và AD-24 (bước 9). Tiếp theo là frontend (F1–F5). Chi tiết ở mục Ghi chú triển khai.
+> **Trạng thái: XONG BACKEND, BƯỚC 0–9 (2026-11-11).** Bảng điểm đã nạp lần đầu lên Neon. Đã có job đêm 3h30, `GET /employer/dashboard/hiring-progress`, số Phù hợp trên thẻ tự mời và trong danh sách tin. Tin demo đã có chỉ tiêu 1–10 trên Neon. Bước 8 (kiểm thử) đạt hết. Đã cập nhật backlog và AD-24 (bước 9). Frontend (F1–F5) xong 2026-11-11 (`docs/05-frontend/phases/hiring-progress/PLAN.md`). Chi tiết ở mục Ghi chú triển khai.
 
 Mục 0.3 của `docs/01-project/FEATURE_BACKLOG.md`. Frontend: `docs/05-frontend/phases/hiring-progress/PLAN.md`.
 

@@ -80,7 +80,8 @@ function JobMeta({ job }: { job: JobPost }) {
       {job.matchedCount !== undefined ? (
         <span className="inline-flex items-center gap-1">
           <Icon name="user-check" size={14} />
-          <MatchedCount jobId={job.id} matched={job.matchedCount} label="Phù hợp" />
+          {/* Danh sách gồm tin của cả công ty; trang tìm ứng viên chỉ người đăng tin mở được. */}
+          <MatchedCount jobId={job.id} matched={job.matchedCount} label="Phù hợp" linked={job.isOwner === true} />
         </span>
       ) : null}
       {job.status === "PUBLISHED" ? (

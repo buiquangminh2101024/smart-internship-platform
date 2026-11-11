@@ -729,7 +729,7 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 
 **Ngày:** 2026-11-11 · **Phase liên quan:** không thuộc phase đánh số. Mục 0.3 của `docs/01-project/FEATURE_BACKLOG.md`, theo nhận xét của giáo viên ở buổi demo 05/11/2026. Kế hoạch chi tiết: `docs/06-backend/hiring-progress/PLAN.md`, `docs/05-frontend/phases/hiring-progress/PLAN.md`.
 
-> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-10). ĐÃ TRIỂN KHAI BACKEND (2026-11-11), đã nạp bảng và kiểm trên Neon.** Mục 6 chốt 2026-11-11, sau số đo. Frontend (F1–F5) chưa làm. Ghi chú triển khai chi tiết ở `docs/06-backend/hiring-progress/PLAN.md`.
+> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-10). ĐÃ TRIỂN KHAI BACKEND (2026-11-11), đã nạp bảng và kiểm trên Neon.** Mục 6 chốt 2026-11-11, sau số đo. Frontend (F1–F5) xong 2026-11-11, ghi chú ở `docs/05-frontend/phases/hiring-progress/PLAN.md`. Ghi chú triển khai chi tiết ở `docs/06-backend/hiring-progress/PLAN.md`.
 
 **Bối cảnh:** trang tổng quan của nhà tuyển dụng cần số ứng viên phù hợp cho mọi tin đang hiển thị. Hiện chưa có điểm nào được lưu: trang tìm ứng viên và tự mời (AD-23) đều lọc SQL ≤ 50 người rồi chấm hybrid lúc chạy (khoảng 1 giây cho 50 người). Đo ngày 2026-11-11: 309/311 tin có hơn 50 người chung kỹ năng, nên muốn đếm đúng thì phải chấm cả pool. Trung vị pool là 438 người, chấm một tin mất khoảng 5 giây. Không chấm lúc mở trang được.
 

@@ -11,7 +11,9 @@ import {
   useSentOutreachInvitations,
 } from "@/hooks/useCandidateOutreach";
 import { useEmployerJobPost } from "@/hooks/useJobPosts";
+import { useJobAutoOutreach } from "@/hooks/useAutoOutreach";
 import { ApiError } from "@/lib/api-client";
+import { formatNumber } from "@/lib/dashboard-format";
 import { CandidateSearchCard, outreachCandidateName } from "@/components/employer/CandidateSearchCard";
 import { SentInvitationRow } from "@/components/employer/SentInvitationRow";
 import { Button } from "@/components/ui/Button";
@@ -108,6 +110,62 @@ function SearchBlockedCard({ error }: { error: unknown }) {
         <p className="text-xs text-text-muted">Bạn vẫn xem được các lời mời đã gửi ở tab &quot;Đã mời&quot;.</p>
       ) : null}
     </Card>
+  );
+}
+
+function SummaryNum({ value }: { value: number }) {
+  return <b className="font-num font-bold tabular-nums text-text-strong">{formatNumber(value)}</b>;
+}
+
+/**
+ * 0.3 F3b (docs/05-frontend/phases/hiring-progress/PLAN.md): từ số "Phù hợp 32" ở trang tổng quan
+ * sang đây chỉ thấy tối đa 10 người, nên ghi rõ 10 người này nằm trong bao nhiêu người phù hợp.
+ * Số Phù hợp đọc bảng điểm lưu sẵn (cùng quyền xem với trang này: chỉ người đăng tin), còn
+ * "Gợi ý" vẫn chấm trực tiếp và không lọc theo ngưỡng, nên có thể gồm người dưới ngưỡng; khi
+ * đó câu chữ nói thẳng ra thay vì gọi cả danh sách là "trong số người phù hợp".
+ */
+function MatchedSummary({ jobId, candidates }: { jobId: string; candidates: CandidateSearchResultDto[] }) {
+  const auto = useJobAutoOutreach(jobId, true);
+  if (!auto.data || auto.data.status.matchScoresAt === null) return null;
+
+  const { matched, matchedApplied } = auto.data.status;
+  const minScore = auto.data.minScore;
+  const shown = candidates.length;
+  const belowThreshold = candidates.filter((candidate) => (candidate.match.score ?? -1) < minScore).length;
+  const applied =
+    matchedApplied > 0 ? (
+      <>
+        {" "}
+        (<SummaryNum value={matchedApplied} /> đã nộp đơn)
+      </>
+    ) : null;
+
+  if (belowThreshold === 0 && shown <= matched) {
+    return (
+      <p className="text-sm text-text-body">
+        <SummaryNum value={shown} /> người điểm cao nhất trong <SummaryNum value={matched} /> người phù hợp{applied}.
+      </p>
+    );
+  }
+  return (
+    <p className="text-sm text-text-body">
+      {matched > 0 ? (
+        <>
+          <SummaryNum value={matched} /> người phù hợp với ngưỡng {minScore}%{applied}.
+        </>
+      ) : (
+        <>Chưa có ứng viên đạt ngưỡng {minScore}%.</>
+      )}{" "}
+      Dưới đây là <SummaryNum value={shown} /> người điểm cao nhất chưa ứng tuyển
+      {belowThreshold === 0 ? null : belowThreshold === shown ? (
+        ", đều dưới ngưỡng"
+      ) : (
+        <>
+          , <SummaryNum value={belowThreshold} /> người dưới ngưỡng
+        </>
+      )}
+      .
+    </p>
   );
 }
 
@@ -305,6 +363,7 @@ function CandidateSearchContent() {
           </Card>
         ) : (
           <div className="grid gap-4">
+            <MatchedSummary jobId={jobId} candidates={search.data} />
             {search.data.map((candidate) => (
               <CandidateSearchCard
                 key={candidate.candidateId}

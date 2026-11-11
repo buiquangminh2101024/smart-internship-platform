@@ -1,6 +1,6 @@
 # Số ứng viên phù hợp và tiến độ tuyển theo tin (0.3) — Frontend
 
-> **Trạng thái: ĐÃ DUYỆT (2026-11-11). ĐỢT A XONG (F1, F2, F4); ĐỢT B (F3, F3b) VÀ F5 CHƯA LÀM.** Backend (`docs/06-backend/hiring-progress/PLAN.md`) đã xong, có API ở bước 5 và 6 bên đó.
+> **Trạng thái: XONG (2026-11-11).** Đợt A (F1, F2, F4), đợt B (F3, F3b) và F5 (kiểm trên trình duyệt) đều xong. Kết quả F5 ở cuối mục Ghi chú triển khai. Backend (`docs/06-backend/hiring-progress/PLAN.md`) đã xong, có API ở bước 5 và 6 bên đó.
 >
 > Làm theo 2 đợt, mỗi đợt một commit, rồi kiểm trên trình duyệt một lần:
 >
@@ -127,11 +127,76 @@ Với tài khoản Mây Xanh của bộ demo lớn:
   - Dòng phụ ghi "điểm phù hợp cập nhật lúc HH:mm ngày DD/MM" từ `scoredAt`; không có `scoredAt` thì bỏ phần này.
 - **F4:** "Tỉ lệ nộp x%" hiện ở mọi trạng thái tin khi có lượt xem (cách tính như bảng cũ). "Phù hợp N" chỉ khi có `matchedCount`.
 - **`SocketProvider` không sửa** (xem Phần 2).
-- **Việc để lại cho đợt B:** `useUpdateJobAutoOutreach` cần làm mới `HIRING_PROGRESS_KEY` và danh sách tin `["employer", "job-posts"]` sau khi lưu cài đặt. Hiện chỉ làm mới chi tiết tin, nên sau khi đổi ngưỡng, trang tổng quan và `/employer/jobs` chỉ có số mới khi hết `staleTime` (mục 3 của F5).
+- **Việc để lại cho đợt B (đã làm ở đợt B):** sau khi lưu cài đặt, `useUpdateJobAutoOutreach` phải làm mới khối tiến độ tuyển và danh sách tin.
 - **Đã kiểm:** `tsc --noEmit`, `eslint` (các file sửa không có cảnh báo), `next build` của web đều qua. Chưa xem trên trình duyệt, để tới F5.
 
-### Đợt B — F3 + F3b
+### Đợt B — F3 + F3b (xong 2026-11-11)
 
-Chưa làm.
+- **File sửa:** `components/employer/AutoOutreachCard.tsx`, `app/employer/(portal)/jobs/[id]/candidate-search/page.tsx`, `hooks/useAutoOutreach.ts`.
+- **Quyền xem (F3b):** `GET …/candidate-search` và `GET …/auto-outreach` cùng kiểm `employerId` của tin, người khác nhận 404 (`requireOwnedJobPost` / `requireOwnedJob`). Hai API cùng quyền, nên dùng lại `useJobAutoOutreach`, không thêm endpoint.
+- **F3:**
+  - Dòng "Phù hợp 32 (12 đã nộp) · Phỏng vấn 2" (dùng `MatchedCount`) nằm ngay trên khung trạng thái.
+  - Dòng này hiện ở mọi trạng thái của tin `PUBLISHED`, kể cả khi chưa bật tự mời, vì đó là lúc số này giúp quyết định có bật hay không.
+  - Tin nháp hoặc chờ duyệt thì không hiện, vì chưa có điểm.
+  - Còn thiếu một trường hợp: tin đã quá hạn nhưng chưa bị đóng vẫn hiện dòng này.
+- **Làm mới sau khi lưu cài đặt:** `useUpdateJobAutoOutreach` làm mới thêm `HIRING_PROGRESS_KEY` và `["employerJobPosts"]` (key của danh sách tin). Ghi chú đợt A nói "hiện chỉ làm mới chi tiết tin" là chưa chính xác: trước đây hook làm mới "Gợi ý" / "Đã mời" của tin (`["employer", "job-posts", jobId]`) và số liệu trang "Lời mời", chưa làm mới hai chỗ này.
+- **F3b, câu chữ lệch so với mô tả:**
+  - "Gợi ý" vẫn chấm trực tiếp và không lọc theo ngưỡng. Bước 8 (b) của backend có tin mà 3 trong 10 người hiện ra ở dưới ngưỡng. Vì vậy câu "N người điểm cao nhất trong M người phù hợp" chỉ dùng khi mọi người đang hiện đều đạt ngưỡng và N ≤ M.
+  - Nếu không, câu là: "M người phù hợp với ngưỡng X% (K đã nộp đơn). Dưới đây là N người điểm cao nhất chưa ứng tuyển, P người dưới ngưỡng". Khi M = 0: "Chưa có ứng viên đạt ngưỡng X%. …".
+  - Dòng chỉ hiện khi danh sách có người, `matchScoresAt` khác null và API tự mời đọc được.
+- **Đã kiểm:** `tsc --noEmit`, `eslint` các file sửa, `next build` của web đều qua. Kết quả trên trình duyệt ở F5.
+
+### F5 — Kiểm trên trình duyệt (2026-11-11)
+
+Chạy với server, web và gateway của chủ dự án. Đăng nhập `tuyendung-mayxanh@large-demo.local`; công ty có 32 tin đang hiển thị, 3 người đăng tin.
+
+1. **Đạt.**
+   - Trang tổng quan có 5 tin. Thứ tự đúng "cần chú ý": cả 5 tin chưa tuyển ai, không tin nào còn ≤ 7 ngày, nên xếp theo hạn nộp gần (9, 10, 11, 18, 20 ngày).
+   - Mọi ô Phù hợp, Đã mời, Nhận lời, Phỏng vấn khớp `GET /employer/dashboard/hiring-progress`.
+   - Dòng phụ: "Đã tuyển 7/82 người trên 32 tin đang hiển thị · 497 ứng viên phù hợp · điểm phù hợp cập nhật lúc 16:30 ngày 11/11".
+   - Không có khối mới.
+2. **Đạt, sau khi sửa một lỗi.**
+   - Không đăng nhập bằng tài khoản thứ hai, vì 5 tin trong bảng đã gồm cả tin của người xem lẫn tin của tech-2 và tech-3.
+   - Tin của người khác hiện chữ "Chưa bật tự mời", không có link.
+   - **Lỗi tìm thấy:** số Phù hợp vẫn là link sang trang tìm ứng viên, trong khi trang đó trả "Job post not found" cho người không đăng tin (đã mở thử `clargedemojob0242`).
+   - **Đã sửa:** `MatchedCount` thêm prop `linked`.
+     - Trang tổng quan chỉ link khi `ownedByViewer`.
+     - `/employer/jobs` không link, vì danh sách gồm tin cả công ty và DTO không cho biết người đăng tin.
+   - **Có từ trước, ngoài phạm vi 0.3:** nút "Tìm ứng viên phù hợp" ở trang chi tiết tin cũng hiện cho mọi employer trong công ty, nên dẫn tới cùng lỗi này. Đã sửa ở mục "Sửa kèm sau F5" bên dưới.
+3. **Đạt.**
+   - Tin `clargedemojob0292`, chưa bật tự mời nên không gửi lời mời nào. Đổi ngưỡng 80 → 70 rồi lưu.
+   - Thẻ đổi ngay từ "Phù hợp 23 (1 đã nộp)" thành "Phù hợp 39 (3 đã nộp)".
+   - Bấm "Tổng quan" trên menu (không tải lại trang): dòng của tin là 39, tổng là 513 (497 + 16).
+   - `/employer/jobs` hiện "Phù hợp 39". Trang tìm ứng viên hiện "10 người điểm cao nhất trong 39 người phù hợp (3 đã nộp đơn)."
+   - Sau đó đã đặt lại ngưỡng 80, số Phù hợp về 23.
+4. **Đạt.**
+   - Ứng viên `ung-vien-1173@large-demo.local` nhận lời mời `clargedemoinv250` của tin `clargedemojob0292`, gọi API bằng curl.
+   - Trang tổng quan đang mở và không tải lại: cột Nhận lời từ 0 lên 1 sau vài giây, chuông thông báo từ 6 lên 7.
+   - Thao tác này ghi lên Neon:
+     - lời mời chuyển `ACCEPTED`;
+     - có thêm 1 thông báo cho Employer và 1 email trong outbox, gửi tới địa chỉ `.local`;
+     - có thêm 1 hội thoại.
+5. **Đạt.**
+   - Cửa sổ trình duyệt không thu được, nên đo trong iframe rộng 375 px (cùng origin, giữ phiên đăng nhập).
+   - `/employer/dashboard`, `/employer/jobs`, trang tin và trang tìm ứng viên đều có `scrollWidth = clientWidth`, không cuộn ngang.
+   - Khối tiến độ hiện dạng thẻ, đọc được.
+6. **Đạt.** `tsc --noEmit`, `npm run lint --workspace web` (0 lỗi; 23 cảnh báo có từ trước, không thuộc file của 0.3), `next build` đều qua.
+
+### Sửa kèm sau F5: nút "Tìm ứng viên phù hợp" cho người không đăng tin (2026-11-11, chủ dự án đồng ý)
+
+Lỗi có từ B3 (tìm và mời ứng viên), không do 0.3 gây ra. F5 mới phát hiện, nên sửa kèm ở đây. Cách sửa giống trang "Lời mời" (`OutreachJobProgressDto.isOwner`).
+
+- **Backend:**
+  - `JobPost.isOwner?` trong shared-types;
+  - `JobPostsService.getOwn` và `listOwn` gán `isOwner` bằng cách so `employerId` của tin với người xem. Không thêm truy vấn, vì `employerId` đã có trong dòng tin.
+  - Các API khác trả `JobPostDto` (sửa, gửi duyệt, đóng tin…) không có trường này.
+  - Thêm 2 test vào `tests/unit/hiring-progress.test.ts`. Cả bộ 466 test unit đều qua.
+- **Trang chi tiết tin:** khi `isOwner === false`, nút bị khoá kèm icon ổ khoá và dòng chữ "Chỉ người đăng tin mới tìm và mời được." Thiếu trường (`undefined`) thì giữ nút như cũ.
+- **`/employer/jobs`:** số "Phù hợp N" lại có link khi `isOwner`. Lúc kiểm F5, link này đã bị tắt.
+- **Đã kiểm trên trình duyệt:**
+  - `clargedemojob0242` (của tech-2) hiện nút khoá;
+  - API trả `isOwner` false cho `0242` và true cho `0292`;
+  - trang đầu `/employer/jobs` có 20 tin, trong đó 9 tin của người xem; cả 9 có link, các tin khác không có.
+- **Kiểm thêm:** `tsc` của web và server, `eslint`, `next build` đều qua. Typecheck gộp cả `scripts` và `tests` chỉ báo lỗi ở `scripts/seed-education-catalog.ts`, file có từ trước và không liên quan.
 
 ## Phần 4 — Ghi chú của chủ dự án

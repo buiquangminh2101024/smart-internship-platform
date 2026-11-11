@@ -759,6 +759,11 @@ export interface JobPost {
    * khác trạng thái thì không có trường này.
    */
   matchedCount?: number;
+  /**
+   * Người xem là người đăng tin ⇒ được tìm và mời ứng viên cho tin (B3: API tìm / mời trả 404
+   * cho người khác cùng công ty). Chỉ có ở GET /employer/job-posts và GET /employer/job-posts/:id.
+   */
+  isOwner?: boolean;
 }
 
 export interface CreateJobPostRequest {

@@ -3,6 +3,7 @@
 // ty, cắt 5 tin, `scoredAt`, `ownedByViewer`, và EmployerDashboardService.hiringProgress với
 // repository giả. Bước 6: `matchedCount` trong danh sách tin của Employer. SQL của
 // progressForCompany / matchedCounts không được kiểm ở đây (đã đối chiếu trên Neon).
+// Sửa kèm sau F5 (docs/05-frontend/phases/hiring-progress/PLAN.md): `isOwner` ở danh sách và chi tiết tin.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -147,10 +148,11 @@ test("EmployerDashboardService.hiringProgress: đọc tiến độ theo công ty
 
 // ─── Bước 6: danh sách tin ─────────────────────────────────────────────────
 
-function jobPostRow(id: string, status: string) {
+function jobPostRow(id: string, status: string, employerId = "emp-1") {
   return {
     id,
     companyId: "co-1",
+    employerId,
     company: { id: "co-1", name: "Công ty A", logoUrl: null, website: null, isVerified: true, industryId: null, cityId: null, address: null, taxCode: null, description: null },
     title: `Tin ${id}`,
     description: "Mô tả",
@@ -185,7 +187,10 @@ function buildJobPostsService(items: ReturnType<typeof jobPostRow>[], counts: Re
   const asked: string[][] = [];
   const service = new JobPostsService({
     employerIdentityCache: { require: async () => ({ employerId: "emp-1", userId: "user-1", companyId: "co-1" }) },
-    jobPostRepository: { findOwnedByCompany: async () => ({ items, hasMore: true, nextCursor: "c2" }) },
+    jobPostRepository: {
+      findOwnedByCompany: async () => ({ items, hasMore: true, nextCursor: "c2" }),
+      findById: async (id: string) => items.find((item) => item.id === id) ?? null,
+    },
     matchScoreRepository: {
       matchedCounts: async (ids: string[]) => {
         asked.push(ids);
@@ -222,4 +227,28 @@ test("listOwn: trang không có tin PUBLISHED ⇒ không hỏi bảng điểm", 
   const page = await service.listOwn("user-1", {});
   assert.deepEqual(asked, []);
   assert.equal("matchedCount" in page.items[0]!, false);
+});
+
+// ─── Sửa kèm sau F5: isOwner ───────────────────────────────────────────────
+
+test("listOwn: isOwner theo người đăng tin, có ở mọi tin của trang (kể cả tin không PUBLISHED)", async () => {
+  const { service } = buildJobPostsService(
+    [jobPostRow("mine", "PUBLISHED"), jobPostRow("theirs", "PUBLISHED", "emp-2"), jobPostRow("draft", "DRAFT", "emp-2")],
+    { mine: 3, theirs: 5 },
+  );
+  const page = await service.listOwn("user-1", {});
+  assert.deepEqual(
+    page.items.map((item) => [item.id, item.isOwner, item.matchedCount]),
+    [
+      ["mine", true, 3],
+      ["theirs", false, 5],
+      ["draft", false, undefined],
+    ],
+  );
+});
+
+test("getOwn: isOwner true với người đăng tin, false với người khác cùng công ty", async () => {
+  const { service } = buildJobPostsService([jobPostRow("mine", "PUBLISHED"), jobPostRow("theirs", "PUBLISHED", "emp-2")], {});
+  assert.equal((await service.getOwn("user-1", "mine")).isOwner, true);
+  assert.equal((await service.getOwn("user-1", "theirs")).isOwner, false);
 });

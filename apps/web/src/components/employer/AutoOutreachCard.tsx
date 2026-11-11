@@ -16,6 +16,7 @@ import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 import { Input } from "@/components/ui/Input";
 import { cappedUntilLabel } from "./CandidateSearchCard";
+import { MatchedCount } from "./MatchedCount";
 
 // Thẻ "Tự động mời ứng viên" ở cột phải trang tin (AD-23, plan frontend F2).
 // Chỉ người đăng tin thấy: API trả 404 cho người khác ⇒ thẻ không hiện.
@@ -42,6 +43,27 @@ function formatNextCheck(iso: string): string {
 
 function Num({ value }: { value: number }) {
   return <span className="font-num font-bold tabular-nums text-text-strong">{value}</span>;
+}
+
+/**
+ * "Phù hợp 32 (12 đã nộp) · Phỏng vấn 2" (0.3 F3, docs/05-frontend/phases/hiring-progress/PLAN.md),
+ * hiện ở mọi trạng thái của tin đang đăng, kể cả khi chưa bật tự mời. Số Phù hợp so với ngưỡng
+ * đã lưu, nên lưu ngưỡng mới thì số đổi ngay mà không cần chấm lại.
+ */
+function MatchedLine({ data, jobId }: { data: JobAutoOutreachDto; jobId: string }) {
+  const { status } = data;
+  return (
+    <p className="text-sm text-text-body">
+      <MatchedCount
+        jobId={jobId}
+        matched={status.matched}
+        matchedApplied={status.matchedApplied}
+        pending={status.matchScoresAt === null}
+        label="Phù hợp"
+      />{" "}
+      · Phỏng vấn <Num value={status.interviewing} />
+    </p>
+  );
 }
 
 /** Dòng trạng thái theo `state` của server (không theo bản đang sửa). */
@@ -252,6 +274,8 @@ export function AutoOutreachCard({ jobId, published }: { jobId: string; publishe
             onChange={(event) => edit({ minScore: event.target.value })}
           />
         </fieldset>
+
+        {published ? <MatchedLine data={data} jobId={jobId} /> : null}
 
         <AutoOutreachStatus data={data} jobId={jobId} />
 

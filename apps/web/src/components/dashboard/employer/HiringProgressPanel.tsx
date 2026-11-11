@@ -174,6 +174,7 @@ function NarrowList({ items }: { items: HiringProgressItem[] }) {
               matchedApplied={item.matchedApplied}
               pending={item.matchScoresAt === null}
               label="Phù hợp"
+              linked={item.ownedByViewer}
             />
             <span aria-hidden>·</span>
             <span>
@@ -217,6 +218,7 @@ function Matched({ item }: { item: HiringProgressItem }) {
       matched={item.matched}
       matchedApplied={item.matchedApplied}
       pending={item.matchScoresAt === null}
+      linked={item.ownedByViewer}
     />
   );
 }
