@@ -724,3 +724,53 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
   - Lúc phải tính nhiều embedding mới: API nhẹ chậm khoảng 2,5 lần trong 1–1,7 giây. Trang tìm ứng viên hiện có cũng gây mức này, nên không phải lý do riêng để tách.
   - Không tách worker, không cần AD mới.
 - Mục 4: hạn mức không tính bằng hàm mà đọc từ cột `outreachInvitationDailyQuota` của gói; đã kiểm trên Neon ra đúng 8 / 14 / 86 (Dùng thử là hằng số 6 trong code).
+
+## AD-24 — Bảng điểm lưu sẵn theo cặp tin–ứng viên (0.3)
+
+**Ngày:** 2026-11-11 · **Phase liên quan:** không thuộc phase đánh số. Mục 0.3 của `docs/01-project/FEATURE_BACKLOG.md`, theo nhận xét của giáo viên ở buổi demo 05/11/2026. Kế hoạch chi tiết: `docs/06-backend/hiring-progress/PLAN.md`, `docs/05-frontend/phases/hiring-progress/PLAN.md`.
+
+> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-10), ĐÃ ĐO TRÊN NEON (2026-11-11). Chưa triển khai.** Mục 6 chốt 2026-11-11, sau số đo.
+
+**Bối cảnh:** trang tổng quan của nhà tuyển dụng cần số ứng viên phù hợp cho mọi tin đang hiển thị. Hiện chưa có điểm nào được lưu: trang tìm ứng viên và tự mời (AD-23) đều lọc SQL ≤ 50 người rồi chấm hybrid lúc chạy (khoảng 1 giây cho 50 người). Đo ngày 2026-11-11: 309/311 tin có hơn 50 người chung kỹ năng, nên muốn đếm đúng thì phải chấm cả pool. Trung vị pool là 438 người, chấm một tin mất khoảng 5 giây. Không chấm lúc mở trang được.
+
+**Quyết định:**
+
+1. **Bảng `job_candidate_match_scores`** lưu điểm mới nhất của từng cặp (tin, ứng viên): `score`, `semanticPending` (điểm rule-only vì chưa có embedding), `weightsVersion`, `scoredAt`. Thêm `JobPost.matchScoresAt`. Đây là **dữ liệu dẫn xuất**: xoá hết vẫn tính lại được.
+2. **Phạm vi chấm:** mọi ứng viên có chung ≥ 1 kỹ năng đã duyệt với tin `PUBLISHED`. Không giới hạn số người, không lọc opt-in, đơn hay lời mời. Chỉ lưu kết quả có điểm. Tin hết hiển thị thì xoá dòng.
+3. **Ngưỡng, lời mời và đơn không lưu trong bảng** mà so lúc đọc. Đổi ngưỡng tự mời của tin không cần chấm lại.
+4. **Cùng bộ chấm** với trang tìm ứng viên và tự mời (`CandidateOutreachService`: cùng quy tắc, cùng cosine, cùng cách xử lý khi thiếu embedding), để điểm trong bảng khớp điểm nhà tuyển dụng thấy.
+5. **Cập nhật:**
+   - (a) khi tin chuyển `PUBLISHED` (tự đăng hoặc Admin duyệt): chấm riêng tin đó, chạy sau commit, không chờ;
+   - (b) job đêm 3h30 giờ Việt Nam: chấm lại mọi tin đang hiển thị, tin chấm lâu nhất trước, giới hạn 45 phút mỗi lượt.
+
+   Chạy chung process như AD-23 mục 8, nhường event loop giữa các lô. Tin đang hiển thị không sửa được nội dung, nên không cần lối "sửa tin".
+6. **Job đêm nạp hồ sơ ứng viên một lần mỗi lượt** rồi dùng lại cho mọi tin.
+   - Số đo: khoảng 80% thời gian chấm một tin là nạp hồ sơ. Mỗi hồ sơ nằm trong pool của khoảng 87 tin.
+   - Chấm từng tin như (a) thì cả đêm ≈ 24 phút. Nạp một lần thì ≈ 2–3 phút.
+   - Cách làm: `CandidateOutreachService` tách phần chấm thành `scoreProfiles(job, profiles, …)`, nhận hồ sơ đã nạp. `scoreCandidates` hiện có nạp hồ sơ rồi gọi lại hàm này, nên điểm ở mọi nơi vẫn từ một chỗ (mục 4).
+   - Cache hồ sơ chỉ sống trong một lượt, trần 20.000 hồ sơ (vượt thì xoá sạch rồi nạp tiếp). Ứng viên sửa hồ sơ trong lúc chạy thì đêm sau mới vào bảng.
+   - Lối (a) dùng cache mới, chỉ nạp hồ sơ của pool tin đó.
+7. **Tự mời (AD-23) và trang tìm ứng viên vẫn chấm trực tiếp.** Chỉ chuyển sang đọc bảng sau khi mục 0.6 có chấm lại theo ứng viên (đánh dấu tường minh ứng viên "cần chấm lại", quét mỗi 15 phút; job đêm giữ làm lưới an toàn).
+
+**Số đo (2026-11-11, Neon, chỉ đọc):**
+
+- 311 tin, 1.523 ứng viên.
+- 131.928 cặp. Ước bảng ≈ 34 MB, cả DB hiện là 35 MB.
+- 1.521/1.523 hồ sơ đã có embedding đúng hash.
+- Chi tiết ở Ghi chú triển khai của plan backend.
+
+**Phương án không chọn:**
+
+- *Gắn vào cron 15 phút của 0.2:* lượt tự mời chỉ có 60 giây (đủ khoảng 38 tin pool 50), không đủ cho pool đầy đủ. Một cron cũng không nên làm hai việc.
+- *Chấm phần thay đổi theo thời gian sửa của ứng viên:* dễ sót, vì sửa kỹ năng không đổi `updatedAt` của ứng viên. Việc này để 0.6 làm bằng đánh dấu tường minh.
+- *Chấm lúc mở trang:* quá chậm (mục Bối cảnh).
+- *Chỉ lưu dòng điểm cao để giảm dung lượng:* ngưỡng của tin cho chỉnh 0–100, nên dòng nào cũng có thể cần.
+- *Job đêm gọi `scorePool` cho từng tin (bản đầu của plan):* ≈ 24 phút, sát ngưỡng 30 phút đặt ra ở bước 0, và hầu hết thời gian là nạp lại cùng một hồ sơ.
+
+**Ảnh hưởng:**
+
+- 1 bảng mới, `JobPost.matchScoresAt`, 1 migration viết tay.
+- Module mới `apps/server/src/modules/match-scores/`, 1 cron, 1 script chạy tay.
+- `job-posts.service.ts`: gọi lối kích hoạt (a).
+- 1 endpoint dashboard; mở rộng `AutoOutreachStatus` trong `packages/shared-types`.
+- `candidate-outreach.service.ts`: tách `scoreProfiles` và thêm `loadJobProfile` public (mục 6). Hành vi của trang tìm ứng viên, tự mời và chấm lúc gửi lời mời không đổi.

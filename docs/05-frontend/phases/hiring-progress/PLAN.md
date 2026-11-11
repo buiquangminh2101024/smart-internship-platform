@@ -18,6 +18,7 @@ Mục 0.3 của `docs/01-project/FEATURE_BACKLOG.md`.
 |---|---|---|
 | `/employer/dashboard` | `HiringProgressPanel` thay `JobPerformancePanel` | `GET /employer/dashboard/hiring-progress` |
 | `/employer/jobs/[id]` | Thẻ "Tự động mời ứng viên" thêm dòng "Phù hợp" và "Phỏng vấn" | `GET …/auto-outreach` (thêm trường) |
+| `/employer/jobs/[id]/candidate-search` | Dòng "N người điểm cao nhất trong M người phù hợp"; danh sách vẫn chấm trực tiếp | `GET …/auto-outreach` (đọc `status.matched`) |
 | `/employer/jobs` | `JobMeta` thêm "Phù hợp N" (nếu làm bước 6 backend) và tỉ lệ nộp | `GET /employer/job-posts` |
 
 Làm mới dữ liệu: khi có `AUTO_OUTREACH_SENT` hoặc ứng viên trả lời lời mời, `SocketProvider` đã làm mới key của thẻ 0.2. Thêm key `hiring-progress` vào cùng nhóm làm mới.
@@ -69,6 +70,14 @@ Phù hợp 32 (12 đã nộp) · Phỏng vấn 2
 - "Phù hợp" là link tới trang tìm ứng viên của tin.
 - `matchScoresAt = null` thì hiện "Đang chấm…".
 - Lưu cài đặt đổi ngưỡng ⇒ làm mới thẻ (đã có), số Phù hợp đổi theo ngưỡng mới mà không cần chấm lại.
+
+### Bước F3b — Trang tìm ứng viên (`jobs/[id]/candidate-search`)
+
+- Danh sách "Gợi ý" **giữ chấm trực tiếp** như hiện tại. Chuyển sang đọc bảng điểm cùng lúc với tự mời của 0.2, sau 0.6.
+- Thêm một dòng trên danh sách: "10 người điểm cao nhất trong 32 người phù hợp (12 đã nộp đơn)". Lý do: từ trang tổng quan bấm vào số "Phù hợp 32" sang đây mà chỉ thấy 10 người thì dễ thắc mắc.
+- Số lấy từ `status.matched` / `status.matchedApplied` của `GET …/auto-outreach` (backend bước 5b), dùng lại hook `useAutoOutreach`. Khi làm, kiểm hai API có cùng quyền xem không (cả hai hiện đều chỉ cho người đăng tin). Nếu khác quyền thì báo lại, không tự thêm endpoint.
+- `matchScoresAt = null` thì không hiện dòng này.
+- Số người thật sự hiện ra có thể ít hơn 10 (pool nhỏ, hoặc đã mời hết), nên câu chữ dùng số thực tế: "N người điểm cao nhất…".
 
 ### Bước F4 — Danh sách tin (`/employer/jobs`)
 

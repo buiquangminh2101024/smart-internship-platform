@@ -408,6 +408,7 @@ model Candidate {
   // AD-15 — bật = cho phép Employer tìm thấy và xem hồ sơ (không lộ phone/email).
   isOpenToOutreach    Boolean                        @default(false)
   outreachInvitations CandidateOutreachInvitation[]
+  matchScores         JobCandidateMatchScore[]
 
   @@map("candidates")
 }
@@ -736,6 +737,9 @@ model JobPost {
   // Dấu "hết ứng viên": null = đang chạy bình thường.
   autoOutreachExhaustedAt     DateTime?
   autoOutreachExhaustedReason AutoOutreachExhaustedReason?
+  // AD-24 — lần chấm bảng điểm gần nhất của tin; null = chưa chấm. Job đêm chấm
+  // tin cũ nhất trước, UI hiện "cập nhật lúc…".
+  matchScoresAt               DateTime?
 
   moderationActions   JobPostModerationAction[]
   reports             JobReport[]
@@ -747,6 +751,7 @@ model JobPost {
   matchEmbedding      JobPostEmbedding?
   outreachInvitations CandidateOutreachInvitation[]
   dailyStats          JobPostDailyStat[]
+  matchScores         JobCandidateMatchScore[]
 
   @@index([companyId, status])
   @@index([status, createdAt])
@@ -821,6 +826,25 @@ model JobPostEmbedding {
   embeddedAt      DateTime                   @default(now())
 
   @@map("job_post_embeddings")
+}
+
+// AD-24 — bảng điểm lưu sẵn (0.3): điểm mới nhất của mọi cặp (tin PUBLISHED, ứng
+// viên có chung ≥ 1 kỹ năng APPROVED). Dữ liệu dẫn xuất, xoá hết vẫn chấm lại
+// được. Ngưỡng, đơn và lời mời KHÔNG lưu ở đây mà so lúc đọc.
+model JobCandidateMatchScore {
+  jobPostId       String
+  jobPost         JobPost   @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  candidateId     String
+  candidate       Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  score           Int
+  // true ⇒ chưa có embedding lúc chấm, điểm là rule-only (markSemanticPending).
+  semanticPending Boolean   @default(false)
+  weightsVersion  String
+  scoredAt        DateTime  @default(now())
+
+  @@id([jobPostId, candidateId])
+  @@index([jobPostId, score])
+  @@map("job_candidate_match_scores")
 }
 
 // Đầu ra LLM của "Phân tích hồ sơ" (AD-14, gộp A1+A4; KHÔNG bao gồm "Việc làm
