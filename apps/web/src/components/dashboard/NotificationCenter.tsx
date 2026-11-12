@@ -331,7 +331,9 @@ export function NotificationCenter({ area, limit = 8, notify, className = "" }: 
 }
 
 function warningIcon(type: Notification["type"]): string {
-  if (type === "JOB_POST_EXPIRING" || type === "SUBSCRIPTION_EXPIRING") return "clock";
+  if (type === "JOB_POST_EXPIRING" || type === "SUBSCRIPTION_EXPIRING" || type === "APPLICATIONS_NEED_ATTENTION") {
+    return "clock";
+  }
   if (type === "JOB_POST_TAKEN_DOWN") return "arrow-down";
   return "triangle-alert";
 }

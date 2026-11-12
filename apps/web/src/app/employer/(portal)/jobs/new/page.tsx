@@ -3,14 +3,28 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import type { CreateJobPostRequest, JobPost, SubmitJobPostResponse } from "@sip/shared-types";
+import type {
+  CreateJobPostRequest,
+  JobPost,
+  SubmitJobPostResponse,
+  UpdateJobApplicationAutomationRequest,
+} from "@sip/shared-types";
 import { apiFetch, ApiError } from "@/lib/api-client";
 import { JobPostForm, type JobPostFormAction } from "@/components/jobs/JobPostForm";
 import { JobPostContent, JobPostHeaderCard } from "@/components/jobs/JobPostContent";
 import { JobPostSubmitResult } from "@/components/jobs/JobPostSubmitResult";
 import { EmployerJobQuotaNotice } from "@/components/jobs/EmployerJobQuotaNotice";
 import { AutoOutreachDraftFields, type AutoOutreachDraftValues } from "@/components/employer/AutoOutreachDraftFields";
-import { HIRING_TARGET_MAX, parseIntInRange, useUpdateJobAutoOutreach } from "@/hooks/useAutoOutreach";
+import {
+  ApplicationAutomationFields,
+  parseRejectBelow,
+  type ApplicationAutomationDraft,
+} from "@/components/employer/ApplicationAutomationFields";
+import { DEFAULT_MIN_SCORE, HIRING_TARGET_MAX, parseIntInRange, useUpdateJobAutoOutreach } from "@/hooks/useAutoOutreach";
+import {
+  APPLICATION_AUTOMATION_DEFAULTS,
+  useUpdateJobApplicationAutomation,
+} from "@/hooks/useApplicationAutomation";
 import { useCompanySubscription } from "@/hooks/useSubscription";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
@@ -46,6 +60,16 @@ export default function NewJobPostPage() {
   const [autoError, setAutoError] = useState<string | undefined>(undefined);
   /** Cài đặt đã lưu lên nháp — chỉ PATCH lại khi người dùng đổi. */
   const [savedAuto, setSavedAuto] = useState(AUTO_DEFAULTS);
+
+  // AD-25 — "Tự động xử lý hồ sơ". Tin mới có X mặc định (form không đổi X), nên Y < DEFAULT_MIN_SCORE.
+  const updateAutomation = useUpdateJobApplicationAutomation();
+  const [automation, setAutomation] = useState<ApplicationAutomationDraft>({
+    ...APPLICATION_AUTOMATION_DEFAULTS,
+    rejectSuggestBelowScore: String(APPLICATION_AUTOMATION_DEFAULTS.rejectSuggestBelowScore),
+  });
+  const [savedAutomation, setSavedAutomation] = useState<Required<UpdateJobApplicationAutomationRequest>>(
+    APPLICATION_AUTOMATION_DEFAULTS,
+  );
 
   async function invalidate() {
     await queryClient.invalidateQueries({ queryKey: ["employerJobPosts"] });
@@ -83,6 +107,38 @@ export default function NewJobPostPage() {
     }
   }
 
+  /** Như `persistAuto`: chỉ gửi trường khác bản đã lưu; lỗi thì nháp vẫn còn, dừng thao tác. */
+  async function persistAutomation(jobId: string, rejectSuggestBelowScore: number): Promise<boolean> {
+    const next = {
+      autoReviewEnabled: automation.autoReviewEnabled,
+      rejectSuggestBelowScore,
+      autoCloseInterviewedEnabled: automation.autoCloseInterviewedEnabled,
+    };
+    const patch: UpdateJobApplicationAutomationRequest = {
+      ...(next.autoReviewEnabled !== savedAutomation.autoReviewEnabled
+        ? { autoReviewEnabled: next.autoReviewEnabled }
+        : {}),
+      ...(next.rejectSuggestBelowScore !== savedAutomation.rejectSuggestBelowScore
+        ? { rejectSuggestBelowScore: next.rejectSuggestBelowScore }
+        : {}),
+      ...(next.autoCloseInterviewedEnabled !== savedAutomation.autoCloseInterviewedEnabled
+        ? { autoCloseInterviewedEnabled: next.autoCloseInterviewedEnabled }
+        : {}),
+    };
+    if (Object.keys(patch).length === 0) return true;
+    try {
+      await updateAutomation.mutateAsync({ jobId, patch });
+      setSavedAutomation(next);
+      return true;
+    } catch (err) {
+      const reason = err instanceof ApiError ? ` (${err.message})` : "";
+      setError(
+        `Đã lưu nháp nhưng chưa lưu được cài đặt tự động xử lý hồ sơ${reason}. Thử lại, hoặc chỉnh lại ở trang tin sau khi tạo.`,
+      );
+      return false;
+    }
+  }
+
   async function handleAction(dto: CreateJobPostRequest, action: JobPostFormAction) {
     setError(null);
     const hiringTarget = parseIntInRange(auto.hiringTarget, 1, HIRING_TARGET_MAX);
@@ -91,10 +147,14 @@ export default function NewJobPostPage() {
       return;
     }
     setAutoError(undefined);
+    // Lỗi đã hiện ngay dưới ô (ApplicationAutomationFields); chỉ chặn gửi.
+    const rejectBelow = parseRejectBelow(automation.rejectSuggestBelowScore, DEFAULT_MIN_SCORE);
+    if (rejectBelow === null) return;
     setSaving(true);
     try {
       const saved = await persist(dto);
       if (!(await persistAuto(saved.id, hiringTarget))) return;
+      if (!(await persistAutomation(saved.id, rejectBelow))) return;
       if (action === "preview") {
         setView("preview");
       } else if (action === "submit") {
@@ -192,7 +252,16 @@ export default function NewJobPostPage() {
               setAuto(next);
               setAutoError(undefined);
             }}
-          />
+          >
+            <h3 className="text-sm font-semibold text-text-strong">Tự động xử lý hồ sơ</h3>
+            <ApplicationAutomationFields
+              values={automation}
+              matchThreshold={DEFAULT_MIN_SCORE}
+              thresholdNote="sửa ở trang tin sau khi tạo"
+              disabled={saving}
+              onChange={setAutomation}
+            />
+          </AutoOutreachDraftFields>
         }
         onAction={handleAction}
       />

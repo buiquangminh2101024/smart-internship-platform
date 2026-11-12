@@ -3,6 +3,7 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { COMPANY_APPLICATIONS_KEY } from "@/hooks/useApplications";
 import { OUTREACH_KEY } from "@/hooks/useCandidateOutreach";
 import { useSocketConnection, isMessagingArea, type SocketStatus } from "@/hooks/useSocket";
 import { showBrowserNotification } from "@/lib/browser-notification";
@@ -61,6 +62,10 @@ export function SocketProvider({
           (event.type === "CANDIDATE_OUTREACH_INVITATION_RESPONDED" || event.type === "AUTO_OUTREACH_SENT")
         ) {
           void queryClient.invalidateQueries({ queryKey: OUTREACH_KEY });
+        }
+        // Nhắc tuần hồ sơ tồn (AD-25): số trên dải gợi ý và tab của trang "Ứng viên" có thể đã cũ.
+        if (area === "employer" && event.type === "APPLICATIONS_NEED_ATTENTION") {
+          void queryClient.invalidateQueries({ queryKey: COMPANY_APPLICATIONS_KEY });
         }
         showBrowserNotification(area, "system", {
           title: event.title,

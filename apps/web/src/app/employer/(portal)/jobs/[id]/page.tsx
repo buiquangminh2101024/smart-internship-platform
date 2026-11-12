@@ -13,6 +13,7 @@ import { JobPostSubmitResult } from "@/components/jobs/JobPostSubmitResult";
 import { ModerationBanner } from "@/components/jobs/ModerationBanner";
 import { EmployerJobQuotaNotice } from "@/components/jobs/EmployerJobQuotaNotice";
 import { AutoOutreachCard } from "@/components/employer/AutoOutreachCard";
+import { ApplicationAutomationCard } from "@/components/employer/ApplicationAutomationCard";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -205,6 +206,8 @@ function EmployerJobDetail({ params }: { params: Promise<{ id: string }> }) {
 
   const status = JOB_STATUS_LABEL[job.status];
   const left = daysLeft(job.expiresAt);
+  // AD-23 — tin đã kết thúc thì cài đặt tự mời không còn tác dụng nên không hiện thẻ.
+  const outreachActive = job.status === "DRAFT" || job.status === "PENDING" || job.status === "PUBLISHED";
 
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-4 px-6 py-12">
@@ -268,10 +271,10 @@ function EmployerJobDetail({ params }: { params: Promise<{ id: string }> }) {
               }
             />
 
-            {/* AD-23 — tin đã kết thúc thì cài đặt không còn tác dụng nên không hiện. */}
-            {job.status === "DRAFT" || job.status === "PENDING" || job.status === "PUBLISHED" ? (
-              <AutoOutreachCard jobId={job.id} published={job.status === "PUBLISHED"} />
-            ) : null}
+            {outreachActive ? <AutoOutreachCard jobId={job.id} published={job.status === "PUBLISHED"} /> : null}
+
+            {/* AD-25 — hiện ở mọi trạng thái: công tắc tự đóng hồ sơ đã phỏng vấn chỉ có tác dụng sau khi tin đóng. */}
+            <ApplicationAutomationCard jobId={job.id} thresholdEditable={outreachActive} />
 
             <Card padding="md" className="grid gap-3">
               <h2 className="text-xs font-semibold tracking-wide text-text-subtle uppercase">Ứng viên</h2>

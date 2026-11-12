@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { DEFAULT_MIN_SCORE, HIRING_TARGET_MAX } from "@/hooks/useAutoOutreach";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
@@ -21,12 +22,15 @@ export function AutoOutreachDraftFields({
   autoAllowed,
   disabled,
   onChange,
+  children,
 }: {
   values: AutoOutreachDraftValues;
   error: string | undefined;
   autoAllowed: boolean;
   disabled: boolean;
   onChange: (next: AutoOutreachDraftValues) => void;
+  /** Phần cài đặt nối thêm dưới đường kẻ (AD-25: các ô "Tự động xử lý hồ sơ"). */
+  children?: ReactNode;
 }) {
   return (
     <Card padding="lg" className="grid gap-4">
@@ -79,6 +83,8 @@ export function AutoOutreachDraftFields({
           </button>
         </div>
       ) : null}
+
+      {children ? <div className="grid gap-4 border-t border-border-subtle pt-4">{children}</div> : null}
     </Card>
   );
 }

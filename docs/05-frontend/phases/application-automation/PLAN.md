@@ -1,6 +1,6 @@
 # Hệ thống tự xử lý hồ sơ chờ lâu (0.4) — Frontend
 
-> **Trạng thái: ĐANG TRIỂN KHAI.** Lập kế hoạch 2026-11-11. Đợt A xong 2026-11-12 (xem "Ghi chú triển khai"); đợt B và F6 chưa làm. Phụ thuộc backend `docs/06-backend/application-automation/PLAN.md` (bước 1–6); Q1–Q3 ở đó đã chốt 2026-11-12.
+> **Trạng thái: ĐANG TRIỂN KHAI.** Lập kế hoạch 2026-11-11. Đợt A và đợt B xong 2026-11-12 (xem "Ghi chú triển khai"); F6 chưa làm. Phụ thuộc backend `docs/06-backend/application-automation/PLAN.md` (bước 1–6); Q1–Q3 ở đó đã chốt 2026-11-12.
 >
 > Làm theo 2 đợt, mỗi đợt một commit, rồi kiểm trên trình duyệt một lần. Các bước F1–F6 ở Phần 3 giữ nguyên nội dung; chỉ cách gom bước vào đợt thay đổi (chia lại 2026-11-12):
 >
@@ -176,6 +176,29 @@ Kiểm: `tsc --noEmit` sạch (trước đợt A còn 4 lỗi), eslint các file
 - Cột "Ứng viên" hiện `candidate.fullName` (thiếu thì "Ứng viên chưa đặt tên"). Ô chọn hồ sơ cũng dùng tên này.
 - Ô lọc trạng thái lấy danh sách từ `APPLICATION_STATUSES` và nhãn tiếng Việt, đã có "Tin đã đóng". Ngày nộp dùng `formatVnDayMonth`.
 - Nút "Xử lý hồ sơ của tin này" dẫn sang `/employer/applications?job=<id>`. Hồ sơ Tin đã đóng không chọn được, lý do ghi "Tin đã ngừng nhận hồ sơ".
+
+### Đợt B (2026-11-12): F4 + phần còn lại của F5
+
+Kiểm: `tsc --noEmit` sạch, eslint các file đã sửa không lỗi, không cảnh báo, `next build` qua. Chưa xem trên trình duyệt (F6).
+
+**F4:**
+
+- `hooks/useApplicationAutomation.ts`: `useJobApplicationAutomation` (GET, `retry: false`) và `useUpdateJobApplicationAutomation` (PATCH). Key `["employer", "job-posts", jobId, "application-automation"]` nằm dưới key của tin, nên lưu cài đặt tự mời (đổi X) đã làm mới thẻ này mà không cần thêm dòng. Lưu xong: làm mới danh sách cấp công ty (`COMPANY_APPLICATIONS_KEY`) và đánh dấu cũ `["employer", "dashboard"]`. Giá trị mặc định (`true` / 50 / `false`) và số ngày 14 / 30 chép từ backend kèm chú thích nguồn.
+- `components/employer/ApplicationAutomationFields.tsx`: ba ô dùng chung cho thẻ và form tạo tin. Hai công tắc là ô chọn gốc (`accent-brand-600`), lời giải thích gắn qua `aria-describedby`. Y kiểm 0 đến X − 1 ngay dưới ô (`parseRejectBelow`, `rejectBelowError`). Khối cuối nói hai mốc tự đóng khi tin đóng và câu "tắt ô đầu thì đề xuất từ chối, nhắc tuần, tự đóng vẫn chạy".
+- `components/employer/ApplicationAutomationCard.tsx`: thẻ ở trang tin, ngay dưới thẻ tự mời; 404 thì ẩn, như thẻ tự mời. Chỉ gửi trường đã đổi; lỗi 400 hiện nguyên câu của server.
+- `AutoOutreachCard`: nhãn "Ngưỡng phù hợp (%)", gợi ý mở đầu bằng "Dùng chung cho tự mời và tự xử lý hồ sơ.". Lưu có đổi X thì làm mới danh sách cấp công ty (server quét lại hồ sơ Chờ duyệt).
+- Form tạo tin: `AutoOutreachDraftFields` nhận `children`, hiện dưới đường kẻ với tiêu đề "Tự động xử lý hồ sơ". Sau khi lưu nháp và lưu cài đặt tự mời, gửi `PATCH …/application-automation` với các trường khác bản đã lưu (lần đầu so với mặc định của backend). Lỗi thì giữ nháp, báo lỗi và dừng, cùng cách với tự mời. X ở form là `DEFAULT_MIN_SCORE` (80), vì form không đổi X.
+
+Khác chữ của plan:
+
+- Thẻ hiện ở **mọi** trạng thái của tin, không theo quy tắc trạng thái của thẻ tự mời (chỉ Nháp, Chờ duyệt, Đang hiển thị). Lý do: công tắc tự đóng hồ sơ đã phỏng vấn chỉ có tác dụng sau khi tin đóng, và API đọc, sửa được ở mọi trạng thái. "Cùng quy tắc ai thấy thẻ" giữ ở nghĩa chỉ người đăng tin. Khi thẻ tự mời không hiện, dòng ngưỡng ghi "không đổi được khi tin đã kết thúc" thay cho "sửa ở thẻ trên".
+- Dòng cuối ghi "hồ sơ chưa phỏng vấn tự đóng sau 14 ngày" thay cho "hồ sơ Đang xem xét sau 14 ngày": nhóm G2 của backend gồm mọi hồ sơ chưa phỏng vấn (Đang xem xét, Danh sách rút gọn, Mời phỏng vấn chưa có buổi nào). Mốc 30 ngày ghi thêm "hoặc sau buổi phỏng vấn gần nhất nếu muộn hơn", khớp `closeDecision`.
+- Lưu xong hiện "Đã lưu." ngay cạnh nút, không dùng toast: thẻ tự mời bên trên làm vậy, và trang tin chưa có `ToastViewport`.
+
+**F5 (phần còn lại):**
+
+- `APPLICATIONS_NEED_ATTENTION` vào `WARNING_NOTIFICATION_TYPES`, nên có màu marigold (đúng nghĩa "đang chờ con người xử lý" của `sip-ui`) và icon `clock` như hai loại "sắp hết hạn".
+- `SocketProvider`: Employer nhận loại này thì làm mới `COMPANY_APPLICATIONS_KEY`.
 
 ## Phần 4 — Ghi chú của chủ dự án
 

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { JobAutoOutreachDto, UpdateAutoOutreachSettingsRequest } from "@sip/shared-types";
 import { apiFetch } from "@/lib/api-client";
+import { COMPANY_APPLICATIONS_KEY } from "@/hooks/useApplications";
 import { OUTREACH_KEY } from "@/hooks/useCandidateOutreach";
 import { HIRING_PROGRESS_KEY } from "@/hooks/useEmployerDashboard";
 
@@ -58,7 +59,7 @@ export function useUpdateJobAutoOutreach() {
         method: "PATCH",
         body: JSON.stringify(patch),
       }),
-    onSuccess: (dto, { jobId }) => {
+    onSuccess: (dto, { jobId, patch }) => {
       queryClient.setQueryData<JobAutoOutreachDto>(jobAutoKey(jobId), dto);
       // Plan Phần 2: lượt chạy nền có thể vừa mời người trong "Gợi ý" ⇒ "Gợi ý" / "Đã mời" của tin
       // (key bắt đầu bằng ["employer", "job-posts", jobId]) và số liệu trang "Lời mời" đã cũ.
@@ -69,6 +70,9 @@ export function useUpdateJobAutoOutreach() {
       // tuyển ở trang tổng quan và "Phù hợp N" ở danh sách tin đã cũ ngay sau khi lưu.
       void queryClient.invalidateQueries({ queryKey: HIRING_PROGRESS_KEY });
       void queryClient.invalidateQueries({ queryKey: ["employerJobPosts"] });
+      // AD-25: X cũng là ngưỡng tự chuyển "Đang xem xét"; hạ X thì server quét ngay hồ sơ Chờ duyệt
+      // của tin ⇒ trang "Ứng viên" đã cũ. Thẻ "Tự động xử lý hồ sơ" nằm dưới key của tin ở trên.
+      if (patch.minScore !== undefined) void queryClient.invalidateQueries({ queryKey: COMPANY_APPLICATIONS_KEY });
     },
   });
 }

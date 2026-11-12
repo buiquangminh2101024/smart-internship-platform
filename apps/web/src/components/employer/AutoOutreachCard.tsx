@@ -262,7 +262,7 @@ export function AutoOutreachCard({ jobId, published }: { jobId: string; publishe
             onChange={(event) => edit({ hiringTarget: event.target.value })}
           />
           <Input
-            label="Ngưỡng điểm phù hợp (%)"
+            label="Ngưỡng phù hợp (%)"
             type="number"
             inputMode="numeric"
             min={0}
@@ -270,7 +270,7 @@ export function AutoOutreachCard({ jobId, published }: { jobId: string; publishe
             size="sm"
             value={values.minScore}
             error={minScoreError}
-            hint={`Đề xuất: ${DEFAULT_MIN_SCORE}%. Thấp hơn thì mời được nhiều người hơn nhưng kém phù hợp hơn.`}
+            hint={`Dùng chung cho tự mời và tự xử lý hồ sơ. Đề xuất: ${DEFAULT_MIN_SCORE}%. Thấp hơn thì mời được nhiều người hơn nhưng kém phù hợp hơn.`}
             onChange={(event) => edit({ minScore: event.target.value })}
           />
         </fieldset>

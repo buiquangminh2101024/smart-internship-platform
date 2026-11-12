@@ -125,8 +125,12 @@ export const NOTIFICATION_ACTION_LABEL: Record<NotificationType, string> = {
   SUPPORT_CONTACT_RECEIVED: "Xem người dùng",
 };
 
-/** Loại cảnh báo (bị từ chối, bị gỡ, sắp hết hạn): tô marigold thay màu khu vực. */
+/**
+ * Loại cảnh báo (bị từ chối, bị gỡ, sắp hết hạn, hồ sơ tồn chờ xử lý): tô marigold thay màu
+ * khu vực.
+ */
 export const WARNING_NOTIFICATION_TYPES: ReadonlySet<NotificationType> = new Set<NotificationType>([
+  "APPLICATIONS_NEED_ATTENTION",
   "JOB_POST_REJECTED",
   "JOB_POST_TAKEN_DOWN",
   "JOB_POST_EXPIRING",
