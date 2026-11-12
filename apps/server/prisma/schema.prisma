@@ -57,6 +57,7 @@ enum ApplicationStatus {
   ACCEPTED
   REJECTED
   CANCELLED
+  JOB_CLOSED // AD-25 — hệ thống đóng vì tin đã ngừng tuyển (trạng thái cuối, chỉ hệ thống chuyển)
 }
 
 enum NotificationType {
@@ -85,6 +86,7 @@ enum NotificationType {
   ACCOUNT_ACTIVATED // AD-18 — người dùng: Admin kích hoạt thủ công tài khoản chưa xác thực
   PASSWORD_RESET_SUGGESTED // AD-18 — người dùng: Admin gửi hướng dẫn đặt lại mật khẩu (link /forgot-password)
   AUTO_OUTREACH_SENT // AD-23 — employer: hệ thống đã tự gửi lời mời cho tin (gộp tối đa 1 thông báo/tin/ngày)
+  APPLICATIONS_NEED_ATTENTION // AD-25 — employer: nhắc hằng tuần về hồ sơ tồn (gộp 1 thông báo/công ty/tuần)
 }
 
 // AD-16 M2 — lịch phỏng vấn. "Đã diễn ra" suy ra từ scheduledAt, không lưu COMPLETED.
@@ -740,6 +742,15 @@ model JobPost {
   // AD-24 — lần chấm bảng điểm gần nhất của tin; null = chưa chấm. Job đêm chấm
   // tin cũ nhất trước, UI hiện "cập nhật lúc…".
   matchScoresAt               DateTime?
+
+  // AD-25 — tự xử lý hồ sơ (0.4). Sửa qua API riêng như cài đặt tự mời.
+  // Ngưỡng X của tự chuyển "Đang xem xét" dùng lại autoOutreachMinScore.
+  // Bật thì hồ sơ Chờ duyệt có điểm ≥ X tự chuyển PENDING → REVIEWING.
+  autoReviewEnabled           Boolean                      @default(true)
+  // Y: điểm dưới Y thì đề xuất từ chối (người xác nhận). Luôn Y < X.
+  rejectSuggestBelowScore     Int                          @default(50)
+  // Bật thì hồ sơ đã phỏng vấn chưa có kết quả tự đóng sau 30 ngày khi tin đã đóng.
+  autoCloseInterviewedEnabled Boolean                      @default(false)
 
   moderationActions   JobPostModerationAction[]
   reports             JobReport[]

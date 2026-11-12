@@ -781,3 +781,63 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 - `job-posts.service.ts`: gọi lối kích hoạt (a).
 - 1 endpoint dashboard; mở rộng `AutoOutreachStatus` và thêm `JobPost.matchedCount` (danh sách tin của Employer) trong `packages/shared-types`.
 - `candidate-outreach.service.ts`: tách `scoreProfiles` và thêm `loadJobProfile` public (mục 6). Hành vi của trang tìm ứng viên, tự mời và chấm lúc gửi lời mời không đổi.
+
+## AD-25 — Hệ thống tự xử lý hồ sơ ứng tuyển (0.4): tự chuyển "Đang xem xét", đề xuất từ chối, nhắc hằng tuần, tự đóng hồ sơ của tin đã đóng (sửa một phần AD-13)
+
+**Ngày:** 2026-11-11 · **Phase liên quan:** không thuộc phase đánh số. Mục 0.4 của `docs/01-project/FEATURE_BACKLOG.md`, theo nhận xét của giáo viên ở buổi demo 05/11/2026 ("chờ 40 ngày, 70 ngày rồi vẫn còn đang chờ xử lý", "chưa thấy tính tự động"). Kế hoạch chi tiết: `docs/06-backend/application-automation/PLAN.md`, `docs/05-frontend/phases/application-automation/PLAN.md`.
+
+> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-11, chủ dự án duyệt từng điểm). CHƯA TRIỂN KHAI.** Ba câu hỏi nhỏ của plan backend (Q1–Q3) đã chốt 2026-11-12.
+
+**Bối cảnh:** hồ sơ nằm ở "Chờ duyệt" hàng chục ngày mà hệ thống không làm gì; nhà tuyển dụng phải tự mở từng hồ sơ. AD-13 mục 3 cấm hệ thống đổi `ApplicationStatus` và cấm tự sắp danh sách đơn theo điểm. Từ 0.3 (AD-24) đã có bảng điểm lưu sẵn, nên đọc điểm của mọi hồ sơ không còn đắt.
+
+**Tham khảo cách làm của các nền tảng khác (tìm ngày 2026-11-11):**
+
+- Tài liệu chính thức của Greenhouse, LinkedIn và Indeed: tự từ chối chỉ dựa trên **câu hỏi sàng lọc bắt buộc** do nhà tuyển dụng đặt, không dựa trên điểm phù hợp. LinkedIn và Indeed gửi thư từ chối trễ 3 ngày.
+- Blog của nhà cung cấp và tư vấn (không phải chuẩn ngành): chia ba dải, tự chuyển bước khi điểm cao, người xem ở dải giữa, điểm thấp đưa vào nhóm chờ rà thay vì tự từ chối.
+- **Không tìm thấy** nền tảng nào công bố việc tự đóng hồ sơ vì nhà tuyển dụng để quá lâu, hay chu kỳ nhắc nhà tuyển dụng. Các con số ở dưới (7, 14, 30 ngày; ngưỡng 50) vì vậy là **số do thiết kế, không có nguồn**.
+
+**Quyết định:**
+
+1. **Điểm ở trang "Ứng viên" đọc từ bảng điểm của AD-24**, không chấm lúc mở trang. Hồ sơ không có dòng điểm (tin không còn hiển thị, ứng viên không chung kỹ năng nào với tin, hoặc chưa tới lượt chấm đêm) hiện "Chưa có điểm" và không được hệ thống tự xử lý theo điểm.
+2. **Ba dải theo điểm, áp cho hồ sơ "Chờ duyệt" của tin đang hiển thị:**
+   - điểm ≥ X: hệ thống **tự chuyển** sang "Đang xem xét". Có công tắc theo tin `JobPost.autoReviewEnabled`, mặc định bật. Công tắc này **chỉ** điều khiển bước chuyển này; đề xuất từ chối, nhắc tuần và tự đóng (mục 5–8) không phụ thuộc nó;
+   - Y ≤ điểm < X: để nguyên cho người xem;
+   - điểm < Y: hệ thống **đề xuất từ chối**, nhà tuyển dụng bấm xác nhận một lần cho cả nhóm. Hệ thống **không bao giờ tự từ chối**.
+3. **Ngưỡng:** X dùng lại `JobPost.autoOutreachMinScore` (mặc định 80), để "Phù hợp" có một nghĩa ở tự mời, tiến độ tuyển và xử lý hồ sơ. Y là cột mới `JobPost.rejectSuggestBelowScore` (mặc định 50, phải nhỏ hơn X), sửa theo từng tin.
+4. **Thứ tự mặc định theo điểm:** tab "Chờ duyệt" và "Đang xem xét" của trang "Ứng viên", và trang hồ sơ theo tin, mặc định xếp "Phù hợp nhất". Nhà tuyển dụng vẫn đổi được.
+5. **Nhắc hằng tuần:** thứ Hai 8h (giờ Việt Nam), mỗi công ty một thông báo gộp cho mọi employer của công ty, chỉ khi còn việc tồn. "Tồn" là hồ sơ đứng yên quá 7 ngày, tính từ dữ liệu sẵn có: "Chờ duyệt" tính từ ngày nộp; trạng thái sau tính từ lần đổi trạng thái gần nhất (`application_status_history`); hồ sơ đã phỏng vấn tính từ buổi phỏng vấn gần nhất đã diễn ra. Không thêm cột, không cho công ty chỉnh số ngày.
+6. **Trạng thái mới `JOB_CLOSED` ("Tin đã đóng")** cho hồ sơ bị hệ thống đóng vì tin đã ngừng tuyển (`EXPIRED`, `CLOSED`, `TAKEN_DOWN`). Là trạng thái cuối. Không dùng `REJECTED`, vì chưa ai đánh giá ứng viên và số liệu phễu sẽ sai. Ứng viên nhận thông báo "tin đã ngừng nhận hồ sơ", không phải "không được chọn".
+7. **Lịch tự đóng sau khi tin đóng**, hệ thống ghi lịch sử với `actorId = null`:
+
+   | Nhóm hồ sơ | Tự đóng |
+   |---|---|
+   | Chờ duyệt | ngay, không chờ: ở lượt chạy hằng ngày đầu tiên sau khi tin đóng |
+   | Đang xem xét; Rút gọn / Mời phỏng vấn chưa có buổi nào diễn ra và không có lịch sắp tới | sau 14 ngày, lần nhắc tuần trước đó báo ngày sẽ đóng |
+   | Có lịch phỏng vấn sắp tới | không đóng |
+   | Đã phỏng vấn, chưa có kết quả | **không** tự đóng, trừ khi tin bật mục 8 |
+
+8. **Công tắc theo tin `JobPost.autoCloseInterviewedEnabled` (mặc định tắt):** khi bật, hồ sơ đã phỏng vấn mà chưa có kết quả được tự đóng sau 30 ngày, tính từ mốc muộn hơn giữa ngày tin đóng và buổi phỏng vấn gần nhất đã diễn ra. Chỉ áp khi tin đã đóng: tin còn mở thì chỉ nhắc. Khi tắt, hệ thống chỉ nhắc và trang "Ứng viên" có nhóm lọc "Cần kết quả".
+9. **Chạy nền chung process**, như AD-23 mục 8 và AD-24: thêm một cron hằng ngày (tự chuyển, tự đóng) và một cron hằng tuần (nhắc). Tự chuyển còn chạy ngay sau khi ứng viên nộp đơn, nếu đã có điểm trong bảng.
+
+**Sửa so với AD-13:**
+
+- Mục 3, vế "không đổi `ApplicationStatus`": hệ thống được tự đổi theo đúng hai lối ở trên (`PENDING → REVIEWING` theo điểm; `→ JOB_CLOSED` theo tin đã đóng). Vế "không ẩn/loại ứng viên" **giữ nguyên**: điểm không bao giờ tự từ chối ai.
+- Mục 3 và mục 9, vế "không sắp xếp danh sách đơn theo điểm ở thứ tự mặc định": bỏ, thay bằng mục 4 ở trên.
+- Phần còn lại của AD-13 (điểm kèm bằng chứng, thiếu dữ liệu không trừ điểm) giữ nguyên.
+
+**Phương án không chọn:**
+
+- *Tự từ chối theo điểm:* không nền tảng nào trong các tài liệu tìm được làm vậy; từ chối không hoàn tác được và gửi email cho ứng viên; điểm chỉ là gợi ý (AD-13).
+- *Tự từ chối theo câu hỏi sàng lọc (kiểu LinkedIn, Greenhouse):* hệ thống chưa có câu hỏi sàng lọc; là việc riêng ở backlog mục 3.
+- *Dùng `REJECTED` cho hồ sơ của tin đã đóng:* sai nghĩa với ứng viên, làm bẩn phễu và số "Phù hợp" của 0.3.
+- *Tự đóng hồ sơ đã phỏng vấn mặc định:* người đã phỏng vấn cần câu trả lời thật; hệ thống không biết kết quả buổi phỏng vấn. Để công ty tự bật theo tin.
+- *Cho công ty nhập số ngày nhắc / số ngày tự đóng:* thêm cài đặt ít ai chỉnh; để hằng số trong code.
+- *Chấm điểm trực tiếp ở trang "Ứng viên":* lý do như AD-24 (quá chậm cho mọi tin của công ty).
+
+**Ảnh hưởng:**
+
+- `schema.prisma` + 1 migration viết tay: `ApplicationStatus.JOB_CLOSED`; `NotificationType.APPLICATIONS_NEED_ATTENTION`; `JobPost.rejectSuggestBelowScore`, `JobPost.autoCloseInterviewedEnabled`, `JobPost.autoReviewEnabled`.
+- Module mới `apps/server/src/modules/application-automation/` (service, repository, 2 cron, 1 script chạy tay); `applications` mở một lối đổi trạng thái cho hệ thống và thêm điểm, sort, bộ lọc gợi ý vào `GET /employer/applications`.
+- Mọi chỗ liệt kê `ApplicationStatus` phải thêm `JOB_CLOSED`: state machine, `statusCounts`, nhãn ở server và web, câu đếm "Phù hợp" của AD-24, công cụ của chatbot hỗ trợ, bộ sinh dữ liệu demo.
+- Đơn `JOB_CLOSED` không nộp lại được (sửa 2026-11-12 sau bước 0 của plan backend): tin `EXPIRED`, `CLOSED`, `TAKEN_DOWN` hiện không có lối hiển thị lại. Khi có tính năng gia hạn tin (`FEATURE_BACKLOG.md` mục 4) thì cho nộp lại cùng lối với đơn `CANCELLED`.
+- Frontend: trang "Ứng viên", trang hồ sơ theo tin, thẻ cài đặt ở trang tin, form tạo tin, nhãn trạng thái phía ứng viên và Admin, trung tâm thông báo.
