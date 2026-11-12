@@ -11,9 +11,14 @@ import {
   closeDueAt,
   effectiveRejectThreshold,
   matchBand,
+  nextAutoCloseRun,
+  vnWeekKey,
   type CloseDueInput,
 } from "../../src/modules/application-automation/application-automation.policy";
-import type { CloseCandidateRow } from "../../src/modules/application-automation/application-automation.repository";
+import type {
+  CloseCandidateRow,
+  CompanyBacklogRow,
+} from "../../src/modules/application-automation/application-automation.repository";
 import { ApplicationAutomationService } from "../../src/modules/application-automation/application-automation.service";
 import type { StatusChangeTarget } from "../../src/modules/applications/applications.repository";
 import { renderNotification } from "../../src/modules/notifications/templates/notification-templates";
@@ -107,6 +112,12 @@ interface FakeOptions {
   failing?: string[];
   /** Chặn câu chọn hồ sơ tự chuyển tới khi gọi `release` (kiểm chạy chồng). */
   holdReview?: Promise<void>;
+  backlog?: CompanyBacklogRow[];
+  employersByCompany?: Record<string, string[]>;
+  /** dedupeKey đã có sẵn (đã nhắc trong tuần). */
+  existingKeys?: string[];
+  /** userId mà notifyOnce ném lỗi. */
+  failingRecipients?: string[];
 }
 
 function buildAutomation(options: FakeOptions = {}) {
@@ -115,7 +126,9 @@ function buildAutomation(options: FakeOptions = {}) {
     limits: [] as number[],
     changes: [] as Array<{ id: string; to: string; extra: unknown }>,
     errors: [] as string[],
+    reminders: [] as Array<{ type: string; userId: string; payload: Record<string, unknown>; key: string }>,
   };
+  const keys = new Set(options.existingKeys ?? []);
   const repository = {
     findAutoReviewTargets: async (scope: unknown, limit: number) => {
       calls.reviewScopes.push(scope);
@@ -124,6 +137,19 @@ function buildAutomation(options: FakeOptions = {}) {
       return (options.reviewTargets ?? []).slice(0, limit);
     },
     findCloseTargets: async (_scope: unknown, limit: number) => (options.closeRows ?? []).slice(0, limit),
+    backlogByCompany: async () => options.backlog ?? [],
+  };
+  const employerRepository = {
+    findManyByCompanyId: async (companyId: string) => (options.employersByCompany?.[companyId] ?? []).map((userId) => ({ userId })),
+  };
+  const notificationsService = {
+    notifyOnce: async (type: string, userId: string, payload: Record<string, unknown>, key: string) => {
+      if (options.failingRecipients?.includes(userId)) throw new Error("db down");
+      if (keys.has(key)) return false;
+      keys.add(key);
+      calls.reminders.push({ type, userId, payload, key });
+      return true;
+    },
   };
   const applicationsService = {
     changeStatusBySystem: async (item: StatusChangeTarget, to: string, extra?: unknown) => {
@@ -136,6 +162,8 @@ function buildAutomation(options: FakeOptions = {}) {
   const service = new ApplicationAutomationService({
     applicationAutomationRepository: repository,
     applicationsService,
+    employerRepository,
+    notificationsService,
     logger,
   } as unknown as ConstructorParameters<typeof ApplicationAutomationService>[0]);
   return { service, calls };
@@ -239,5 +267,136 @@ test("thông báo JOB_CLOSED: lời theo closeReason; trạng thái khác giữ 
 
   const reviewing = renderNotification("APPLICATION_STATUS_CHANGED", { ...PAYLOAD, oldStatus: "PENDING", newStatus: "REVIEWING" }, CTX);
   assert.equal(reviewing.title, "Cập nhật trạng thái hồ sơ ứng tuyển");
-  assert.match(reviewing.body, /từ "Chờ duyệt" sang "Đang xem xét"/);
+  assert.match(reviewing.body ?? "", /từ "Chờ duyệt" sang "Đang xem xét"/);
+});
+
+// ─── Nhắc tuần (bước 5) ─────────────────────────────────────────────────────
+
+test("vnWeekKey: thứ Hai của tuần theo giờ Việt Nam (Chủ nhật thuộc tuần trước)", () => {
+  // Thứ Hai 16/11/2026 00:30 giờ VN = Chủ nhật 15/11 17:30 UTC.
+  assert.equal(vnWeekKey(new Date("2026-11-15T17:30:00Z")), "2026-11-16");
+  // Chủ nhật 15/11 23:59 giờ VN = 16:59 UTC ⇒ vẫn tuần bắt đầu 09/11.
+  assert.equal(vnWeekKey(new Date("2026-11-15T16:59:00Z")), "2026-11-09");
+  // Thứ Hai 8h giờ VN (lúc cron chạy) và thứ Tư cùng tuần ⇒ cùng khoá.
+  assert.equal(vnWeekKey(new Date("2026-11-16T01:00:00Z")), "2026-11-16");
+  assert.equal(vnWeekKey(new Date("2026-11-18T10:00:00Z")), "2026-11-16");
+});
+
+test("nextAutoCloseRun: lượt 8h30 giờ VN đầu tiên không sớm hơn hạn và lúc này", () => {
+  const now = new Date("2026-11-16T01:00:00Z"); // thứ Hai 8h00 giờ VN
+  // Hạn 18/11 7h giờ VN ⇒ lượt 8h30 cùng ngày.
+  assert.deepEqual(nextAutoCloseRun(new Date("2026-11-18T00:00:00Z"), now), new Date("2026-11-18T01:30:00Z"));
+  // Hạn 18/11 10h giờ VN ⇒ lượt hôm sau.
+  assert.deepEqual(nextAutoCloseRun(new Date("2026-11-18T03:00:00Z"), now), new Date("2026-11-19T01:30:00Z"));
+  // Hạn đúng 8h30 ⇒ lượt đó đóng.
+  assert.deepEqual(nextAutoCloseRun(new Date("2026-11-18T01:30:00Z"), now), new Date("2026-11-18T01:30:00Z"));
+  // Hạn đã qua ⇒ lượt 8h30 sáng nay (nhắc chạy lúc 8h).
+  assert.deepEqual(nextAutoCloseRun(new Date("2026-11-10T00:00:00Z"), now), new Date("2026-11-16T01:30:00Z"));
+  // Hạn 23h giờ VN (16h UTC) ⇒ 8h30 hôm sau theo giờ VN.
+  assert.deepEqual(nextAutoCloseRun(new Date("2026-11-20T16:00:00Z"), now), new Date("2026-11-21T01:30:00Z"));
+});
+
+function backlog(companyId: string, overrides: Partial<CompanyBacklogRow> = {}): CompanyBacklogRow {
+  return {
+    companyId,
+    companyName: `Công ty ${companyId}`,
+    pendingStale: 12,
+    reviewingStale: 0,
+    awaitingSchedule: 0,
+    needsResult: 3,
+    closingSoon: 5,
+    closingDueAt: new Date("2026-11-18T03:00:00Z"),
+    ...overrides,
+  };
+}
+
+test("nhắc tuần: mỗi employer một thông báo, khoá theo công ty + người + tuần, closingOn là ngày lượt chạy", async () => {
+  const now = new Date("2026-11-16T01:00:00Z");
+  const { service, calls } = buildAutomation({
+    backlog: [backlog("co-1"), backlog("co-2", { closingSoon: 0, closingDueAt: null })],
+    employersByCompany: { "co-1": ["u-1", "u-2"], "co-2": ["u-3"] },
+  });
+  const result = await service.runWeeklyReminder({}, now);
+  assert.equal(result.status, "DONE");
+  if (result.status === "DONE") {
+    assert.deepEqual({ companies: result.companies, created: result.created, duplicates: result.duplicates, failed: result.failed }, {
+      companies: 2,
+      created: 3,
+      duplicates: 0,
+      failed: 0,
+    });
+  }
+  assert.deepEqual(calls.reminders.map((call) => call.key), [
+    "APPLICATIONS_NEED_ATTENTION:co-1:u-1:2026-11-16",
+    "APPLICATIONS_NEED_ATTENTION:co-1:u-2:2026-11-16",
+    "APPLICATIONS_NEED_ATTENTION:co-2:u-3:2026-11-16",
+  ]);
+  assert.deepEqual(calls.reminders[0]!.payload, {
+    companyId: "co-1",
+    companyName: "Công ty co-1",
+    pendingStale: 12,
+    reviewingStale: 0,
+    awaitingSchedule: 0,
+    needsResult: 3,
+    closingSoon: 5,
+    closingOn: new Date("2026-11-19T01:30:00Z"),
+  });
+  assert.equal(calls.reminders[2]!.payload.closingOn, null);
+});
+
+test("nhắc tuần: không công ty nào có hồ sơ tồn ⇒ không thông báo", async () => {
+  const { service, calls } = buildAutomation({ backlog: [] });
+  const result = await service.runWeeklyReminder();
+  assert.equal(result.status === "DONE" && result.companies, 0);
+  assert.equal(calls.reminders.length, 0);
+});
+
+test("nhắc tuần: chạy lại trong tuần ⇒ không tạo trùng; lỗi một người nhận ⇒ đi tiếp", async () => {
+  const now = new Date("2026-11-18T10:00:00Z");
+  const { service, calls } = buildAutomation({
+    backlog: [backlog("co-1")],
+    employersByCompany: { "co-1": ["u-1", "u-2", "u-3"] },
+    existingKeys: ["APPLICATIONS_NEED_ATTENTION:co-1:u-1:2026-11-16"],
+    failingRecipients: ["u-2"],
+  });
+  const result = await service.runWeeklyReminder({}, now);
+  assert.equal(result.status === "DONE" && `${result.created}/${result.duplicates}/${result.failed}`, "1/1/1");
+  assert.deepEqual(calls.reminders.map((call) => call.userId), ["u-3"]);
+  assert.equal(calls.errors.length, 1);
+
+  // Lượt thứ hai cùng tuần: không thêm gì.
+  const again = await service.runWeeklyReminder({}, now);
+  assert.equal(again.status === "DONE" && again.created, 0);
+});
+
+const NEED_ATTENTION = {
+  companyId: "co-1",
+  companyName: "Công ty A",
+  pendingStale: 12,
+  reviewingStale: 0,
+  awaitingSchedule: 2,
+  needsResult: 3,
+  closingSoon: 5,
+  closingOn: new Date("2026-11-18T01:30:00Z"),
+};
+
+test("lời nhắc tuần: đúng thứ tự, bỏ nhóm bằng 0, có email, link theo ý đầu tiên lọc được", () => {
+  const rendered = renderNotification("APPLICATIONS_NEED_ATTENTION", NEED_ATTENTION, CTX);
+  assert.equal(rendered.title, "Có hồ sơ ứng viên cần xử lý");
+  assert.equal(
+    rendered.body,
+    "3 ứng viên đã phỏng vấn chưa có kết quả · 5 hồ sơ sẽ tự đóng từ ngày 18/11 · 12 hồ sơ chờ duyệt quá 7 ngày · 2 ứng viên chờ đặt lịch phỏng vấn quá 7 ngày",
+  );
+  assert.equal(rendered.link, "/employer/applications?focus=result");
+  assert.equal(rendered.email?.subject, "[Công ty A] Hồ sơ ứng viên cần xử lý tuần này");
+  assert.match(rendered.email?.html ?? "", /Tin đã đóng/);
+
+  const pendingOnly = { ...NEED_ATTENTION, needsResult: 0, closingSoon: 0, closingOn: null, awaitingSchedule: 0 };
+  assert.equal(renderNotification("APPLICATIONS_NEED_ATTENTION", pendingOnly, CTX).link, "/employer/applications?status=PENDING");
+  const reviewingOnly = { ...pendingOnly, pendingStale: 0, reviewingStale: 4 };
+  assert.equal(renderNotification("APPLICATIONS_NEED_ATTENTION", reviewingOnly, CTX).link, "/employer/applications?status=REVIEWING");
+  const closingOnly = { ...pendingOnly, pendingStale: 0, closingSoon: 1, closingOn: NEED_ATTENTION.closingOn };
+  const closing = renderNotification("APPLICATIONS_NEED_ATTENTION", closingOnly, CTX);
+  assert.equal(closing.link, "/employer/applications");
+  assert.equal(closing.body, "1 hồ sơ sẽ tự đóng từ ngày 18/11");
 });

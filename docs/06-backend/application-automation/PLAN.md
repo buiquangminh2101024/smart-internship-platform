@@ -410,6 +410,51 @@ G2 chỉ gồm Đang xem xét (48) và Rút gọn (46); không có hồ sơ Mờ
   - **Chưa ghi gì lên Neon.** Chạy thật để bước 8, xin xác nhận trước.
 - `tsc` server: chỉ còn lỗi của `APPLICATIONS_NEED_ATTENTION` (bước 5).
 
+### Bước 5 — nhắc hằng tuần (2026-11-12)
+
+- Loại `APPLICATIONS_NEED_ATTENTION`:
+  - Thêm vào shared-types `NotificationType` (đã build lại `dist`), `notification-groups.ts` (nhóm `APPLICATIONS`) và payload trong `notification.types.ts`.
+  - Payload: `companyId`, `companyName`, 5 con số, `closingOn`.
+- Template:
+  - Tiêu đề "Có hồ sơ ứng viên cần xử lý".
+  - Thân gồm các ý nối bằng " · ", theo thứ tự của plan, bỏ ý bằng 0.
+  - Có email; tiêu đề thư "[Công ty] Hồ sơ ứng viên cần xử lý tuần này". Khi có hồ sơ sắp tự đóng, thư thêm một câu giải thích.
+- `application-automation`:
+  - `.config.ts`: `STALE_AFTER_DAYS` = 7, `CLOSING_SOON_DAYS` = 7, `AUTOMATION_DAILY_RUN_VN` = 8h30.
+  - `.policy.ts`: `vnWeekKey` (thứ Hai của tuần theo giờ VN) và `nextAutoCloseRun`.
+  - `.repository.ts`: `backlogByCompany`, một câu SQL gộp theo công ty, chỉ trả công ty có số khác 0.
+  - `.service.ts`: `runWeeklyReminder`. Có cờ không chạy chồng; lỗi của một người nhận hay một công ty thì ghi log rồi đi tiếp.
+  - `stale-application-reminder.job.ts`: `"0 8 * * 1"` giờ VN. **Chưa gọi trong `main.ts`**, để bước 7 như plan.
+- `applications.repository.ts`: export thêm `NEEDS_RESULT`.
+- **Chọn thêm khi làm (plan chưa ghi):**
+  - **Phạm vi từng số:**
+    - Chờ duyệt, Đang xem xét, Chờ đặt lịch: chỉ tính tin đang hiển thị (`VISIBLE_JOB`). Hồ sơ cùng loại ở tin đã đóng đã nằm trong "sắp tự đóng" hoặc đã bị đóng.
+    - Cần kết quả: tính mọi tin, đúng quyết định #6 "mặc định chỉ nhắc".
+  - **Mốc "đứng yên":** lần đổi trạng thái gần nhất (`MAX` lịch sử), không có thì ngày nộp. Riêng "cần kết quả" tính từ buổi phỏng vấn gần nhất.
+  - **Chờ đặt lịch:** dùng `AWAITING_SCHEDULE` và bỏ hồ sơ đã phỏng vấn, để một hồ sơ không bị đếm hai lần.
+  - **Hồ sơ G4 bật công tắc** sắp tới hạn có thể nằm ở cả "cần kết quả" lẫn "sắp tự đóng": đây là hai việc khác nhau, chấp nhận.
+  - **Ngày "sẽ tự đóng"** không lấy thẳng `dueAt` mà lấy ngày của lượt 8h30 đầu tiên kể từ hạn (`nextAutoCloseRun`), để ngày báo trước khớp ngày ứng viên nhận thông báo. Hạn đã qua mà chưa đóng thì lấy lượt kế tiếp.
+  - **Lời "từ ngày dd/mm"** thay cho "ngày dd/mm" của plan, vì các hồ sơ có thể tới hạn ở nhiều ngày khác nhau.
+  - **Định dạng ngày:** ICU ghi ngày/tháng của `vi-VN` là "18-11", nên template tự ghép `dd/mm`.
+  - **Link:** theo ý đầu tiên khác 0 và lọc được (`focus=result`, `status=PENDING`, `REVIEWING`, `SHORTLISTED`); chỉ có "sắp tự đóng" thì mở `/employer/applications`. Đã sửa dòng tương ứng ở plan frontend (F5).
+  - **Hằng 7 ngày trong lời nhắc** lấy từ `STALE_AFTER_DAYS`, nên template import config của module `application-automation`.
+- Test (`application-automation.test.ts`):
+  - `vnWeekKey`: Chủ nhật và thứ Hai theo giờ VN, cùng tuần.
+  - `nextAutoCloseRun`: trước/sau 8h30, đúng 8h30, hạn đã qua, 23h giờ VN.
+  - Lượt nhắc: mỗi employer một thông báo, đúng khoá; `closingOn` đã đổi sang ngày lượt chạy; không công ty nào ⇒ không thông báo; chạy lại trong tuần ⇒ không trùng; lỗi một người nhận ⇒ đi tiếp.
+  - Lời nhắc: thứ tự, bỏ ý bằng 0, email, link.
+  - Toàn bộ unit test server: 494/494 qua.
+- **Chạy thử trên Neon (chỉ `SELECT`, `.claude-workspace/scratch/step5-verify.ts`, chỉ dựng lời nhắc, không gửi):**
+  - **45 công ty, 79 employer** sẽ nhận. Bước 0 ước 46 / 80 theo định nghĩa rộng hơn (mọi tin, mốc gồm cả buổi phỏng vấn).
+  - Tổng: chờ duyệt quá 7 ngày 579, đang xem xét 415, chờ đặt lịch 268, cần kết quả 31, sắp tự đóng 94.
+  - Hai số chờ duyệt và cần kết quả khớp đếm tay bằng câu SQL viết riêng (579 / 31).
+  - 94 "sắp tự đóng" chính là 94 hồ sơ G2 đã quá hạn ở bước 4. Lượt 8h30 đầu tiên sẽ đóng chúng, nên lần nhắc thứ Hai sau đó sẽ không còn.
+  - Thời gian: 591 ms lần đầu, 66 ms lần hai.
+  - Ví dụ một lời nhắc: "5 ứng viên đã phỏng vấn chưa có kết quả · 13 hồ sơ sẽ tự đóng từ ngày 13/11 · 16 hồ sơ chờ duyệt quá 7 ngày · 12 hồ sơ đang xem xét quá 7 ngày · 8 ứng viên chờ đặt lịch phỏng vấn quá 7 ngày" → `?focus=result`.
+  - **Chưa ghi gì lên Neon.**
+- **Email lượt nhắc đầu:** 79 thư cho employer. Số thư tới địa chỉ `.local` chưa đếm; sẽ đếm ở `--dry-run` bước 8 và xử lý như thư `.local` của ứng viên (đã chốt, xin xác nhận trước khi ghi).
+- `tsc` server: **hết lỗi**. `tsc` web còn 4 lỗi, đều do thiếu khoá: `lib/application-status.ts` và `components/admin/UserDetailSections.tsx` thiếu `JOB_CLOSED` (F1); `lib/notifications.ts` thiếu 2 khoá `APPLICATIONS_NEED_ATTENTION` (F5). Chưa sửa web.
+
 ## Phần 4 — Ghi chú của chủ dự án
 
 <!-- Để trống — dành cho chủ dự án. -->

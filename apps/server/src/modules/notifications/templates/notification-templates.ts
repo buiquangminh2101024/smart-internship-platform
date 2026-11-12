@@ -1,5 +1,6 @@
 import type { InterviewMode, NotificationType, UserStatus } from "@prisma/client";
 import type { SupportCategory } from "@sip/shared-types";
+import { STALE_AFTER_DAYS } from "../../application-automation/application-automation.config";
 import type { NotificationPayloadMap, RenderedNotification } from "../notification.types";
 
 type Renderer<T extends NotificationType> = (
@@ -85,6 +86,48 @@ function absolute(ctx: TemplateContext, path: string): string {
 function formatDateTime(date: Date): string {
   const time = date.toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", hour12: false });
   return `${formatDate(date)} ${time} (giờ Việt Nam)`;
+}
+
+/**
+ * "dd/mm" theo giờ Việt Nam — ngày tự đóng trong nhắc tuần. Ghép từ từng phần vì ICU ghi
+ * ngày/tháng của `vi-VN` là "18-11".
+ */
+function formatDayMonth(date: Date): string {
+  const parts = new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit" }).formatToParts(date);
+  const part = (type: "day" | "month") => parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("day")}/${part("month")}`;
+}
+
+type NeedAttentionData = NotificationPayloadMap["APPLICATIONS_NEED_ATTENTION"];
+
+/**
+ * Các ý của nhắc tuần, theo thứ tự cần kết quả, sắp tự đóng, chờ duyệt, đang xem xét, chờ
+ * đặt lịch (plan bước 5). Nhóm bằng 0 thì bỏ.
+ */
+function applicationsNeedAttentionParts(data: NeedAttentionData): string[] {
+  const days = STALE_AFTER_DAYS;
+  const parts: string[] = [];
+  if (data.needsResult > 0) parts.push(`${data.needsResult} ứng viên đã phỏng vấn chưa có kết quả`);
+  if (data.closingSoon > 0) {
+    parts.push(
+      data.closingOn
+        ? `${data.closingSoon} hồ sơ sẽ tự đóng từ ngày ${formatDayMonth(data.closingOn)}`
+        : `${data.closingSoon} hồ sơ sắp tự đóng`,
+    );
+  }
+  if (data.pendingStale > 0) parts.push(`${data.pendingStale} hồ sơ chờ duyệt quá ${days} ngày`);
+  if (data.reviewingStale > 0) parts.push(`${data.reviewingStale} hồ sơ đang xem xét quá ${days} ngày`);
+  if (data.awaitingSchedule > 0) parts.push(`${data.awaitingSchedule} ứng viên chờ đặt lịch phỏng vấn quá ${days} ngày`);
+  return parts;
+}
+
+/** Mở đúng chỗ của ý đầu tiên có thể lọc được trên trang "Ứng viên". */
+function applicationsNeedAttentionLink(data: NeedAttentionData): string {
+  if (data.needsResult > 0) return "/employer/applications?focus=result";
+  if (data.pendingStale > 0) return "/employer/applications?status=PENDING";
+  if (data.reviewingStale > 0) return "/employer/applications?status=REVIEWING";
+  if (data.awaitingSchedule > 0) return "/employer/applications?status=SHORTLISTED";
+  return "/employer/applications";
 }
 
 interface InterviewLines {
@@ -289,6 +332,33 @@ const templates: { [T in NotificationType]: Renderer<T> } = {
   }),
 
   // Do cron hằng ngày tạo (dedupeKey = JOB_POST_EXPIRING:{jobPostId}:{userId}); chỉ trong app.
+  // AD-25 — nhắc tuần (thứ Hai 8h). Có email: người quên xử lý thường là người không mở app.
+  APPLICATIONS_NEED_ATTENTION: (data, ctx) => {
+    const title = "Có hồ sơ ứng viên cần xử lý";
+    const parts = applicationsNeedAttentionParts(data);
+    const body = parts.join(" · ");
+    const link = applicationsNeedAttentionLink(data);
+    return {
+      title,
+      body,
+      link,
+      email: {
+        subject: `[${data.companyName}] Hồ sơ ứng viên cần xử lý tuần này`,
+        html: emailHtml(
+          title,
+          [
+            `Tình hình hồ sơ ứng viên của ${data.companyName}:`,
+            ...parts.map((part) => `• ${part}`),
+            ...(data.closingSoon > 0
+              ? ["Hồ sơ ở tin đã ngừng tuyển mà không được xử lý sẽ được hệ thống chuyển sang \"Tin đã đóng\" và báo cho ứng viên."]
+              : []),
+          ],
+          { label: "Xem hồ sơ", url: absolute(ctx, link) },
+        ),
+      },
+    };
+  },
+
   JOB_POST_EXPIRING: (data) => ({
     title: "Tin tuyển dụng sắp hết hạn",
     body: `Tin "${data.jobPostTitle}" sẽ hết hạn vào ${formatDate(data.expiresAt)}.`,

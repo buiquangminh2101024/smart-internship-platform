@@ -132,7 +132,7 @@ export const LAST_INTERVIEW_AT = Prisma.sql`(
   WHERE i."applicationId" = a."id" AND i."status" = 'SCHEDULED' AND i."scheduledAt" <= ${NOW_UTC})`;
 
 /** Đã phỏng vấn, không có lịch sắp tới, chưa có kết quả. Chỉ Rút gọn / Mời PV mới có lịch. */
-const NEEDS_RESULT = Prisma.sql`(
+export const NEEDS_RESULT = Prisma.sql`(
   a."status" IN ('SHORTLISTED', 'INTERVIEWING')
   AND EXISTS (SELECT 1 FROM interviews i
               WHERE i."applicationId" = a."id" AND i."status" = 'SCHEDULED' AND i."scheduledAt" <= ${NOW_UTC})

@@ -112,7 +112,7 @@ Khi tin đóng: hồ sơ Chờ duyệt tự đóng ngay; hồ sơ Đang xem xét
 ### Bước F5 — Thông báo nhắc hằng tuần
 
 - `lib/notifications.ts`: `APPLICATIONS_NEED_ATTENTION` thuộc nhóm `APPLICATIONS`, nhãn nút "Xem hồ sơ".
-- Link đích: có `needsResult` ⇒ `/employer/applications?focus=result`; không thì `/employer/applications?status=PENDING`.
+- Link đích do backend dựng sẵn trong thông báo (bước 5 backend), theo ý đầu tiên khác 0: cần kết quả ⇒ `/employer/applications?focus=result`; chờ duyệt ⇒ `?status=PENDING`; đang xem xét ⇒ `?status=REVIEWING`; chờ đặt lịch ⇒ `?status=SHORTLISTED`; chỉ có "sắp tự đóng" ⇒ `/employer/applications`. Frontend chỉ cần trang đọc đúng `focus` và `status` từ URL. (Bản đầu ghi "không thì `status=PENDING`", đổi để công ty không có hồ sơ chờ duyệt không bị mở vào tab rỗng.)
 - `NotificationCenter`: icon `clock` như các nhắc khác.
 - `SocketProvider`: nhận loại này thì làm mới danh sách hồ sơ cấp công ty.
 

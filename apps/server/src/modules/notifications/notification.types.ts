@@ -62,6 +62,24 @@ export interface NotificationPayloadMap {
     jobPostTitle: string;
     candidateName: string | null;
   };
+  // AD-25 — nhắc tuần, gộp một thông báo cho mỗi employer của công ty. Gửi bằng notifyOnce,
+  // khoá APPLICATIONS_NEED_ATTENTION:<công ty>:<người nhận>:<thứ Hai của tuần>.
+  APPLICATIONS_NEED_ATTENTION: {
+    companyId: string;
+    companyName: string;
+    /** Chờ duyệt quá 7 ngày, tin đang hiển thị. */
+    pendingStale: number;
+    /** Đang xem xét đứng yên quá 7 ngày, tin đang hiển thị. */
+    reviewingStale: number;
+    /** Chờ đặt lịch quá 7 ngày, tin đang hiển thị. */
+    awaitingSchedule: number;
+    /** Đã phỏng vấn quá 7 ngày, chưa có kết quả, mọi tin. */
+    needsResult: number;
+    /** Sẽ tự đóng (G2, G4) trong 7 ngày tới. */
+    closingSoon: number;
+    /** Lượt hằng ngày sẽ đóng hồ sơ sớm nhất trong `closingSoon`; null khi `closingSoon = 0`. */
+    closingOn: Date | null;
+  };
   JOB_POST_EXPIRING: { jobPostId: string; jobPostTitle: string; expiresAt: Date };
   SUBSCRIPTION_EXPIRING: { subscriptionId: string; planName: string; endDate: Date };
   CATALOG_ENTRY_SUGGESTED: {

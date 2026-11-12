@@ -53,7 +53,9 @@ export type NotificationType =
   | "ACCOUNT_ACTIVATED"
   | "PASSWORD_RESET_SUGGESTED"
   // AD-23 — hệ thống đã tự gửi lời mời cho tin (gộp tối đa 1 thông báo/tin/ngày)
-  | "AUTO_OUTREACH_SENT";
+  | "AUTO_OUTREACH_SENT"
+  // AD-25 — nhắc hằng tuần công ty về hồ sơ tồn (gộp 1 thông báo/employer/tuần)
+  | "APPLICATIONS_NEED_ATTENTION";
 
 /** Loại vấn đề của form /support (AD-17). */
 export type SupportCategory = "ACCOUNT_SUSPENDED" | "OTHER";

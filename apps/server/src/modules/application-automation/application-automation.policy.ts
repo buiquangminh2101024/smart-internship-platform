@@ -1,6 +1,6 @@
 import type { ApplicationStatus } from "@prisma/client";
 import type { ApplicationMatchBand } from "@sip/shared-types";
-import { AUTO_CLOSE_GRACE_DAYS, AUTO_CLOSE_INTERVIEWED_DAYS } from "./application-automation.config";
+import { AUTO_CLOSE_GRACE_DAYS, AUTO_CLOSE_INTERVIEWED_DAYS, AUTOMATION_DAILY_RUN_VN } from "./application-automation.config";
 
 /*
  * Quy tắc của tự xử lý hồ sơ (AD-25, 0.4). Hàm thuần, không đụng DB, có unit test.
@@ -93,4 +93,38 @@ export function closeDecision(input: CloseDueInput): CloseDecision | null {
 /** Ngày tới hạn tự đóng, hoặc `null` nếu hồ sơ không tự đóng. */
 export function closeDueAt(input: CloseDueInput): Date | null {
   return closeDecision(input)?.dueAt ?? null;
+}
+
+// ─── Nhắc tuần (bước 5) ─────────────────────────────────────────────────────
+
+/** Việt Nam là UTC+7, không đổi giờ theo mùa. */
+const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+/**
+ * Thứ Hai của tuần chứa `now`, theo giờ Việt Nam, dạng YYYY-MM-DD — phần cuối của `dedupeKey`
+ * nhắc tuần: chạy lại trong cùng tuần (kể cả Chủ nhật) không tạo thông báo trùng.
+ */
+export function vnWeekKey(now: Date): string {
+  const vn = new Date(now.getTime() + VN_OFFSET_MS);
+  const daysSinceMonday = (vn.getUTCDay() + 6) % 7;
+  return new Date(vn.getTime() - daysSinceMonday * DAY_MS).toISOString().slice(0, 10);
+}
+
+/**
+ * Lúc hồ sơ tới hạn `dueAt` thực sự bị đóng: lượt hằng ngày đầu tiên (8h30 giờ Việt Nam)
+ * không sớm hơn cả `dueAt` lẫn `now`. Nhắc tuần ghi ngày này, không ghi `dueAt`, để ngày
+ * báo trước khớp ngày ứng viên nhận thông báo đóng.
+ */
+export function nextAutoCloseRun(dueAt: Date, now: Date): Date {
+  const from = dueAt > now ? dueAt : now;
+  const vn = new Date(from.getTime() + VN_OFFSET_MS);
+  const runVn = Date.UTC(
+    vn.getUTCFullYear(),
+    vn.getUTCMonth(),
+    vn.getUTCDate(),
+    AUTOMATION_DAILY_RUN_VN.hour,
+    AUTOMATION_DAILY_RUN_VN.minute,
+  );
+  const sameDay = vn.getTime() <= runVn;
+  return new Date((sameDay ? runVn : runVn + DAY_MS) - VN_OFFSET_MS);
 }

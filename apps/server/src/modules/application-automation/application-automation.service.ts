@@ -1,7 +1,9 @@
 import type { Logger } from "../../shared/logger";
 import type { ApplicationsService } from "../applications/applications.service";
+import type { EmployerRepository } from "../employers/employer.repository";
+import type { NotificationsService } from "../notifications/notifications.service";
 import { AUTOMATION_MAX_PER_RUN, AUTOMATION_YIELD_EVERY } from "./application-automation.config";
-import { closeDecision, type AutoCloseGroup } from "./application-automation.policy";
+import { closeDecision, nextAutoCloseRun, vnWeekKey, type AutoCloseGroup } from "./application-automation.policy";
 import type { ApplicationAutomationRepository, AutomationScope } from "./application-automation.repository";
 
 /**
@@ -34,6 +36,20 @@ export type RunDailyResult =
   | { status: "LOCKED" }
   | { status: "DONE"; review: AutomationPartResult; close: AutoCloseResult; durationMs: number };
 
+export type WeeklyReminderResult =
+  | { status: "LOCKED" }
+  | {
+      status: "DONE";
+      /** Công ty có ít nhất một số tồn khác 0. */
+      companies: number;
+      /** Thông báo mới tạo (mỗi employer một thông báo). */
+      created: number;
+      /** Đã nhắc trong tuần này (trùng `dedupeKey`) ⇒ không tạo lại. */
+      duplicates: number;
+      failed: number;
+      durationMs: number;
+    };
+
 type Outcome = "CHANGED" | "RACED" | "NOT_DUE";
 
 const yieldToEventLoop = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
@@ -47,22 +63,78 @@ const yieldToEventLoop = (): Promise<void> => new Promise((resolve) => setImmedi
 export class ApplicationAutomationService {
   private readonly repository: ApplicationAutomationRepository;
   private readonly applicationsService: ApplicationsService;
+  private readonly employerRepository: EmployerRepository;
+  private readonly notificationsService: NotificationsService;
   private readonly logger: Logger;
-  /** Không chạy chồng `runDaily` (một process, AD-23 mục 8). */
+  /** Không chạy chồng `runDaily` / `runWeeklyReminder` (một process, AD-23 mục 8). */
   private dailyRunning = false;
+  private weeklyRunning = false;
 
   constructor({
     applicationAutomationRepository,
     applicationsService,
+    employerRepository,
+    notificationsService,
     logger,
   }: {
     applicationAutomationRepository: ApplicationAutomationRepository;
     applicationsService: ApplicationsService;
+    employerRepository: EmployerRepository;
+    notificationsService: NotificationsService;
     logger: Logger;
   }) {
     this.repository = applicationAutomationRepository;
     this.applicationsService = applicationsService;
+    this.employerRepository = employerRepository;
+    this.notificationsService = notificationsService;
     this.logger = logger;
+  }
+
+  /**
+   * Nhắc tuần (bước 5): mỗi employer của công ty có hồ sơ tồn nhận một thông báo gộp (trong app
+   * và email). `dedupeKey` theo công ty + người nhận + thứ Hai của tuần (giờ Việt Nam), nên chạy
+   * lại trong tuần không tạo trùng. Lỗi của một người nhận thì ghi log rồi đi tiếp.
+   */
+  async runWeeklyReminder(scope: Pick<AutomationScope, "companyId"> = {}, now = new Date()): Promise<WeeklyReminderResult> {
+    if (this.weeklyRunning) return { status: "LOCKED" };
+    this.weeklyRunning = true;
+    const startedAt = Date.now();
+    try {
+      const rows = await this.repository.backlogByCompany(scope);
+      const week = vnWeekKey(now);
+      const result = { status: "DONE" as const, companies: rows.length, created: 0, duplicates: 0, failed: 0, durationMs: 0 };
+      for (const [index, row] of rows.entries()) {
+        if (index > 0) await yieldToEventLoop();
+        const { closingDueAt, ...counts } = row;
+        const payload = { ...counts, closingOn: closingDueAt ? nextAutoCloseRun(closingDueAt, now) : null };
+        try {
+          const employers = await this.employerRepository.findManyByCompanyId(row.companyId);
+          for (const { userId } of employers) {
+            try {
+              const isNew = await this.notificationsService.notifyOnce(
+                "APPLICATIONS_NEED_ATTENTION",
+                userId,
+                payload,
+                `APPLICATIONS_NEED_ATTENTION:${row.companyId}:${userId}:${week}`,
+              );
+              if (isNew) result.created += 1;
+              else result.duplicates += 1;
+            } catch (error) {
+              result.failed += 1;
+              this.logger.error("Weekly reminder failed for recipient", { companyId: row.companyId, userId, error: errorMessage(error) });
+            }
+          }
+        } catch (error) {
+          result.failed += 1;
+          this.logger.error("Weekly reminder failed for company", { companyId: row.companyId, error: errorMessage(error) });
+        }
+      }
+      result.durationMs = Date.now() - startedAt;
+      this.logger.info("Stale application reminder", { ...scope, ...result });
+      return result;
+    } finally {
+      this.weeklyRunning = false;
+    }
   }
 
   /** Lối 2 và 3 của bước 4b. Hồ sơ đang được lượt khác xử lý thì câu UPDATE có điều kiện chặn trùng. */

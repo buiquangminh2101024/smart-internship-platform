@@ -14,3 +14,15 @@ export const AUTOMATION_MAX_PER_RUN = 500;
 
 /** Nhường event loop cho request web sau mỗi bấy nhiêu hồ sơ. */
 export const AUTOMATION_YIELD_EVERY = 50;
+
+/**
+ * Giờ lượt hằng ngày (giờ Việt Nam). Cron ở bước 7 dựng từ hằng này; nhắc tuần dùng nó để
+ * tính ngày hồ sơ thực sự bị đóng (lượt đầu tiên từ lúc tới hạn).
+ */
+export const AUTOMATION_DAILY_RUN_VN = { hour: 8, minute: 30 } as const;
+
+/** Nhắc tuần (quyết định #4): hồ sơ đứng yên quá bấy nhiêu ngày là "tồn". */
+export const STALE_AFTER_DAYS = 7;
+
+/** Nhắc tuần: báo trước các hồ sơ sẽ tự đóng trong bấy nhiêu ngày tới. */
+export const CLOSING_SOON_DAYS = 7;
