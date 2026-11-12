@@ -2,6 +2,7 @@
 // Tự xử lý hồ sơ (AD-25, docs/06-backend/application-automation/PLAN.md).
 // Bước 3: dải điểm theo ngưỡng X / Y. Bước 4: closeDecision (G1–G4), lượt tự chuyển / tự đóng
 // với repository và ApplicationsService giả, lời thông báo khi hệ thống đóng hồ sơ.
+// Bước 5: nhắc tuần. Bước 6: cài đặt theo tin (quyền, Y < X, lối quét khi bật lại công tắc).
 // SQL chọn hồ sơ được đối chiếu riêng trên DB thật (bước 8).
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -18,8 +19,12 @@ import {
 import type {
   CloseCandidateRow,
   CompanyBacklogRow,
+  JobAutomationSettingsPatch,
+  JobAutomationSettingsRow,
 } from "../../src/modules/application-automation/application-automation.repository";
+import { updateJobApplicationAutomationSchema } from "../../src/modules/application-automation/application-automation.dto";
 import { ApplicationAutomationService } from "../../src/modules/application-automation/application-automation.service";
+import { AppError } from "../../src/shared/errors/AppError";
 import type { StatusChangeTarget } from "../../src/modules/applications/applications.repository";
 import { renderNotification } from "../../src/modules/notifications/templates/notification-templates";
 
@@ -399,4 +404,140 @@ test("lời nhắc tuần: đúng thứ tự, bỏ nhóm bằng 0, có email, li
   const closing = renderNotification("APPLICATIONS_NEED_ATTENTION", closingOnly, CTX);
   assert.equal(closing.link, "/employer/applications");
   assert.equal(closing.body, "1 hồ sơ sẽ tự đóng từ ngày 18/11");
+});
+
+// ─── Cài đặt theo tin (bước 6) ──────────────────────────────────────────────
+
+const SETTINGS_JOB: JobAutomationSettingsRow = {
+  id: "job-1",
+  status: "PUBLISHED",
+  employerId: "emp-1",
+  autoOutreachMinScore: 80,
+  autoReviewEnabled: true,
+  rejectSuggestBelowScore: 50,
+  autoCloseInterviewedEnabled: false,
+};
+
+function buildSettings(job: Partial<JobAutomationSettingsRow> = {}, options: { xLoweredTo?: number } = {}) {
+  let row: JobAutomationSettingsRow = { ...SETTINGS_JOB, ...job };
+  const writes: JobAutomationSettingsPatch[] = [];
+  const reviewed: string[] = [];
+  const service = new ApplicationAutomationService({
+    employerIdentityCache: { require: async () => ({ userId: "user-emp-1", employerId: "emp-1", companyId: "co-1" }) },
+    applicationAutomationRepository: {
+      findJobSettings: async (id: string) => (id === row.id ? row : null),
+      updateJobSettings: async (_id: string, patch: JobAutomationSettingsPatch) => {
+        // Giả lập X bị hạ ở cài đặt tự mời ngay trước câu UPDATE có điều kiện Y < X.
+        if (options.xLoweredTo !== undefined) row = { ...row, autoOutreachMinScore: options.xLoweredTo };
+        if (patch.rejectSuggestBelowScore !== undefined && patch.rejectSuggestBelowScore >= row.autoOutreachMinScore) return false;
+        writes.push(patch);
+        row = {
+          ...row,
+          ...(patch.autoReviewEnabled !== undefined ? { autoReviewEnabled: patch.autoReviewEnabled } : {}),
+          ...(patch.rejectSuggestBelowScore !== undefined ? { rejectSuggestBelowScore: patch.rejectSuggestBelowScore } : {}),
+          ...(patch.autoCloseInterviewedEnabled !== undefined
+            ? { autoCloseInterviewedEnabled: patch.autoCloseInterviewedEnabled }
+            : {}),
+        };
+        return true;
+      },
+      // Lối 3: trigger gọi autoReview theo tin; ghi lại tin được quét.
+      findAutoReviewTargets: async (scope: { jobPostId?: string }) => {
+        reviewed.push(scope.jobPostId ?? "?");
+        return [];
+      },
+    },
+    logger: { info: () => {}, warn: () => {}, error: () => {} },
+  } as unknown as ConstructorParameters<typeof ApplicationAutomationService>[0]);
+  return { service, writes, reviewed };
+}
+
+async function appErrorOf(promise: Promise<unknown>): Promise<AppError> {
+  try {
+    await promise;
+  } catch (error) {
+    assert.ok(error instanceof AppError);
+    return error;
+  }
+  return assert.fail("phải lỗi");
+}
+
+test("cài đặt tin: GET trả X chỉ đọc và Y thực dùng (kẹp X − 1 khi dữ liệu cũ có Y ≥ X)", async () => {
+  assert.deepEqual(await buildSettings().service.getJobSettings("user-emp-1", "job-1"), {
+    autoReviewEnabled: true,
+    matchThreshold: 80,
+    rejectSuggestBelowScore: 50,
+    autoCloseInterviewedEnabled: false,
+  });
+  const legacy = await buildSettings({ autoOutreachMinScore: 40 }).service.getJobSettings("user-emp-1", "job-1");
+  assert.equal(legacy.rejectSuggestBelowScore, 39);
+});
+
+test("cài đặt tin: chỉ người đăng tin; tin của người khác hoặc không có ⇒ 404, không ghi", async () => {
+  const { service, writes } = buildSettings({ employerId: "emp-colleague" });
+  assert.equal((await appErrorOf(service.getJobSettings("user-emp-1", "job-1"))).statusCode, 404);
+  assert.equal((await appErrorOf(service.updateJobSettings("user-emp-1", "job-1", { autoReviewEnabled: false }))).statusCode, 404);
+  assert.equal((await appErrorOf(buildSettings().service.getJobSettings("user-emp-1", "job-x"))).statusCode, 404);
+  assert.equal(writes.length, 0);
+});
+
+test("cài đặt tin: Y ≥ X ⇒ 400 kèm X, không ghi; Y = X − 1 và Y = 0 thì được", async () => {
+  const { service, writes } = buildSettings();
+  for (const y of [80, 95]) {
+    const error = await appErrorOf(service.updateJobSettings("user-emp-1", "job-1", { rejectSuggestBelowScore: y }));
+    assert.equal(error.statusCode, 400);
+    assert.match(error.message, /nhỏ hơn ngưỡng phù hợp \(80%\)/);
+  }
+  assert.equal(writes.length, 0);
+  assert.equal((await service.updateJobSettings("user-emp-1", "job-1", { rejectSuggestBelowScore: 79 })).rejectSuggestBelowScore, 79);
+  assert.equal((await service.updateJobSettings("user-emp-1", "job-1", { rejectSuggestBelowScore: 0 })).rejectSuggestBelowScore, 0);
+});
+
+test("cài đặt tin: X vừa bị hạ giữa lúc đọc và lúc ghi ⇒ 400 theo X mới", async () => {
+  const { service, writes } = buildSettings({}, { xLoweredTo: 60 });
+  const error = await appErrorOf(service.updateJobSettings("user-emp-1", "job-1", { rejectSuggestBelowScore: 70 }));
+  assert.equal(error.statusCode, 400);
+  assert.match(error.message, /\(60%\)/);
+  assert.equal(writes.length, 0);
+});
+
+test("cài đặt tin: sửa được ở tin đã đóng; trả giá trị sau khi ghi", async () => {
+  const { service, writes, reviewed } = buildSettings({ status: "CLOSED" });
+  const dto = await service.updateJobSettings("user-emp-1", "job-1", { autoCloseInterviewedEnabled: true });
+  assert.equal(dto.autoCloseInterviewedEnabled, true);
+  assert.deepEqual(writes, [{ autoCloseInterviewedEnabled: true }]);
+  assert.deepEqual(reviewed, []);
+});
+
+test("cài đặt tin: bật lại tự chuyển ở tin đang đăng ⇒ quét tin đó; đang bật, tắt hoặc tin chưa đăng thì không", async () => {
+  const reenabled = buildSettings({ autoReviewEnabled: false });
+  await reenabled.service.updateJobSettings("user-emp-1", "job-1", { autoReviewEnabled: true });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(reenabled.reviewed, ["job-1"]);
+
+  const others = [
+    { job: { autoReviewEnabled: true }, patch: { autoReviewEnabled: true } },
+    { job: { autoReviewEnabled: true }, patch: { autoReviewEnabled: false } },
+    { job: { autoReviewEnabled: false, status: "DRAFT" as const }, patch: { autoReviewEnabled: true } },
+    { job: { autoReviewEnabled: false }, patch: { rejectSuggestBelowScore: 40 } },
+  ];
+  for (const { job, patch } of others) {
+    const built = buildSettings(job);
+    await built.service.updateJobSettings("user-emp-1", "job-1", patch);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(built.reviewed, [], JSON.stringify({ job, patch }));
+  }
+});
+
+test("schema PATCH cài đặt tin: cần ít nhất một trường, Y nguyên 0–100", () => {
+  assert.equal(updateJobApplicationAutomationSchema.safeParse({}).success, false);
+  assert.equal(updateJobApplicationAutomationSchema.safeParse({ rejectSuggestBelowScore: -1 }).success, false);
+  assert.equal(updateJobApplicationAutomationSchema.safeParse({ rejectSuggestBelowScore: 101 }).success, false);
+  assert.equal(updateJobApplicationAutomationSchema.safeParse({ rejectSuggestBelowScore: 49.5 }).success, false);
+  assert.equal(updateJobApplicationAutomationSchema.safeParse({ autoReviewEnabled: "yes" }).success, false);
+  assert.equal(
+    updateJobApplicationAutomationSchema.safeParse({ autoReviewEnabled: false, rejectSuggestBelowScore: 0, autoCloseInterviewedEnabled: true })
+      .success,
+    true,
+  );
 });

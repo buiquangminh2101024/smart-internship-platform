@@ -134,13 +134,19 @@ function buildService(options: Options = {}) {
     hiringTarget: 1,
     autoOutreachExhaustedAt: null,
     autoOutreachExhaustedReason: null,
+    rejectSuggestBelowScore: 50,
     ...options.job,
   };
   const updates: JobAutoOutreachPatch[] = [];
   // Lượt chạy kích hoạt từ PATCH (bước 5): khoá trả false ⇒ lượt dừng ngay, chỉ ghi công ty.
   const triggered: string[] = [];
+  // 0.4 bước 6 — tin được quét tự chuyển "Đang xem xét" sau khi hạ X.
+  const autoReviewed: string[] = [];
   let sharePercent = 80;
   const service = new AutoOutreachService({
+    autoReviewTrigger: (target: { jobPostId?: string; applicationId?: string }) => {
+      autoReviewed.push(target.jobPostId ?? `application:${target.applicationId}`);
+    },
     autoOutreachRunStore: {
       tryLock: async (companyId: string) => {
         triggered.push(companyId);
@@ -178,7 +184,7 @@ function buildService(options: Options = {}) {
       countJob: async () => ({ pending: 7, acceptedInvitations: 3, hiredCount: 0, autoSentToday: 4 }),
     },
   } as unknown as ConstructorParameters<typeof AutoOutreachService>[0]);
-  return { service, updates, triggered, sharePercent: () => sharePercent };
+  return { service, updates, triggered, autoReviewed, sharePercent: () => sharePercent };
 }
 
 async function statusOf(promise: Promise<unknown>): Promise<number> {
@@ -289,6 +295,45 @@ test("PATCH: sửa được khi tin không PUBLISHED; tắt thì state OFF", asy
   const draft = buildService({ job: { status: "DRAFT" } });
   await draft.service.updateJobSettings("user-emp-1", "job-1", { enabled: true });
   assert.deepEqual(draft.triggered, [], "tin chưa hiển thị ⇒ chờ lúc đăng tin mới chạy");
+});
+
+test("PATCH (0.4 bước 6): hạ X xuống ≤ Y ⇒ 400 kèm Y, không ghi; X = Y + 1 thì được", async () => {
+  const { service, updates } = buildService({ job: { rejectSuggestBelowScore: 60 } });
+  for (const minScore of [60, 40, 0]) {
+    try {
+      await service.updateJobSettings("user-emp-1", "job-1", { minScore });
+      assert.fail("phải lỗi");
+    } catch (error) {
+      assert.ok(error instanceof AppError);
+      assert.equal(error.statusCode, 400);
+      assert.match(error.message, /lớn hơn ngưỡng đề xuất từ chối \(60%\)/);
+    }
+  }
+  assert.equal(updates.length, 0);
+  const dto = await service.updateJobSettings("user-emp-1", "job-1", { minScore: 61 });
+  assert.equal(dto.minScore, 61);
+  // Không gửi X thì không kiểm (sửa số người cần tuyển vẫn được dù dữ liệu cũ có Y ≥ X).
+  const legacy = buildService({ job: { autoOutreachMinScore: 40, rejectSuggestBelowScore: 50 } });
+  assert.equal((await legacy.service.updateJobSettings("user-emp-1", "job-1", { hiringTarget: 2 })).hiringTarget, 2);
+});
+
+test("PATCH (0.4 bước 6): hạ X ở tin đang đăng ⇒ quét tự chuyển của tin; tăng X hoặc tin chưa đăng thì không", async () => {
+  const lowered = buildService();
+  await lowered.service.updateJobSettings("user-emp-1", "job-1", { minScore: 70 });
+  assert.deepEqual(lowered.autoReviewed, ["job-1"]);
+
+  // Không phụ thuộc công tắc tự mời hay gói: câu chọn tự lọc autoReviewEnabled.
+  const trial = buildService({ policy: TRIAL });
+  await trial.service.updateJobSettings("user-emp-1", "job-1", { minScore: 70 });
+  assert.deepEqual(trial.autoReviewed, ["job-1"]);
+
+  const raised = buildService();
+  await raised.service.updateJobSettings("user-emp-1", "job-1", { minScore: 90 });
+  const same = buildService();
+  await same.service.updateJobSettings("user-emp-1", "job-1", { minScore: 80, hiringTarget: 2 });
+  const draft = buildService({ job: { status: "DRAFT" } });
+  await draft.service.updateJobSettings("user-emp-1", "job-1", { minScore: 70 });
+  assert.deepEqual([...raised.autoReviewed, ...same.autoReviewed, ...draft.autoReviewed], []);
 });
 
 test("cài đặt công ty: ai cũng xem được; chỉ quản trị viên được sửa", async () => {

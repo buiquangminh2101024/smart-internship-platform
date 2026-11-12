@@ -1606,7 +1606,27 @@ export interface BulkUpdateApplicationStatusResult {
   skipped: Array<{ applicationId: string; reason: BulkStatusSkipReason }>;
 }
 
-// --- Messaging (Phase 9) -------------------------------------------------
+/**
+ * GET/PATCH /employer/job-posts/:jobId/application-automation — cài đặt tự xử lý hồ sơ của tin
+ * (0.4, AD-25). Chỉ người đăng tin; đọc và sửa được ở mọi trạng thái của tin.
+ */
+export interface JobApplicationAutomationSettings {
+  /** Tự chuyển hồ sơ Chờ duyệt có điểm ≥ X sang "Đang xem xét". Mặc định bật. */
+  autoReviewEnabled: boolean;
+  /** X (`autoOutreachMinScore`), chỉ đọc ở đây: sửa ở cài đặt tự mời. */
+  matchThreshold: number;
+  /** Y: hồ sơ Chờ duyệt có điểm < Y vào nhóm đề xuất từ chối. 0 ≤ Y < X, mặc định 50. */
+  rejectSuggestBelowScore: number;
+  /** Tự đóng hồ sơ đã phỏng vấn chưa có kết quả, 30 ngày sau khi tin đóng. Mặc định tắt. */
+  autoCloseInterviewedEnabled: boolean;
+}
+
+/** Gửi ít nhất một trường. Y ≥ X ⇒ 400. */
+export type UpdateJobApplicationAutomationRequest = Partial<
+  Pick<JobApplicationAutomationSettings, "autoReviewEnabled" | "rejectSuggestBelowScore" | "autoCloseInterviewedEnabled">
+>;
+
+// --- Messaging (Phase 9)-------------------------------------------------
 
 export interface Message {
   id: string;

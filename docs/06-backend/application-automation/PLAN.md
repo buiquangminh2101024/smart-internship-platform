@@ -455,6 +455,38 @@ G2 chỉ gồm Đang xem xét (48) và Rút gọn (46); không có hồ sơ Mờ
 - **Email lượt nhắc đầu:** 79 thư cho employer. Số thư tới địa chỉ `.local` chưa đếm; sẽ đếm ở `--dry-run` bước 8 và xử lý như thư `.local` của ứng viên (đã chốt, xin xác nhận trước khi ghi).
 - `tsc` server: **hết lỗi**. `tsc` web còn 4 lỗi, đều do thiếu khoá: `lib/application-status.ts` và `components/admin/UserDetailSections.tsx` thiếu `JOB_CLOSED` (F1); `lib/notifications.ts` thiếu 2 khoá `APPLICATIONS_NEED_ATTENTION` (F5). Chưa sửa web.
 
+### Bước 6 — API cài đặt theo tin (2026-11-12)
+
+- `GET` / `PATCH /employer/job-posts/:jobId/application-automation`:
+  - Quyền giống cài đặt tự mời: chỉ người đăng tin (so `employerId` của tin với employer của người gọi); tin của người khác hoặc không có ⇒ 404. Đọc và sửa được ở mọi trạng thái của tin.
+  - Shared types: `JobApplicationAutomationSettings`, `UpdateJobApplicationAutomationRequest` (đã build lại `dist`).
+- File mới trong `application-automation/`: `.dto.ts` (zod: ít nhất một trường; Y nguyên 0–100), `.controller.ts`. `.module.ts` thêm `applicationAutomationRouter` (gọi `registerApplicationAutomation` rồi trả route); `main.ts` đổi lời gọi `registerApplicationAutomation(container)` thành `app.use("/api", applicationAutomationRouter(container))`, cùng vị trí.
+- `.repository.ts`: `findJobSettings`, `updateJobSettings`.
+  - Ghi bằng `UPDATE job_posts` thô, không đổi `updatedAt`. Thêm lý do so với plan: `updatedAt` là mốc "ngày tin đóng" của tin `EXPIRED` (`JOB_CLOSED_AT`), nên bật công tắc tự đóng ở tin đã hết hạn mà đổi `updatedAt` sẽ dời ngày tự đóng.
+  - Gửi Y thì câu UPDATE có thêm điều kiện `"autoOutreachMinScore" > Y`.
+- `.service.ts`: `getJobSettings`, `updateJobSettings`; thêm dependency `employerIdentityCache`.
+  - Y ≥ X ⇒ 400 "Ngưỡng đề xuất từ chối phải nhỏ hơn ngưỡng phù hợp (X%)."
+  - Câu UPDATE không ghi được dòng nào (X vừa bị hạ ở cài đặt tự mời giữa lúc đọc và lúc ghi) ⇒ đọc lại, trả 400 theo X mới.
+  - Bật lại `autoReviewEnabled` (từ tắt sang bật) ở tin `PUBLISHED` ⇒ `trigger({ jobPostId })` (lối 3).
+- `auto-outreach.service.ts`:
+  - PATCH gửi `minScore` ≤ Y của tin ⇒ 400 "Ngưỡng phù hợp phải lớn hơn ngưỡng đề xuất từ chối (Y%)." Không ghi gì. Không gửi `minScore` thì không kiểm.
+  - Hạ X ở tin `PUBLISHED` ⇒ `autoReviewTrigger({ jobPostId })` (lối 3).
+  - Thêm dependency `autoReviewTrigger`; `auto-outreach.repository.ts` đọc thêm cột `rejectSuggestBelowScore`.
+- **Chọn thêm khi làm (plan chưa ghi):**
+  - **Y trả về là Y thực dùng** (`effectiveRejectThreshold`, kẹp về X − 1), để thẻ hiện đúng ngưỡng mà nhóm đề xuất từ chối đang áp. Neon hiện không có tin nào cần kẹp (bước 1).
+  - **Lối 3 khi hạ X không xét công tắc tự mời hay gói**: X dùng chung, nên hạ X ở gói Dùng thử (vẫn sửa được ngưỡng) cũng làm hồ sơ vừa đạt ngưỡng được tự chuyển. Câu chọn tự lọc `autoReviewEnabled` và tin không hiển thị. Tăng X, giữ nguyên X, tin chưa đăng thì không quét.
+  - **Còn một khe nhỏ khi hai PATCH chạy cùng lúc:** cài đặt tự mời kiểm X > Y theo Y đọc lúc đầu, không có điều kiện trong câu ghi. Nếu cùng lúc có người tăng Y, có thể ra Y ≥ X. Không sửa thêm vì Y luôn bị kẹp lúc đọc (bước 1), nhóm đề xuất từ chối vẫn đúng.
+  - Ghi lỗi 400 ở service (cần X của tin), không ở zod.
+- Form tạo tin hiện chỉ gửi `hiringTarget` và `enabled` qua cài đặt tự mời, không gửi X, nên điều kiện mới không ảnh hưởng. Thẻ "Tự động mời ứng viên" sẽ nhận 400 khi hạ X ≤ Y; F4 hiện câu của server như plan frontend đã ghi.
+- Test:
+  - `application-automation.test.ts`: GET (Y thực dùng); 404 khi không phải người đăng tin; Y ≥ X ⇒ 400, biên Y = X − 1 và Y = 0; X bị hạ chen giữa ⇒ 400 theo X mới; sửa được ở tin đã đóng; lối 3 chỉ khi bật lại ở tin đang đăng; schema.
+  - `auto-outreach-settings.test.ts`: hạ X ≤ Y ⇒ 400, không ghi, X = Y + 1 thì được; dữ liệu cũ Y ≥ X vẫn sửa được số người cần tuyển; hạ X ở tin đang đăng ⇒ quét (kể cả gói Dùng thử); tăng hoặc giữ X, tin nháp ⇒ không quét.
+  - Toàn bộ unit test server: 503/503 qua. `tsc` server: hết lỗi.
+- **Trên Neon (chỉ đọc, `.claude-workspace/scratch/step6-verify.ts`):**
+  - `findJobSettings` đọc đúng tin có nhiều hồ sơ Chờ duyệt nhất (X 80, Y 50, công tắc mặc định); id không có ⇒ `null`.
+  - Câu UPDATE chỉ in ra bằng prisma giả, **không chạy**: `UPDATE job_posts SET "autoReviewEnabled" = $1, "rejectSuggestBelowScore" = $2 WHERE "id" = $3 AND "autoOutreachMinScore" > $4`. PATCH thật để bước 8, xin xác nhận trước.
+  - **`EXPLAIN ANALYZE` các câu quét** (mục "không thêm index" của bước 1), lần chạy thứ hai: tự chuyển toàn hệ thống 5 ms, theo một tin (lối 3) 0,2 ms, tự đóng 2 ms, nhắc tuần 18 ms. Lần chạy đầu, câu tự chuyển mất 1,2 s, lần hai chỉ còn 5 ms. Có thể do cache nguội ở lần đầu, chưa kiểm. Các câu đều quét tuần tự `applications` (bảng vài nghìn dòng), không chậm. **Không thêm index.**
+
 ## Phần 4 — Ghi chú của chủ dự án
 
 <!-- Để trống — dành cho chủ dự án. -->

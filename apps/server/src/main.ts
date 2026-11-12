@@ -38,7 +38,7 @@ import { startCandidateOutreachExpiryJob } from "./modules/candidate-outreach/ca
 import type { CandidateOutreachRepository } from "./modules/candidate-outreach/candidate-outreach.repository";
 import { startAutoOutreachJob } from "./modules/candidate-outreach/auto-outreach.job";
 import { registerMatchScores } from "./modules/match-scores/match-scores.module";
-import { registerApplicationAutomation } from "./modules/application-automation/application-automation.module";
+import { applicationAutomationRouter } from "./modules/application-automation/application-automation.module";
 import { startMatchScoreJob } from "./modules/match-scores/match-score.job";
 import type { MatchScoreRepository } from "./modules/match-scores/match-score.repository";
 import type { MatchScoreService } from "./modules/match-scores/match-score.service";
@@ -122,9 +122,9 @@ app.use("/api", candidateInsightsRouter(container));
 app.use("/api", candidateOutreachRouter(container));
 // Bảng điểm lưu sẵn (AD-24): dùng candidateOutreachService/candidateMatchProfileLoader, chưa có route riêng.
 registerMatchScores(container);
-// Tự xử lý hồ sơ (AD-25): applicationsService cần autoReviewTrigger do hàm này đăng ký —
-// resolve lúc có request nên chỉ cần đăng ký trước khi server nhận request. Cron ở bước 7.
-registerApplicationAutomation(container);
+// Tự xử lý hồ sơ (AD-25): applicationsService và autoOutreachService cần autoReviewTrigger do
+// hàm này đăng ký — resolve lúc có request hoặc lúc start job bên dưới. Cron ở bước 7.
+app.use("/api", applicationAutomationRouter(container));
 
 app.use("/api/conversations", messagingRoutes(container));
 

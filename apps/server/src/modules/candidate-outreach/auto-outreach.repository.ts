@@ -16,6 +16,8 @@ const jobAutoOutreachSelect = {
   hiringTarget: true,
   autoOutreachExhaustedAt: true,
   autoOutreachExhaustedReason: true,
+  // 0.4 bước 6 — X phải lớn hơn Y (ngưỡng đề xuất từ chối) của tin.
+  rejectSuggestBelowScore: true,
 } satisfies Prisma.JobPostSelect;
 
 export type JobAutoOutreachRow = Prisma.JobPostGetPayload<{ select: typeof jobAutoOutreachSelect }>;

@@ -1,10 +1,24 @@
+import type { JobApplicationAutomationSettings } from "@sip/shared-types";
+import { AppError } from "../../shared/errors/AppError";
 import type { Logger } from "../../shared/logger";
 import type { ApplicationsService } from "../applications/applications.service";
+import type { EmployerIdentityCache } from "../employers/employer-identity-cache";
 import type { EmployerRepository } from "../employers/employer.repository";
 import type { NotificationsService } from "../notifications/notifications.service";
 import { AUTOMATION_MAX_PER_RUN, AUTOMATION_YIELD_EVERY } from "./application-automation.config";
-import { closeDecision, nextAutoCloseRun, vnWeekKey, type AutoCloseGroup } from "./application-automation.policy";
-import type { ApplicationAutomationRepository, AutomationScope } from "./application-automation.repository";
+import type { UpdateJobApplicationAutomationInput } from "./application-automation.dto";
+import {
+  closeDecision,
+  effectiveRejectThreshold,
+  nextAutoCloseRun,
+  vnWeekKey,
+  type AutoCloseGroup,
+} from "./application-automation.policy";
+import type {
+  ApplicationAutomationRepository,
+  AutomationScope,
+  JobAutomationSettingsRow,
+} from "./application-automation.repository";
 
 /**
  * Tự chuyển "Đang xem xét" cho một hồ sơ (vừa nộp) hoặc một tin (vừa hạ X / bật lại công tắc):
@@ -64,6 +78,7 @@ export class ApplicationAutomationService {
   private readonly repository: ApplicationAutomationRepository;
   private readonly applicationsService: ApplicationsService;
   private readonly employerRepository: EmployerRepository;
+  private readonly employerIdentityCache: EmployerIdentityCache;
   private readonly notificationsService: NotificationsService;
   private readonly logger: Logger;
   /** Không chạy chồng `runDaily` / `runWeeklyReminder` (một process, AD-23 mục 8). */
@@ -74,20 +89,68 @@ export class ApplicationAutomationService {
     applicationAutomationRepository,
     applicationsService,
     employerRepository,
+    employerIdentityCache,
     notificationsService,
     logger,
   }: {
     applicationAutomationRepository: ApplicationAutomationRepository;
     applicationsService: ApplicationsService;
     employerRepository: EmployerRepository;
+    employerIdentityCache: EmployerIdentityCache;
     notificationsService: NotificationsService;
     logger: Logger;
   }) {
     this.repository = applicationAutomationRepository;
     this.applicationsService = applicationsService;
     this.employerRepository = employerRepository;
+    this.employerIdentityCache = employerIdentityCache;
     this.notificationsService = notificationsService;
     this.logger = logger;
+  }
+
+  // ─── Cài đặt của tin (bước 6) ────────────────────────────────────────────
+
+  /** Chỉ người đăng tin (cùng quy tắc với cài đặt tự mời). Đọc được ở mọi trạng thái của tin. */
+  async getJobSettings(userId: string, jobPostId: string): Promise<JobApplicationAutomationSettings> {
+    return toSettingsDto(await this.requireOwnedJob(userId, jobPostId));
+  }
+
+  /**
+   * Chỉ người đăng tin, sửa được ở mọi trạng thái của tin (form tạo tin gửi khi tin còn là bản
+   * nháp; công tắc tự đóng hồ sơ đã phỏng vấn chỉ có tác dụng sau khi tin đóng). Y ≥ X ⇒ 400.
+   * Bật lại `autoReviewEnabled` ⇒ quét ngay hồ sơ Chờ duyệt của tin (lối 3 của bước 4b).
+   */
+  async updateJobSettings(
+    userId: string,
+    jobPostId: string,
+    patch: UpdateJobApplicationAutomationInput,
+  ): Promise<JobApplicationAutomationSettings> {
+    const job = await this.requireOwnedJob(userId, jobPostId);
+    const rejectBelow = patch.rejectSuggestBelowScore;
+    if (rejectBelow !== undefined && rejectBelow >= job.autoOutreachMinScore) {
+      throw rejectAboveThresholdError(job.autoOutreachMinScore);
+    }
+    if (!(await this.repository.updateJobSettings(job.id, patch))) {
+      // X vừa bị hạ ở cài đặt tự mời giữa lúc đọc và lúc ghi (câu UPDATE có điều kiện Y < X).
+      const latest = await this.repository.findJobSettings(job.id);
+      if (!latest) throw new AppError(404, "Job post not found");
+      throw rejectAboveThresholdError(latest.autoOutreachMinScore);
+    }
+    const updated = await this.repository.findJobSettings(job.id);
+    if (!updated) throw new AppError(404, "Job post not found");
+    // Câu chọn của autoReview tự lọc tin không hiển thị; xét PUBLISHED trước chỉ để bớt một câu SQL.
+    if (patch.autoReviewEnabled === true && !job.autoReviewEnabled && updated.status === "PUBLISHED") {
+      this.trigger({ jobPostId: job.id });
+    }
+    return toSettingsDto(updated);
+  }
+
+  /** Tin của người khác hoặc không có ⇒ 404 như không tồn tại (cùng quy tắc với cài đặt tự mời). */
+  private async requireOwnedJob(userId: string, jobPostId: string): Promise<JobAutomationSettingsRow> {
+    const { employerId } = await this.employerIdentityCache.require(userId);
+    const job = await this.repository.findJobSettings(jobPostId);
+    if (!job || job.employerId !== employerId) throw new AppError(404, "Job post not found");
+    return job;
   }
 
   /**
@@ -229,4 +292,18 @@ export class ApplicationAutomationService {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** Y trả về là Y thực dùng (kẹp về X − 1 khi dữ liệu cũ có Y ≥ X), khớp nhóm đề xuất từ chối. */
+function toSettingsDto(job: JobAutomationSettingsRow): JobApplicationAutomationSettings {
+  return {
+    autoReviewEnabled: job.autoReviewEnabled,
+    matchThreshold: job.autoOutreachMinScore,
+    rejectSuggestBelowScore: effectiveRejectThreshold(job.autoOutreachMinScore, job.rejectSuggestBelowScore),
+    autoCloseInterviewedEnabled: job.autoCloseInterviewedEnabled,
+  };
+}
+
+function rejectAboveThresholdError(matchThreshold: number): AppError {
+  return new AppError(400, `Ngưỡng đề xuất từ chối phải nhỏ hơn ngưỡng phù hợp (${matchThreshold}%).`);
 }

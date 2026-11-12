@@ -101,9 +101,29 @@ function scopeWhere(scope: AutomationScope): Prisma.Sql {
   return conditions.length > 0 ? Prisma.join(conditions, " ") : Prisma.empty;
 }
 
+/** Cột cài đặt của tin (bước 6) và các cột để kiểm quyền. */
+const jobAutomationSettingsSelect = {
+  id: true,
+  status: true,
+  employerId: true,
+  autoOutreachMinScore: true,
+  autoReviewEnabled: true,
+  rejectSuggestBelowScore: true,
+  autoCloseInterviewedEnabled: true,
+} satisfies Prisma.JobPostSelect;
+
+export type JobAutomationSettingsRow = Prisma.JobPostGetPayload<{ select: typeof jobAutomationSettingsSelect }>;
+
+export interface JobAutomationSettingsPatch {
+  autoReviewEnabled?: boolean | undefined;
+  rejectSuggestBelowScore?: number | undefined;
+  autoCloseInterviewedEnabled?: boolean | undefined;
+}
+
 /**
- * Chỉ đọc. Mọi lần đổi trạng thái đi qua `ApplicationsService.changeStatusBySystem` (AD-25:
- * một lối duy nhất), module này không tự UPDATE bảng `applications`.
+ * Chỉ đọc bảng `applications`. Mọi lần đổi trạng thái đi qua
+ * `ApplicationsService.changeStatusBySystem` (AD-25: một lối duy nhất). Chỉ ghi 3 cột cài đặt
+ * của `job_posts` (bước 6).
  */
 export class ApplicationAutomationRepository {
   private readonly prisma: PrismaClient;
@@ -199,5 +219,38 @@ export class ApplicationAutomationRepository {
       WHERE b."pendingStale" + b."reviewingStale" + b."awaitingSchedule" + b."needsResult" + b."closingSoon" > 0
       ORDER BY b."companyId"
     `);
+  }
+
+  // ─── Cài đặt theo tin (bước 6) ────────────────────────────────────────────
+
+  findJobSettings(jobPostId: string): Promise<JobAutomationSettingsRow | null> {
+    return this.prisma.jobPost.findUnique({ where: { id: jobPostId }, select: jobAutomationSettingsSelect });
+  }
+
+  /**
+   * Ghi bằng SQL để không đổi `updatedAt` của tin (cùng lý do với `matchScoresAt`, và vì
+   * `updatedAt` là mốc "ngày tin đóng" của tin `EXPIRED`, xem `JOB_CLOSED_AT`). Có Y thì chỉ ghi
+   * khi Y < X tại lúc ghi, chặn trường hợp X vừa bị hạ ở cài đặt tự mời.
+   * Trả `false` khi không ghi được dòng nào (tin không còn, hoặc Y ≥ X).
+   */
+  async updateJobSettings(jobPostId: string, patch: JobAutomationSettingsPatch): Promise<boolean> {
+    const sets: Prisma.Sql[] = [];
+    if (patch.autoReviewEnabled !== undefined) sets.push(Prisma.sql`"autoReviewEnabled" = ${patch.autoReviewEnabled}`);
+    if (patch.rejectSuggestBelowScore !== undefined) {
+      sets.push(Prisma.sql`"rejectSuggestBelowScore" = ${patch.rejectSuggestBelowScore}`);
+    }
+    if (patch.autoCloseInterviewedEnabled !== undefined) {
+      sets.push(Prisma.sql`"autoCloseInterviewedEnabled" = ${patch.autoCloseInterviewedEnabled}`);
+    }
+    if (sets.length === 0) return true;
+    const belowThreshold =
+      patch.rejectSuggestBelowScore !== undefined
+        ? Prisma.sql`AND "autoOutreachMinScore" > ${patch.rejectSuggestBelowScore}`
+        : Prisma.empty;
+    const count = await this.prisma.$executeRaw(Prisma.sql`
+      UPDATE job_posts SET ${Prisma.join(sets, ", ")}
+      WHERE "id" = ${jobPostId} ${belowThreshold}
+    `);
+    return count > 0;
   }
 }

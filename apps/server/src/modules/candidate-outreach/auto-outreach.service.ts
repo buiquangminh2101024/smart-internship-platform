@@ -1,6 +1,7 @@
 import type { CompanyOutreachSettings, JobAutoOutreachDto, MatchResult, OutreachInviteSkipReason } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
 import type { Logger } from "../../shared/logger";
+import type { AutoReviewTrigger } from "../application-automation/application-automation.service";
 import type { EmployerIdentityCache } from "../employers/employer-identity-cache";
 import type { EmployerRepository } from "../employers/employer.repository";
 import type { MatchScoreRepository } from "../match-scores/match-score.repository";
@@ -92,6 +93,7 @@ export class AutoOutreachService {
   private readonly rateLimit: CandidateOutreachRateLimitService;
   private readonly notificationsService: NotificationsService;
   private readonly matchScoreRepository: MatchScoreRepository;
+  private readonly autoReviewTrigger: AutoReviewTrigger;
   private readonly logger: Logger;
 
   constructor({
@@ -104,6 +106,7 @@ export class AutoOutreachService {
     candidateOutreachRateLimitService,
     notificationsService,
     matchScoreRepository,
+    autoReviewTrigger,
     logger,
   }: {
     autoOutreachRepository: AutoOutreachRepository;
@@ -115,6 +118,8 @@ export class AutoOutreachService {
     candidateOutreachRateLimitService: CandidateOutreachRateLimitService;
     notificationsService: NotificationsService;
     matchScoreRepository: MatchScoreRepository;
+    /** 0.4 — lối kích hoạt tự chuyển "Đang xem xét", resolve ApplicationAutomationService lúc gọi. */
+    autoReviewTrigger: AutoReviewTrigger;
     logger: Logger;
   }) {
     this.repository = autoOutreachRepository;
@@ -126,6 +131,7 @@ export class AutoOutreachService {
     this.rateLimit = candidateOutreachRateLimitService;
     this.notificationsService = notificationsService;
     this.matchScoreRepository = matchScoreRepository;
+    this.autoReviewTrigger = autoReviewTrigger;
     this.logger = logger;
   }
 
@@ -152,11 +158,24 @@ export class AutoOutreachService {
       throw new AppError(403, "Tự động mời ứng viên có từ gói Cơ bản. Gói Dùng thử chỉ mời tay.");
     }
 
+    // 0.4 bước 6 — X dùng chung cho tự xử lý hồ sơ, phải lớn hơn Y của tin.
+    if (patch.minScore !== undefined && patch.minScore <= job.rejectSuggestBelowScore) {
+      throw new AppError(
+        400,
+        `Ngưỡng phù hợp phải lớn hơn ngưỡng đề xuất từ chối (${job.rejectSuggestBelowScore}%).`,
+      );
+    }
+
     const reopens = reopensAutoOutreach(toSettings(job), patch);
     const updated = await this.repository.updateJob(job.id, { ...patch, clearExhausted: reopens });
     // Không chờ lượt chạy: trạng thái trả về là của lúc này, frontend đọc lại sau.
     if (reopens && updated.autoOutreachEnabled && updated.status === "PUBLISHED" && policy?.autoAllowed) {
       this.trigger(updated.companyId);
+    }
+    // Hạ X ⇒ hồ sơ Chờ duyệt vừa đạt ngưỡng được tự chuyển ngay (lối 3, bước 4b của 0.4). Không
+    // phụ thuộc công tắc tự mời hay gói: câu chọn tự lọc `autoReviewEnabled` và tin không hiển thị.
+    if (updated.autoOutreachMinScore < job.autoOutreachMinScore && updated.status === "PUBLISHED") {
+      this.autoReviewTrigger({ jobPostId: updated.id });
     }
     return this.toJobDto(updated, policy);
   }
