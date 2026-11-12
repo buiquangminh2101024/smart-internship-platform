@@ -1,6 +1,6 @@
 # Hệ thống tự xử lý hồ sơ chờ lâu (0.4) — Frontend
 
-> **Trạng thái: ĐANG TRIỂN KHAI.** Lập kế hoạch 2026-11-11. Đợt A, đợt B và F6 xong 2026-11-12 (xem "Ghi chú triển khai"). Phụ thuộc backend `docs/06-backend/application-automation/PLAN.md` (bước 1–6); Q1–Q3 ở đó đã chốt 2026-11-12.
+> **Trạng thái: XONG (2026-11-12).** Lập kế hoạch 2026-11-11. Đợt A, đợt B và F6 (kiểm trên trình duyệt) đều xong; kết quả ở "Ghi chú triển khai". Phụ thuộc backend `docs/06-backend/application-automation/PLAN.md` (bước 1–6); Q1–Q3 ở đó đã chốt 2026-11-12.
 >
 > Làm theo 2 đợt, mỗi đợt một commit, rồi kiểm trên trình duyệt một lần. Các bước F1–F6 ở Phần 3 giữ nguyên nội dung; chỉ cách gom bước vào đợt thay đổi (chia lại 2026-11-12):
 >

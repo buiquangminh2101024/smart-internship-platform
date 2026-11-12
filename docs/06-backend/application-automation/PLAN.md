@@ -1,6 +1,6 @@
 # Hệ thống tự xử lý hồ sơ chờ lâu (0.4) — Backend
 
-> **Trạng thái: ĐÃ LẬP KẾ HOẠCH (2026-11-11), CHƯA TRIỂN KHAI.** Q1–Q3 đã chốt 2026-11-12. Chỉ bắt đầu code khi có lệnh.
+> **Trạng thái: XONG BACKEND, BƯỚC 0–9 (2026-11-12).** Lập kế hoạch 2026-11-11, Q1–Q3 chốt 2026-11-12. Kết quả từng bước ở "Ghi chú triển khai". Frontend (`docs/05-frontend/phases/application-automation/PLAN.md`) cũng đã xong F1–F6 cùng ngày.
 
 Mục 0.4 của `docs/01-project/FEATURE_BACKLOG.md`. Quyết định kiến trúc: AD-25 (sửa một phần AD-13). Frontend: `docs/05-frontend/phases/application-automation/PLAN.md`. Nền: AD-24 (bảng điểm), `docs/06-backend/employer-applications/PLAN.md` (trang "Ứng viên", API hàng loạt), AD-16 (lịch sử trạng thái, thông báo trong transaction).
 

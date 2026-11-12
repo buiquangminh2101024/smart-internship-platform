@@ -786,7 +786,7 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 
 **Ngày:** 2026-11-11 · **Phase liên quan:** không thuộc phase đánh số. Mục 0.4 của `docs/01-project/FEATURE_BACKLOG.md`, theo nhận xét của giáo viên ở buổi demo 05/11/2026 ("chờ 40 ngày, 70 ngày rồi vẫn còn đang chờ xử lý", "chưa thấy tính tự động"). Kế hoạch chi tiết: `docs/06-backend/application-automation/PLAN.md`, `docs/05-frontend/phases/application-automation/PLAN.md`.
 
-> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-11, chủ dự án duyệt từng điểm). ĐÃ TRIỂN KHAI BACKEND (2026-11-12), đã chạy và kiểm trên Neon. FRONTEND (F1–F6) CHƯA LÀM.** Ba câu hỏi nhỏ của plan backend (Q1–Q3) đã chốt 2026-11-12. Ghi chú triển khai và số đo ở `docs/06-backend/application-automation/PLAN.md`. Lượt chạy đầu trên Neon đã đổi 387 hồ sơ (258 sang "Đang xem xét", 129 sang "Tin đã đóng"); đo tải lượt 8h30 cho thấy web không chậm đi, nên giữ chạy chung process (mục 9).
+> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-11, chủ dự án duyệt từng điểm). ĐÃ TRIỂN KHAI BACKEND VÀ FRONTEND (2026-11-12): backend đã chạy và kiểm trên Neon, frontend F1–F6 đã kiểm trên trình duyệt.** Ba câu hỏi nhỏ của plan backend (Q1–Q3) đã chốt 2026-11-12. Ghi chú triển khai và số đo ở `docs/06-backend/application-automation/PLAN.md`. Lượt chạy đầu trên Neon đã đổi 387 hồ sơ (258 sang "Đang xem xét", 129 sang "Tin đã đóng"); đo tải lượt 8h30 cho thấy web không chậm đi, nên giữ chạy chung process (mục 9).
 
 **Bối cảnh:** hồ sơ nằm ở "Chờ duyệt" hàng chục ngày mà hệ thống không làm gì; nhà tuyển dụng phải tự mở từng hồ sơ. AD-13 mục 3 cấm hệ thống đổi `ApplicationStatus` và cấm tự sắp danh sách đơn theo điểm. Từ 0.3 (AD-24) đã có bảng điểm lưu sẵn, nên đọc điểm của mọi hồ sơ không còn đắt.
 
@@ -841,3 +841,102 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 - Mọi chỗ liệt kê `ApplicationStatus` phải thêm `JOB_CLOSED`: state machine, `statusCounts`, nhãn ở server và web, câu đếm "Phù hợp" của AD-24, công cụ của chatbot hỗ trợ, bộ sinh dữ liệu demo.
 - Đơn `JOB_CLOSED` không nộp lại được (sửa 2026-11-12 sau bước 0 của plan backend): tin `EXPIRED`, `CLOSED`, `TAKEN_DOWN` hiện không có lối hiển thị lại. Khi có tính năng gia hạn tin (`FEATURE_BACKLOG.md` mục 4) thì cho nộp lại cùng lối với đơn `CANCELLED`.
 - Frontend: trang "Ứng viên", trang hồ sơ theo tin, thẻ cài đặt ở trang tin, form tạo tin, nhãn trạng thái phía ứng viên và Admin, trung tâm thông báo.
+
+## AD-26 — Ứng viên thấy nhiều việc phù hợp, xếp theo ưu tiên (0.5): "Việc làm phù hợp" đọc bảng điểm, điểm trên `/jobs`, job alert tự động, độ hoàn thiện hồ sơ (sửa một phần AD-14)
+
+**Ngày:** 2026-11-12 · **Phase liên quan:** không thuộc phase đánh số. Mục 0.5 của `docs/01-project/FEATURE_BACKLOG.md`, theo nhận xét của giáo viên ở buổi demo 05/11/2026 ("hệ thống sẽ giúp em làm sao tìm được công việc phù hợp với mình nhất", "không phải chỉ có một cái phù hợp mà có rất nhiều cái phù hợp tại vì có quá nhiều tiêu chí", "tự động nó làm"). Kế hoạch chi tiết: `docs/06-backend/job-discovery/PLAN.md`, `docs/05-frontend/phases/job-discovery/PLAN.md`.
+
+> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-12, chủ dự án duyệt từng điểm trong buổi trao đổi). CHƯA TRIỂN KHAI.**
+
+**Bối cảnh:**
+
+- "Việc làm phù hợp" (`JobRecommendationService.getTopMatches`, AD-14) chấm lúc mở trang: SQL lấy ≤ 50 tin đăng trong 30 ngày gần nhất, chấm rule cho cả 50, chấm hybrid lại top 20, trả top 10 có điểm ≥ 20. Hệ quả:
+  - tin đăng quá 30 ngày không bao giờ hiện;
+  - tin có điểm hybrid cao mà điểm rule thấp có thể bị bỏ sót;
+  - thứ tự có thể lệch với điểm nhà tuyển dụng thấy trong bảng điểm (AD-24);
+  - tin đã ứng tuyển vẫn hiện;
+  - mỗi thẻ chỉ có "Phù hợp x%", không có lý do.
+- Từ 0.3 (AD-24) đã có điểm hybrid của mọi cặp (tin đang hiển thị, ứng viên có chung ≥ 1 kỹ năng), nhưng phía ứng viên chưa dùng.
+- `/jobs` chỉ hiện 20 tin đầu (API có `cursor` nhưng trang không có "Xem thêm"), không có điểm phù hợp, không sắp xếp được. Bộ lọc kỹ năng liệt kê toàn bộ danh mục thành chip và buộc tin có **đủ** mọi kỹ năng đã chọn.
+- Chưa có job alert. Ứng viên chưa có kỹ năng nào không nằm trong bảng điểm, nên đứng ngoài mọi tính năng tự động mà không được báo.
+- Thanh độ hoàn thiện (`CompletenessBar`) chỉ hiện sau khi bấm "Phân tích hồ sơ" (gọi LLM, có hạn mức), và lấy số từ bản chụp của lần phân tích trước.
+
+**Quyết định:**
+
+1. **"Việc làm phù hợp" đọc từ bảng điểm của AD-24.**
+   - Lấy các tin đang hiển thị có dòng điểm của ứng viên, xếp theo điểm, **bỏ giới hạn 30 ngày**, có "Xem thêm" thay cho top 10 cố định.
+   - Mỗi trang chấm đầy đủ lại (cùng bộ chấm hybrid) các tin được hiển thị, để có `MatchResult` làm lý do xếp hạng và để điểm phản ánh hồ sơ mới nhất. Điểm hiện trên thẻ là điểm vừa chấm.
+   - **Dự phòng:** ứng viên chưa có dòng nào trong bảng (mới tạo hồ sơ, hoặc vừa thêm kỹ năng đầu tiên mà chưa tới lượt đêm) thì dùng đường chấm trực tiếp hiện có, bỏ giới hạn 30 ngày. Khi 0.6 có chấm lại theo ứng viên thì đường này chỉ còn là lưới an toàn.
+   - **Loại tin đã ứng tuyển** (có đơn ở mọi trạng thái trừ `CANCELLED`) và **tin mà ứng viên đã nhận lời mời** (lời mời `PENDING`, `ACCEPTED`, `DECLINED`; lời mời `EXPIRED` không loại).
+2. **Lý do xếp hạng theo từng tiêu chí** hiện trên mỗi thẻ, lấy từ `MatchResult` đã có: kỹ năng bắt buộc x/y, kỹ năng ưu tiên, kinh nghiệm, học vấn, mức tương đồng nội dung, kỹ năng còn thiếu. Không thêm tiêu chí chấm mới.
+3. **Địa điểm chỉ dùng để lọc, không vào công thức chấm.** Trọng số đã hiệu chỉnh ở GĐ2/GĐ3 giữ nguyên, bảng điểm không phải chấm lại.
+4. **`GET /job-posts` (công khai) nhận token ứng viên nhưng không bắt buộc** (`optionalAuthenticate`).
+   - Khách chưa đăng nhập nhận đúng kết quả như cũ.
+   - Ứng viên đăng nhập nhận thêm trên từng tin: điểm từ bảng điểm, đã lưu, đã ứng tuyển. Họ được dùng `sort=match` và bộ lọc "Chỉ tin phù hợp với tôi" (≥ 70).
+   - Không tách endpoint riêng, để chỉ có một danh sách tin.
+5. **Bộ lọc mới ở `/jobs`, chỉ dựa trên cột đã có:**
+   - kinh nghiệm yêu cầu (`minExperienceYears`);
+   - lương: có ghi rõ / thoả thuận;
+   - kỹ năng: "có ít nhất một" hoặc "đủ tất cả";
+   - từ khoá tìm cả trong tên kỹ năng của tin;
+   - kèm tổng số kết quả.
+
+   Không thêm cột mới cho tin (hình thức làm việc, cấp bậc). Không làm tìm không dấu, vì cần `unaccent` hoặc cột chuẩn hoá, tức là thay đổi hạ tầng DB, nên làm riêng.
+6. **Job alert tự động dựa trên bảng điểm**, ứng viên không phải lưu bộ lọc:
+   - Khi tin chuyển `PUBLISHED` và lối (a) của AD-24 chấm xong tin đó, hệ thống báo cho ứng viên có điểm ≥ **max(ngưỡng tự mời của tin, 70)**. Lượt chấm đêm **không** sinh báo: chỉ tin mới được báo.
+   - Bỏ qua: ứng viên đã ứng tuyển hoặc đã nhận lời mời của tin đó (cùng quy tắc mục 1); ứng viên tắt job alert; tin khác thành phố nếu ứng viên bật "chỉ thành phố của tôi".
+   - Mỗi cặp (ứng viên, tin) chỉ được báo một lần, ghi ở bảng mới `job_alerts`.
+   - **Thông báo trong ứng dụng gửi ngay nhưng gộp theo ngày.** Mỗi ứng viên có một thông báo `JOB_ALERT` mỗi ngày. Các tin tiếp theo trong ngày **cập nhật** thông báo đó ("N tin mới phù hợp với bạn"), đánh dấu lại là chưa đọc và đẩy realtime. Đây là lối mới của module `notifications`, vì `dedupeKey` hiện chỉ bỏ qua bản trùng.
+   - **Email gộp mỗi ngày một lần** (8h giờ Việt Nam), liệt kê các tin mới chưa gửi email, chỉ gửi khi có tin. Đi qua outbox (AD-8) như mọi email khác.
+   - **Bật sẵn** cho mọi ứng viên, tắt được trong Cài đặt (job alert, email job alert, chỉ thành phố của tôi). Khác lời mời của AD-15 (phải tự bật), vì job alert không công khai gì của ứng viên.
+7. **Nhắc một lần cho ứng viên chưa có kỹ năng:** thông báo `PROFILE_SKILLS_REMINDER` kèm email, gửi một lần duy nhất cho mỗi ứng viên (khoá `dedupeKey` theo ứng viên), cho tài khoản đã tạo từ 24 giờ trở lên mà chưa có kỹ năng nào.
+8. **Độ hoàn thiện hồ sơ tính bằng code, luôn hiện, không gọi LLM.**
+   - Endpoint riêng, tính trực tiếp mỗi lần gọi, không đọc bản chụp `CandidateProfileInsight`.
+   - **Tám mục, chia theo hậu quả khi thiếu** (chốt 2026-11-13):
+
+     | Nhóm | Mục | Trọng số |
+     |---|---|---|
+     | Cửa vào: thiếu là mất hẳn một tính năng | Kỹ năng (không có gợi ý, báo tin, không được tìm thấy) | 30 |
+     | | CV (nộp đơn bắt buộc chọn CV) | 15 |
+     | | Bật cho nhà tuyển dụng liên hệ (không nhận lời mời, kể cả tự động) | 10 |
+     | Ảnh hưởng điểm phù hợp (trọng số `hybrid-v2`: kỹ năng ≈ 43%, nội dung 40%, kinh nghiệm ≈ 13%, học vấn ≈ 4%) | Kinh nghiệm | 10 |
+     | | Dự án (vào văn bản nội dung; với sinh viên thường thay cho kinh nghiệm) | 10 |
+     | | Tiêu đề và giới thiệu (vào văn bản nội dung) | 10 |
+     | | Học vấn **có chọn ngành trong danh mục** (không chọn ngành thì bộ chấm coi như chưa có) | 10 |
+     | Chỉ dùng để lọc | Thành phố | 5 |
+
+     Thứ tự giữa các nhóm có căn cứ trong code; con số trong từng nhóm là **số do thiết kế, không có nguồn**.
+   - **"Nên làm trước" theo từng ứng viên:** một mục còn thiếu được chọn từ chính các tin hợp nhất với ứng viên (trang đầu "Việc làm phù hợp"). Thứ tự: thiếu kỹ năng thì luôn là kỹ năng; sau đó mục mà ≥ 3/10 tin hợp nhất cần nhưng hồ sơ chưa có dữ liệu (tin yêu cầu kinh nghiệm mà kinh nghiệm `UNKNOWN`; tin ghi ngành mà học vấn `UNKNOWN`), kèm số tin làm bằng chứng; không có thì mục thiếu có trọng số cao nhất. Tính bằng code từ `MatchResult`, không gọi LLM.
+   - **Lời khuyên nói "giúp điểm chính xác hơn", không hứa "tăng điểm":** theo AD-13, mục thiếu bị bỏ ra khỏi công thức, nên khai ngành khác hoặc ít năm hơn tin yêu cầu có thể làm điểm giảm.
+   - Độ hoàn thiện **chỉ để hiển thị**, không ảnh hưởng điểm phù hợp hay độ tin cậy. Giữ D10 của candidate-insights và quy tắc "thiếu dữ liệu không trừ điểm" của AD-13. Độ tin cậy của bộ chấm vẫn tính trên bốn cờ cũ của `CandidateMatchProfile.completeness`; tám mục mới tính riêng, không sửa cờ đó.
+   - Gợi ý thiếu kỹ năng và lệch ngành (`SKILL_GAP`, `INDUSTRY_MISMATCH`, do code tạo) hiện ở trang "Việc làm phù hợp", tính từ danh sách đang xem.
+
+**Sửa so với AD-14:**
+
+- "Việc làm phù hợp" không còn chấm toàn bộ lúc mở trang và không còn giới hạn 30 ngày (mục 1). `getTopMatches`, mà trợ lý hồ sơ đang dùng, đi cùng lối mới để hai nơi ra cùng một danh sách.
+- "Phân tích hồ sơ" thu hẹp về phần LLM làm: đổi tên thành "Nhận xét cách viết hồ sơ (AI)", thẻ kết quả chỉ hiện điểm mạnh và gợi ý cách viết. Điểm độ hoàn thiện và gợi ý do code tạo chuyển ra ngoài (mục 8). Backend của chức năng phân tích và hạn mức giữ nguyên; không xoá cột hay dữ liệu đã lưu.
+- Phần còn lại của AD-14 ("LLM chỉ diễn đạt", không gọi LLM ở "Việc làm phù hợp") giữ nguyên.
+
+**Phương án không chọn:**
+
+- *Giữ chấm trực tiếp, chỉ nới giới hạn 30 ngày:* vẫn chỉ xét 50 tin, vẫn lệch điểm với phía nhà tuyển dụng, không phân trang được.
+- *Đưa địa điểm vào công thức chấm:* phải hiệu chỉnh lại trọng số đã có căn cứ ở GĐ2/GĐ3 và chấm lại cả bảng. Lọc là đủ cho nhu cầu "tìm việc gần nhà".
+- *Job alert theo bộ lọc ứng viên tự lưu (kiểu TopCV):* chỉ là khớp điều kiện, ứng viên phải tự tạo, không thể hiện được phần tự động. Để lại ở backlog mục 3.
+- *Ngưỡng báo dùng thẳng ngưỡng của tin:* nhà tuyển dụng hạ ngưỡng thấp thì ứng viên nhận tin rác. *Ngưỡng riêng hoàn toàn:* có hai nghĩa "phù hợp". Chọn ngưỡng của tin, có sàn 70.
+- *Mỗi tin một thông báo và một email:* Admin duyệt nhiều tin cùng lúc thì thành spam.
+- *Endpoint danh sách tin riêng cho ứng viên:* hai danh sách, hai bộ lọc phải giữ khớp nhau.
+- *Đưa độ hoàn thiện vào điểm:* điểm đo độ hợp giữa hồ sơ và một tin, không đo hồ sơ tốt hay dở.
+
+**Ảnh hưởng:**
+
+- `schema.prisma` + 1 migration viết tay:
+  - `NotificationType.JOB_ALERT`, `NotificationType.PROFILE_SKILLS_REMINDER`;
+  - `Candidate.jobAlertEnabled`, `Candidate.jobAlertEmailEnabled`, `Candidate.jobAlertSameCityOnly`;
+  - bảng `job_alerts`;
+  - index `(candidateId, score)` trên `job_candidate_match_scores`.
+- `job-matching`: "Việc làm phù hợp" đọc bảng điểm, có phân trang và lý do; `getTopMatches` đi cùng lối.
+- `job-posts`: `GET /job-posts` có `optionalAuthenticate`, thông tin theo người xem, `sort=match`, bộ lọc mới, tổng số.
+- `candidate-insights`: endpoint độ hoàn thiện.
+- Module mới `apps/server/src/modules/job-alerts/` (service, repository, cron email hằng ngày, cron nhắc một lần, API cài đặt, script chạy tay). `match-scores` gọi job alert sau lối (a). `notifications` thêm lối cập nhật thông báo gộp theo ngày.
+- `packages/shared-types`: kiểu mới cho danh sách gợi ý, thông tin theo người xem, độ hoàn thiện, cài đặt job alert.
+- Frontend: "Việc làm phù hợp", `/jobs`, `/profile`, Cài đặt, trung tâm thông báo, FAQ của chatbot hỗ trợ.
