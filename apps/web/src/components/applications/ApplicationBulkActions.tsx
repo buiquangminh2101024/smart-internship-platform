@@ -29,12 +29,16 @@ export function ApplicationBulkActions({
   counts,
   busy,
   onAction,
+  only,
 }: {
   counts: BulkCounts;
   /** Thao tác đang chạy: khoá cả thanh. */
   busy: BulkAction | null;
   onAction: (action: BulkAction) => void;
+  /** Chỉ hiện các nút này, theo đúng thứ tự (nhóm đề xuất từ chối, AD-25). */
+  only?: BulkAction[] | undefined;
 }) {
+  const buttons = only ? only.flatMap((action) => BUTTONS.filter((button) => button.action === action)) : BUTTONS;
   const scheduleOver = counts.SCHEDULE > BATCH_MAX;
   return (
     <>
@@ -45,7 +49,7 @@ export function ApplicationBulkActions({
         </span>
       ) : null}
       <div className="flex flex-wrap gap-2 max-[480px]:basis-full">
-        {BUTTONS.map(({ action, label, icon, noneReason }) => {
+        {buttons.map(({ action, label, icon, noneReason }) => {
           const count = counts[action];
           const reason =
             count === 0

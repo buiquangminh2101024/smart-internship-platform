@@ -12,6 +12,7 @@ import type {
   BulkUpdateApplicationStatusRequest,
   BulkUpdateApplicationStatusResult,
   EmployerApplicationsPage,
+  EmployerApplicationsFocus,
   EmployerApplicationsSort,
 } from "@sip/shared-types";
 
@@ -125,6 +126,8 @@ export const COMPANY_APPLICATIONS_PAGE_SIZE = 20;
 
 export interface CompanyApplicationsQuery {
   status: ApplicationStatus | null;
+  /** Nhóm gợi ý (AD-25). Có `focus` thì `status` là null (API không nhận cả hai). */
+  focus: EmployerApplicationsFocus | null;
   jobPostId: string | null;
   /** Đã cắt khoảng trắng; rỗng ⇒ không tìm. */
   q: string;
@@ -132,9 +135,10 @@ export interface CompanyApplicationsQuery {
   page: number;
 }
 
-function companyApplicationsUrl({ status, jobPostId, q, sort, page }: CompanyApplicationsQuery): string {
+function companyApplicationsUrl({ status, focus, jobPostId, q, sort, page }: CompanyApplicationsQuery): string {
   const params = new URLSearchParams({ sort, page: String(page), pageSize: String(COMPANY_APPLICATIONS_PAGE_SIZE) });
-  if (status) params.set("status", status);
+  if (focus) params.set("focus", focus);
+  else if (status) params.set("status", status);
   if (jobPostId) params.set("jobPostId", jobPostId);
   if (q) params.set("q", q);
   return `/employer/applications?${params}`;

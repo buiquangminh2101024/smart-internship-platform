@@ -51,6 +51,7 @@ export function markAllNotificationsRead(area: AuthArea): Promise<{ updated: num
 export const NOTIFICATION_GROUP_BY_TYPE: Record<NotificationType, NotificationGroup> = {
   APPLICATION_STATUS_CHANGED: "APPLICATIONS",
   APPLICATION_RECEIVED: "APPLICATIONS",
+  APPLICATIONS_NEED_ATTENTION: "APPLICATIONS",
   JOB_POST_APPROVED: "JOB_POSTS",
   JOB_POST_REJECTED: "JOB_POSTS",
   JOB_POST_TAKEN_DOWN: "JOB_POSTS",
@@ -95,6 +96,8 @@ export const NOTIFICATION_GROUP_META: Record<NotificationGroup, { label: string;
 export const NOTIFICATION_ACTION_LABEL: Record<NotificationType, string> = {
   APPLICATION_STATUS_CHANGED: "Xem hồ sơ ứng tuyển",
   APPLICATION_RECEIVED: "Xem hồ sơ",
+  // Nhắc hằng tuần (AD-25): link do server dựng theo ý đầu tiên khác 0.
+  APPLICATIONS_NEED_ATTENTION: "Xem hồ sơ",
   JOB_POST_APPROVED: "Xem tin",
   JOB_POST_REJECTED: "Sửa tin",
   JOB_POST_TAKEN_DOWN: "Xem chi tiết",

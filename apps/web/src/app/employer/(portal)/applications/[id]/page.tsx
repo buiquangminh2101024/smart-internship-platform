@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import type { ApplicationStatus } from "@sip/shared-types";
+import { APPLICATION_STATUS_LABEL, isFinalApplicationStatus } from "@/lib/application-status";
 
 export default function EmployerApplicationDetailPage() {
   const params = useParams();
@@ -54,18 +55,21 @@ export default function EmployerApplicationDetailPage() {
 
   if (isLoading) return <div className="p-10">Đang tải...</div>;
   if (isError || !application) return <div className="p-10">Lỗi không tìm thấy ứng viên.</div>;
+  // Trạng thái cuối (gồm Tin đã đóng) không chuyển tiếp được; server cũng chặn.
+  const isFinal = isFinalApplicationStatus(application.status);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
         <Button variant="secondary" onClick={() => router.back()}>Quay lại danh sách</Button>
         <h1 className="text-2xl font-bold">Chi tiết ứng viên</h1>
-        <Badge tone={
-          application.status === "ACCEPTED" ? "success" :
-          application.status === "REJECTED" || application.status === "CANCELLED" ? "danger" :
-          application.status === "PENDING" ? "warning" : "info"
-        }>{application.status}</Badge>
+        <Badge tone={APPLICATION_STATUS_LABEL[application.status].tone}>
+          {APPLICATION_STATUS_LABEL[application.status].label}
+        </Badge>
       </div>
+      {application.status === "JOB_CLOSED" ? (
+        <p className="text-sm text-text-muted">Tin đã ngừng nhận hồ sơ. Hồ sơ này không đổi trạng thái được nữa.</p>
+      ) : null}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 space-y-6">
@@ -116,11 +120,11 @@ export default function EmployerApplicationDetailPage() {
           <Card padding="md">
             <h3 className="font-bold mb-4">Chuyển trạng thái</h3>
             <div className="grid grid-cols-1 gap-2">
-              <Button disabled={application.status === "REVIEWING"} variant="secondary" onClick={() => handleStatusChange("REVIEWING")}>Đang xem xét</Button>
-              <Button disabled={application.status === "SHORTLISTED"} variant="secondary" onClick={() => handleStatusChange("SHORTLISTED")}>Lọt vào vòng trong</Button>
-              <Button disabled={application.status === "INTERVIEWING"} variant="secondary" onClick={() => handleStatusChange("INTERVIEWING")}>Phỏng vấn</Button>
-              <Button disabled={application.status === "ACCEPTED"} variant="primary" onClick={() => handleStatusChange("ACCEPTED")}>Nhận (Accepted)</Button>
-              <Button disabled={application.status === "REJECTED"} variant="danger" onClick={() => handleStatusChange("REJECTED")}>Từ chối (Rejected)</Button>
+              <Button disabled={isFinal || application.status === "REVIEWING"} variant="secondary" onClick={() => handleStatusChange("REVIEWING")}>Đang xem xét</Button>
+              <Button disabled={isFinal || application.status === "SHORTLISTED"} variant="secondary" onClick={() => handleStatusChange("SHORTLISTED")}>Lọt vào vòng trong</Button>
+              <Button disabled={isFinal || application.status === "INTERVIEWING"} variant="secondary" onClick={() => handleStatusChange("INTERVIEWING")}>Phỏng vấn</Button>
+              <Button disabled={isFinal || application.status === "ACCEPTED"} variant="primary" onClick={() => handleStatusChange("ACCEPTED")}>Nhận (Accepted)</Button>
+              <Button disabled={isFinal || application.status === "REJECTED"} variant="danger" onClick={() => handleStatusChange("REJECTED")}>Từ chối (Rejected)</Button>
             </div>
             
             <hr className="my-4" />

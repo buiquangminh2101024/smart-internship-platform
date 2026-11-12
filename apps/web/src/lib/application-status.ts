@@ -15,6 +15,8 @@ export const APPLICATION_STATUS_LABEL: Record<ApplicationStatus, { label: string
   ACCEPTED: { label: "Được nhận", tone: "success" },
   REJECTED: { label: "Bị từ chối", tone: "danger" },
   CANCELLED: { label: "Đã huỷ", tone: "neutral" },
+  // Hệ thống đặt khi tin ngừng tuyển (AD-25). Không phải bị từ chối nên không dùng đỏ.
+  JOB_CLOSED: { label: "Tin đã đóng", tone: "neutral" },
 };
 
 /** Thứ tự theo state machine (H3 plan backend `employer-applications`). */
@@ -26,9 +28,10 @@ export const APPLICATION_STATUSES: ApplicationStatus[] = [
   "ACCEPTED",
   "REJECTED",
   "CANCELLED",
+  "JOB_CLOSED",
 ];
 
 /** Trạng thái cuối: không chuyển tiếp được nữa. */
 export function isFinalApplicationStatus(status: ApplicationStatus): boolean {
-  return status === "ACCEPTED" || status === "REJECTED" || status === "CANCELLED";
+  return status === "ACCEPTED" || status === "REJECTED" || status === "CANCELLED" || status === "JOB_CLOSED";
 }

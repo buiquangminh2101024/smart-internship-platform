@@ -15,6 +15,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { CandidateInterview, JobPostStatus } from "@sip/shared-types";
 import { JOB_STATUS_LABEL } from "@/lib/job-post-display";
+import { APPLICATION_STATUS_LABEL } from "@/lib/application-status";
 
 const INACTIVE_JOB_STATUSES: ReadonlySet<JobPostStatus> = new Set(["CLOSED", "EXPIRED", "TAKEN_DOWN"]);
 
@@ -123,12 +124,13 @@ export default function ApplicationsPage() {
                           Tin {JOB_STATUS_LABEL[app.jobPost.status].label.toLowerCase()}
                         </Badge>
                       ) : null}
-                      <Badge tone={
-                        app.status === "ACCEPTED" ? "success" :
-                          app.status === "REJECTED" || app.status === "CANCELLED" ? "danger" :
-                            app.status === "PENDING" ? "warning" : "info"
-                      }>{app.status}</Badge>
+                      <Badge tone={APPLICATION_STATUS_LABEL[app.status].tone}>
+                        {APPLICATION_STATUS_LABEL[app.status].label}
+                      </Badge>
                     </div>
+                    {app.status === "JOB_CLOSED" ? (
+                      <p className="text-sm text-text-muted">Tin đã ngừng nhận hồ sơ.</p>
+                    ) : null}
 
                     <div className="flex gap-2">
                       {!jobInactive ? (

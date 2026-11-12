@@ -1,18 +1,18 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import type { EmployerApplicationJobCount, EmployerApplicationsSort } from "@sip/shared-types";
 import { JOB_STATUS_LABEL } from "@/lib/job-post-display";
 import { formatNumber } from "@/lib/dashboard-format";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { Icon } from "@/components/ui/Icon";
 import { SEARCH_MIN_LENGTH, normalizeSearch } from "./useApplicationsPageParams";
 
 const SEARCH_DEBOUNCE_MS = 300;
 
 const SORT_OPTIONS: { value: EmployerApplicationsSort; label: string }[] = [
+  // AD-25: điểm phù hợp lưu sẵn (AD-24), hồ sơ chưa có điểm xếp cuối.
+  { value: "match", label: "Phù hợp nhất" },
   { value: "oldest", label: "Nộp lâu nhất trước" },
   { value: "newest", label: "Mới nhất trước" },
   // D10: "khớp kỹ năng" — không gọi là "độ phù hợp" (điểm của Job Matcher).
@@ -122,16 +122,6 @@ export function ApplicationsToolbar({
           />
         </div>
       </div>
-      {jobPostId ? (
-        // Q1: điểm phù hợp chỉ tính theo từng tin, nên sắp theo điểm nằm ở trang hồ sơ của tin.
-        <Link
-          href={`/employer/jobs/${jobPostId}/applications`}
-          className="inline-flex w-fit items-center gap-1 text-[13px] font-semibold text-brand-700 hover:underline"
-        >
-          Xếp theo độ phù hợp
-          <Icon name="arrow-right" size={14} />
-        </Link>
-      ) : null}
     </div>
   );
 }

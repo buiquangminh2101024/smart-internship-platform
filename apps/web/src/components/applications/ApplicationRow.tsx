@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { ApplicationSkillMatch, EmployerApplicationListItem } from "@sip/shared-types";
+import type { ApplicationSkillMatch, EmployerApplicationListItem, EmployerApplicationsFocus } from "@sip/shared-types";
 import { APPLICATION_STATUS_LABEL, isFinalApplicationStatus } from "@/lib/application-status";
 import { JOB_STATUS_LABEL } from "@/lib/job-post-display";
 import { formatVnDayMonth, formatVnTime, formatWaited, initialsOf, waitedOverDays } from "@/lib/dashboard-format";
@@ -10,12 +10,20 @@ import { Icon } from "@/components/ui/Icon";
 import { DashButton } from "@/components/dashboard/DashButton";
 import { TaskBadge } from "@/components/dashboard/TaskGroup";
 import { RowCheckbox } from "@/components/interviews/SelectionBar";
+import { MatchScoreBadge } from "@/components/jobs/MatchScoreBadge";
 
 /** Thao tác chính của một hồ sơ; "Từ chối" đi riêng vì luôn hỏi xác nhận. */
 export type RowAction = "REVIEWING" | "SHORTLISTED" | "SCHEDULE" | "ACCEPTED";
 
-/** Nút chính theo state machine (H3): chỉ những bước API cho phép. */
-export function primaryActionOf(item: EmployerApplicationListItem): RowAction | null {
+/**
+ * Nút chính theo state machine (H3): chỉ những bước API cho phép. Nhóm "Cần kết quả"
+ * (`focus=result`, AD-25): hồ sơ Mời phỏng vấn đã phỏng vấn thì nút chính là "Được nhận".
+ */
+export function primaryActionOf(
+  item: EmployerApplicationListItem,
+  focus: EmployerApplicationsFocus | null = null,
+): RowAction | null {
+  if (focus === "result" && item.status === "INTERVIEWING" && item.needsResult) return "ACCEPTED";
   switch (item.status) {
     case "PENDING":
       return "REVIEWING";
@@ -39,6 +47,20 @@ const ACTION_BUTTON: Record<RowAction, { label: string; icon: string }> = {
 
 export function candidateName(item: EmployerApplicationListItem): string {
   return item.candidate.fullName?.trim() || "Ứng viên chưa đặt tên";
+}
+
+const NO_SCORE_HINT = "Điểm chỉ có ở tin đang hiển thị và ứng viên có kỹ năng chung với tin.";
+
+/** Điểm phù hợp lưu sẵn (AD-24, AD-25). Khác "Khớp kỹ năng" (D10): hai tên không dùng lẫn. */
+export function MatchScoreText({ score }: { score: number | null }) {
+  if (score === null) {
+    return (
+      <span className="whitespace-nowrap text-text-muted" title={NO_SCORE_HINT}>
+        Chưa có điểm
+      </span>
+    );
+  }
+  return <MatchScoreBadge score={score} status="SCORED" />;
 }
 
 /** "Khớp 3/4 kỹ năng bắt buộc · 1/2 nên có" (D10). Chỉ là số, không đánh giá tốt / xấu. */
@@ -87,6 +109,8 @@ export interface ApplicationRowProps {
   locked: boolean;
   /** Thao tác đang chạy trên hồ sơ này. */
   busy: RowAction | "REJECTED" | null;
+  /** Nhóm gợi ý đang xem (AD-25), null ở chế độ tab thường. */
+  focus: EmployerApplicationsFocus | null;
   onToggle: (checked: boolean) => void;
   onAction: (action: RowAction) => void;
   onReject: () => void;
@@ -151,12 +175,32 @@ function Applied({ item, highlightWait }: { item: EmployerApplicationListItem; h
   );
 }
 
-function Status({ item, note }: { item: EmployerApplicationListItem; note?: string | undefined }) {
+function Status({
+  item,
+  note,
+  focus,
+}: {
+  item: EmployerApplicationListItem;
+  note?: string | undefined;
+  focus: EmployerApplicationsFocus | null;
+}) {
   const status = APPLICATION_STATUS_LABEL[item.status];
   return (
     <div className="flex flex-col items-start gap-1">
       <Badge tone={status.tone}>{status.label}</Badge>
-      {item.nextInterviewAt ? (
+      {item.changedBySystem ? (
+        // Lần đổi gần nhất do hệ thống làm (AD-25): tự chuyển Đang xem xét hoặc tự đóng khi tin ngừng tuyển.
+        <TaskBadge tone="neutral">
+          <Icon name="settings" size={14} className="mr-1" />
+          {item.status === "JOB_CLOSED" ? "Hệ thống tự đóng" : "Hệ thống tự chuyển"}
+        </TaskBadge>
+      ) : null}
+      {focus === "result" && item.needsResult && item.lastInterviewAt ? (
+        <span className="inline-flex items-center gap-1 whitespace-nowrap text-text-muted">
+          <Icon name="calendar-check" size={14} />
+          Phỏng vấn {formatWaited(item.lastInterviewAt)} trước
+        </span>
+      ) : item.nextInterviewAt ? (
         <span className="inline-flex items-center gap-1 whitespace-nowrap text-text-muted">
           <Icon name="calendar" size={14} />
           Phỏng vấn{" "}
@@ -177,8 +221,8 @@ function Status({ item, note }: { item: EmployerApplicationListItem; note?: stri
   );
 }
 
-function Actions({ item, busy, locked, onAction, onReject }: ApplicationRowProps) {
-  const action = primaryActionOf(item);
+function Actions({ item, busy, locked, focus, onAction, onReject }: ApplicationRowProps) {
+  const action = primaryActionOf(item, focus);
   const name = candidateName(item);
   const disabled = busy !== null || locked;
   return (
@@ -213,7 +257,7 @@ function Actions({ item, busy, locked, onAction, onReject }: ApplicationRowProps
 
 /** Một hồ sơ trong bảng (≥ 768px). */
 export function ApplicationTableRow(props: ApplicationRowProps) {
-  const { item, note, showJob, highlightWait, selected } = props;
+  const { item, note, showJob, highlightWait, selected, focus } = props;
   return (
     <tr className={`border-b border-border-subtle align-top last:border-0 ${selected ? "bg-brand-50" : ""}`}>
       <td className="w-12 py-3 pr-0 pl-3">
@@ -228,10 +272,13 @@ export function ApplicationTableRow(props: ApplicationRowProps) {
         </td>
       ) : null}
       <td className="py-3 pr-3">
-        <Status item={item} note={note} />
+        <Status item={item} note={note} focus={focus} />
       </td>
       <td className="py-3 pr-3">
         <Applied item={item} highlightWait={highlightWait} />
+      </td>
+      <td className="py-3 pr-3">
+        <MatchScoreText score={item.matchScore} />
       </td>
       <td className="min-w-[130px] py-3 pr-3">
         <SkillMatchText match={item.skillMatch} />
@@ -247,7 +294,7 @@ export function ApplicationTableRow(props: ApplicationRowProps) {
 
 /** Một hồ sơ dạng thẻ (< 768px): ô chọn ở góc, nút ở dòng cuối. */
 export function ApplicationCard(props: ApplicationRowProps) {
-  const { item, note, showJob, highlightWait, selected } = props;
+  const { item, note, showJob, highlightWait, selected, focus } = props;
   return (
     <li
       className={`flex flex-col gap-2 rounded-lg border p-3 ${
@@ -271,8 +318,9 @@ export function ApplicationCard(props: ApplicationRowProps) {
         ) : null}
         <Applied item={item} highlightWait={highlightWait} />
       </p>
-      <Status item={item} note={note} />
-      <p>
+      <Status item={item} note={note} focus={focus} />
+      <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <MatchScoreText score={item.matchScore} />
         <SkillMatchText match={item.skillMatch} />
       </p>
       <div className="flex flex-wrap items-center gap-2 border-t border-border-subtle pt-2">

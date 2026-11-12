@@ -1,12 +1,17 @@
 # Hệ thống tự xử lý hồ sơ chờ lâu (0.4) — Frontend
 
-> **Trạng thái: ĐÃ LẬP KẾ HOẠCH (2026-11-11), CHƯA TRIỂN KHAI.** Chờ chủ dự án duyệt. Phụ thuộc backend `docs/06-backend/application-automation/PLAN.md` (bước 1–6); Q1–Q3 ở đó đã chốt 2026-11-12.
+> **Trạng thái: ĐANG TRIỂN KHAI.** Lập kế hoạch 2026-11-11. Đợt A xong 2026-11-12 (xem "Ghi chú triển khai"); đợt B và F6 chưa làm. Phụ thuộc backend `docs/06-backend/application-automation/PLAN.md` (bước 1–6); Q1–Q3 ở đó đã chốt 2026-11-12.
 >
-> Làm theo 2 đợt, mỗi đợt một commit, rồi kiểm trên trình duyệt một lần:
+> Làm theo 2 đợt, mỗi đợt một commit, rồi kiểm trên trình duyệt một lần. Các bước F1–F6 ở Phần 3 giữ nguyên nội dung; chỉ cách gom bước vào đợt thay đổi (chia lại 2026-11-12):
 >
-> - **Đợt A = F1 + F2 + F3**: nhãn trạng thái mới, trang "Ứng viên", trang hồ sơ theo tin. F1 đi trước vì thiếu nhãn `JOB_CLOSED` thì `tsc` của web không qua.
-> - **Đợt B = F4 + F5**: cài đặt theo tin và thông báo nhắc.
-> - **F6** sau cả hai đợt.
+> | Đợt | Gồm | Lý do |
+> |---|---|---|
+> | A1 | F1 + phần kiểu của F5 (nhóm `APPLICATIONS`, nhãn nút "Xem hồ sơ" trong `lib/notifications.ts`) | Sau bước 7 backend, `tsc` của web còn 4 lỗi thiếu khoá: 2 lỗi `JOB_CLOSED` (F1), 2 lỗi `APPLICATIONS_NEED_ATTENTION` (F5). Gộp lại để `tsc` sạch trước khi làm tiếp. |
+> | A2 | F2 + F3 | Cùng là danh sách hồ sơ, dùng chung `MatchScoreBadge`, nhãn trạng thái, kiểu sắp "Phù hợp nhất". Link "Xử lý hồ sơ của tin này" ở F3 dẫn sang trang F2, làm chung thì kiểm được luôn. |
+> | B | F4 + phần còn lại của F5 (icon trong `NotificationCenter`, làm mới ở `SocketProvider`) | Phải sau F2: lưu cài đặt ở F4 làm mới danh sách cấp công ty; link `?focus=result` trong thông báo nhắc chỉ mở đúng khi trang F2 đã đọc `focus`. |
+> | Cuối | F6, gồm cập nhật FAQ (mục 10) | Cần đủ giao diện. |
+>
+> Bản chia đầu (2026-11-11): đợt A = F1 + F2 + F3, đợt B = F4 + F5, F6 sau cả hai. Đợt A mới vẫn là một commit (A1 + A2).
 
 Mục 0.4 của `docs/01-project/FEATURE_BACKLOG.md`. Quyết định kiến trúc: AD-25.
 
@@ -141,7 +146,36 @@ Với một công ty của bộ demo lớn do chủ dự án chỉ định (thao
 
 ## Ghi chú triển khai
 
-<!-- Điền khi triển khai. -->
+### Đợt A (2026-11-12): A1 = F1 + kiểu của F5, A2 = F2 + F3
+
+Kiểm: `tsc --noEmit` sạch (trước đợt A còn 4 lỗi), eslint các file đã sửa không có lỗi mới (còn 3 cảnh báo có từ trước ở `(candidate)/applications/page.tsx` và `jobs/[id]/page.tsx`), `next build` qua. Chưa xem trên trình duyệt: để ở F6 (không tự bật server vì khởi động sẽ ghi lên Neon).
+
+**A1:**
+
+- `lib/application-status.ts`: `JOB_CLOSED` "Tin đã đóng", tone `neutral`, đứng cuối danh sách tab; `isFinalApplicationStatus` trả `true`. `UserDetailSections.tsx` thêm cùng nhãn.
+- `lib/notifications.ts`: `APPLICATIONS_NEED_ATTENTION` thuộc nhóm `APPLICATIONS`, nút "Xem hồ sơ". Icon và làm mới ở `SocketProvider` để đợt B.
+- Trang hồ sơ của ứng viên `(candidate)/applications`: nhãn lấy từ `APPLICATION_STATUS_LABEL` (trước đây in thẳng mã `PENDING`, `REJECTED`…). Vì vậy tone đổi theo bảng chung: Đang xem xét từ `info` sang `brand`, Đã huỷ từ đỏ sang xám. Đơn `JOB_CLOSED` có dòng phụ "Tin đã ngừng nhận hồ sơ.".
+- Trang chi tiết hồ sơ của employer `applications/[id]`: nhãn tiếng Việt như trên; hồ sơ ở trạng thái cuối (gồm Tin đã đóng) thì khoá mọi nút chuyển trạng thái (server vốn đã chặn). Đơn `JOB_CLOSED` có dòng "Tin đã ngừng nhận hồ sơ. Hồ sơ này không đổi trạng thái được nữa.".
+- `jobs/[id]`: nút ứng tuyển ghi "Tin đã đóng" (bị khoá như các đơn khác), không có lối nộp lại.
+
+**A2 — F2:**
+
+- `useApplicationsPageParams` đọc `focus` (`reject` | `result`, giá trị lạ bỏ qua). Có `focus` thì bỏ qua `status`, vì API trả 400 khi có cả hai. `defaultSortFor(status, focus)` khớp `defaultSort` của backend: có `focus` ⇒ `oldest`; Chờ duyệt, Đang xem xét ⇒ `match`; còn lại `newest`.
+- Ô sắp xếp thêm "Phù hợp nhất" ở đầu. Đã bỏ link "Xếp theo độ phù hợp".
+- Cột "Phù hợp" đứng trước "Khớp kỹ năng" (`MatchScoreText` trong `ApplicationRow.tsx`, dùng `MatchScoreBadge`; `null` ⇒ "Chưa có điểm" kèm `title`). Màn hẹp: điểm đứng đầu dòng "Khớp kỹ năng".
+- Nhãn "Hệ thống tự chuyển" / "Hệ thống tự đóng" khi `changedBySystem`. `TaskBadge` thêm tone `neutral` (`surface-hover` + `text-muted`) cho nhãn này. Hồ sơ vừa được người dùng đổi trong phiên thì nhãn mất ngay (đặt `changedBySystem` về false ở hàng đã xử lý).
+- Dải gợi ý: thẻ `ul` gồm các dòng viền trái marigold kèm nút "Xem", xếp dọc dưới 1024px. Chỉ hiện khi không ở chế độ `focus` và nhóm có số > 0.
+- Khi ở chế độ `focus`, hàng tab được thay bằng tiêu đề nhóm (kèm số), câu giải thích và nút "Thoát". Vùng danh sách lúc đó là `region` gắn với tiêu đề, không còn là `tabpanel`. Lý do: không có tab nào ứng với nhóm gợi ý, để `tablist` mà không tab nào được chọn sẽ sai mẫu ARIA. Đổi `focus` (vào hay thoát) thì xoá `status`, `sort` và `page`, dùng `push` như đổi tab.
+- `focus=reject`: chọn sẵn mọi hồ sơ của trang, một lần cho mỗi tổ hợp tab, lọc và trang. Việc chọn sẵn đặt state ngay trong lúc render, không qua effect. Thanh thao tác chỉ còn "Từ chối k" và "Xem xét k" (thêm prop `only` cho `ApplicationBulkActions`). `ConfirmDialog` giữ nguyên câu của bản cũ. Sau khi xử lý và danh sách đã tải lại, "Còn N hồ sơ được đề xuất → Xem tiếp", với N = `total` mới trừ số hồ sơ chưa xử lý còn trên trang đang giữ. "Xem tiếp" dựng lại trang 1 và chọn sẵn lại.
+- `focus=result`: hồ sơ Mời phỏng vấn có `needsResult` thì nút chính là "Được nhận", kèm dòng "Phỏng vấn N ngày trước" (lấy từ `lastInterviewAt`). Không chọn sẵn.
+- Tab "Tin đã đóng" có sẵn qua `APPLICATION_STATUSES`. Hồ sơ trong tab không có ô chọn và không có nút, vì là trạng thái cuối.
+
+**A2 — F3:**
+
+- Mặc định "Phù hợp nhất". `sortMode` là `null` cho tới khi người dùng tự chọn. Điểm chưa về hoặc tải lỗi thì danh sách theo thứ tự API ("Mới nhất").
+- Cột "Ứng viên" hiện `candidate.fullName` (thiếu thì "Ứng viên chưa đặt tên"). Ô chọn hồ sơ cũng dùng tên này.
+- Ô lọc trạng thái lấy danh sách từ `APPLICATION_STATUSES` và nhãn tiếng Việt, đã có "Tin đã đóng". Ngày nộp dùng `formatVnDayMonth`.
+- Nút "Xử lý hồ sơ của tin này" dẫn sang `/employer/applications?job=<id>`. Hồ sơ Tin đã đóng không chọn được, lý do ghi "Tin đã ngừng nhận hồ sơ".
 
 ## Phần 4 — Ghi chú của chủ dự án
 

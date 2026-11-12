@@ -100,6 +100,8 @@ export default function PublicJobDetailPage({ params }: { params: Promise<{ id: 
       case "ACCEPTED": return "Đã được nhận";
       case "REJECTED": return "Đã bị từ chối";
       case "CANCELLED": return "Ứng tuyển lại";
+      // Tin đã đóng không hiển thị lại được, nên không có lối nộp lại (F1, chốt 2026-11-12).
+      case "JOB_CLOSED": return "Tin đã đóng";
       default: return "Ứng tuyển ngay";
     }
   })();

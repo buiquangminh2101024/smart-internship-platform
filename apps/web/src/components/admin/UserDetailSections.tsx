@@ -35,6 +35,7 @@ const APPLICATION_STATUS: Record<ApplicationStatus, { label: string; tone: Badge
   ACCEPTED: { label: "Được nhận", tone: "success" },
   REJECTED: { label: "Bị từ chối", tone: "danger" },
   CANCELLED: { label: "Đã huỷ", tone: "neutral" },
+  JOB_CLOSED: { label: "Tin đã đóng", tone: "neutral" },
 };
 
 // Cùng nhãn với hộp thư lời mời của ứng viên (`OutreachInvitationInbox`).

@@ -15,7 +15,7 @@ import { RowCheckbox, SelectionBar, TriStateCheckbox } from "@/components/interv
 import { useInterviewActions } from "@/components/interviews/useInterviewActions";
 import { formatVnDayMonth, vnTodayIso } from "@/lib/dashboard-format";
 import { addDaysIso, vnIso } from "@/lib/interview-format";
-import { APPLICATION_STATUS_LABEL } from "@/lib/application-status";
+import { APPLICATION_STATUSES, APPLICATION_STATUS_LABEL } from "@/lib/application-status";
 import type { ApplicationMatchSummary, ApplicationStatus, EmployerInterview } from "@sip/shared-types";
 
 // Xếp hạng ứng viên (A3, AD-13 mục 9) — docs/05-frontend/phases/candidate-ranker/PLAN.md.
@@ -68,7 +68,12 @@ function notSelectableReason(status: ApplicationStatus, hasUpcoming: boolean): s
   if (hasUpcoming) return "Đã có lịch, không chọn được";
   if (status === "PENDING" || status === "REVIEWING") return "Chưa tới bước phỏng vấn";
   if (status === "SHORTLISTED" || status === "INTERVIEWING") return "Đang tải trạng thái lịch";
+  if (status === "JOB_CLOSED") return "Tin đã ngừng nhận hồ sơ";
   return "Hồ sơ đã có kết quả";
+}
+
+function candidateNameOf(app: { candidate?: { fullName?: string | null } | null }): string {
+  return app.candidate?.fullName?.trim() || "Ứng viên chưa đặt tên";
 }
 
 export default function EmployerJobApplicationsPage() {
@@ -79,15 +84,17 @@ export default function EmployerJobApplicationsPage() {
   const { toasts, push, dismiss } = useToast();
   
   const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "">("");
-  const [sortMode, setSortMode] = useState<SortMode>("newest");
-  
+  // null: người dùng chưa tự chọn ⇒ mặc định "Phù hợp nhất" khi có điểm (AD-25, F3).
+  const [sortMode, setSortMode] = useState<SortMode | null>(null);
+
   const { data: applications, isLoading, isError } = useEmployerJobApplications(jobId, statusFilter ? statusFilter : undefined);
-  // Điểm tham khảo, ghép theo applicationId — chỉ đổi thứ tự khi Employer chủ động chọn "Phù hợp nhất".
+  // Điểm tham khảo, ghép theo applicationId. Trang này chấm trực tiếp nên có điểm cả với tin đã đóng.
   const { data: matches, isError: isMatchesError } = useEmployerApplicationMatches(jobId);
   const matchByApplication = new Map((matches ?? []).map((match) => [match.applicationId, match]));
-  // Chưa có điểm (đang tải/lỗi) ⇒ khoá "Phù hợp nhất", không skeleton danh sách (D4).
+  // Sửa D4 (candidate-ranker): điểm chưa về thì hiện theo thứ tự API, không skeleton danh sách;
+  // điểm về thì xếp theo điểm. Tải điểm lỗi ⇒ giữ "Mới nhất".
   const matchesReady = !!matches;
-  const effectiveSortMode: SortMode = matchesReady ? sortMode : "newest";
+  const effectiveSortMode: SortMode = matchesReady ? (sortMode ?? "match") : "newest";
   const displayedApplications =
     applications && effectiveSortMode === "match"
       ? sortApplicationsByMatch(applications, matchByApplication)
@@ -123,7 +130,13 @@ export default function EmployerJobApplicationsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Danh sách ứng viên</h1>
-        <Button variant="secondary" onClick={() => router.back()}>Quay lại tin tuyển dụng</Button>
+        <div className="flex flex-wrap gap-2">
+          {/* Đổi trạng thái hồ sơ nằm ở trang "Ứng viên", lọc sẵn theo tin này. */}
+          <Button as="a" href={`/employer/applications?job=${encodeURIComponent(jobId)}`} variant="secondary" iconAfter="arrow-right">
+            Xử lý hồ sơ của tin này
+          </Button>
+          <Button variant="secondary" onClick={() => router.back()}>Quay lại tin tuyển dụng</Button>
+        </div>
       </div>
 
       <Card padding="md" className="flex flex-wrap items-center gap-4">
@@ -134,13 +147,11 @@ export default function EmployerJobApplicationsPage() {
           onChange={(e) => setStatusFilter(e.target.value as ApplicationStatus | "")}
         >
           <option value="">Tất cả</option>
-          <option value="PENDING">Chờ xử lý (PENDING)</option>
-          <option value="REVIEWING">Đang xem xét (REVIEWING)</option>
-          <option value="SHORTLISTED">Lọt vào vòng trong (SHORTLISTED)</option>
-          <option value="INTERVIEWING">Phỏng vấn (INTERVIEWING)</option>
-          <option value="ACCEPTED">Đã nhận (ACCEPTED)</option>
-          <option value="REJECTED">Từ chối (REJECTED)</option>
-          <option value="CANCELLED">Đã hủy (CANCELLED)</option>
+          {APPLICATION_STATUSES.map((status) => (
+            <option key={status} value={status}>
+              {APPLICATION_STATUS_LABEL[status].label}
+            </option>
+          ))}
         </select>
         <span className="text-sm font-medium">Sắp xếp:</span>
         <select
@@ -206,16 +217,16 @@ export default function EmployerJobApplicationsPage() {
                   >
                     <td className="w-14 py-0 pr-0 pl-3">
                       <RowCheckbox
-                        label={awaitingItem?.candidateName ?? app.candidate?.user?.email ?? "ứng viên"}
+                        label={candidateNameOf(app)}
                         checked={isSelected}
                         disabled={!awaitingItem}
                         disabledReason={notSelectableReason(app.status, upcomingInterview !== undefined)}
                         onChange={(checked) => awaitingItem && toggle([awaitingItem], checked)}
                       />
                     </td>
-                    <td className="p-4 font-medium">{app.candidate?.user?.email || "N/A"}</td>
+                    <td className="p-4 font-medium">{candidateNameOf(app)}</td>
                     <td className="p-4 text-gray-600">{app.candidate?.user?.email || "N/A"}</td>
-                    <td className="p-4 text-gray-600">{new Date(app.createdAt).toLocaleDateString()}</td>
+                    <td className="p-4 font-num text-gray-600 tabular-nums">{formatVnDayMonth(app.createdAt)}</td>
                     <td className="p-4">
                       <div className="flex flex-wrap gap-1.5">
                         <Badge tone={APPLICATION_STATUS_LABEL[app.status].tone}>
