@@ -129,6 +129,7 @@ Với một công ty của bộ demo lớn do chủ dự án chỉ định (thao
 7. Trang hồ sơ theo tin: mặc định "Phù hợp nhất", hiện tên, ô lọc tiếng Việt.
 8. Màn hẹp 375 px: không cuộn ngang ở trang "Ứng viên", trang tin và form tạo tin.
 9. `tsc --noEmit`, `npm run lint --workspace web` (không lỗi mới ở file đã sửa), `next build`.
+10. FAQ trợ lý hỗ trợ (thêm 2026-11-12, bước 9 backend): mục `employer-application-automation` (`apps/server/content/support-faq/07-quan-ly-ung-vien.md`) hiện chỉ tả cách hệ thống chạy, chưa nói nút nằm ở đâu, vì giao diện chưa có. Khi xong F2 và F4, thêm vào mục này tên thẻ "Tự động xử lý hồ sơ" ở trang tin, dải gợi ý và tab "Tin đã đóng" ở trang "Ứng viên". Sau đó chạy lại `npm run support-chat:index -w apps/server` và `support-chat:eval`, rồi commit cùng `faq-index.json`.
 
 ## Ngoài phạm vi
 

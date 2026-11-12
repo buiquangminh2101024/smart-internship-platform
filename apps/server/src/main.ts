@@ -39,6 +39,9 @@ import type { CandidateOutreachRepository } from "./modules/candidate-outreach/c
 import { startAutoOutreachJob } from "./modules/candidate-outreach/auto-outreach.job";
 import { registerMatchScores } from "./modules/match-scores/match-scores.module";
 import { applicationAutomationRouter } from "./modules/application-automation/application-automation.module";
+import { startApplicationAutomationJob } from "./modules/application-automation/application-automation.job";
+import { startStaleApplicationReminderJob } from "./modules/application-automation/stale-application-reminder.job";
+import type { ApplicationAutomationService } from "./modules/application-automation/application-automation.service";
 import { startMatchScoreJob } from "./modules/match-scores/match-score.job";
 import type { MatchScoreRepository } from "./modules/match-scores/match-score.repository";
 import type { MatchScoreService } from "./modules/match-scores/match-score.service";
@@ -123,7 +126,7 @@ app.use("/api", candidateOutreachRouter(container));
 // Bảng điểm lưu sẵn (AD-24): dùng candidateOutreachService/candidateMatchProfileLoader, chưa có route riêng.
 registerMatchScores(container);
 // Tự xử lý hồ sơ (AD-25): applicationsService và autoOutreachService cần autoReviewTrigger do
-// hàm này đăng ký — resolve lúc có request hoặc lúc start job bên dưới. Cron ở bước 7.
+// hàm này đăng ký — resolve lúc có request hoặc lúc start job bên dưới.
 app.use("/api", applicationAutomationRouter(container));
 
 app.use("/api/conversations", messagingRoutes(container));
@@ -186,6 +189,17 @@ startSubscriptionExpiringNoticeJob({
 startInterviewReminderJob({
   interviewsRepository: container.resolve<InterviewsRepository>("interviewsRepository"),
   notificationsService: container.resolve<NotificationsService>("notificationsService"),
+  logger,
+});
+// Tự xử lý hồ sơ (AD-25): tự chuyển "Đang xem xét" và tự đóng "Tin đã đóng" lúc 08:30 giờ Việt
+// Nam hằng ngày (sau lượt chấm điểm 03:30); nhắc hồ sơ tồn 08:00 thứ Hai. Resolve sau
+// notificationsRouter và interviewsRouter vì service cần notificationsService, interviewsRepository.
+startApplicationAutomationJob({
+  applicationAutomationService: container.resolve<ApplicationAutomationService>("applicationAutomationService"),
+  logger,
+});
+startStaleApplicationReminderJob({
+  applicationAutomationService: container.resolve<ApplicationAutomationService>("applicationAutomationService"),
   logger,
 });
 // Gộp số nhật ký theo giờ cho biểu đồ của trang nhật ký (AD-20) — chạy bù khi

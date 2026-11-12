@@ -487,6 +487,116 @@ G2 chỉ gồm Đang xem xét (48) và Rút gọn (46); không có hồ sơ Mờ
   - Câu UPDATE chỉ in ra bằng prisma giả, **không chạy**: `UPDATE job_posts SET "autoReviewEnabled" = $1, "rejectSuggestBelowScore" = $2 WHERE "id" = $3 AND "autoOutreachMinScore" > $4`. PATCH thật để bước 8, xin xác nhận trước.
   - **`EXPLAIN ANALYZE` các câu quét** (mục "không thêm index" của bước 1), lần chạy thứ hai: tự chuyển toàn hệ thống 5 ms, theo một tin (lối 3) 0,2 ms, tự đóng 2 ms, nhắc tuần 18 ms. Lần chạy đầu, câu tự chuyển mất 1,2 s, lần hai chỉ còn 5 ms. Có thể do cache nguội ở lần đầu, chưa kiểm. Các câu đều quét tuần tự `applications` (bảng vài nghìn dòng), không chậm. **Không thêm index.**
 
+### Bước 7 — Cron, script chạy tay (2026-11-12)
+
+- `application-automation.job.ts`: `startApplicationAutomationJob` gọi `runDaily()` theo `APPLICATION_AUTOMATION_CRON`, dựng từ `AUTOMATION_DAILY_RUN_VN` (= `"30 8 * * *"`), giờ `Asia/Ho_Chi_Minh`. `runDaily` tự ghi log tổng kết; job chỉ ghi thêm khi lượt bị bỏ qua (`LOCKED`) hoặc lỗi.
+- `main.ts`: gọi `startApplicationAutomationJob` và `startStaleApplicationReminderJob` ngay sau job nhắc lịch phỏng vấn, tức sau `notificationsRouter` và `interviewsRouter` mà service cần. Việc đăng ký module đã làm ở bước 4 / 6.
+- `scripts/process-applications.ts` + `npm run process-applications --workspace=apps/server -- …`:
+  - Không có `--review` / `--close` / `--remind` thì chạy cả ba. Có cả `--review` lẫn `--close` thì gọi `runDaily` (cùng hàm với cron), có một trong hai thì gọi `autoReview` / `autoClose`. `--remind` gọi `runWeeklyReminder`.
+  - `--dry-run` chỉ đọc: đếm hồ sơ sẽ tự chuyển (và số tin), sẽ tự đóng theo G1 / G2 / G4 (xét lại bằng `closeDecision`), và số thông báo nhắc sẽ tạo. Số này không bị giới hạn mỗi lượt; khi vượt 500 thì script ghi rõ lượt thật chỉ xử lý 500.
+  - Dựng service bằng tay như `rescore-match-scores`, không qua container (container mở Redis). Thông báo vẫn lưu DB và outbox, chỉ bỏ bước đẩy realtime; người nhận thấy khi tải lại.
+- **Chọn thêm khi làm (plan chưa ghi):**
+  - Tham số lạ (gõ sai, ví dụ `--reveiw`) ⇒ dừng, báo lỗi. Nếu bỏ qua tham số lạ, lệnh gõ sai sẽ chạy cả ba phần và ghi lên DB.
+  - `--company` trỏ tới công ty không có ⇒ dừng, báo lỗi.
+  - `--dry-run` của nhắc tuần kiểm `dedupeKey` đã có, để tách "sẽ tạo" với "đã nhắc tuần này". Khoá dựng bằng hàm mới `weeklyReminderDedupeKey` ở `.policy.ts`, service dùng chung hàm này nên hai nơi không lệch nhau.
+  - Script chạy trong process riêng nên khoá chống chạy chồng không có tác dụng với cron của server. Câu UPDATE có điều kiện chặn đổi trùng, `dedupeKey` chặn nhắc trùng.
+- Test: `weeklyReminderDedupeKey`; cron dựng ra `"30 8 * * *"` và `node-cron` chấp nhận. Toàn bộ unit test server: 505/505 qua. `tsc` server và script: hết lỗi.
+- **`--dry-run` trên Neon (chỉ đọc):**
+  - Toàn hệ thống: tự chuyển **258** hồ sơ ở 145 tin; tự đóng **129** (G1 35, G2 94, G4 0); nhắc tuần 45 công ty, **79** thông báo, chưa ai được nhắc tuần này. Khớp số đo ở bước 0, 4 và 5. Thời gian cả lệnh khoảng 12 giây, gồm cả mở kết nối.
+  - `--company` một công ty demo: tự chuyển 22 hồ sơ ở 10 tin, tự đóng 8 (G1 2, G2 6), nhắc 3 thông báo.
+  - **Chưa chạy lượt thật, chưa bật server.** Khi khởi động, server chạy bù job thống kê nhật ký nên ghi lên Neon. Chạy thật để bước 8, xin xác nhận trước.
+
+### Bước 8 — Kiểm thử (2026-11-12)
+
+**Unit test:** các mục của bước 8 đã có từ bước 2–7 (`application-automation.test.ts`, `employer-applications-service.test.ts`: `changeStatusBySystem`, API người dùng không chuyển được sang `JOB_CLOSED`, `statusCounts` 8 trạng thái). Toàn bộ unit test server: 505/505 qua.
+
+**Build:** `npm run build` của `shared-types` và server qua. `tsc --noEmit` của web còn đúng 4 lỗi thiếu khoá đã biết (`JOB_CLOSED` ở `lib/application-status.ts`, `components/admin/UserDetailSections.tsx`; `APPLICATIONS_NEED_ATTENTION` ở `lib/notifications.ts`), để F1 và F5.
+
+**(a) Chỉ đọc trên Neon** (`.claude-workspace/scratch/step8-readonly.ts`). Tất cả đạt:
+
+- `--dry-run` cả ba phần khớp số đo bước 0 (ghi ở bước 7).
+- `listForCompany` với `sort=match`, công ty nhiều hồ sơ nhất (Mây Xanh, 450 hồ sơ):
+  - Ghép 23 trang (20 dòng mỗi trang) ra đúng 450 dòng, không trùng; tab Chờ duyệt 7 trang, 130 dòng.
+  - Điểm trên dòng khớp bảng điểm (405 dòng có điểm, lệch 0); thứ tự điểm giảm dần, chưa có điểm xếp cuối.
+  - `EXPLAIN ANALYZE` trang đầu, lần hai: 8,8 ms (mọi trạng thái), 3,7 ms (Chờ duyệt).
+- `focusCounts.reject` ở 3 tin có nhiều hồ sơ Chờ duyệt nhất: 13 / 1 / 4. Khớp đếm tay bằng ORM với `effectiveRejectThreshold`, và khớp số dòng của danh sách `focus=reject`.
+- Câu chọn tự chuyển: với 1.281 hồ sơ Chờ duyệt, tập SQL chọn trùng tập tính tay (lệch 0). Chọn 258; không có điểm 60; điểm < X 963; tin không hiển thị mà điểm ≥ X 0 (điểm của tin đã đóng đã bị dọn, nên những hồ sơ đó rơi vào nhóm "không có điểm"); tin tắt công tắc 0.
+- **Thư của lượt đầu:** 387 thư cho ứng viên (382 tới `.local`, 5 tới 1 địa chỉ thật, đều là thư báo đóng hồ sơ) và 79 thư nhắc cho employer (78 tới `.local`, 1 tới 1 địa chỉ thật). `.env` để `DEV_SKIP_EMAIL_SENDING=false`, nên nếu outbox chạy thì các thư này đi qua Resend thật. Công ty demo Mây Xanh chỉ có địa chỉ `.local`.
+
+**(b) Chạy thật cho công ty demo Mây Xanh** (`clargedemocompmayxanhtech`; chủ dự án duyệt; chạy bằng chính `npm run process-applications -- --company …`, lúc 12:29 UTC):
+
+- Tự chuyển 22/22, tự đóng 8/8 (G1 2, G2 6), nhắc 3 employer. Không có hồ sơ nào bị đổi chen giữa hay lỗi. Phần tự chuyển và tự đóng mất 11,2 s, phần nhắc mất 1,1 s.
+- Trạng thái của công ty: Chờ duyệt 130 → 106, Đang xem xét 74 → 94, Rút gọn 47 → 43, Tin đã đóng 0 → 8.
+- Lịch sử: 30 dòng mới, cả 30 đều `actorId = null`, mỗi hồ sơ một dòng (`PENDING→REVIEWING` 22, `PENDING→JOB_CLOSED` 2, `REVIEWING→JOB_CLOSED` 2, `SHORTLISTED→JOB_CLOSED` 4).
+- 33 thông báo: 22 "Cập nhật trạng thái hồ sơ ứng tuyển", 8 "Hồ sơ ứng tuyển đã được đóng", 3 `APPLICATIONS_NEED_ATTENTION`. Có 33 dòng outbox, mỗi dòng gắn với đúng một thông báo trong số đó, đều tới `.local`.
+- **Thư `.local`:** 33 dòng chuyển `FAILED` với `lastError` "Không gửi: địa chỉ .local của dữ liệu demo (0.4 bước 8, kiểm thử tự xử lý hồ sơ)". Server tắt suốt lúc kiểm nên không thư nào đi trước khi đánh dấu.
+- **Chạy lại lần hai:** chọn 0, đổi 0; nhắc tuần trùng 3, không tạo thêm. Không có dòng lịch sử, thông báo hay outbox mới.
+- **PATCH thật** (tin `clargedemojob0025`, qua `ApplicationAutomationService` với đúng người đăng tin; đã trả về cài đặt ban đầu X 80, Y 50, tự chuyển bật, tự đóng đã phỏng vấn tắt):
+  - Y = 40 và bật tự đóng đã phỏng vấn ⇒ trả đúng; `focusCounts.reject` của tin 2 → 1, khớp đếm tay điểm < 40.
+  - Y = X ⇒ 400 "Ngưỡng đề xuất từ chối phải nhỏ hơn ngưỡng phù hợp (80%)."
+  - Employer công ty khác: GET và PATCH đều 404.
+  - Tắt rồi bật lại tự chuyển ⇒ lối 3 chạy, không còn hồ sơ đạt ngưỡng nên không đổi gì.
+  - `updatedAt` của tin không đổi sau mọi lần PATCH.
+- Danh sách tab Đang xem xét: `changedBySystem` đúng 22 hồ sơ vừa tự chuyển.
+- Số "Phù hợp" của 0.3: hồ sơ `JOB_CLOSED` nằm ở tin đã đóng, có dòng điểm 0/8, nên không thể vào số này. Điều kiện `NOT IN (… 'JOB_CLOSED')` của `MATCHED_COUNTS` chỉ có tác dụng khi sau này có lối mở lại tin (gia hạn).
+- **Lối 2 (ngay khi nộp đơn) không chạy trên Neon**, vì phải tạo hồ sơ mới; đã có unit test.
+
+**(c) Đo tải lượt 8h30. ĐẠT: không làm web chậm.** Chủ dự án duyệt ghi và chọn chặn cả thư tới địa chỉ thật.
+
+Cách đo giống mục (e) bước 8 của 0.3 (`.claude-workspace/scratch/load-test-automation.ts`):
+
+- Một process chạy Express với đủ router (thêm `applicationAutomationRouter`), không bật cron, ở cổng 4999.
+- Process đó chạy `runDaily()` thật cho toàn hệ thống, tức phần còn lại sau (b).
+- Trong lúc chạy, hai vòng gọi liên tục `GET /api/health` và `GET /api/job-posts?page=1&limit=20`.
+- Event loop đo bằng `monitorEventLoopDelay` (resolution 10 ms).
+
+| Tình huống | Thời gian | Event loop p50 / p99 / max | `/api/health` p50 / p95 (số mẫu) | `/api/job-posts` p50 / p95 (số mẫu) | Lỗi |
+| --- | --- | --- | --- | --- | --- |
+| Nền | 20,4 s | 15,4 / 21,6 / 23,3 ms | 48 / 53 ms (400) | 487 / 596 ms (39) | 0 |
+| Lượt 8h30 | 128,7 s | 15,4 / 22,2 / 26,7 ms | 48 / 52 ms (2.619) | 484 / 539 ms (258) | 0 |
+| Nền lần 2 | 20,2 s | 15,4 / 21,6 / 22,6 ms | 47 / 50 ms (418) | 489 / 504 ms (41) | 0 |
+
+- Lượt chạy: tự chuyển 236/236, tự đóng 121/121 (G1 33, G2 88, G4 0). Không có hồ sơ nào bị đổi chen giữa, lỗi hay chưa tới hạn. Trung bình **359 ms mỗi hồ sơ** (một transaction gồm đổi trạng thái, lịch sử, thông báo, outbox, từ máy dev tới Neon). Lượt 500 hồ sơ sẽ mất khoảng 3 phút.
+- Event loop và `/api/health` không đổi. `/api/job-posts` p50 484 ms so với 487 / 489 ms của hai lần nền, p95 539 ms nằm giữa hai lần nền (596 / 504 ms). Không tăng quá 20%, nên giữ 500 hồ sơ mỗi lượt và giờ 8h30.
+- Giới hạn của số đo giống 0.3: timer của Windows khoảng 15 ms, và client gọi API chạy chung process.
+- Ghi lên Neon: 357 dòng lịch sử (đều `actorId = null`), 357 thông báo, 357 dòng outbox. **Đã chuyển hết sang `FAILED`:** 352 dòng tới `.local` (cùng ghi chú như (b)) và 5 dòng tới địa chỉ thật, với ghi chú "Không gửi: thư của lượt đo tải (0.4 bước 8), chủ dự án chọn không gửi tới địa chỉ thật". Sau đó cả bảng outbox không còn dòng `PENDING` nào.
+
+**Sau bước 8 (chỉ đọc):**
+
+- `--dry-run`: tự chuyển 0, tự đóng 0.
+- Tổng hồ sơ `JOB_CLOSED` là 129, đúng bằng số đo bước 0.
+- Nhắc tuần còn 43 công ty, sẽ tạo 74 thông báo; 3 người đã được nhắc trong tuần này.
+- Các số tồn: chờ duyệt quá 7 ngày 483, đang xem xét 431, chờ đặt lịch 281, cần kết quả 36, sắp tự đóng 0. Hai số chờ đặt lịch và cần kết quả cao hơn lúc đo ở bước 5 (268 / 31). Có thể do thời gian trôi qua nên thêm hồ sơ vượt mốc 7 ngày hoặc thêm buổi phỏng vấn đã diễn ra; chưa kiểm.
+
+**Còn lại khi bật server với `.env` hiện tại:** cron 8h30 và cron nhắc thứ Hai (16/11) sẽ sinh thư tới `.local` và tới các địa chỉ thật, như mọi loại thông báo khác. Lời nhắc thứ Hai sẽ có thư tới 1 địa chỉ thật của employer. Đây là cách outbox vẫn chạy từ trước, 0.4 không đổi gì ở phần này.
+
+**Dữ liệu trên Neon khác so với trước bước 8:**
+
+- 387 hồ sơ đổi trạng thái (258 sang Đang xem xét, 129 sang Tin đã đóng).
+- 390 thông báo và 390 dòng outbox, đều `FAILED`.
+- Cài đặt của tin `clargedemojob0025` giữ nguyên như ban đầu.
+
+### Bước 9 — Tài liệu (2026-11-12)
+
+- `FEATURE_BACKLOG.md` dòng 0.4: backend xong, frontend chưa làm; ghi phần đã có, số đo, phần còn lại.
+- AD-25: trạng thái "ĐÃ TRIỂN KHAI BACKEND (2026-11-12)", kèm số hồ sơ của lượt đầu và kết luận đo tải.
+- FAQ trợ lý hỗ trợ:
+  - `03-tim-viec-ung-tuyen.md`:
+    - `application-status`: thêm trạng thái "Tin đã đóng"; nói rõ "Đang xem xét" có thể do hệ thống tự chuyển, nên chưa chắc nhà tuyển dụng đã mở hồ sơ.
+    - Mục mới `application-job-closed`: khi nào đơn bị đóng (theo G1–G4), không phải bị từ chối, không nộp lại được.
+    - `match-score`: hệ thống không bao giờ tự từ chối vì điểm thấp.
+  - `07-quan-ly-ung-vien.md`:
+    - `employer-applications`: thêm "Tin đã đóng" là kết quả cuối do hệ thống đặt.
+    - Mục mới `employer-application-automation`: tự chuyển, đề xuất từ chối, nhắc tuần, lịch tự đóng, công tắc theo tin.
+  - **Chưa ghi vị trí nút và thẻ** (thẻ "Tự động xử lý hồ sơ", dải gợi ý, tab "Tin đã đóng"), vì giao diện F2 và F4 chưa có. Chatbot không được chỉ tới chỗ chưa tồn tại. Đã thêm việc này vào F6 của plan frontend (mục 10).
+  - Đã sinh lại `faq-index.json` (42 mục, 276 câu hỏi mẫu). Model embedding chạy trên máy, không chạm DB.
+- **Eval chatbot** (`npm run support-chat:eval`, không gọi LLM, không chạm DB; `eval/eval-results.md` sinh lại):
+  - So với trước khi thêm hai mục, ở cách chọn đoạn của server: đúng ở vị trí đầu 58 → 57/94, đúng trong top 3 giữ 75/94.
+  - Câu gõ không dấu: top 3 34 → 33/79.
+  - Lần thêm đầu kéo lệch nhiều hơn (top 3 còn 72/94). Câu "Đơn bị đóng có nộp lại được không?" kéo câu "muốn rút đơn lại" về mục mới; câu "Bao lâu thì hồ sơ bị tự đóng?" gần với một câu hỏi về gói. Đã bỏ hoặc đổi các câu hỏi mẫu đó và đo lại.
+  - Câu q083 ("Hệ thống có dùng AI không") có mục mới trong top 3 thay cho `employer-onboarding`; mục đúng của câu này vẫn không nằm trong top 3, như trước.
+- `API_CONVENTIONS.md`: không đổi. Trang "Ứng viên" vẫn phân trang đánh số như đã ghi; API cài đặt theo tin theo cùng mẫu với cài đặt tự mời.
+
 ## Phần 4 — Ghi chú của chủ dự án
 
 <!-- Để trống — dành cho chủ dự án. -->

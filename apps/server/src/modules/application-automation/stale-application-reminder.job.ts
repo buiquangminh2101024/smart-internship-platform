@@ -9,7 +9,7 @@ export interface StaleApplicationReminderJobDeps {
 
 /**
  * AD-25 — nhắc công ty về hồ sơ tồn, thứ Hai 8h giờ Việt Nam (quyết định #4). Mỗi employer
- * chỉ nhận một thông báo mỗi tuần nhờ `dedupeKey`. Gọi trong `main.ts` ở bước 7.
+ * chỉ nhận một thông báo mỗi tuần nhờ `dedupeKey`.
  */
 export function startStaleApplicationReminderJob(deps: StaleApplicationReminderJobDeps): void {
   cron.schedule(

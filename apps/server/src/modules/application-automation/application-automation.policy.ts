@@ -110,6 +110,11 @@ export function vnWeekKey(now: Date): string {
   return new Date(vn.getTime() - daysSinceMonday * DAY_MS).toISOString().slice(0, 10);
 }
 
+/** `dedupeKey` của nhắc tuần: một thông báo cho mỗi công ty + người nhận + tuần (giờ Việt Nam). */
+export function weeklyReminderDedupeKey(companyId: string, userId: string, now: Date): string {
+  return `APPLICATIONS_NEED_ATTENTION:${companyId}:${userId}:${vnWeekKey(now)}`;
+}
+
 /**
  * Lúc hồ sơ tới hạn `dueAt` thực sự bị đóng: lượt hằng ngày đầu tiên (8h30 giờ Việt Nam)
  * không sớm hơn cả `dueAt` lẫn `now`. Nhắc tuần ghi ngày này, không ghi `dueAt`, để ngày

@@ -9,7 +9,7 @@ import { ApplicationAutomationRepository } from "./application-automation.reposi
 import { ApplicationAutomationService, type AutoReviewTrigger } from "./application-automation.service";
 
 /**
- * Tự xử lý hồ sơ chờ lâu (0.4, AD-25). Cron ở bước 7. Service cần applicationsService; resolve
+ * Tự xử lý hồ sơ chờ lâu (0.4, AD-25). Cron khởi động trong main.ts. Service cần applicationsService; resolve
  * lúc dùng nên thứ tự đăng ký chỉ để dễ đọc. Phải đăng ký trước request đầu tiên vì
  * ApplicationsService cần `autoReviewTrigger`, và trước khi main.ts resolve autoOutreachService
  * (service đó cũng nhận `autoReviewTrigger`).

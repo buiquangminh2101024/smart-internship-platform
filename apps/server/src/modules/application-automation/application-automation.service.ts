@@ -11,7 +11,7 @@ import {
   closeDecision,
   effectiveRejectThreshold,
   nextAutoCloseRun,
-  vnWeekKey,
+  weeklyReminderDedupeKey,
   type AutoCloseGroup,
 } from "./application-automation.policy";
 import type {
@@ -164,7 +164,6 @@ export class ApplicationAutomationService {
     const startedAt = Date.now();
     try {
       const rows = await this.repository.backlogByCompany(scope);
-      const week = vnWeekKey(now);
       const result = { status: "DONE" as const, companies: rows.length, created: 0, duplicates: 0, failed: 0, durationMs: 0 };
       for (const [index, row] of rows.entries()) {
         if (index > 0) await yieldToEventLoop();
@@ -178,7 +177,7 @@ export class ApplicationAutomationService {
                 "APPLICATIONS_NEED_ATTENTION",
                 userId,
                 payload,
-                `APPLICATIONS_NEED_ATTENTION:${row.companyId}:${userId}:${week}`,
+                weeklyReminderDedupeKey(row.companyId, userId, now),
               );
               if (isNew) result.created += 1;
               else result.duplicates += 1;

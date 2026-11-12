@@ -3,9 +3,11 @@
 // Bước 3: dải điểm theo ngưỡng X / Y. Bước 4: closeDecision (G1–G4), lượt tự chuyển / tự đóng
 // với repository và ApplicationsService giả, lời thông báo khi hệ thống đóng hồ sơ.
 // Bước 5: nhắc tuần. Bước 6: cài đặt theo tin (quyền, Y < X, lối quét khi bật lại công tắc).
+// Bước 7: biểu thức cron của lượt hằng ngày.
 // SQL chọn hồ sơ được đối chiếu riêng trên DB thật (bước 8).
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import cron from "node-cron";
 import type { ApplicationStatus } from "@prisma/client";
 import {
   closeDecision,
@@ -14,8 +16,10 @@ import {
   matchBand,
   nextAutoCloseRun,
   vnWeekKey,
+  weeklyReminderDedupeKey,
   type CloseDueInput,
 } from "../../src/modules/application-automation/application-automation.policy";
+import { APPLICATION_AUTOMATION_CRON } from "../../src/modules/application-automation/application-automation.job";
 import type {
   CloseCandidateRow,
   CompanyBacklogRow,
@@ -285,6 +289,20 @@ test("vnWeekKey: thứ Hai của tuần theo giờ Việt Nam (Chủ nhật thu�
   // Thứ Hai 8h giờ VN (lúc cron chạy) và thứ Tư cùng tuần ⇒ cùng khoá.
   assert.equal(vnWeekKey(new Date("2026-11-16T01:00:00Z")), "2026-11-16");
   assert.equal(vnWeekKey(new Date("2026-11-18T10:00:00Z")), "2026-11-16");
+});
+
+test("weeklyReminderDedupeKey: công ty + người nhận + thứ Hai của tuần (dùng chung cho service và --dry-run)", () => {
+  assert.equal(
+    weeklyReminderDedupeKey("co-1", "u-1", new Date("2026-11-18T10:00:00Z")),
+    "APPLICATIONS_NEED_ATTENTION:co-1:u-1:2026-11-16",
+  );
+});
+
+// ─── Cron (bước 7) ──────────────────────────────────────────────────────────
+
+test("lượt hằng ngày: cron dựng từ AUTOMATION_DAILY_RUN_VN là 8h30", () => {
+  assert.equal(APPLICATION_AUTOMATION_CRON, "30 8 * * *");
+  assert.ok(cron.validate(APPLICATION_AUTOMATION_CRON));
 });
 
 test("nextAutoCloseRun: lượt 8h30 giờ VN đầu tiên không sớm hơn hạn và lúc này", () => {

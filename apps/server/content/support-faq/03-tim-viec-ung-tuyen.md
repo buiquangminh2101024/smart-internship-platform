@@ -66,17 +66,38 @@ questions:
 - Đang xem xét nghĩa là gì?
 - Đơn bị từ chối hay được nhận xem ở đâu?
 - Nhà tuyển dụng đã xem hồ sơ của tôi chưa?
+- Sao đơn của tôi chuyển sang Đang xem xét ngay sau khi nộp?
 
 Các đơn đã nộp nằm ở **Ứng tuyển của tôi** (/applications). Ý nghĩa trạng thái:
 
 - **Chờ duyệt**: đơn đã gửi, nhà tuyển dụng chưa tiếp nhận.
-- **Đang xem xét**: nhà tuyển dụng đang xem hồ sơ.
+- **Đang xem xét**: hồ sơ đã vào nhóm được xem xét. Hồ sơ có mức độ phù hợp đạt ngưỡng của tin có thể được **hệ thống tự chuyển** sang trạng thái này (ngay khi nộp hoặc trong lượt xử lý 8h30 sáng hằng ngày), nên trạng thái này chưa chắc là nhà tuyển dụng đã mở hồ sơ.
 - **Vào danh sách rút gọn**: bạn được chọn vào nhóm ứng viên tiềm năng.
 - **Mời phỏng vấn**: có lịch phỏng vấn (xem ngay trong đơn).
 - **Được nhận** hoặc **Bị từ chối**: kết quả cuối.
 - **Đã huỷ**: bạn đã tự huỷ đơn.
+- **Tin đã đóng**: tin đã ngừng tuyển và hệ thống đã đóng đơn. Đây không phải bị từ chối, vì chưa có đánh giá nào về bạn. Đơn này là kết quả cuối và không nộp lại được.
 
 Mỗi lần trạng thái thay đổi, bạn nhận thông báo ở chuông. Thời gian phản hồi do từng nhà tuyển dụng quyết định; bạn có thể nhắn tin hỏi thêm từ trang đơn ứng tuyển.
+
+## application-job-closed
+audience: candidate
+title: Đơn bị đóng vì tin đã ngừng tuyển
+questions:
+- Tại sao đơn của tôi bị đóng?
+- Hồ sơ ứng tuyển đã được đóng là sao?
+- Đơn chuyển sang Tin đã đóng nghĩa là gì?
+- Tin hết hạn thì đơn của tôi thế nào?
+- Tôi đã phỏng vấn mà đơn bị đóng
+
+Khi tin hết hạn, bị nhà tuyển dụng đóng hoặc bị gỡ, hệ thống đóng các đơn chưa có kết quả và chuyển sang **Tin đã đóng**. Bạn nhận thông báo kèm email.
+
+- Đơn **Chờ duyệt**: đóng ở lượt xử lý 8h30 sáng đầu tiên sau khi tin đóng.
+- Đơn **Đang xem xét**, hoặc đã vào danh sách rút gọn / mời phỏng vấn nhưng chưa phỏng vấn: đóng sau **14 ngày** kể từ khi tin đóng, để nhà tuyển dụng kịp xử lý.
+- Đơn **có lịch phỏng vấn sắp tới** thì không bị đóng.
+- Đơn **đã phỏng vấn nhưng chưa có kết quả** chỉ bị đóng nếu nhà tuyển dụng bật chế độ này cho tin, sau **30 ngày**. Khi đó thông báo ghi rõ nhà tuyển dụng chưa cập nhật kết quả.
+
+**Tin đã đóng** không phải bị từ chối. Đơn đã đóng không nộp lại được, vì tin đã ngừng tuyển.
 
 ## application-cancel
 audience: candidate
@@ -106,7 +127,7 @@ questions:
 
 Ở trang chi tiết tin, thẻ **Mức độ phù hợp** so sánh hồ sơ của bạn với yêu cầu của tin: kỹ năng bắt buộc và ưu tiên, số năm kinh nghiệm, ngành học, kèm mức độ gần nghĩa giữa hồ sơ và mô tả công việc, và giải thích phần nào bạn đã đáp ứng, phần nào còn thiếu.
 
-Điểm chỉ mang tính tham khảo, không quyết định việc bạn được nhận. Để điểm sát hơn, hãy cập nhật kỹ năng, học vấn và kinh nghiệm ở **Hồ sơ ứng viên** (/profile).
+Điểm chỉ mang tính tham khảo, không quyết định việc bạn được nhận. Hệ thống **không bao giờ tự từ chối** đơn vì điểm thấp; chỉ nhà tuyển dụng mới từ chối được. Đơn có điểm đạt ngưỡng của tin có thể được hệ thống tự chuyển sang **Đang xem xét**. Để điểm sát hơn, hãy cập nhật kỹ năng, học vấn và kinh nghiệm ở **Hồ sơ ứng viên** (/profile).
 
 ## candidate-interviews
 audience: candidate

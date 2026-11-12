@@ -786,7 +786,7 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 
 **Ngày:** 2026-11-11 · **Phase liên quan:** không thuộc phase đánh số. Mục 0.4 của `docs/01-project/FEATURE_BACKLOG.md`, theo nhận xét của giáo viên ở buổi demo 05/11/2026 ("chờ 40 ngày, 70 ngày rồi vẫn còn đang chờ xử lý", "chưa thấy tính tự động"). Kế hoạch chi tiết: `docs/06-backend/application-automation/PLAN.md`, `docs/05-frontend/phases/application-automation/PLAN.md`.
 
-> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-11, chủ dự án duyệt từng điểm). CHƯA TRIỂN KHAI.** Ba câu hỏi nhỏ của plan backend (Q1–Q3) đã chốt 2026-11-12.
+> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-11, chủ dự án duyệt từng điểm). ĐÃ TRIỂN KHAI BACKEND (2026-11-12), đã chạy và kiểm trên Neon. FRONTEND (F1–F6) CHƯA LÀM.** Ba câu hỏi nhỏ của plan backend (Q1–Q3) đã chốt 2026-11-12. Ghi chú triển khai và số đo ở `docs/06-backend/application-automation/PLAN.md`. Lượt chạy đầu trên Neon đã đổi 387 hồ sơ (258 sang "Đang xem xét", 129 sang "Tin đã đóng"); đo tải lượt 8h30 cho thấy web không chậm đi, nên giữ chạy chung process (mục 9).
 
 **Bối cảnh:** hồ sơ nằm ở "Chờ duyệt" hàng chục ngày mà hệ thống không làm gì; nhà tuyển dụng phải tự mở từng hồ sơ. AD-13 mục 3 cấm hệ thống đổi `ApplicationStatus` và cấm tự sắp danh sách đơn theo điểm. Từ 0.3 (AD-24) đã có bảng điểm lưu sẵn, nên đọc điểm của mọi hồ sơ không còn đắt.
 

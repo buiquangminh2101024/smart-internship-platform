@@ -1,13 +1,13 @@
 # Kết quả eval chatbot hỗ trợ — bậc 2 (so khớp FAQ)
 
-> Sinh tự động bởi `apps/server/scripts/support-chat-eval.ts` lúc 2026-10-19T14:40:55.010Z — không sửa tay; chạy lại script để cập nhật. Phương pháp: `../PLAN.md` mục "Bộ eval" và "Pipeline xử lý một câu hỏi".
+> Sinh tự động bởi `apps/server/scripts/support-chat-eval.ts` lúc 2026-11-12T12:45:26.444Z — không sửa tay; chạy lại script để cập nhật. Phương pháp: `../PLAN.md` mục "Bộ eval" và "Pipeline xử lý một câu hỏi".
 
-Model embedding `Xenova/paraphrase-multilingual-MiniLM-L12-v2`, phiên bản FAQ `77f4fbae44ae`. Bộ câu hỏi do người soạn, cỡ nhỏ: con số chỉ mang tính chỉ báo. Score là cosine giữa câu hỏi và **câu hỏi mẫu gần nhất** của mỗi mục FAQ người hỏi được thấy.
+Model embedding `Xenova/paraphrase-multilingual-MiniLM-L12-v2`, phiên bản FAQ `ee1b90d6c71f`. Bộ câu hỏi do người soạn, cỡ nhỏ: con số chỉ mang tính chỉ báo. Score là cosine giữa câu hỏi và **câu hỏi mẫu gần nhất** của mỗi mục FAQ người hỏi được thấy.
 
 ## Dữ liệu
 
 - 118 câu: 110 câu hỏi mới (faq 84 · llm 11 · out_of_scope 15) và 8 câu nối tiếp (có `history`). 17 câu hỏi mới gõ không dấu — không trả thẳng, không chặn, luôn xuống bậc 3–4 (chọn đoạn bằng bản bỏ dấu của câu hỏi mẫu).
-- Thời gian embed một câu (đã làm nóng model): trung vị 6,5 ms, lớn nhất 250,3 ms.
+- Thời gian embed một câu (đã làm nóng model): trung vị 6,2 ms, lớn nhất 204,0 ms.
 
 ## Ngưỡng đang dùng (`support-chat.config.ts`)
 
@@ -52,8 +52,8 @@ Biên an toàn: câu sẽ bị trả thẳng sai có score cao nhất dưới 0,
 | Ngưỡng | Trả thẳng | Đúng | Chính xác | Sai mục | Trả thẳng câu llm | Trả thẳng câu ngoài PV | Phủ câu faq |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 0,600 | 75 | 49 | 65% | 14 | 10 | 2 | 58% |
-| 0,625 | 69 | 48 | 70% | 11 | 9 | 1 | 57% |
-| 0,650 | 65 | 46 | 71% | 9 | 9 | 1 | 55% |
+| 0,625 | 70 | 48 | 69% | 12 | 9 | 1 | 57% |
+| 0,650 | 66 | 46 | 70% | 10 | 9 | 1 | 55% |
 | 0,675 | 62 | 44 | 71% | 8 | 9 | 1 | 52% |
 | 0,700 | 56 | 40 | 71% | 6 | 9 | 1 | 48% |
 | 0,725 | 45 | 33 | 73% | 5 | 7 | 0 | 39% |
@@ -113,10 +113,10 @@ Mục đúng (`faqId`) có nằm trong 3 mục đưa vào prompt không. Cột "
 | Cách xếp hạng | Top-1 (mọi câu có faqId) | Top-3 (mọi câu có faqId) | Top-1 (câu llm) | Top-3 (câu llm) |
 | --- | --- | --- | --- | --- |
 | `question` — score câu hỏi mẫu cao nhất | 57/94 | 73/94 | 1/10 | 5/10 |
-| `content` — score với `title + nội dung` | 46/94 | 65/94 | 3/10 | 4/10 |
+| `content` — score với `title + nội dung` | 46/94 | 63/94 | 3/10 | 5/10 |
 | `max` — max(câu hỏi mẫu, nội dung) | 58/94 | 76/94 | 1/10 | 6/10 |
-| `mean` — trung bình (câu hỏi mẫu, nội dung) | 58/94 | 75/94 | 1/10 | 4/10 |
-| `server` — ◀ `contextRankOf` server đang dùng | 58/94 | 75/94 | 1/10 | 4/10 |
+| `mean` — trung bình (câu hỏi mẫu, nội dung) | 57/94 | 75/94 | 1/10 | 4/10 |
+| `server` — ◀ `contextRankOf` server đang dùng | 57/94 | 75/94 | 1/10 | 4/10 |
 
 Câu nối tiếp — embed riêng câu hỏi hay ghép thêm tin user gần nhất trong lịch sử:
 
@@ -179,8 +179,8 @@ Bỏ dấu nhân tạo 93 câu hỏi mới có dấu (giữ nhãn) để có c�
 
 | So với | Top-1 đúng mục | Top-3 có mục đúng |
 | --- | --- | --- |
-| Câu hỏi mẫu gốc | 4/79 | 23/79 |
-| Bản bỏ dấu của câu hỏi mẫu ◀ | 19/79 | 34/79 |
+| Câu hỏi mẫu gốc | 3/79 | 23/79 |
+| Bản bỏ dấu của câu hỏi mẫu ◀ | 19/79 | 33/79 |
 
 Score cao nhất (so với bản bỏ dấu): câu trong phạm vi 0,636–0,950, câu ngoài phạm vi 0,387–0,923 — hai nhóm chồng lên nhau gần hết nên không có ngưỡng chặn an toàn.
 
@@ -188,8 +188,8 @@ Nếu trả thẳng câu không dấu (so với bản bỏ dấu):
 
 | Ngưỡng | Trả thẳng | Đúng | Chính xác |
 | --- | --- | --- | --- |
-| 0,850 | 59 | 10 | 17% |
-| 0,900 | 25 | 5 | 20% |
+| 0,850 | 60 | 10 | 17% |
+| 0,900 | 26 | 5 | 19% |
 | 0,925 | 4 | 3 | 75% |
 | 0,950 | 1 | 1 | 100% |
 
@@ -250,7 +250,7 @@ Câu bị xếp khác nhãn mong đợi. Với câu `llm` rơi đúng bậc 3–
 | q056 | employer | Hạn nộp hồ sơ tối đa được đặt bao nhiêu ngày? | faq jobpost-create | bậc 3–4 | 0,751 | subscription-trial (Thời gian dùng thử là bao lâu?) |
 | q057 | employer | Tin của tôi gửi lâu rồi mà vẫn chờ duyệt | faq jobpost-approval | bậc 3–4 | 0,715 | jobpost-approval (Tại sao tin của tôi đang chờ duyệt?) |
 | q058 | employer | Tin bị admin từ chối thì sửa lại thế nào? | faq jobpost-approval | bậc 3–4 | 0,681 | jobpost-approval (Tin bị từ chối thì làm sao?) |
-| q059 | employer | Muốn dừng nhận hồ sơ cho một tin thì làm sao? | faq jobpost-status | bậc 3–4 | 0,625 | employer-applications (Từ chối nhiều hồ sơ cùng lúc được không?) |
+| q059 | employer | Muốn dừng nhận hồ sơ cho một tin thì làm sao? | faq jobpost-status | bậc 3–4 | 0,653 | employer-application-automation (Có tắt được việc hệ thống tự chuyển hồ sơ sang Đang xem xét không?) |
 | q060 | employer | Sao tin đã đăng không có nút sửa? | faq jobpost-status | bậc 3–4 | 0,693 | jobpost-status (Tại sao tôi không sửa được tin đã đăng?) |
 | q061 | employer | Có tính năng AI đọc mô tả công việc để điền kỹ năng không? | faq jobpost-requirements-ai | bậc 3–4 | 0,715 | jobpost-requirements-ai (Kết quả AI gợi ý có tự lưu vào tin không?) |
 | q062 | employer | Công ty mới có được đăng tin miễn phí không? | faq subscription-trial | bậc 3–4 | 0,763 | subscription-trial (Đăng tin có miễn phí không?) |
@@ -292,5 +292,5 @@ Câu `llm` mà mục đúng **không** nằm trong top-3 (cách `question`): 5.
 | q076 | Đang có gói còn 10 ngày mà mua gói khác thì số tin còn lại có được cộng vào không? | subscription-payment | subscription-trial, company-join, subscription-plans |
 | q077 | Ứng viên đang ở bước phỏng vấn, tôi muốn nhận luôn thì có phải đợi phỏng vấn xong không? | employer-applications | employer-interviews, candidate-search-invite, job-apply |
 | q079 | Một tin bị hạ thì tôi có mất lượt đăng không, và ứng viên đã nộp có còn xem được không? | jobpost-status | employer-applications, subscription-plans, candidate-search-invite |
-| q083 | Hệ thống có dùng AI không, AI làm những gì? | about-internhub | jobpost-requirements-ai, recommended-jobs, employer-onboarding |
+| q083 | Hệ thống có dùng AI không, AI làm những gì? | about-internhub | jobpost-requirements-ai, recommended-jobs, employer-application-automation |
 
