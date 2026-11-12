@@ -238,6 +238,20 @@ function ApplicationsPageContent() {
     }
   }, [returnedPage, query.page, update]);
 
+  // Hàng tab cuộn ngang: mở trang ở tab cuối (vd. "Tin đã đóng") thì tab đang chọn bị khuất bên
+  // phải. Chỉ cuộn hàng tab, không cuộn trang.
+  const tabsReady = data !== undefined;
+  useEffect(() => {
+    if (!tabsReady || query.focus !== null) return;
+    const tab = tabRefs.current.get(tabId(query.status));
+    const tablist = tab?.parentElement;
+    if (!tab || !tablist) return;
+    const tabBox = tab.getBoundingClientRect();
+    const listBox = tablist.getBoundingClientRect();
+    if (tabBox.right > listBox.right) tablist.scrollLeft += tabBox.right - listBox.right;
+    else if (tabBox.left < listBox.left) tablist.scrollLeft -= listBox.left - tabBox.left;
+  }, [tabsReady, query.status, query.focus]);
+
   // `job` trên URL không phải tin của công ty (404): bỏ qua như giá trị lạ.
   const jobNotFound = list.error instanceof ApiError && list.error.status === 404 && query.jobPostId !== null;
   useEffect(() => {
@@ -693,7 +707,7 @@ function ApplicationsPageContent() {
                         <th scope="col" className="py-2 pr-3 font-semibold">
                           Ngày nộp
                         </th>
-                        <th scope="col" className="py-2 pr-3 font-semibold">
+                        <th scope="col" className="py-2 pr-3 font-semibold whitespace-nowrap">
                           Phù hợp
                         </th>
                         <th scope="col" className="py-2 pr-3 font-semibold">

@@ -16,6 +16,7 @@ import { useRouter } from "next/navigation";
 import type { CandidateInterview, JobPostStatus } from "@sip/shared-types";
 import { JOB_STATUS_LABEL } from "@/lib/job-post-display";
 import { APPLICATION_STATUS_LABEL } from "@/lib/application-status";
+import { formatVnDate } from "@/lib/dashboard-format";
 
 const INACTIVE_JOB_STATUSES: ReadonlySet<JobPostStatus> = new Set(["CLOSED", "EXPIRED", "TAKEN_DOWN"]);
 
@@ -115,7 +116,9 @@ export default function ApplicationsPage() {
                       <Icon name="building-2" size={14} className="inline-block mr-1 text-text-muted" />
                       {app.jobPost.company.name}
                     </p>
-                    <p className="text-xs text-text-muted mt-2">Nộp lúc: {new Date(app.createdAt).toLocaleDateString()}</p>
+                    <p className="text-xs text-text-muted mt-2">
+                      Nộp lúc: <span className="font-num tabular-nums">{formatVnDate(app.createdAt)}</span>
+                    </p>
                   </div>
                   <div className="flex flex-col items-end gap-3 shrink-0">
                     <div className="flex flex-wrap justify-end gap-2">

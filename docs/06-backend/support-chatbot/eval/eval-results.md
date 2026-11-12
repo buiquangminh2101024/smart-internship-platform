@@ -1,13 +1,13 @@
 # Kết quả eval chatbot hỗ trợ — bậc 2 (so khớp FAQ)
 
-> Sinh tự động bởi `apps/server/scripts/support-chat-eval.ts` lúc 2026-11-12T12:45:26.444Z — không sửa tay; chạy lại script để cập nhật. Phương pháp: `../PLAN.md` mục "Bộ eval" và "Pipeline xử lý một câu hỏi".
+> Sinh tự động bởi `apps/server/scripts/support-chat-eval.ts` lúc 2026-11-12T14:10:34.840Z — không sửa tay; chạy lại script để cập nhật. Phương pháp: `../PLAN.md` mục "Bộ eval" và "Pipeline xử lý một câu hỏi".
 
-Model embedding `Xenova/paraphrase-multilingual-MiniLM-L12-v2`, phiên bản FAQ `ee1b90d6c71f`. Bộ câu hỏi do người soạn, cỡ nhỏ: con số chỉ mang tính chỉ báo. Score là cosine giữa câu hỏi và **câu hỏi mẫu gần nhất** của mỗi mục FAQ người hỏi được thấy.
+Model embedding `Xenova/paraphrase-multilingual-MiniLM-L12-v2`, phiên bản FAQ `d71d5d83a172`. Bộ câu hỏi do người soạn, cỡ nhỏ: con số chỉ mang tính chỉ báo. Score là cosine giữa câu hỏi và **câu hỏi mẫu gần nhất** của mỗi mục FAQ người hỏi được thấy.
 
 ## Dữ liệu
 
 - 118 câu: 110 câu hỏi mới (faq 84 · llm 11 · out_of_scope 15) và 8 câu nối tiếp (có `history`). 17 câu hỏi mới gõ không dấu — không trả thẳng, không chặn, luôn xuống bậc 3–4 (chọn đoạn bằng bản bỏ dấu của câu hỏi mẫu).
-- Thời gian embed một câu (đã làm nóng model): trung vị 6,2 ms, lớn nhất 204,0 ms.
+- Thời gian embed một câu (đã làm nóng model): trung vị 6,2 ms, lớn nhất 199,3 ms.
 
 ## Ngưỡng đang dùng (`support-chat.config.ts`)
 
@@ -113,10 +113,10 @@ Mục đúng (`faqId`) có nằm trong 3 mục đưa vào prompt không. Cột "
 | Cách xếp hạng | Top-1 (mọi câu có faqId) | Top-3 (mọi câu có faqId) | Top-1 (câu llm) | Top-3 (câu llm) |
 | --- | --- | --- | --- | --- |
 | `question` — score câu hỏi mẫu cao nhất | 57/94 | 73/94 | 1/10 | 5/10 |
-| `content` — score với `title + nội dung` | 46/94 | 63/94 | 3/10 | 5/10 |
+| `content` — score với `title + nội dung` | 46/94 | 65/94 | 3/10 | 5/10 |
 | `max` — max(câu hỏi mẫu, nội dung) | 58/94 | 76/94 | 1/10 | 6/10 |
-| `mean` — trung bình (câu hỏi mẫu, nội dung) | 57/94 | 75/94 | 1/10 | 4/10 |
-| `server` — ◀ `contextRankOf` server đang dùng | 57/94 | 75/94 | 1/10 | 4/10 |
+| `mean` — trung bình (câu hỏi mẫu, nội dung) | 57/94 | 74/94 | 1/10 | 4/10 |
+| `server` — ◀ `contextRankOf` server đang dùng | 57/94 | 74/94 | 1/10 | 4/10 |
 
 Câu nối tiếp — embed riêng câu hỏi hay ghép thêm tin user gần nhất trong lịch sử:
 
@@ -158,7 +158,7 @@ Câu hỏi gõ không dấu — score và mục cao nhất khi so với câu h�
 | id | Câu hỏi | Mục đúng | So với câu mẫu gốc | So với câu mẫu bỏ dấu | Top-3 có mục đúng (gốc → bỏ dấu) |
 | --- | --- | --- | --- | --- | --- |
 | q003 | lam sao dang ky tai khoan | account-register | 0,500 account-notifications ✗ | 0,852 account-notifications ✗ | không → không |
-| q006 | khong nhan duoc ma otp | account-otp | 0,565 subscription-trial ✗ | 0,842 account-otp | không → có |
+| q006 | khong nhan duoc ma otp | account-otp | 0,565 subscription-trial ✗ | 0,842 account-otp | không → không |
 | q055 | dang tin tuyen dung o dau | jobpost-create | 0,720 subscription-trial ✗ | 0,896 employer-interviews ✗ | có → có |
 | q105 | quen pass roi lay lai kieu gi | account-forgot-password | 0,499 subscription-trial ✗ | 0,838 employer-applications ✗ | không → không |
 | q106 | up cv len he thong kieu gi | cv-upload | 0,329 messaging ✗ | 0,742 contact-support ✗ | không → không |
@@ -180,7 +180,7 @@ Bỏ dấu nhân tạo 93 câu hỏi mới có dấu (giữ nhãn) để có c�
 | So với | Top-1 đúng mục | Top-3 có mục đúng |
 | --- | --- | --- |
 | Câu hỏi mẫu gốc | 3/79 | 23/79 |
-| Bản bỏ dấu của câu hỏi mẫu ◀ | 19/79 | 33/79 |
+| Bản bỏ dấu của câu hỏi mẫu ◀ | 19/79 | 31/79 |
 
 Score cao nhất (so với bản bỏ dấu): câu trong phạm vi 0,636–0,950, câu ngoài phạm vi 0,387–0,923 — hai nhóm chồng lên nhau gần hết nên không có ngưỡng chặn an toàn.
 

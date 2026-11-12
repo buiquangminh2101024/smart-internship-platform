@@ -186,7 +186,8 @@ function Status({
 }) {
   const status = APPLICATION_STATUS_LABEL[item.status];
   return (
-    <div className="flex flex-col items-start gap-1">
+    // Không xuống dòng trong nhãn: cột Trạng thái lấy đủ bề rộng của nhãn dài nhất, các cột chữ co lại.
+    <div className="flex flex-col items-start gap-1 whitespace-nowrap">
       <Badge tone={status.tone}>{status.label}</Badge>
       {item.changedBySystem ? (
         // Lần đổi gần nhất do hệ thống làm (AD-25): tự chuyển Đang xem xét hoặc tự đóng khi tin ngừng tuyển.

@@ -408,7 +408,7 @@ test("lời nhắc tuần: đúng thứ tự, bỏ nhóm bằng 0, có email, li
   assert.equal(rendered.title, "Có hồ sơ ứng viên cần xử lý");
   assert.equal(
     rendered.body,
-    "3 ứng viên đã phỏng vấn chưa có kết quả · 5 hồ sơ sẽ tự đóng từ ngày 18/11 · 12 hồ sơ chờ duyệt quá 7 ngày · 2 ứng viên chờ đặt lịch phỏng vấn quá 7 ngày",
+    "3 ứng viên đã phỏng vấn quá 7 ngày chưa có kết quả · 5 hồ sơ sẽ tự đóng từ ngày 18/11 · 12 hồ sơ chờ duyệt quá 7 ngày · 2 ứng viên chờ đặt lịch phỏng vấn quá 7 ngày",
   );
   assert.equal(rendered.link, "/employer/applications?focus=result");
   assert.equal(rendered.email?.subject, "[Công ty A] Hồ sơ ứng viên cần xử lý tuần này");

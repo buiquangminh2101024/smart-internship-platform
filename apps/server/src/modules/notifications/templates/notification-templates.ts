@@ -107,7 +107,7 @@ type NeedAttentionData = NotificationPayloadMap["APPLICATIONS_NEED_ATTENTION"];
 function applicationsNeedAttentionParts(data: NeedAttentionData): string[] {
   const days = STALE_AFTER_DAYS;
   const parts: string[] = [];
-  if (data.needsResult > 0) parts.push(`${data.needsResult} ứng viên đã phỏng vấn chưa có kết quả`);
+  if (data.needsResult > 0) parts.push(`${data.needsResult} ứng viên đã phỏng vấn quá 7 ngày chưa có kết quả`);
   if (data.closingSoon > 0) {
     parts.push(
       data.closingOn

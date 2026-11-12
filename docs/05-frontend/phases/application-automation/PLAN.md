@@ -1,6 +1,6 @@
 # Hệ thống tự xử lý hồ sơ chờ lâu (0.4) — Frontend
 
-> **Trạng thái: ĐANG TRIỂN KHAI.** Lập kế hoạch 2026-11-11. Đợt A và đợt B xong 2026-11-12 (xem "Ghi chú triển khai"); F6 chưa làm. Phụ thuộc backend `docs/06-backend/application-automation/PLAN.md` (bước 1–6); Q1–Q3 ở đó đã chốt 2026-11-12.
+> **Trạng thái: ĐANG TRIỂN KHAI.** Lập kế hoạch 2026-11-11. Đợt A, đợt B và F6 xong 2026-11-12 (xem "Ghi chú triển khai"). Phụ thuộc backend `docs/06-backend/application-automation/PLAN.md` (bước 1–6); Q1–Q3 ở đó đã chốt 2026-11-12.
 >
 > Làm theo 2 đợt, mỗi đợt một commit, rồi kiểm trên trình duyệt một lần. Các bước F1–F6 ở Phần 3 giữ nguyên nội dung; chỉ cách gom bước vào đợt thay đổi (chia lại 2026-11-12):
 >
@@ -199,6 +199,39 @@ Khác chữ của plan:
 
 - `APPLICATIONS_NEED_ATTENTION` vào `WARNING_NOTIFICATION_TYPES`, nên có màu marigold (đúng nghĩa "đang chờ con người xử lý" của `sip-ui`) và icon `clock` như hai loại "sắp hết hạn".
 - `SocketProvider`: Employer nhận loại này thì làm mới `COMPANY_APPLICATIONS_KEY`.
+
+### F6 (2026-11-12): kiểm trên trình duyệt
+
+Server, web và gateway do chủ dự án bật, vào qua cổng 8080. Công ty demo Mây Xanh, tài khoản `tuyendung-mayxanh@large-demo.local`. Chủ dự án duyệt trước các thao tác ghi: đăng nhập, từ chối thật 2 hồ sơ, đổi Y rồi trả lại, chạy `process-applications`. Số liệu đối chiếu bằng cách đọc phản hồi API ngay trong trang.
+
+| # | Kết quả |
+|---|---|
+| 1 | Đạt. Tab Chờ duyệt: mặc định "Phù hợp nhất", URL không ghi `sort`; 106 hồ sơ qua 6 trang, không trùng, điểm giảm dần, cột "Phù hợp" khớp API từng dòng. Tab Đang xem xét: 94 hồ sơ, 2 hồ sơ "Chưa có điểm" nằm cuối. |
+| 2 | Đạt. Dải gợi ý 54 = `total` của `focus=reject`; 20 hồ sơ trang đầu chọn sẵn; thanh thao tác chỉ còn "Từ chối 20", "Xem xét 20"; bỏ chọn một dòng thì còn 19. Bỏ chọn còn 2 rồi xác nhận: `bulk-status` đổi đúng 2 (`clargedemoapp374`, `clargedemoapp2957`), không bỏ qua hồ sơ nào; dải gợi ý 54 → 52; "Còn 34 hồ sơ được đề xuất → Xem tiếp" (52 − 18 hồ sơ chưa xử lý trên trang); "Xem tiếp" chọn sẵn lại 20; "Thoát" về tab Tất cả. `focus=result`: 8 hồ sơ, không chọn sẵn, nút chính "Được nhận", có "Phỏng vấn N ngày trước". |
+| 3 | `--dry-run --company` ra 0 (lượt thật đã chạy ở bước 8 backend) nên không chạy thật. Kiểm giao diện trên kết quả của bước 8: đúng 22 hồ sơ có nhãn "Hệ thống tự chuyển"; tab Tin đã đóng có 8 hồ sơ, nhãn "Hệ thống tự đóng", không ô chọn, không nút. |
+| 4 | Đạt. Ứng viên `ung-vien-0307`: đơn ghi "Tin đã đóng" (xám) kèm "Tin đã ngừng nhận hồ sơ.", không màu đỏ; thông báo "Hồ sơ ứng tuyển đã được đóng" đúng lời. Trang chi tiết hồ sơ phía employer có dòng "Tin đã ngừng nhận hồ sơ. Hồ sơ này không đổi trạng thái được nữa.". |
+| 5 | Đạt, tin "Thực tập sinh Frontend React" (`clargedemojobscmxfrontendintern`). Y = 80 bị chặn dưới ô ("Nhập số nguyên từ 0 đến 79."), nút Lưu khoá. Y 50 → 60: số đề xuất của tin 4 → 7 (đúng 3 hồ sơ điểm 50–59). Hạ X xuống 60 ở thẻ tự mời: server trả 400, thẻ hiện "Ngưỡng phù hợp phải lớn hơn ngưỡng đề xuất từ chối (60%).", không ghi. Đã trả Y về 50. Tin của người khác cùng công ty (`clargedemojob0025`): cả hai thẻ ẩn. |
+| 6 | Link đạt: icon đồng hồ nền marigold, nhóm "Hồ sơ", "Xem hồ sơ" mở `?focus=result`. Số: xem "Còn lại" bên dưới. |
+| 7 | Đạt. Mặc định "Phù hợp nhất"; cột Ứng viên hiện tên, cột Email giữ email; ô lọc tiếng Việt có "Tin đã đóng"; ngày nộp DD/MM; link "Xử lý hồ sơ của tin này" đúng `?job=`. |
+| 8 | Đạt. Cửa sổ trình duyệt không thu được về 375 px nên đo trong iframe 375 px cùng origin: 7 trang (Ứng viên ở Tất cả / `focus=reject` / `focus=result` / Tin đã đóng, trang tin, form tạo tin, hồ sơ theo tin) đều có `scrollWidth` = `clientWidth`, không phần tử nào tràn ngoài vùng cuộn. |
+| 9 | Đạt. `tsc --noEmit` sạch, eslint các file sửa trong F6 sạch, `next build` qua. |
+| 10 | Đã thêm vào FAQ `employer-application-automation`: hai câu hỏi mẫu ("Cài đặt tự xử lý hồ sơ ở đâu?", "Xem các hồ sơ được đề xuất từ chối ở đâu?") và đoạn "Ở đâu" (thẻ cài đặt, dòng gợi ý, nhóm đề xuất từ chối, nhãn, tab Tin đã đóng); câu "ngưỡng điểm" đổi thành "Ngưỡng phù hợp". Mục `employer-applications`: "Phù hợp nhất" có ở cả trang Ứng viên. Đã chạy lại `support-chat:index` và `support-chat:eval`. |
+
+Sửa trong F6:
+
+- Bảng ở trang Ứng viên: thêm cột "Phù hợp" làm cột Trạng thái hẹp lại, nhãn "Đang xem xét" gãy 3 dòng ở 1536 px. Nhãn trạng thái giờ không xuống dòng (`whitespace-nowrap` ở `Status`), tiêu đề "Phù hợp" cũng vậy.
+- Mở trang ở tab cuối (`?status=JOB_CLOSED`) thì tab đang chọn bị khuất bên phải hàng tab cuộn ngang. Thêm effect cuộn hàng tab (chỉ hàng tab, không cuộn trang) cho thấy tab đang chọn.
+
+Sau F6, chủ dự án duyệt sửa thêm (2026-11-12):
+
+- **Số trong thông báo nhắc tuần khác số trên trang.** Thông báo chỉ đếm hồ sơ đứng yên quá 7 ngày (thiết kế backend bước 5), còn trang hiện mọi hồ sơ của nhóm: "1 ứng viên đã phỏng vấn chưa có kết quả" mà trang `focus=result` có 8. Các nhóm khác có ghi "quá 7 ngày", riêng nhóm này thiếu. Đã sửa lời trong `notification-templates.ts` thành "N ứng viên đã phỏng vấn quá 7 ngày chưa có kết quả", test đơn vị cập nhật theo (29/29 qua). Thông báo đã tạo là bản chụp nên không đổi.
+- **Eval chatbot.** Sau khi sửa FAQ, số câu trả thẳng không đổi; top-3 đoạn đưa vào prompt (`server`) 75 → 73/94, câu gõ không dấu 33 → 31/79 (q006 "khong nhan duoc ma otp", q112 "xep lich phong van cho may ung vien"). Thử trả câu "Phù hợp nhất" ở mục `employer-applications` về như cũ: `server` lên 74/94, q112 lấy lại top-3, q006 vẫn mất, nên q006 do phần khác (hai câu hỏi mẫu mới của mục `employer-application-automation`). Câu cuối cùng giữ thông tin trang Ứng viên nhưng ngắn: "Danh sách đơn của từng tin và trang **Ứng viên** có cách sắp xếp **Phù hợp nhất** …", cho `server` 74/94, `content` 65/94 (bản commit 63). Bỏ ý "tab Chờ duyệt và Đang xem xét mặc định sắp theo cách này" vì ý đó kéo q112 khỏi top-3.
+- **Ngày "Nộp lúc" ở trang ứng tuyển của ứng viên** dạng `11/1/2026` (`toLocaleDateString()` mặc định). Đổi sang `formatVnDate` (DD/MM/YYYY giờ Việt Nam), số dùng `font-num tabular-nums`.
+- **Tên công ty dài tràn khỏi sidebar 240 px.** Khung grid của `CompanyHeader` thiếu `min-w-0` nên ô giãn theo chữ, `truncate` không cắt được và huy hiệu "Đã xác minh" bị kéo dài theo. Thêm `min-w-0`, `justify-items-start`, tên xuống tối đa 2 dòng (`line-clamp-2`) kèm `title` tên đầy đủ, dùng chung cho sidebar và ngăn kéo (bỏ prop `wrap`). Kiểm ở 1536 px: tên Mây Xanh 2 dòng, tên giả dài 100 ký tự vẫn 2 dòng, nằm trong cột, huy hiệu rộng 87 px.
+
+Còn lại:
+
+- Form tạo tin chưa bấm lưu thật (sẽ tạo tin nháp trên Neon, ngoài các thao tác đã duyệt); đã xem các ô hiển thị đúng ở desktop và 375 px.
 
 ## Phần 4 — Ghi chú của chủ dự án
 

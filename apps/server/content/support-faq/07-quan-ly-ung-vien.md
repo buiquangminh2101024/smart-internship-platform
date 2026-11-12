@@ -20,7 +20,7 @@ Hồ sơ ứng tuyển nằm ở **Ứng viên** (/employer/applications), hoặ
 - Mỗi lần đổi trạng thái, ứng viên nhận thông báo.
 - **Ghi chú nội bộ** và **đánh giá 1–5 sao** chỉ công ty bạn thấy, ứng viên không thấy.
 - Có thể chọn nhiều hồ sơ để đổi trạng thái cùng lúc (tối đa 50 hồ sơ mỗi lần).
-- Danh sách đơn của từng tin có cách sắp xếp **Phù hợp nhất** theo mức độ phù hợp với yêu cầu của tin.
+- Danh sách đơn của từng tin và trang **Ứng viên** có cách sắp xếp **Phù hợp nhất** theo mức độ phù hợp với yêu cầu của tin.
 
 ## employer-application-automation
 audience: employer
@@ -35,10 +35,12 @@ questions:
 - Thông báo có hồ sơ ứng viên cần xử lý là gì?
 - Khi nào hệ thống đóng hồ sơ của tin đã hết hạn?
 - Có tắt được việc hệ thống tự chuyển hồ sơ sang Đang xem xét không?
+- Cài đặt tự xử lý hồ sơ ở đâu?
+- Xem các hồ sơ được đề xuất từ chối ở đâu?
 
 Hệ thống giúp hồ sơ không bị bỏ quên. Mỗi tin có cài đặt riêng, và **không bao giờ tự từ chối** ứng viên.
 
-- **Tự chuyển sang Đang xem xét:** hồ sơ **Chờ duyệt** của tin đang hiển thị có mức độ phù hợp **≥ ngưỡng phù hợp** của tin thì được chuyển ngay khi nộp, hoặc ở lượt 8h30 sáng hằng ngày. Ngưỡng này là ngưỡng điểm ở thẻ **Tự động mời ứng viên** của tin (mặc định 80%), dùng chung cho tự mời. Hồ sơ chưa có điểm thì không được tự chuyển. Mỗi tin có công tắc riêng, mặc định bật, để tắt việc tự chuyển. Ứng viên nhận thông báo như khi bạn tự bấm.
+- **Tự chuyển sang Đang xem xét:** hồ sơ **Chờ duyệt** của tin đang hiển thị có mức độ phù hợp **≥ ngưỡng phù hợp** của tin thì được chuyển ngay khi nộp, hoặc ở lượt 8h30 sáng hằng ngày. Ngưỡng này là **Ngưỡng phù hợp** ở thẻ **Tự động mời ứng viên** của tin (mặc định 80%), dùng chung cho tự mời. Hồ sơ chưa có điểm thì không được tự chuyển. Mỗi tin có công tắc riêng, mặc định bật, để tắt việc tự chuyển. Ứng viên nhận thông báo như khi bạn tự bấm.
 - **Đề xuất từ chối:** hồ sơ Chờ duyệt có điểm dưới ngưỡng đề xuất từ chối của tin (mặc định 50%, luôn nhỏ hơn ngưỡng phù hợp) được gom thành một nhóm để bạn xem lại. Chỉ khi bạn xác nhận thì hồ sơ mới bị từ chối.
 - **Nhắc hằng tuần:** 8h sáng thứ Hai, mỗi nhà tuyển dụng của công ty nhận một thông báo kèm email nếu còn hồ sơ đứng yên quá 7 ngày, ứng viên đã phỏng vấn chưa có kết quả, hoặc hồ sơ sắp bị tự đóng (kèm ngày đóng).
 - **Tự đóng khi tin ngừng tuyển** (tin hết hạn, đã đóng hoặc bị gỡ), hồ sơ chuyển sang **Tin đã đóng**:
@@ -48,6 +50,12 @@ Hệ thống giúp hồ sơ không bị bỏ quên. Mỗi tin có cài đặt ri
   - Đã phỏng vấn mà chưa có kết quả: chỉ đóng khi tin bật chế độ tự đóng hồ sơ đã phỏng vấn (mặc định tắt), sau 30 ngày.
 
 **Tin đã đóng** là kết quả cuối, không mở lại được. Trạng thái này không tính là từ chối, và ứng viên được báo là tin đã ngừng nhận hồ sơ.
+
+Ở đâu:
+
+- Cài đặt: thẻ **Tự động xử lý hồ sơ** ở trang chi tiết tin (chỉ người đăng tin thấy), hoặc cuối form tạo tin.
+- Trang **Ứng viên**: dòng gợi ý phía trên các tab mở nhóm đề xuất từ chối (hồ sơ được chọn sẵn, bỏ chọn hồ sơ muốn giữ rồi bấm **Từ chối**) và nhóm cần kết quả phỏng vấn.
+- Hồ sơ hệ thống đã chuyển có nhãn **Hệ thống tự chuyển**; hồ sơ hệ thống đã đóng nằm ở tab **Tin đã đóng**.
 
 ## employer-interviews
 audience: employer
