@@ -27,6 +27,8 @@ export interface NotificationPayloadMap {
     companyName: string;
     oldStatus: string;
     newStatus: string;
+    /** AD-25 — chỉ có khi hệ thống đóng hồ sơ (`newStatus = JOB_CLOSED`); chọn lời thông báo. */
+    closeReason?: "JOB_ENDED" | "NO_RESULT";
   };
   JOB_POST_APPROVED: { jobPostId: string; jobPostTitle: string };
   JOB_POST_REJECTED: { jobPostId: string; jobPostTitle: string; reason?: string };

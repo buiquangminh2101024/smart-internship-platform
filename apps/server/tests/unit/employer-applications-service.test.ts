@@ -67,6 +67,7 @@ function buildService(options: Options = {}) {
     updates: [] as Array<{ id: string; from: ApplicationStatus; to: ApplicationStatus; db: unknown }>,
     history: [] as Array<{ applicationId: string; fromStatus: ApplicationStatus | null; toStatus: ApplicationStatus; actorId: string | null }>,
     cancelled: [] as string[],
+    cancelReasons: [] as string[],
     notified: [] as Array<{ type: string; userId: string; payload: Record<string, unknown> }>,
     transactionTimeout: undefined as number | undefined,
   };
@@ -113,11 +114,13 @@ function buildService(options: Options = {}) {
     employerRepository: {},
     employerIdentityCache: { require: async () => EMPLOYER },
     interviewsRepository: {
-      cancelUpcomingForApplication: async (applicationId: string) => {
+      cancelUpcomingForApplication: async (applicationId: string, reason: string) => {
         calls.cancelled.push(applicationId);
+        calls.cancelReasons.push(reason);
         return 1;
       },
     },
+    autoReviewTrigger: () => {},
     notificationsService: {
       notify: async (type: string, userId: string, payload: Record<string, unknown>) => {
         calls.notified.push({ type, userId, payload });
@@ -395,4 +398,57 @@ test("từng hồ sơ: được nhận ⇒ cùng chuỗi ghi như hàng loạt (
   assert.equal(calls.history.length, 1);
   assert.deepEqual(calls.cancelled, ["a-1"]);
   assert.equal(calls.notified[0]!.payload.newStatus, "ACCEPTED");
+});
+
+// ─── Lối hệ thống (AD-25, 0.4 bước 4a) ─────────────────────────────────────
+
+test("changeStatusBySystem: tự chuyển Đang xem xét ⇒ lịch sử actorId null, thông báo như người bấm, không huỷ lịch", async () => {
+  const { service, calls } = buildService();
+  assert.equal(await service.changeStatusBySystem(target("a-1", "PENDING"), "REVIEWING"), true);
+  assert.deepEqual(calls.updates.map(({ id, from, to, db }) => ({ id, from, to, db })), [
+    { id: "a-1", from: "PENDING", to: "REVIEWING", db: TX },
+  ]);
+  assert.deepEqual(calls.history, [{ applicationId: "a-1", fromStatus: "PENDING", toStatus: "REVIEWING", actorId: null }]);
+  assert.deepEqual(calls.cancelled, []);
+  assert.deepEqual(calls.notified[0]!.payload, {
+    applicationId: "a-1",
+    jobPostId: "job-1",
+    jobPostTitle: "Thực tập sinh Frontend",
+    companyName: "Công ty A",
+    oldStatus: "PENDING",
+    newStatus: "REVIEWING",
+  });
+});
+
+test("changeStatusBySystem: đóng hồ sơ ⇒ JOB_CLOSED, closeReason trong payload, huỷ lịch còn sót với lý do riêng", async () => {
+  const { service, calls } = buildService();
+  assert.equal(await service.changeStatusBySystem(target("a-2", "SHORTLISTED"), "JOB_CLOSED", { closeReason: "NO_RESULT" }), true);
+  assert.deepEqual(calls.history, [{ applicationId: "a-2", fromStatus: "SHORTLISTED", toStatus: "JOB_CLOSED", actorId: null }]);
+  assert.deepEqual(calls.cancelled, ["a-2"]);
+  assert.deepEqual(calls.cancelReasons, ["Tin tuyển dụng đã ngừng tuyển"]);
+  assert.equal(calls.notified[0]!.payload.newStatus, "JOB_CLOSED");
+  assert.equal(calls.notified[0]!.payload.closeReason, "NO_RESULT");
+});
+
+test("changeStatusBySystem: trạng thái vừa bị đổi ⇒ false, không ghi lịch sử, không thông báo", async () => {
+  const { service, calls } = buildService({ raced: ["a-1"] });
+  assert.equal(await service.changeStatusBySystem(target("a-1", "PENDING"), "REVIEWING"), false);
+  assert.equal(calls.history.length, 0);
+  assert.equal(calls.notified.length, 0);
+});
+
+test("changeStatusBySystem: đích hay trạng thái gốc ngoài lối hệ thống ⇒ lỗi lập trình, không ghi gì", async () => {
+  const { service, calls } = buildService();
+  // Không bao giờ tự từ chối / tự nhận.
+  for (const to of ["REJECTED", "ACCEPTED", "SHORTLISTED"]) {
+    await assert.rejects(service.changeStatusBySystem(target("a-1", "PENDING"), to as "REVIEWING"));
+  }
+  // REVIEWING chỉ từ PENDING; JOB_CLOSED không từ trạng thái đã kết thúc.
+  await assert.rejects(service.changeStatusBySystem(target("a-1", "SHORTLISTED"), "REVIEWING"));
+  for (const from of ["ACCEPTED", "REJECTED", "CANCELLED", "JOB_CLOSED"] as const) {
+    await assert.rejects(service.changeStatusBySystem(target("a-1", from), "JOB_CLOSED"));
+  }
+  // closeReason chỉ đi với JOB_CLOSED.
+  await assert.rejects(service.changeStatusBySystem(target("a-1", "PENDING"), "REVIEWING", { closeReason: "JOB_ENDED" }));
+  assert.equal(calls.updates.length, 0);
 });

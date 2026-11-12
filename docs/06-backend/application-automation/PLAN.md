@@ -376,6 +376,40 @@ G2 chỉ gồm Đang xem xét (48) và Rút gọn (46); không có hồ sơ Mờ
 - **Chạy thử trên Neon (chỉ `SELECT`)**, công ty nhiều hồ sơ nhất (450 hồ sơ): `focusCounts` = `{ reject: 54, result: 8 }`, khớp đếm tay bằng câu SQL viết riêng; tab Chờ duyệt với `sort=match` sắp đúng điểm giảm dần; `focus=reject` ra 50/50 dòng `BELOW`; `focus=result` ra 8 dòng, đều có `needsResult` và `lastInterviewAt`; điểm trên dòng khớp bảng điểm (97 = 97). Thời gian mỗi câu 110–280 ms tính cả đường mạng tới Neon; `EXPLAIN ANALYZE` để bước 8. `changedBySystem` hiện đều `false` (chưa có lần tự chuyển nào).
 - `tsc` server: chỉ còn lỗi của `APPLICATIONS_NEED_ATTENTION` (bước 5). Web chưa dùng các trường mới (F2).
 
+### Bước 4 — tự chuyển và tự đóng (2026-11-12)
+
+- `applications.service.ts`:
+  - `changeStatusBySystem(target, to, { closeReason })` mở transaction riêng rồi gọi `applyStatusChange`, với `actorId` nay nhận `null`.
+  - Bảng `SYSTEM_TRANSITIONS` tách khỏi `STATUS_TRANSITIONS`: `REVIEWING` chỉ từ `PENDING`; `JOB_CLOSED` từ 4 trạng thái chưa kết thúc. Đích khác, trạng thái gốc khác, hoặc `closeReason` đi với đích khác `JOB_CLOSED` ⇒ ném lỗi lập trình.
+  - `createApplication` gọi `autoReviewTrigger({ applicationId })` sau commit.
+- `notification.types.ts`: payload `APPLICATION_STATUS_CHANGED` thêm `closeReason?`.
+- `notification-templates.ts`: `newStatus = JOB_CLOSED` có tiêu đề "Hồ sơ ứng tuyển đã được đóng" và lời theo `closeReason`, đúng như 4c. Các trạng thái khác giữ lời cũ.
+- Module mới `application-automation/`:
+  - `.config.ts`: 14, 30 ngày; 500 hồ sơ mỗi loại mỗi lượt; nhường event loop mỗi 50 hồ sơ.
+  - `.policy.ts`: `closeDecision` / `closeDueAt` theo bảng G1–G4.
+  - `.repository.ts`: chỉ đọc. `findAutoReviewTargets`, `findCloseTargets`; hằng SQL `JOB_CLOSED_AT`, `CLOSE_DUE_AT` (giữ cùng quy tắc với `closeDecision`), `OPEN_ON_CLOSED_JOB` (để bước 5 dùng lại).
+  - `.service.ts`: `autoReview`, `autoClose`, `runDaily` (cờ không chạy chồng), `trigger`.
+  - `.module.ts`: `registerApplicationAutomation`.
+- `applications.repository.ts`: export `APPLIED_AT`, `LAST_INTERVIEW_AT` để dùng chung.
+- **Chọn thêm khi làm (plan chưa ghi):**
+  - **Đăng ký module ngay ở bước 4** (`main.ts` gọi `registerApplicationAutomation` sau `registerMatchScores`), không đợi bước 7: `ApplicationsService` cần `autoReviewTrigger`, thiếu đăng ký thì API nộp đơn lỗi. Cron và script vẫn để bước 7.
+  - `JOB_CLOSED` cũng huỷ lịch `SCHEDULED` chưa diễn ra, `cancelReason` "Tin tuyển dụng đã ngừng tuyển". Hệ thống không đóng hồ sơ có lịch sắp tới (G3), nên việc này chỉ phòng trường hợp lịch được đặt chen vào giữa lúc chọn và lúc đóng.
+  - Mốc ngày tin đóng: `CLOSED` thiếu `closedAt`, hoặc `TAKEN_DOWN` thiếu dòng `RETRACTED`, thì lùi về `updatedAt`. Như vậy hồ sơ chỉ đóng muộn hơn, không sớm hơn. Neon hiện không có tin nào rơi vào trường hợp này.
+  - SQL lọc hạn trước để giới hạn 500 không bị hồ sơ G3, G4 (tắt) chiếm chỗ. Service xét lại từng dòng bằng `closeDecision`. Dòng lệch (giờ DB và giờ app khác nhau) đếm vào `notDue` và để lượt sau.
+  - Thứ tự xử lý: tự chuyển xếp nộp sớm nhất trước; tự đóng xếp hạn sớm nhất trước.
+  - `AutoReviewTrigger` nhận `{ applicationId }` hoặc `{ jobPostId }`. Lối 3 (PATCH hạ X, bật lại công tắc) sẽ nối ở bước 6, cùng API cài đặt.
+- Test:
+  - `application-automation.test.ts`: `closeDecision` đủ G1–G4, công tắc bật/tắt, mốc muộn hơn, trạng thái đã kết thúc; `autoReview`, `autoClose` với repository giả (raced, lỗi một hồ sơ thì đi tiếp, `limited`, `notDue`, `closeReason` theo nhóm); `runDaily` chạy chồng ⇒ `LOCKED`; lời thông báo `JOB_CLOSED`.
+  - `employer-applications-service.test.ts`: `changeStatusBySystem` ghi lịch sử `actorId = null`; `JOB_CLOSED` kèm `closeReason` và lý do huỷ lịch riêng; trạng thái vừa đổi ⇒ `false`, không ghi gì; đích hay gốc sai ⇒ lỗi.
+  - Toàn bộ unit test server: 488/488 qua.
+- **Chạy thử câu chọn trên Neon (chỉ `SELECT`, script `.claude-workspace/scratch/step4-verify.ts`):**
+  - Tự chuyển: **258** hồ sơ ở 145 tin, đều `PENDING`.
+  - Tự đóng: **129** hồ sơ, gồm G1 35 (Chờ duyệt) và G2 94 (Đang xem xét 48, Rút gọn 46). `closeDecision` xét lại không lệch dòng nào. Khớp đếm tay theo định nghĩa bước 0 (35 / 94) và khớp số đo bước 0.
+  - Phạm vi một hồ sơ / một công ty lọc đúng.
+  - Thời gian khi kết nối đã mở: 50–210 ms mỗi câu. Lần gọi đầu 3,7 s, gồm cả mở kết nối.
+  - **Chưa ghi gì lên Neon.** Chạy thật để bước 8, xin xác nhận trước.
+- `tsc` server: chỉ còn lỗi của `APPLICATIONS_NEED_ATTENTION` (bước 5).
+
 ## Phần 4 — Ghi chú của chủ dự án
 
 <!-- Để trống — dành cho chủ dự án. -->

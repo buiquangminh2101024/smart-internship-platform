@@ -61,7 +61,7 @@ export interface StatusChangeTarget {
 }
 
 /** Mốc nộp: lần ứng tuyển lại gần nhất, không có thì lúc tạo — cùng mốc với dashboard. */
-const APPLIED_AT = Prisma.sql`COALESCE(a."reappliedAt", a."createdAt")`;
+export const APPLIED_AT = Prisma.sql`COALESCE(a."reappliedAt", a."createdAt")`;
 
 /**
  * Tên trường của học vấn đại diện cho ứng viên `c`: isCurrent trước, rồi endYear
@@ -127,7 +127,7 @@ const MATCH_SCORE_JOIN = Prisma.sql`
 // ─── AD-25: tự xử lý hồ sơ ─────────────────────────────────────────────────
 
 /** Buổi phỏng vấn gần nhất đã diễn ra: lịch SCHEDULED có giờ đã qua (AD-16 M2 không lưu COMPLETED). */
-const LAST_INTERVIEW_AT = Prisma.sql`(
+export const LAST_INTERVIEW_AT = Prisma.sql`(
   SELECT MAX(i."scheduledAt") FROM interviews i
   WHERE i."applicationId" = a."id" AND i."status" = 'SCHEDULED' AND i."scheduledAt" <= ${NOW_UTC})`;
 

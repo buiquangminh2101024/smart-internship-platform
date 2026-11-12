@@ -115,8 +115,14 @@ function interviewLines(data: InterviewLines): string[] {
  */
 const templates: { [T in NotificationType]: Renderer<T> } = {
   APPLICATION_STATUS_CHANGED: (data, ctx) => {
-    const title = "Cập nhật trạng thái hồ sơ ứng tuyển";
-    const body = `Hồ sơ ứng tuyển vị trí "${data.jobPostTitle}" tại ${data.companyName} đã chuyển từ "${statusLabel(data.oldStatus)}" sang "${statusLabel(data.newStatus)}".`;
+    // AD-25 — hệ thống đóng hồ sơ vì tin đã ngừng tuyển: lời riêng theo lý do.
+    const closed = data.newStatus === "JOB_CLOSED";
+    const title = closed ? "Hồ sơ ứng tuyển đã được đóng" : "Cập nhật trạng thái hồ sơ ứng tuyển";
+    const body = !closed
+      ? `Hồ sơ ứng tuyển vị trí "${data.jobPostTitle}" tại ${data.companyName} đã chuyển từ "${statusLabel(data.oldStatus)}" sang "${statusLabel(data.newStatus)}".`
+      : data.closeReason === "NO_RESULT"
+        ? `Tin "${data.jobPostTitle}" tại ${data.companyName} đã ngừng tuyển và nhà tuyển dụng chưa cập nhật kết quả. Hồ sơ của bạn đã được đóng.`
+        : `Tin "${data.jobPostTitle}" tại ${data.companyName} đã ngừng nhận hồ sơ. Hồ sơ của bạn đã được đóng.`;
     const link = "/applications";
     return {
       title,
