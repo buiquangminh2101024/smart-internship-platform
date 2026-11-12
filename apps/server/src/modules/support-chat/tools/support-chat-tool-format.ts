@@ -16,6 +16,7 @@ export const APPLICATION_STATUS_LABEL: Record<ApplicationStatus, string> = {
   ACCEPTED: "Được nhận",
   REJECTED: "Bị từ chối",
   CANCELLED: "Đã huỷ",
+  JOB_CLOSED: "Tin đã đóng",
 };
 
 export const DATE_FORMAT = new Intl.DateTimeFormat("vi-VN", {

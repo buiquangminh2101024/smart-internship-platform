@@ -21,7 +21,9 @@ export type ApplicationStatus =
   | "INTERVIEWING"
   | "ACCEPTED"
   | "REJECTED"
-  | "CANCELLED";
+  | "CANCELLED"
+  // AD-25 — hệ thống đóng vì tin đã ngừng tuyển (trạng thái cuối, chỉ hệ thống chuyển)
+  | "JOB_CLOSED";
 
 export type NotificationType =
   | "APPLICATION_STATUS_CHANGED"
@@ -1480,16 +1482,31 @@ export interface EmployerApplicationView extends EmployerApplicationDetail {
   interviews: ApplicationInterview[];
 }
 
-/** `oldest`/`newest` theo ngày nộp; `skills`: khớp kỹ năng nhiều nhất (D10). */
-export type EmployerApplicationsSort = "oldest" | "newest" | "skills";
+/**
+ * `oldest`/`newest` theo ngày nộp; `skills`: khớp kỹ năng nhiều nhất (D10);
+ * `match`: điểm phù hợp lưu sẵn cao nhất trước, hồ sơ chưa có điểm xếp cuối (AD-25).
+ */
+export type EmployerApplicationsSort = "oldest" | "newest" | "skills" | "match";
 
-/** GET /employer/applications — query. `sort` mặc định `oldest` khi `status=PENDING`, còn lại `newest`. */
+/**
+ * Nhóm gợi ý của trang "Ứng viên" (AD-25), không dùng chung với `status`:
+ * - `reject`: hồ sơ Chờ duyệt của tin đang hiển thị có điểm dưới ngưỡng đề xuất từ chối Y;
+ * - `result`: hồ sơ `needsResult`.
+ */
+export type EmployerApplicationsFocus = "reject" | "result";
+
+/**
+ * GET /employer/applications — query. `sort` mặc định `match` khi `status` là `PENDING` hoặc
+ * `REVIEWING`, `oldest` khi có `focus`, còn lại `newest`.
+ */
 export interface EmployerApplicationsQuery {
   status?: ApplicationStatus;
   jobPostId?: string;
   /** 2–100 ký tự, tìm trong tên hoặc email ứng viên. */
   q?: string;
   sort?: EmployerApplicationsSort;
+  /** Không gửi cùng `status` (400). */
+  focus?: EmployerApplicationsFocus;
   page?: number;
   /** 1–50, mặc định 20. */
   pageSize?: number;
@@ -1516,8 +1533,27 @@ export interface EmployerApplicationListItem {
   awaitingSchedule: boolean;
   /** Lịch SCHEDULED gần nhất còn ở tương lai, nếu có. */
   nextInterviewAt: string | null;
+  /** Buổi phỏng vấn (SCHEDULED) gần nhất đã diễn ra, nếu có — cho "phỏng vấn N ngày trước". */
+  lastInterviewAt: string | null;
   skillMatch: ApplicationSkillMatch;
+  /** Điểm phù hợp lưu sẵn (AD-24). null ⇒ chưa có điểm. */
+  matchScore: number | null;
+  /** Dải theo ngưỡng của tin (AD-25). null khi không có điểm. */
+  matchBand: ApplicationMatchBand | null;
+  /** Lần đổi trạng thái gần nhất do hệ thống làm (không phải dòng khởi tạo). */
+  changedBySystem: boolean;
+  /**
+   * Đã có buổi phỏng vấn diễn ra, không có lịch sắp tới, chưa có kết quả
+   * (Rút gọn hoặc Mời phỏng vấn).
+   */
+  needsResult: boolean;
 }
+
+/**
+ * Dải điểm theo ngưỡng của tin (AD-25): `ABOVE` ≥ X (ngưỡng phù hợp); `BELOW` < Y (ngưỡng
+ * đề xuất từ chối); `MIDDLE` ở giữa.
+ */
+export type ApplicationMatchBand = "ABOVE" | "MIDDLE" | "BELOW";
 
 /** Một tin có ít nhất một hồ sơ (theo `q`, không theo `status`), cho ô lọc theo tin. */
 export interface EmployerApplicationJobCount {
@@ -1542,6 +1578,8 @@ export interface EmployerApplicationsPage {
   statusCounts: Record<ApplicationStatus, number>;
   /** Xếp theo tên tin. */
   jobCounts: EmployerApplicationJobCount[];
+  /** Số hồ sơ của từng nhóm gợi ý (AD-25), theo `jobPostId` và `q`, không theo `status`. */
+  focusCounts: Record<EmployerApplicationsFocus, number>;
 }
 
 /** Trạng thái đích được phép đổi hàng loạt (D4). "Được nhận" chỉ làm từng hồ sơ. */

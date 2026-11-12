@@ -259,6 +259,7 @@ interface JobApplicationAutomationSettings {
 ### Bước 9 — Tài liệu
 
 - Cập nhật dòng 0.4 của `FEATURE_BACKLOG.md`, trạng thái AD-25, ghi số đo vào "Ghi chú triển khai".
+- FAQ trợ lý hỗ trợ (`content/support-faq/03-tim-viec-ung-tuyen.md`, `07-quan-ly-ung-vien.md`): thêm trạng thái "Tin đã đóng" và việc hệ thống tự chuyển "Đang xem xét".
 - `docs/04-api/API_CONVENTIONS.md`: không có ngoại lệ mới (trang vẫn phân trang đánh số như đã ghi).
 
 ## Rủi ro
@@ -347,6 +348,33 @@ G2 chỉ gồm Đang xem xét (48) và Rút gọn (46); không có hồ sơ Mờ
 - Kiểm `autoOutreachMinScore ≤ 50`: 0 tin ở mọi trạng thái (mọi tin X = 80), nên không tin nào vi phạm Y < X khi Y = 50.
 - Đã chạy `prisma generate`. `tsc` của `apps/server` báo lỗi ở những chỗ liệt kê trạng thái, đúng như dự kiến, sẽ hết sau bước 2 và bước 4. Ngoài các file đã ghi ở bước 2, `tsc` còn chỉ ra: `application.mapper.ts`, `users.service.ts` (gán enum Prisma sang `ApplicationStatus` của shared-types, hết khi shared-types có `JOB_CLOSED`); `notification-groups.ts`, `notification.mapper.ts`, `notification.types.ts` (payload), `notification-templates.ts` (thiếu renderer cho `APPLICATIONS_NEED_ATTENTION`).
 - **Đã áp lên Neon (2026-11-12)** sau khi chủ dự án xác nhận (`npm run db:deploy`). Kiểm lại: hai giá trị enum mới đã có; 422/422 tin nhận `autoReviewEnabled = true`, `rejectSuggestBelowScore = 50`, `autoCloseInterviewedEnabled = false`; `prisma migrate status` báo đủ 36 migration.
+
+### Bước 2 — `JOB_CLOSED` ở mọi chỗ liệt kê trạng thái (2026-11-12)
+
+- `packages/shared-types`: `ApplicationStatus` thêm `JOB_CLOSED`, đã build lại `dist`. `NotificationType` **chưa** thêm `APPLICATIONS_NEED_ATTENTION` (để bước 5 thêm cùng payload và template).
+- `applications.service.ts`: `STATUS_TRANSITIONS.JOB_CLOSED = []`, không trạng thái nào có đích `JOB_CLOSED`. `statusCounts` tự có khoá `JOB_CLOSED` (lấy từ khoá của bảng chuyển). `createApplication` không đổi.
+- `match-score.repository.ts`: `MATCHED_COUNTS` loại thêm `JOB_CLOSED`.
+- Nhãn "Tin đã đóng": `notification-templates.ts` (chỉ nhãn; lời riêng theo `closeReason` để bước 4), `support-chat-tool-format.ts` (tool của ứng viên lấy danh sách trạng thái từ bảng nhãn này nên tự nhận `JOB_CLOSED`).
+- Rà, không cần sửa: `dashboard.repository.ts` (chỉ đếm `PENDING`, không có câu phễu theo trạng thái hồ sơ); `interviews.service.ts` (đặt lịch chỉ nhận `SHORTLISTED` / `INTERVIEWING`, nên đơn `JOB_CLOSED` không đặt lịch được); `scripts/lib/large-demo/history.ts`, `seed-dashboard-demo.ts` (không có `Record<ApplicationStatus, …>`, không sinh `JOB_CLOSED`); `applications.dto.ts` (PATCH đơn lẻ dùng `nativeEnum` nên nhận chữ `JOB_CLOSED`, nhưng `canTransition` trả 400; `bulk-status` chỉ nhận `REVIEWING` / `SHORTLISTED` / `REJECTED`).
+- Test: `employer-applications-service.test.ts` sửa `statusCounts` thành 8 khoá; thêm test người dùng không chuyển sang / ra khỏi `JOB_CLOSED` (bảng chuyển, `bulk-status`, PATCH đơn lẻ ⇒ 400). Toàn bộ unit test server: 467/467 qua.
+- `tsc` server: hết lỗi về `JOB_CLOSED`; còn lỗi của `APPLICATIONS_NEED_ATTENTION` (notifications), hết ở bước 5.
+- `tsc` web: lỗi ở `lib/application-status.ts` và `components/admin/UserDetailSections.tsx` (thiếu khoá `JOB_CLOSED`), đúng như plan frontend dự kiến, sửa ở F1. Chưa sửa web trong bước này.
+- Việc để bước 9: FAQ `content/support-faq/03-tim-viec-ung-tuyen.md` và `07-quan-ly-ung-vien.md` liệt kê trạng thái, cần thêm "Tin đã đóng" khi tính năng chạy thật.
+
+### Bước 3 — điểm, sắp xếp, nhóm gợi ý ở `GET /employer/applications` (2026-11-12)
+
+- `application-automation/application-automation.policy.ts` (mới): `effectiveRejectThreshold(X, Y)` (kẹp Y = X − 1) và `matchBand(score, X, Y)`. Bản SQL cùng quy tắc là `REJECT_SUGGEST_THRESHOLD` trong `applications.repository.ts`.
+- `applications.repository.ts`: `MATCH_SCORE_JOIN` (LEFT JOIN bảng điểm theo khoá chính), các hằng `LAST_INTERVIEW_AT`, `NEEDS_RESULT`, `SUGGEST_REJECT`, `CHANGED_BY_SYSTEM`; `listForCompany` trả thêm điểm, X, Y, `lastInterviewAt`, `changedBySystem`, `needsResult` và nhận `focus`; `ORDER_BY.match`; hàm mới `countFocus` (một câu `COUNT(*) FILTER`, chạy song song với các câu đếm sẵn có). `VISIBLE_JOB` của `match-score.repository.ts` được export để dùng chung.
+- `applications.service.ts`: `defaultSort(status, focus)`; `total` lấy từ `focusCounts` khi có `focus`; trả `focusCounts`.
+- Shared types: `EmployerApplicationsSort` thêm `"match"`, kiểu mới `EmployerApplicationsFocus`, `ApplicationMatchBand`; `EmployerApplicationListItem` thêm `matchScore`, `matchBand`, `changedBySystem`, `needsResult`, `lastInterviewAt`; `EmployerApplicationsPage` thêm `focusCounts`.
+- **Chọn thêm khi làm (plan chưa ghi):**
+  - `focus` **không dùng chung** với `status`: gửi cả hai ⇒ 400 "Không lọc theo trạng thái cùng lúc với nhóm gợi ý". Plan frontend coi nhóm gợi ý là một chế độ riêng, nên không cần kết hợp; nhờ vậy `total` lấy thẳng từ `focusCounts`.
+  - Sắp xếp mặc định khi có `focus`: `oldest` (chờ lâu nhất trước, như tab Chờ duyệt trước đây).
+  - `needsResult` chỉ xét `SHORTLISTED` / `INTERVIEWING` (chỉ hai trạng thái này có lịch).
+  - Thêm trường `lastInterviewAt` (buổi gần nhất đã diễn ra), vì F2 cần hiện "phỏng vấn N ngày trước" ở nhóm `focus=result`.
+- Test: `employer-applications-service.test.ts` sửa sort mặc định (`PENDING` thành `match`), thêm test query (`sort=match`, `focus`, `focus` + `status` ⇒ lỗi), `focus` chuyển xuống repository và `total`, các trường mới trên dòng. Thêm `application-automation.test.ts` (biên X, Y, không có điểm, kẹp Y ≥ X). Toàn bộ unit test server: 473/473 qua.
+- **Chạy thử trên Neon (chỉ `SELECT`)**, công ty nhiều hồ sơ nhất (450 hồ sơ): `focusCounts` = `{ reject: 54, result: 8 }`, khớp đếm tay bằng câu SQL viết riêng; tab Chờ duyệt với `sort=match` sắp đúng điểm giảm dần; `focus=reject` ra 50/50 dòng `BELOW`; `focus=result` ra 8 dòng, đều có `needsResult` và `lastInterviewAt`; điểm trên dòng khớp bảng điểm (97 = 97). Thời gian mỗi câu 110–280 ms tính cả đường mạng tới Neon; `EXPLAIN ANALYZE` để bước 8. `changedBySystem` hiện đều `false` (chưa có lần tự chuyển nào).
+- `tsc` server: chỉ còn lỗi của `APPLICATIONS_NEED_ATTENTION` (bước 5). Web chưa dùng các trường mới (F2).
 
 ## Phần 4 — Ghi chú của chủ dự án
 

@@ -1,6 +1,7 @@
 ﻿import type { CandidateApplicationSummary, EmployerApplicationDetail, EmployerApplicationListItem, CvRecord } from "@sip/shared-types";
 import type { ApplicationWithCandidateRelations, ApplicationWithEmployerRelations, CompanyApplicationRow } from "./applications.repository";
 import { toJobPostDto } from "../job-posts/job-post.mapper";
+import { matchBand } from "../application-automation/application-automation.policy";
 
 function toCvRecord(cv: any): CvRecord {
   return {
@@ -71,11 +72,16 @@ export function toEmployerApplicationListItem(row: CompanyApplicationRow): Emplo
     jobPost: { id: row.jobPostId, title: row.jobPostTitle, status: row.jobPostStatus },
     awaitingSchedule: row.awaitingSchedule,
     nextInterviewAt: row.nextInterviewAt?.toISOString() ?? null,
+    lastInterviewAt: row.lastInterviewAt?.toISOString() ?? null,
     skillMatch: {
       requiredMatched: row.requiredMatched,
       requiredTotal: row.requiredTotal,
       optionalMatched: row.optionalMatched,
       optionalTotal: row.optionalTotal,
     },
+    matchScore: row.matchScore,
+    matchBand: matchBand(row.matchScore, row.matchThreshold, row.rejectSuggestBelowScore),
+    changedBySystem: row.changedBySystem,
+    needsResult: row.needsResult,
   };
 }

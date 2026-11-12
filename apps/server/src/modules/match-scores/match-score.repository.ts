@@ -8,8 +8,11 @@ import { NOW_UTC } from "../candidate-outreach/candidate-outreach.repository";
 /** Mỗi lệnh INSERT tối đa chừng này dòng (pool lớn nhất ở bộ demo là 882). */
 const INSERT_CHUNK_SIZE = 1_000;
 
-/** Tin "đang hiển thị": PUBLISHED và chưa quá hạn, cùng điều kiện với tìm kiếm công khai. */
-const VISIBLE_JOB = Prisma.sql`j."status" = 'PUBLISHED' AND (j."expiresAt" IS NULL OR j."expiresAt" > ${NOW_UTC})`;
+/**
+ * Tin "đang hiển thị": PUBLISHED và chưa quá hạn, cùng điều kiện với tìm kiếm công khai.
+ * Cần bí danh `j` (job_posts). Dùng lại ở nhóm `focus=reject` của trang "Ứng viên" (AD-25).
+ */
+export const VISIBLE_JOB = Prisma.sql`j."status" = 'PUBLISHED' AND (j."expiresAt" IS NULL OR j."expiresAt" > ${NOW_UTC})`;
 
 /**
  * Đếm Phù hợp của tin `j` (định nghĩa ở `HiringProgressRow`). Dùng làm LATERAL subquery,
@@ -20,9 +23,9 @@ const MATCHED_COUNTS = Prisma.sql`
   SELECT
     COUNT(*) FILTER (
       WHERE (a."id" IS NULL AND c."isOpenToOutreach")
-         OR a."status" NOT IN ('CANCELLED', 'REJECTED')
+         OR a."status" NOT IN ('CANCELLED', 'REJECTED', 'JOB_CLOSED')
     )::int AS "matched",
-    COUNT(*) FILTER (WHERE a."status" NOT IN ('CANCELLED', 'REJECTED'))::int AS "matchedApplied"
+    COUNT(*) FILTER (WHERE a."status" NOT IN ('CANCELLED', 'REJECTED', 'JOB_CLOSED'))::int AS "matchedApplied"
   FROM job_candidate_match_scores s
   JOIN candidates c ON c."id" = s."candidateId"
   LEFT JOIN applications a ON a."jobPostId" = s."jobPostId" AND a."candidateId" = s."candidateId"
@@ -47,8 +50,8 @@ export interface RescoreJobRow {
  * hai nhóm (chốt 2026-11-11):
  * - chưa nộp: bật cho liên hệ và KHÔNG có đơn nào vào tin — đúng nhóm mà trang tìm
  *   ứng viên và tự mời 0.2 lấy ra;
- * - đã nộp: đơn đang xét hoặc đã tuyển (không phải CANCELLED / REJECTED).
- * Người đã huỷ đơn hoặc bị từ chối không được đếm. `matchedApplied` = nhóm đã nộp.
+ * - đã nộp: đơn đang xét hoặc đã tuyển (không phải CANCELLED / REJECTED / JOB_CLOSED).
+ * Người đã huỷ đơn, bị từ chối hoặc có đơn bị hệ thống đóng (AD-25) không được đếm. `matchedApplied` = nhóm đã nộp.
  */
 export interface HiringProgressRow {
   jobPostId: string;

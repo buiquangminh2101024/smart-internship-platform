@@ -1,12 +1,17 @@
 import { Prisma, type ApplicationStatus, type JobPostStatus } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
-import type { EmployerApplicationsSort } from "@sip/shared-types";
+import type { EmployerApplicationsFocus, EmployerApplicationsSort } from "@sip/shared-types";
+import { NOW_UTC } from "../candidate-outreach/candidate-outreach.repository";
 import { jobPostInclude } from "../job-posts/job-post.repository";
 import { AWAITING_SCHEDULE } from "../interviews/interviews.repository";
+import { VISIBLE_JOB } from "../match-scores/match-score.repository";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
-/** Bộ lọc của trang "Ứng viên" cấp công ty. `status` chỉ áp cho danh sách, không cho các số đếm. */
+/**
+ * Bộ lọc của trang "Ứng viên" cấp công ty. `status` và `focus` chỉ áp cho danh sách,
+ * không cho các số đếm.
+ */
 export interface CompanyApplicationFilter {
   jobPostId?: string | undefined;
   q?: string | undefined;
@@ -25,10 +30,24 @@ export interface CompanyApplicationRow {
   jobPostStatus: JobPostStatus;
   awaitingSchedule: boolean;
   nextInterviewAt: Date | null;
+  lastInterviewAt: Date | null;
   requiredMatched: number;
   requiredTotal: number;
   optionalMatched: number;
   optionalTotal: number;
+  /** Điểm lưu sẵn (AD-24); null ⇒ không có dòng điểm. */
+  matchScore: number | null;
+  /** X của tin (`autoOutreachMinScore`). */
+  matchThreshold: number;
+  /** Y của tin như đã lưu; kẹp Y < X ở `matchBand`. */
+  rejectSuggestBelowScore: number;
+  changedBySystem: boolean;
+  needsResult: boolean;
+}
+
+export interface FocusCountsRow {
+  reject: number;
+  result: number;
 }
 
 /** Đủ để kiểm tra chuyển trạng thái và soạn thông báo APPLICATION_STATUS_CHANGED. */
@@ -101,6 +120,47 @@ const COMPANY_FROM = Prisma.sql`
   JOIN candidates c ON c."id" = a."candidateId"
   JOIN users u ON u."id" = c."userId"`;
 
+/** Điểm lưu sẵn của hồ sơ (AD-24). Khoá chính của bảng điểm là đúng cặp này nên không nhân dòng. */
+const MATCH_SCORE_JOIN = Prisma.sql`
+  LEFT JOIN job_candidate_match_scores ms ON ms."jobPostId" = a."jobPostId" AND ms."candidateId" = a."candidateId"`;
+
+// ─── AD-25: tự xử lý hồ sơ ─────────────────────────────────────────────────
+
+/** Buổi phỏng vấn gần nhất đã diễn ra: lịch SCHEDULED có giờ đã qua (AD-16 M2 không lưu COMPLETED). */
+const LAST_INTERVIEW_AT = Prisma.sql`(
+  SELECT MAX(i."scheduledAt") FROM interviews i
+  WHERE i."applicationId" = a."id" AND i."status" = 'SCHEDULED' AND i."scheduledAt" <= ${NOW_UTC})`;
+
+/** Đã phỏng vấn, không có lịch sắp tới, chưa có kết quả. Chỉ Rút gọn / Mời PV mới có lịch. */
+const NEEDS_RESULT = Prisma.sql`(
+  a."status" IN ('SHORTLISTED', 'INTERVIEWING')
+  AND EXISTS (SELECT 1 FROM interviews i
+              WHERE i."applicationId" = a."id" AND i."status" = 'SCHEDULED' AND i."scheduledAt" <= ${NOW_UTC})
+  AND NOT EXISTS (SELECT 1 FROM interviews i
+                  WHERE i."applicationId" = a."id" AND i."status" = 'SCHEDULED' AND i."scheduledAt" > ${NOW_UTC}))`;
+
+/** Y thực dùng — cùng quy tắc với `effectiveRejectThreshold` (application-automation.policy.ts). */
+const REJECT_SUGGEST_THRESHOLD = Prisma.sql`GREATEST(0, LEAST(j."rejectSuggestBelowScore", j."autoOutreachMinScore" - 1))`;
+
+/** Đề xuất từ chối: Chờ duyệt, tin đang hiển thị, có điểm và điểm < Y. Cần `MATCH_SCORE_JOIN`. */
+const SUGGEST_REJECT = Prisma.sql`(
+  a."status" = 'PENDING' AND ${VISIBLE_JOB} AND ms."score" < ${REJECT_SUGGEST_THRESHOLD})`;
+
+const FOCUS_WHERE: Record<EmployerApplicationsFocus, Prisma.Sql> = {
+  reject: SUGGEST_REJECT,
+  result: NEEDS_RESULT,
+};
+
+/**
+ * Lần đổi trạng thái gần nhất do hệ thống làm: dòng lịch sử mới nhất có `actorId` null và
+ * không phải dòng khởi tạo (8 dòng khởi tạo `actorId` null có sẵn trên Neon — bước 0).
+ */
+const CHANGED_BY_SYSTEM = Prisma.sql`COALESCE((
+  SELECT h."actorId" IS NULL AND h."fromStatus" IS NOT NULL FROM application_status_history h
+  WHERE h."applicationId" = a."id"
+  ORDER BY h."createdAt" DESC, h."id" DESC
+  LIMIT 1), FALSE)`;
+
 /**
  * D10: tỉ lệ kỹ năng bắt buộc khớp (tin không có kỹ năng bắt buộc ⇒ NULL, xếp cuối),
  * rồi số kỹ năng không bắt buộc khớp, rồi nộp sớm trước. Luôn kết thúc bằng id để
@@ -111,6 +171,8 @@ const ORDER_BY: Record<EmployerApplicationsSort, Prisma.Sql> = {
   newest: Prisma.sql`${APPLIED_AT} DESC, a."id" DESC`,
   skills: Prisma.sql`sm."requiredMatched"::float / NULLIF(sm."requiredTotal", 0) DESC NULLS LAST,
     sm."optionalMatched" DESC, ${APPLIED_AT} ASC, a."id" ASC`,
+  // AD-25: điểm lưu sẵn cao nhất trước, chưa có điểm xếp cuối.
+  match: Prisma.sql`ms."score" DESC NULLS LAST, ${APPLIED_AT} ASC, a."id" ASC`,
 };
 
 export type ApplicationWithCandidateRelations = Prisma.ApplicationGetPayload<{
@@ -252,13 +314,18 @@ export class ApplicationsRepository {
    * Một trang hồ sơ của mọi tin trong công ty. `skillMatch` tính trong cùng câu (kỹ năng
    * của tin LEFT JOIN kỹ năng của ứng viên theo skillId) nên `sort=skills` sắp trước khi
    * chia trang. Không xét minYears và kỹ năng gần nghĩa (việc của Job Matcher).
+   * Điểm phù hợp đọc từ bảng điểm lưu sẵn (AD-24, AD-25), không chấm trực tiếp.
    */
   listForCompany(
     companyId: string,
-    filter: CompanyApplicationFilter & { status?: ApplicationStatus | undefined },
+    filter: CompanyApplicationFilter & {
+      status?: ApplicationStatus | undefined;
+      focus?: EmployerApplicationsFocus | undefined;
+    },
     options: { sort: EmployerApplicationsSort; offset: number; limit: number },
   ): Promise<CompanyApplicationRow[]> {
     const statusFilter = filter.status ? Prisma.sql`AND a."status" = CAST(${filter.status} AS "ApplicationStatus")` : Prisma.empty;
+    const focusFilter = filter.focus ? Prisma.sql`AND ${FOCUS_WHERE[filter.focus]}` : Prisma.empty;
     return this.prisma.$queryRaw<CompanyApplicationRow[]>(Prisma.sql`
       SELECT a."id" AS "applicationId", a."status"::text AS "status", ${APPLIED_AT} AS "appliedAt",
              c."id" AS "candidateId", c."fullName" AS "candidateName", c."avatarUrl" AS "candidateAvatarUrl",
@@ -267,8 +334,15 @@ export class ApplicationsRepository {
              ${AWAITING_SCHEDULE} AS "awaitingSchedule",
              (SELECT MIN(i."scheduledAt") FROM interviews i
               WHERE i."applicationId" = a."id" AND i."status" = 'SCHEDULED' AND i."scheduledAt" > NOW()) AS "nextInterviewAt",
-             sm."requiredMatched", sm."requiredTotal", sm."optionalMatched", sm."optionalTotal"
+             ${LAST_INTERVIEW_AT} AS "lastInterviewAt",
+             sm."requiredMatched", sm."requiredTotal", sm."optionalMatched", sm."optionalTotal",
+             ms."score" AS "matchScore",
+             j."autoOutreachMinScore" AS "matchThreshold",
+             j."rejectSuggestBelowScore" AS "rejectSuggestBelowScore",
+             ${CHANGED_BY_SYSTEM} AS "changedBySystem",
+             ${NEEDS_RESULT} AS "needsResult"
       ${COMPANY_FROM}
+      ${MATCH_SCORE_JOIN}
       LEFT JOIN LATERAL (
         SELECT COUNT(*) FILTER (WHERE s."importance" = 'REQUIRED')::int AS "requiredTotal",
                COUNT(cs."skillId") FILTER (WHERE s."importance" = 'REQUIRED')::int AS "requiredMatched",
@@ -278,7 +352,7 @@ export class ApplicationsRepository {
         LEFT JOIN candidate_skills cs ON cs."skillId" = s."skillId" AND cs."candidateId" = a."candidateId"
         WHERE s."jobPostId" = a."jobPostId"
       ) sm ON TRUE
-      WHERE ${companyWhere(companyId, filter)} ${statusFilter}
+      WHERE ${companyWhere(companyId, filter)} ${statusFilter} ${focusFilter}
       ORDER BY ${ORDER_BY[options.sort]}
       LIMIT ${options.limit} OFFSET ${options.offset}
     `);
@@ -292,6 +366,22 @@ export class ApplicationsRepository {
       WHERE ${companyWhere(companyId, filter)}
       GROUP BY a."status"
     `);
+  }
+
+  /**
+   * Số hồ sơ của từng nhóm gợi ý (AD-25), áp `jobPostId`, `q`, không áp `status`. Hai nhóm chỉ
+   * gồm Chờ duyệt / Rút gọn / Mời PV nên lọc trước theo trạng thái để bớt câu con.
+   */
+  async countFocus(companyId: string, filter: CompanyApplicationFilter): Promise<FocusCountsRow> {
+    const [row] = await this.prisma.$queryRaw<FocusCountsRow[]>(Prisma.sql`
+      SELECT COUNT(*) FILTER (WHERE ${SUGGEST_REJECT})::int AS "reject",
+             COUNT(*) FILTER (WHERE ${NEEDS_RESULT})::int AS "result"
+      ${COMPANY_FROM}
+      ${MATCH_SCORE_JOIN}
+      WHERE ${companyWhere(companyId, filter)}
+        AND a."status" IN ('PENDING', 'SHORTLISTED', 'INTERVIEWING')
+    `);
+    return { reject: row?.reject ?? 0, result: row?.result ?? 0 };
   }
 
   /** Mọi tin có ít nhất một hồ sơ khớp `q` (không áp `jobPostId`, `status`), xếp theo tên tin. */

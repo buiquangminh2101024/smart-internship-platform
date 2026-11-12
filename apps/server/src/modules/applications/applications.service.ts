@@ -2,6 +2,7 @@ import type {
   BulkStatusSkipReason,
   BulkUpdateApplicationStatusResult,
   CreateApplicationRequest,
+  EmployerApplicationsFocus,
   EmployerApplicationsPage,
   EmployerApplicationsSort,
   UpdateApplicationEvaluationRequest,
@@ -22,7 +23,11 @@ const INTERVIEW_CANCEL_REASON_DECIDED = "Hồ sơ đã có kết quả";
 /** Lô 50 hồ sơ ghi vài trăm câu lệnh (trạng thái, history, thông báo, outbox), như đặt lịch hàng loạt. */
 const BULK_TRANSACTION_TIMEOUT_MS = 30_000;
 
-/** State machine hồ sơ phía employer. Không có chuyển ngược: mọi lần đổi đều không hoàn tác được. */
+/**
+ * State machine hồ sơ phía employer. Không có chuyển ngược: mọi lần đổi đều không hoàn tác được.
+ * `JOB_CLOSED` (AD-25) không nằm trong bảng đích nào: chỉ hệ thống chuyển sang, người dùng
+ * (API đơn lẻ và hàng loạt) không chuyển được.
+ */
 const STATUS_TRANSITIONS: Record<ApplicationStatus, readonly ApplicationStatus[]> = {
   PENDING: ["REVIEWING", "REJECTED"],
   REVIEWING: ["SHORTLISTED", "REJECTED"],
@@ -31,15 +36,23 @@ const STATUS_TRANSITIONS: Record<ApplicationStatus, readonly ApplicationStatus[]
   ACCEPTED: [],
   REJECTED: [],
   CANCELLED: [],
+  JOB_CLOSED: [],
 };
 
 export function canTransition(from: ApplicationStatus, to: ApplicationStatus): boolean {
   return STATUS_TRANSITIONS[from].includes(to);
 }
 
-/** Tab Chờ duyệt: hồ sơ chờ lâu nhất trước. Tab khác: mới nhất trước. */
-export function defaultSort(status: ApplicationStatus | undefined): EmployerApplicationsSort {
-  return status === "PENDING" ? "oldest" : "newest";
+/**
+ * AD-25: tab Chờ duyệt và Đang xem xét ⇒ phù hợp nhất trước. Nhóm gợi ý (`focus`) ⇒ nộp lâu
+ * nhất trước. Còn lại ⇒ mới nhất trước. (Tab Chờ duyệt trước đây mặc định `oldest`; vẫn chọn được.)
+ */
+export function defaultSort(
+  status: ApplicationStatus | undefined,
+  focus?: EmployerApplicationsFocus | undefined,
+): EmployerApplicationsSort {
+  if (focus) return "oldest";
+  return status === "PENDING" || status === "REVIEWING" ? "match" : "newest";
 }
 
 /** Đủ mọi trạng thái, trạng thái không có hồ sơ là 0. */
@@ -221,32 +234,37 @@ export class ApplicationsService {
 
   /**
    * Trang "Ứng viên" (mọi tin của công ty): phân trang theo số trang, `page` vượt trang
-   * cuối thì trả trang cuối (như D18). `total` lấy từ `statusCounts` nên không cần câu đếm riêng.
+   * cuối thì trả trang cuối (như D18). `total` lấy từ `statusCounts` (hoặc `focusCounts` khi
+   * có `focus`) nên không cần câu đếm riêng.
    */
   async listCompanyApplications(userId: string, query: ListCompanyApplicationsQuery): Promise<EmployerApplicationsPage> {
     const { companyId } = await this.requireEmployer(userId);
     const filter = { jobPostId: query.jobPostId, q: query.q };
-    const sort = query.sort ?? defaultSort(query.status);
+    const sort = query.sort ?? defaultSort(query.status, query.focus);
     const listPage = (page: number) =>
       this.applicationsRepository.listForCompany(
         companyId,
-        { ...filter, status: query.status },
+        { ...filter, status: query.status, focus: query.focus },
         { sort, offset: (page - 1) * query.pageSize, limit: query.pageSize },
       );
     // Lấy trang được hỏi cùng lúc với các số đếm để chỉ chờ DB một lượt. Tin của công ty khác
     // thì trang rỗng (mọi câu đều lọc theo công ty) và vẫn trả 404 bên dưới.
-    const [ownsJobPost, statusRows, jobCounts, requestedRows] = await Promise.all([
+    const [ownsJobPost, statusRows, jobCounts, focusCounts, requestedRows] = await Promise.all([
       query.jobPostId ? this.applicationsRepository.jobPostBelongsToCompany(query.jobPostId, companyId) : true,
       this.applicationsRepository.countByStatus(companyId, filter),
       this.applicationsRepository.countByJob(companyId, query.q),
+      this.applicationsRepository.countFocus(companyId, filter),
       listPage(query.page),
     ]);
     if (!ownsJobPost) throw new AppError(404, "Job post not found");
 
     const statusCounts = toStatusCounts(statusRows);
-    const total = query.status
-      ? statusCounts[query.status]
-      : Object.values(statusCounts).reduce((sum, count) => sum + count, 0);
+    // DTO không cho dùng chung `status` với `focus`.
+    const total = query.focus
+      ? focusCounts[query.focus]
+      : query.status
+        ? statusCounts[query.status]
+        : Object.values(statusCounts).reduce((sum, count) => sum + count, 0);
     const lastPage = Math.max(1, Math.ceil(total / query.pageSize));
     const page = Math.min(query.page, lastPage);
     // Trang vượt trang cuối (sửa URL, hay hồ sơ vừa đổi trạng thái) thì lấy lại trang cuối.
@@ -258,6 +276,7 @@ export class ApplicationsService {
       pageSize: query.pageSize,
       statusCounts,
       jobCounts,
+      focusCounts,
     };
   }
 

@@ -24,19 +24,25 @@ export const COMPANY_APPLICATIONS_PAGE_MAX = 50;
 // Query string luôn là chuỗi; `q` rỗng coi như không tìm.
 /**
  * Phân trang theo số trang (ngoại lệ của API_CONVENTIONS.md, như D18). `sort` để
- * trống thì service chọn theo `status`. `page` vượt trang cuối → trang cuối.
+ * trống thì service chọn theo `status` / `focus`. `page` vượt trang cuối → trang cuối.
+ * `focus` (AD-25) là một nhóm gợi ý riêng, không dùng chung với `status`.
  */
-export const listCompanyApplicationsQuerySchema = z.object({
-  status: z.nativeEnum(ApplicationStatus).optional(),
-  jobPostId: z.string().min(1).optional(),
-  q: z.preprocess(
-    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
-    z.string().trim().min(2, "Từ khoá tìm cần ít nhất 2 ký tự").max(100, "Từ khoá tìm tối đa 100 ký tự").optional(),
-  ),
-  sort: z.enum(["oldest", "newest", "skills"]).optional(),
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(COMPANY_APPLICATIONS_PAGE_MAX).default(COMPANY_APPLICATIONS_PAGE_DEFAULT),
-});
+export const listCompanyApplicationsQuerySchema = z
+  .object({
+    status: z.nativeEnum(ApplicationStatus).optional(),
+    jobPostId: z.string().min(1).optional(),
+    q: z.preprocess(
+      (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+      z.string().trim().min(2, "Từ khoá tìm cần ít nhất 2 ký tự").max(100, "Từ khoá tìm tối đa 100 ký tự").optional(),
+    ),
+    sort: z.enum(["oldest", "newest", "skills", "match"]).optional(),
+    focus: z.enum(["reject", "result"]).optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    pageSize: z.coerce.number().int().min(1).max(COMPANY_APPLICATIONS_PAGE_MAX).default(COMPANY_APPLICATIONS_PAGE_DEFAULT),
+  })
+  .refine((query) => !(query.status && query.focus), {
+    message: "Không lọc theo trạng thái cùng lúc với nhóm gợi ý",
+  });
 export type ListCompanyApplicationsQuery = z.infer<typeof listCompanyApplicationsQuerySchema>;
 
 /** D6 — tối đa 50 hồ sơ mỗi lần. */
