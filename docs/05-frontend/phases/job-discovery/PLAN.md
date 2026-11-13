@@ -102,7 +102,7 @@ Trung tâm thông báo → JOB_ALERT, PROFILE_SKILLS_REMINDER; realtime JOB_ALER
 
 ### Bước F5 — Thông báo
 
-- Thêm `JOB_ALERT` (icon tìm việc, link `/recommended-jobs`) và `PROFILE_SKILLS_REMINDER` (icon hồ sơ, link `/profile`) vào bảng icon/nhóm của trung tâm thông báo và chuông.
+- Thêm `JOB_ALERT` (icon tìm việc, link `/recommended-jobs`) và `PROFILE_SKILLS_REMINDER` (icon hồ sơ, link `/profile`) vào bảng icon/nhóm của trung tâm thông báo và chuông. Nhóm (`NOTIFICATION_GROUP_BY_TYPE`) và nhãn nút (`NOTIFICATION_ACTION_LABEL`) trong `lib/notifications.ts` đã thêm ở bước 7 backend để web biên dịch được; F5 xem lại nhãn và thêm icon.
 - Realtime `JOB_ALERT` → invalidate `job-recommendations` và danh sách thông báo (thông báo gộp cập nhật tại chỗ, không nhân đôi trong danh sách đã cache).
 
 ### Bước F6 — FAQ và kiểm trên trình duyệt

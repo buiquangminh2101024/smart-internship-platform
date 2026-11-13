@@ -1,7 +1,7 @@
 import type { InterviewMode, NotificationType, UserStatus } from "@prisma/client";
 import type { SupportCategory } from "@sip/shared-types";
 import { STALE_AFTER_DAYS } from "../../application-automation/application-automation.config";
-import type { NotificationPayloadMap, RenderedNotification } from "../notification.types";
+import type { NotificationPayloadMap, RenderedEmail, RenderedNotification } from "../notification.types";
 
 type Renderer<T extends NotificationType> = (
   data: NotificationPayloadMap[T],
@@ -632,6 +632,45 @@ const templates: { [T in NotificationType]: Renderer<T> } = {
   // Tin nhắn cố ý không có loại notification: không ghi DB mỗi tin, chỉ push
   // realtime qua RealtimeNotifier.pushMessageToUser (Phase 9 bổ sung).
 };
+
+/** Một tin trong email gộp job alert. */
+export interface JobAlertDigestJob {
+  jobPostId: string;
+  title: string;
+  companyName: string;
+  score: number;
+}
+
+/**
+ * AD-26 D8 — email gộp job alert lúc 8h, không gắn với thông báo trong ứng dụng nào (thông báo
+ * `JOB_ALERT` đã gửi lúc báo). `jobs` đã sắp và cắt sẵn; `total` là số tin còn đáng gửi.
+ */
+export function renderJobAlertDigestEmail(
+  data: { jobs: JobAlertDigestJob[]; total: number },
+  ctx: TemplateContext,
+): RenderedEmail {
+  const heading = `${data.total} tin mới phù hợp với bạn`;
+  const items = data.jobs
+    .map(
+      (job) =>
+        `<li style="margin:0 0 10px"><a href="${escapeHtml(absolute(ctx, `/jobs/${job.jobPostId}`))}" style="color:#2563eb;font-weight:600;text-decoration:none">${escapeHtml(job.title)}</a>` +
+        `<br><span style="color:#4b5563">${escapeHtml(job.companyName)} · phù hợp ${job.score}%</span></li>`,
+    )
+    .join("");
+  const more = data.total - data.jobs.length;
+  const html = [
+    `<div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;color:#111827">`,
+    `<h2 style="margin:0 0 16px;font-size:18px">${escapeHtml(heading)}</h2>`,
+    `<p style="margin:0 0 12px">Từ lần email trước, hệ thống tìm thấy các tin sau phù hợp từ 70% trở lên với hồ sơ của bạn:</p>`,
+    `<ul style="margin:0 0 12px;padding-left:20px">${items}</ul>`,
+    more > 0 ? `<p style="margin:0 0 12px">và ${more} tin khác.</p>` : "",
+    `<p style="margin:24px 0 0"><a href="${escapeHtml(absolute(ctx, "/recommended-jobs"))}" style="background:#2563eb;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;display:inline-block">Xem việc làm phù hợp</a></p>`,
+    `<p style="margin:24px 0 0;font-size:12px;color:#6b7280">Bạn nhận email này vì đang bật email tổng hợp job alert. Tắt trong <a href="${escapeHtml(absolute(ctx, "/settings"))}" style="color:#6b7280">Cài đặt</a>.</p>`,
+    `<p style="margin:8px 0 0;font-size:12px;color:#6b7280">Email tự động từ Smart Internship Platform, vui lòng không trả lời.</p>`,
+    `</div>`,
+  ].join("");
+  return { subject: heading, html };
+}
 
 export function renderNotification<T extends NotificationType>(
   type: T,

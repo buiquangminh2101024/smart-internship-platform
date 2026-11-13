@@ -39,6 +39,8 @@ import type { CandidateOutreachRepository } from "./modules/candidate-outreach/c
 import { startAutoOutreachJob } from "./modules/candidate-outreach/auto-outreach.job";
 import { registerMatchScores } from "./modules/match-scores/match-scores.module";
 import { jobAlertsRouter } from "./modules/job-alerts/job-alerts.routes";
+import { startJobAlertsJob } from "./modules/job-alerts/job-alerts.job";
+import type { JobAlertService } from "./modules/job-alerts/job-alert.service";
 import { applicationAutomationRouter } from "./modules/application-automation/application-automation.module";
 import { startApplicationAutomationJob } from "./modules/application-automation/application-automation.job";
 import { startStaleApplicationReminderJob } from "./modules/application-automation/stale-application-reminder.job";
@@ -204,6 +206,12 @@ startApplicationAutomationJob({
 });
 startStaleApplicationReminderJob({
   applicationAutomationService: container.resolve<ApplicationAutomationService>("applicationAutomationService"),
+  logger,
+});
+// Job alert (AD-26 D8, D10): email gộp và nhắc thêm kỹ năng lúc 08:00 giờ Việt Nam. Resolve sau
+// notificationsRouter vì service cần notificationsService, outboxRepository.
+startJobAlertsJob({
+  jobAlertService: container.resolve<JobAlertService>("jobAlertService"),
   logger,
 });
 // Gộp số nhật ký theo giờ cho biểu đồ của trang nhật ký (AD-20) — chạy bù khi

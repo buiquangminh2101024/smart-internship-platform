@@ -26,6 +26,7 @@
     "eval-job-matching": "dotenv -e ../../.env -- tsx scripts/eval-job-matching.ts",
     "rescore-match-scores": "dotenv -e ../../.env -- tsx scripts/rescore-match-scores.ts",
     "process-applications": "dotenv -e ../../.env -- tsx scripts/process-applications.ts",
+    "job-alerts": "dotenv -e ../../.env -- tsx scripts/job-alerts.ts",
     "support-chat:index": "dotenv -e ../../.env -- tsx scripts/support-chat-index.ts",
     "support-chat:eval": "dotenv -e ../../.env -- tsx scripts/support-chat-eval.ts",
     "audit:archive": "dotenv -e ../../.env -- tsx scripts/audit-archive.ts",

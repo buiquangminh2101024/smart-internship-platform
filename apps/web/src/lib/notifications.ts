@@ -63,6 +63,7 @@ export const NOTIFICATION_GROUP_BY_TYPE: Record<NotificationType, NotificationGr
   CANDIDATE_OUTREACH_INVITATION_RECEIVED: "INVITATIONS",
   CANDIDATE_OUTREACH_INVITATION_RESPONDED: "INVITATIONS",
   AUTO_OUTREACH_SENT: "INVITATIONS",
+  JOB_ALERT: "INVITATIONS",
   SUBSCRIPTION_EXPIRING: "SUBSCRIPTION",
   CATALOG_ENTRY_SUGGESTED: "CATALOG",
   PAYMENT_COMPLETED: "PAYMENTS",
@@ -75,6 +76,7 @@ export const NOTIFICATION_GROUP_BY_TYPE: Record<NotificationType, NotificationGr
   ACCOUNT_ACTIVATED: "ACCOUNT",
   PASSWORD_RESET_SUGGESTED: "ACCOUNT",
   SUPPORT_CONTACT_RECEIVED: "ACCOUNT",
+  PROFILE_SKILLS_REMINDER: "ACCOUNT",
 };
 
 export const NOTIFICATION_GROUP_META: Record<NotificationGroup, { label: string; icon: string }> = {
@@ -109,6 +111,8 @@ export const NOTIFICATION_ACTION_LABEL: Record<NotificationType, string> = {
   CANDIDATE_OUTREACH_INVITATION_RECEIVED: "Xem lời mời",
   CANDIDATE_OUTREACH_INVITATION_RESPONDED: "Xem ứng viên",
   AUTO_OUTREACH_SENT: "Xem lời mời",
+  // AD-26 — link trỏ về /recommended-jobs.
+  JOB_ALERT: "Xem việc làm phù hợp",
   SUBSCRIPTION_EXPIRING: "Xem gói dịch vụ",
   CATALOG_ENTRY_SUGGESTED: "Duyệt",
   // Chưa có trang giao dịch — link trỏ về trang công ty đã thanh toán (D14).
@@ -123,6 +127,8 @@ export const NOTIFICATION_ACTION_LABEL: Record<NotificationType, string> = {
   ACCOUNT_ACTIVATED: "Đăng nhập",
   PASSWORD_RESET_SUGGESTED: "Đặt lại mật khẩu",
   SUPPORT_CONTACT_RECEIVED: "Xem người dùng",
+  // AD-26 — link trỏ về /profile.
+  PROFILE_SKILLS_REMINDER: "Cập nhật hồ sơ",
 };
 
 /**

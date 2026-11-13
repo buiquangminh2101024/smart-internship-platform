@@ -55,7 +55,10 @@ export type NotificationType =
   // AD-23 — hệ thống đã tự gửi lời mời cho tin (gộp tối đa 1 thông báo/tin/ngày)
   | "AUTO_OUTREACH_SENT"
   // AD-25 — nhắc hằng tuần công ty về hồ sơ tồn (gộp 1 thông báo/employer/tuần)
-  | "APPLICATIONS_NEED_ATTENTION";
+  | "APPLICATIONS_NEED_ATTENTION"
+  // AD-26 — tin mới phù hợp (gộp 1 thông báo/ứng viên/ngày); nhắc một lần thêm kỹ năng
+  | "JOB_ALERT"
+  | "PROFILE_SKILLS_REMINDER";
 
 /** Loại vấn đề của form /support (AD-17). */
 export type SupportCategory = "ACCOUNT_SUSPENDED" | "OTHER";

@@ -1,6 +1,6 @@
 # Ứng viên thấy nhiều việc phù hợp, xếp theo ưu tiên (0.5) — Backend
 
-> **Trạng thái: ĐÃ LẬP KẾ HOẠCH (2026-11-12). XONG BƯỚC 0 (2026-11-13, chỉ đọc). Q1–Q7 đã chốt. XONG BƯỚC 1 (2026-11-13, đã áp lên Neon). XONG BƯỚC 2 (2026-11-13). XONG BƯỚC 3 (2026-11-13). XONG BƯỚC 4 (2026-11-13). XONG BƯỚC 5 (2026-11-13). Sẵn sàng bước 6 khi có lệnh.** Hướng đã chốt ở AD-26 trong buổi trao đổi với chủ dự án ngày 2026-11-12. Kết quả đo ở "Ghi chú triển khai".
+> **Trạng thái: ĐÃ LẬP KẾ HOẠCH (2026-11-12). XONG BƯỚC 0 (2026-11-13, chỉ đọc). Q1–Q7 đã chốt. XONG BƯỚC 1 (2026-11-13, đã áp lên Neon). XONG BƯỚC 2 (2026-11-13). XONG BƯỚC 3 (2026-11-13). XONG BƯỚC 4 (2026-11-13). XONG BƯỚC 5 (2026-11-13). XONG BƯỚC 6 (2026-11-13). XONG BƯỚC 7 (2026-11-13). Sẵn sàng bước 8 khi có lệnh.** Hướng đã chốt ở AD-26 trong buổi trao đổi với chủ dự án ngày 2026-11-12. Kết quả đo ở "Ghi chú triển khai".
 
 Mục 0.5 của `docs/01-project/FEATURE_BACKLOG.md`. Quyết định kiến trúc: AD-26 (sửa một phần AD-14). Frontend: `docs/05-frontend/phases/job-discovery/PLAN.md`. Nền:
 - AD-24 (bảng điểm `job_candidate_match_scores`, lối chấm (a) khi tin được đăng);
@@ -434,6 +434,55 @@ Khớp số đo HTTP ở AD-24 (p50 475–485 ms). Phần lớn là `jobPostIncl
   - Phần chọn ứng viên của câu repository so với một câu viết lại bằng cách khác (LEFT JOIN chống trùng) trên 20 tin mới nhất: **cùng tập ở cả 20 tin.** Mỗi tin báo 0–56 người, trung vị 14, tổng 450; 294 người nhận, 92 người nhận ≥ 2 tin, nhiều nhất 5; nếu mọi người bật "chỉ thành phố của tôi" còn 128. Khớp đúng số ước ở bước 0 mục 6. 505 cặp đạt điểm trước khi trừ đơn / lời mời; không cặp nào bị loại vì tài khoản không `ACTIVE`.
   - Phiên Neon dùng `TimeZone = GMT`; `Date` gửi qua tham số ra đúng giờ UTC khi đổi sang `timestamp(3)` (như `replaceForJob` đang dùng).
   - Repository đọc đúng: tên tin và công ty; cài đặt của `ung-vien-0248` (Đà Nẵng, bật / bật / tắt) và của một ứng viên chưa có thành phố (`cityName: null`). `job_alerts` và thông báo `JOB_ALERT` đang 0 dòng.
+
+### Bước 6 — Email gộp, nhắc một lần, cron, script (2026-11-13)
+
+- **`job-alerts.config.ts`** thêm `JOB_ALERT_DAILY_CRON = "0 8 * * *"`, `JOB_ALERT_DIGEST_MAX_JOBS = 10`, `SKILLS_REMINDER_MIN_ACCOUNT_AGE_HOURS = 24`.
+- **`JobAlertService.sendDailyDigests(now)`:**
+  - Lấy ứng viên có dòng `job_alerts` chưa xét (`emailedAt IS NULL`, tạo trước lúc chạy), kèm cờ "gửi được" = bật job alert, bật email, tài khoản `ACTIVE`.
+  - **Người không gửi được** (tắt email, tắt alert, tài khoản không còn `ACTIVE`): một câu đánh dấu `emailedAt` cho mọi dòng của họ, không gửi. **Thêm so với plan:** plan chỉ lấy người bật email, nên dòng của người tắt email sẽ nằm mãi và dồn thành một email dài khi họ bật lại. Nay họ chỉ nhận email cho tin báo sau khi bật.
+  - **Người gửi được:** mỗi người một transaction. (1) Câu `UPDATE job_alerts SET emailedAt … WHERE candidateId … AND emailedAt IS NULL RETURNING jobPostId` nhận các dòng. Lượt chạy chồng (cron và script) nhận 0 dòng nên không gửi trùng. (2) Đọc các tin đã nhận còn đáng gửi: đang hiển thị, và ứng viên chưa ứng tuyển / chưa được mời **kể từ lúc báo** (thêm so với plan, cùng quy tắc D3, để email không gợi ý tin đã nộp). Sắp theo điểm lúc báo, rồi tin báo sau trước. (3) Còn tin thì tạo một `OutboxEvent` `NOTIFICATION_EMAIL` (`aggregateType = "Candidate"`, `notificationType = "JOB_ALERT"`) liệt kê tối đa 10 tin, kèm "và N tin khác". Không còn tin thì không gửi, nhưng các dòng vẫn được đánh dấu. Lỗi của một người huỷ transaction của người đó (dòng còn nguyên cho lượt sau), ghi log rồi đi tiếp.
+  - Email gộp không tạo thông báo trong ứng dụng, vì thông báo `JOB_ALERT` đã có từ lúc báo.
+- **Mẫu email** `renderJobAlertDigestEmail` trong `notification-templates.ts`: tiêu đề "N tin mới phù hợp với bạn"; mỗi tin là link tuyệt đối tới `/jobs/<id>` kèm tên công ty và "phù hợp X%"; nút "Xem việc làm phù hợp"; dòng cuối "Tắt trong Cài đặt" trỏ `/settings`. Mọi chuỗi do người dùng nhập đều được escape.
+- **`sendSkillsReminders(now)`:** một câu chọn ứng viên có tài khoản `ACTIVE` (tức đã xác thực, không bị khoá), tạo từ ≥ 24 giờ, không có dòng nào trong `candidate_skills` (cùng cách đếm với độ hoàn thiện), chưa có thông báo khoá `profile-skills-reminder:<candidateId>`. Mỗi người một `notifyOnce("PROFILE_SKILLS_REMINDER")` (kèm email). Lỗi một người ghi log rồi đi tiếp.
+- **`runDaily(now)`:** gọi email gộp rồi nhắc kỹ năng; cờ chống chạy chồng trong process (trả `LOCKED`); ghi log tổng kết và thời gian.
+- **Cron** `job-alerts.job.ts` → `startJobAlertsJob`, 08:00 giờ Việt Nam, mount trong `main.ts` sau cron nhắc tuần của 0.4. Mẫu như `application-automation.job.ts`.
+- **Script** `npm run job-alerts --workspace=apps/server -- [--dry-run] [--digest] [--reminders] [--job <id>]` (`scripts/job-alerts.ts`):
+  - không có `--digest` / `--reminders` / `--job` thì chạy như cron 8h;
+  - `--job <id>` gọi `onJobScored` cho tin đó, đọc điểm đang lưu, không chấm lại. Tin không tồn tại hoặc không hiển thị thì dừng với mã lỗi; tin chưa có điểm thì nhắc chạy `rescore-match-scores --job` trước;
+  - `--dry-run` chỉ đếm: số người đạt điều kiện của tin và trong đó đã báo bao nhiêu; số email sẽ xếp, số người không còn tin, số dòng sẽ đánh dấu; số người sẽ nhắc;
+  - tham số lạ hoặc `--job` thiếu id thì dừng, như `process-applications`;
+  - script không có Socket.IO nên thông báo tạo từ đây không đẩy realtime.
+- `JobAlertService` nhận thêm `outboxRepository` và `config` (`CORS_ORIGIN` làm gốc link email, như `NotificationsService`).
+- **Test:** `tests/unit/job-alert-digest.test.ts` 7 ca:
+  - email gộp: outbox nằm cùng transaction với câu nhận dòng; tối đa 10 tin kèm "và 2 tin khác"; người tắt email chỉ được đánh dấu; không còn tin thì không gửi; lượt khác đã nhận thì không gửi; lỗi một người không chặn người sau;
+  - `--dry-run` không ghi;
+  - mẫu email escape và có link tuyệt đối;
+  - nhắc kỹ năng: mốc 24 giờ, khoá, trùng, lỗi;
+  - `runDaily` trả `LOCKED` khi đang chạy.
+
+  `job-alerts.test.ts` cập nhật hàm dựng service. Toàn bộ unit test server: 565/565 qua. `tsc` server vẫn chỉ còn lỗi `notification.mapper.ts` (hết ở bước 7); script `job-alerts.ts` kiểm kiểu riêng, không lỗi.
+- **Kiểm trên Neon (chỉ đọc; script chạy với `DATABASE_URL` trỏ endpoint trực tiếp, phiên read-only):**
+  - `EXPLAIN` câu nhận dòng (`UPDATE … RETURNING`) dùng index `(emailedAt, createdAt)` của `job_alerts`. `EXPLAIN` câu đọc tin của email dùng khoá chính `job_alerts`, `job_posts`, `companies`, rồi anti join cho đơn và lời mời qua index. Cả hai câu hợp lệ với schema thật.
+  - `job_alerts` đang rỗng, nên email gộp ra 0 ứng viên, 0 email. Chạy thật có dữ liệu ở bước 8.6.
+  - Nhắc kỹ năng: service ra 0 người; bỏ điều kiện tuổi tài khoản vẫn 0. Đếm bằng SQL tay: 0/1.523 ứng viên chưa có kỹ năng, khớp bước 0 mục 7. Để demo phải tạo tài khoản mới (bước 8.7).
+  - `countTargetsForJob` cho 5 tin mới nhất ra 14 / 8 / 30 / 10 / 46 người, trùng số mỗi tin ở bước 5.
+  - `npm run job-alerts -- --dry-run` in đúng hai dòng 0; `--dry-run --job clargedemojob0093` ra "14 đạt, 0 đã báo ⇒ sẽ báo 14"; `--job khong-co` dừng với "Không có tin"; `--bogus` và `--job` thiếu id bị từ chối.
+
+### Bước 7 — `packages/shared-types` (2026-11-13)
+
+- Phần lớn bước 7 đã làm dần ở bước 2–5, vì server cần kiểu để biên dịch:
+  - `JobRecommendationList` (bước 2);
+  - `ProfileCompleteness*` (bước 3);
+  - `JobPostViewerInfo`, `JobPost.viewer?`, `PaginatedResponse.total?`, các trường mới của `JobPostSearchQuery` (bước 4);
+  - `JobAlertSettings`, `UpdateJobAlertSettingsRequest` (bước 5).
+- Bước này chỉ còn thêm `JOB_ALERT` và `PROFILE_SKILLS_REMINDER` vào `NotificationType`. Payload của hai loại nằm ở `notification.types.ts` phía server (bước 5); `Notification` của shared-types không có payload nên không đổi gì thêm.
+- **Khác plan:** web có `Record<NotificationType, …>` ở `apps/web/src/lib/notifications.ts`, nên đã thêm luôn hai dòng ở đó để web không lỗi biên dịch trong lúc chờ F5:
+  - `NOTIFICATION_GROUP_BY_TYPE`: `JOB_ALERT` → `INVITATIONS`, `PROFILE_SKILLS_REMINDER` → `ACCOUNT`, giống `notification-groups.ts` của server;
+  - `NOTIFICATION_ACTION_LABEL`: "Xem việc làm phù hợp" (`/recommended-jobs`) và "Cập nhật hồ sơ" (`/profile`).
+
+  F5 vẫn còn icon, realtime và invalidate.
+- Đã build lại `dist`. `tsc` sạch ở shared-types, server (hết lỗi `notification.mapper.ts`), web và script `job-alerts.ts`. Toàn bộ unit test server: 565/565 qua.
 
 ## Phần 4 — Ghi chú của chủ dự án
 

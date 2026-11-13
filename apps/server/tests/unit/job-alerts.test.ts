@@ -83,6 +83,7 @@ function alertSetup(options: {
       warn: () => {},
       error: (_msg: string, meta: Record<string, unknown>) => errors.push(meta),
     },
+    config: { CORS_ORIGIN: "https://web.test" },
   } as unknown as ConstructorParameters<typeof JobAlertService>[0]);
   return { service, calls, upserts, errors, infos };
 }
@@ -194,6 +195,7 @@ function settingsSetup(row: CandidateJobAlertSettingsRow | null) {
     },
     notificationsService: {},
     logger: { info: () => {}, warn: () => {}, error: () => {} },
+    config: { CORS_ORIGIN: "https://web.test" },
   } as unknown as ConstructorParameters<typeof JobAlertService>[0]);
   return { service, patches };
 }
