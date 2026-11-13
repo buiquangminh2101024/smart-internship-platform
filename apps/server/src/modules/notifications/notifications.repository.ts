@@ -30,6 +30,25 @@ export class NotificationsRepository {
     return row !== null;
   }
 
+  findOwnerByDedupeKey(dedupeKey: string): Promise<{ id: string; userId: string } | null> {
+    return this.prisma.notification.findUnique({ where: { dedupeKey }, select: { id: true, userId: true } });
+  }
+
+  /**
+   * AD-26 D8 — thông báo gộp theo ngày có nội dung mới: thay nội dung, đặt lại chưa đọc và
+   * đưa lên đầu danh sách (sắp theo `createdAt`; bảng không có `updatedAt`).
+   */
+  refresh(
+    id: string,
+    data: Pick<NotificationWriteData, "title" | "body" | "link">,
+    now: Date,
+  ): Promise<Notification> {
+    return this.prisma.notification.update({
+      where: { id },
+      data: { ...data, isRead: false, readAt: null, createdAt: now },
+    });
+  }
+
   async listForUser(
     userId: string,
     options: { unreadOnly: boolean; cursor?: string; types?: NotificationType[] },

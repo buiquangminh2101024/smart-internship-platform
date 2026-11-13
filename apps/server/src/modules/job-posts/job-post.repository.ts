@@ -13,6 +13,8 @@ import {
 type Db = PrismaClient | Prisma.TransactionClient;
 
 const PAGE_SIZE = 20;
+/** Cỡ trang các danh sách tin — đường `sort=match` của tìm kiếm công khai dùng cùng cỡ. */
+export const JOB_POST_PAGE_SIZE = PAGE_SIZE;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Cửa sổ "sắp hết hạn" của tin cần chú ý (khác cửa sổ 3 ngày của thông báo JOB_POST_EXPIRING). */
@@ -79,6 +81,82 @@ function paginate<T extends { id: string }>(rows: T[]): Page<T> {
   const items = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
   const nextCursor = hasMore ? items[items.length - 1]?.id : undefined;
   return { items, hasMore, ...(nextCursor ? { nextCursor } : {}) };
+}
+
+export interface PublicJobSearchFilter {
+  q?: string;
+  companyId?: string;
+  cityId?: string;
+  industryId?: string;
+  jobType?: JobPostType;
+  salaryMin?: number;
+  skillIds?: string[];
+  skillMode?: "any" | "all";
+  experience?: "none" | "lt1" | "1to2" | "gt2";
+  salaryKind?: "disclosed" | "negotiable";
+}
+
+/** Q3 — nhóm kinh nghiệm theo `minExperienceYears` (Float); null và 0 đều là "không yêu cầu". */
+const EXPERIENCE_WHERE: Record<NonNullable<PublicJobSearchFilter["experience"]>, Prisma.JobPostWhereInput> = {
+  none: { OR: [{ minExperienceYears: null }, { minExperienceYears: { lte: 0 } }] },
+  lt1: { minExperienceYears: { gt: 0, lt: 1 } },
+  "1to2": { minExperienceYears: { gte: 1, lte: 2 } },
+  gt2: { minExperienceYears: { gt: 2 } },
+};
+
+const SALARY_KIND_WHERE: Record<NonNullable<PublicJobSearchFilter["salaryKind"]>, Prisma.JobPostWhereInput> = {
+  negotiable: { isNegotiable: true },
+  disclosed: { isNegotiable: false, OR: [{ salaryMin: { not: null } }, { salaryMax: { not: null } }] },
+};
+
+/** Mới đăng trước, hoà theo id — thứ tự toàn phần để cursor theo id không lặp / sót tin. */
+const SEARCH_ORDER: Prisma.JobPostOrderByWithRelationInput[] = [{ publishedAt: "desc" }, { id: "desc" }];
+
+/** Điều kiện tìm kiếm công khai — một nguồn cho cả đường mới đăng và đường theo điểm (AD-26). */
+function publicSearchWhere(filter: PublicJobSearchFilter): Prisma.JobPostWhereInput {
+  // Mỗi điều kiện "hoặc" là 1 phần tử của AND — không gộp chung key `OR` ở
+  // cùng một object vì các nhánh sẽ ghi đè lẫn nhau.
+  const and: Prisma.JobPostWhereInput[] = [{ OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }];
+  if (filter.salaryMin) {
+    // Tin "Thỏa thuận" luôn hiện kể cả khi lọc theo lương tối thiểu — không
+    // có salaryMax để so sánh, loại bỏ sẽ giấu mất phần lớn tin thực tập.
+    and.push({
+      OR: [{ isNegotiable: true }, { salaryMax: { gte: filter.salaryMin } }, { salaryMin: { gte: filter.salaryMin } }],
+    });
+  }
+  if (filter.salaryKind) and.push(SALARY_KIND_WHERE[filter.salaryKind]);
+  if (filter.experience) and.push(EXPERIENCE_WHERE[filter.experience]);
+  if (filter.q) {
+    and.push({
+      OR: [
+        { title: { contains: filter.q, mode: "insensitive" } },
+        { description: { contains: filter.q, mode: "insensitive" } },
+        { company: { name: { contains: filter.q, mode: "insensitive" } } },
+        // AD-26 (D6) — tìm cả tên kỹ năng đã duyệt của tin (skill PENDING không lộ ra công khai).
+        { skills: { some: { skill: { status: "APPROVED", name: { contains: filter.q, mode: "insensitive" } } } } },
+      ],
+    });
+  }
+  if (filter.skillIds?.length) {
+    if (filter.skillMode === "all") {
+      // Mỗi skill là một điều kiện `some` riêng — gộp chung một `some` với
+      // `skillId: { in: [...] }` sẽ thành "có BẤT KỲ skill nào", tức là OR.
+      for (const skillId of filter.skillIds) {
+        and.push({ skills: { some: { skillId } } });
+      }
+    } else {
+      // Q4 — mặc định "có ít nhất một".
+      and.push({ skills: { some: { skillId: { in: filter.skillIds } } } });
+    }
+  }
+  return {
+    status: "PUBLISHED",
+    AND: and,
+    ...(filter.companyId ? { companyId: filter.companyId } : {}),
+    ...(filter.cityId ? { cityId: filter.cityId } : {}),
+    ...(filter.industryId ? { industryId: filter.industryId } : {}),
+    ...(filter.jobType ? { jobType: filter.jobType } : {}),
+  };
 }
 
 export class JobPostRepository {
@@ -255,61 +333,72 @@ export class JobPostRepository {
     return new Set(rows.map((row) => row.id));
   }
 
-  /** Tìm kiếm công khai — chỉ tin PUBLISHED và chưa quá hạn. */
+  /**
+   * Tìm kiếm công khai — chỉ tin PUBLISHED và chưa quá hạn, mới đăng trước, cursor theo id.
+   * `total` đếm cùng điều kiện (AD-26), chạy song song với trang.
+   */
   async findPublishedForSearch(
-    filter: {
-      q?: string;
-      companyId?: string;
-      cityId?: string;
-      industryId?: string;
-      jobType?: JobPostType;
-      salaryMin?: number;
-      skillIds?: string[];
-    },
+    filter: PublicJobSearchFilter,
     cursor: string | undefined,
-  ): Promise<Page<JobPostWithRelations>> {
-    // Mỗi điều kiện "hoặc" là 1 phần tử của AND — không gộp chung key `OR` ở
-    // cùng một object vì các nhánh sẽ ghi đè lẫn nhau.
-    const and: Prisma.JobPostWhereInput[] = [{ OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }];
-    if (filter.salaryMin) {
-      // Tin "Thỏa thuận" luôn hiện kể cả khi lọc theo lương tối thiểu — không
-      // có salaryMax để so sánh, loại bỏ sẽ giấu mất phần lớn tin thực tập.
-      and.push({
-        OR: [{ isNegotiable: true }, { salaryMax: { gte: filter.salaryMin } }, { salaryMin: { gte: filter.salaryMin } }],
-      });
-    }
-    if (filter.q) {
-      and.push({
-        OR: [
-          { title: { contains: filter.q, mode: "insensitive" } },
-          { description: { contains: filter.q, mode: "insensitive" } },
-          { company: { name: { contains: filter.q, mode: "insensitive" } } },
-        ],
-      });
-    }
-    if (filter.skillIds?.length) {
-      // Mỗi skill là một điều kiện `some` riêng — gộp chung một `some` với
-      // `skillId: { in: [...] }` sẽ thành "có BẤT KỲ skill nào", tức là OR.
-      for (const skillId of filter.skillIds) {
-        and.push({ skills: { some: { skillId } } });
-      }
-    }
+  ): Promise<Page<JobPostWithRelations> & { total: number }> {
+    const where = publicSearchWhere(filter);
+    const [rows, total] = await Promise.all([
+      this.prisma.jobPost.findMany({
+        where,
+        include: jobPostInclude,
+        // `id` làm thứ tự hoà: chỉ sắp `publishedAt` thì cursor theo id lặp / sót tin cùng
+        // `publishedAt` (bước 4 đo trên Neon: duyệt hết trang ra 311/312 tin, có tin lặp).
+        orderBy: SEARCH_ORDER,
+        take: PAGE_SIZE + 1,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      }),
+      this.prisma.jobPost.count({ where }),
+    ]);
+    return { ...paginate(rows), total };
+  }
 
+  /**
+   * AD-26 (D5) — mọi id qua bộ lọc công khai, mới đăng trước, cho đường `sort=match` /
+   * `minMatch` của ứng viên: service ghép điểm rồi sắp và phân trang offset. Dùng chung
+   * `publicSearchWhere` để hai đường không lệch bộ lọc; số tin đang hiển thị chỉ vài trăm.
+   */
+  async findPublishedIdsForSearch(filter: PublicJobSearchFilter): Promise<string[]> {
     const rows = await this.prisma.jobPost.findMany({
-      where: {
-        status: "PUBLISHED",
-        AND: and,
-        ...(filter.companyId ? { companyId: filter.companyId } : {}),
-        ...(filter.cityId ? { cityId: filter.cityId } : {}),
-        ...(filter.industryId ? { industryId: filter.industryId } : {}),
-        ...(filter.jobType ? { jobType: filter.jobType } : {}),
-      },
-      include: jobPostInclude,
-      orderBy: { publishedAt: "desc" },
-      take: PAGE_SIZE + 1,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      where: publicSearchWhere(filter),
+      select: { id: true },
+      orderBy: SEARCH_ORDER,
     });
-    return paginate(rows);
+    return rows.map((row) => row.id);
+  }
+
+  /** Tin theo id, giữ đúng thứ tự `ids`; tin không còn tồn tại bị bỏ. */
+  async findManyWithRelationsByIds(ids: string[]): Promise<JobPostWithRelations[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.prisma.jobPost.findMany({ where: { id: { in: ids } }, include: jobPostInclude });
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    return ids.flatMap((id) => byId.get(id) ?? []);
+  }
+
+  /** AD-26 (D5) — tin trong `jobPostIds` mà ứng viên đã lưu / đã ứng tuyển (trừ CANCELLED, Q1). */
+  async findViewerState(
+    candidateId: string,
+    jobPostIds: string[],
+  ): Promise<{ saved: Set<string>; applied: Set<string> }> {
+    if (jobPostIds.length === 0) return { saved: new Set(), applied: new Set() };
+    const [saved, applied] = await Promise.all([
+      this.prisma.savedJob.findMany({
+        where: { candidateId, jobPostId: { in: jobPostIds } },
+        select: { jobPostId: true },
+      }),
+      this.prisma.application.findMany({
+        where: { candidateId, jobPostId: { in: jobPostIds }, status: { not: "CANCELLED" } },
+        select: { jobPostId: true },
+      }),
+    ]);
+    return {
+      saved: new Set(saved.map((row) => row.jobPostId)),
+      applied: new Set(applied.map((row) => row.jobPostId)),
+    };
   }
 
   countByStatus(where: Prisma.JobPostWhereInput): Promise<number> {

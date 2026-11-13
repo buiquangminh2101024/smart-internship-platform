@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import type { JobPost, JobRecommendationList, MatchResult } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
+import { parseOffsetCursor } from "../../shared/utils/offset-cursor";
 import type { CandidateMatchProfile, JobMatcher, JobMatchProfile } from "../../shared/ports/JobMatcher";
 import { buildCodeSuggestions } from "../candidate-insights/profile-suggestions.util";
 import type { CandidateMatchProfileLoader } from "./candidate-match-profile.loader";
@@ -16,9 +17,6 @@ import type { JobMatcherMode } from "./job-matching.service";
 import type { JobRecommendationRepository } from "./job-recommendation.repository";
 import type { MatchEmbeddingService } from "./match-embedding.service";
 import { markSemanticPending } from "./scoring-job-matcher";
-
-/** Offset lớn nhất nhận qua cursor — ứng viên nhiều tin nhất ở bước 0 có 218 tin ≥ 20. */
-const MAX_CURSOR_OFFSET = 10_000;
 
 export interface TopMatchOptions {
   limit?: number;
@@ -276,11 +274,10 @@ function emptyList(
   return { status, source, items: [], total: 0, nextCursor: null, suggestions: [] };
 }
 
-/** `cursor` là offset dạng chuỗi (thứ tự theo điểm không hợp với cursor theo id). */
+/**
+ * `cursor` là offset dạng chuỗi (thứ tự theo điểm không hợp với cursor theo id). Ứng viên
+ * nhiều tin nhất ở bước 0 có 218 tin ≥ 20, xa dưới trần offset 10.000.
+ */
 export function parseRecommendationCursor(cursor: string | undefined): number {
-  if (cursor === undefined || cursor === "") return 0;
-  if (!/^\d{1,5}$/.test(cursor) || Number(cursor) > MAX_CURSOR_OFFSET) {
-    throw new AppError(400, "Invalid cursor", "INVALID_CURSOR");
-  }
-  return Number(cursor);
+  return parseOffsetCursor(cursor);
 }

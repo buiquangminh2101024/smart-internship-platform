@@ -193,6 +193,19 @@ export class MatchScoreRepository {
    * Số Phù hợp của các tin trong một trang danh sách tin (bước 6), một câu gộp. Chỉ tin
    * đang hiển thị có trong Map; tin khác trạng thái thì không có khoá.
    */
+  /**
+   * AD-26 (D5) — điểm lưu của MỘT ứng viên cho các tin trong `jobPostIds` (tin không có
+   * dòng thì không có trong Map). Dùng index (candidateId, score DESC).
+   */
+  async scoresForCandidate(candidateId: string, jobPostIds: string[]): Promise<Map<string, number>> {
+    if (jobPostIds.length === 0) return new Map();
+    const rows = await this.prisma.jobCandidateMatchScore.findMany({
+      where: { candidateId, jobPostId: { in: jobPostIds } },
+      select: { jobPostId: true, score: true },
+    });
+    return new Map(rows.map((row) => [row.jobPostId, row.score]));
+  }
+
   async matchedCounts(jobPostIds: string[]): Promise<Map<string, number>> {
     if (jobPostIds.length === 0) return new Map();
     const rows = await this.prisma.$queryRaw<Array<{ jobPostId: string; matched: number }>>(Prisma.sql`

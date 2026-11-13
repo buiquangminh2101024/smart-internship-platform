@@ -37,7 +37,9 @@ export class JobPostsController {
 
   search = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const result = await this.jobPostsService.search(req.query as JobPostSearchQuery);
+      // AD-26 (D5) — route dùng optionalAuthenticate; chỉ vai trò ứng viên có phần theo người xem.
+      const viewerUserId = req.user?.role === "CANDIDATE" ? req.user.id : undefined;
+      const result = await this.jobPostsService.search(req.query as JobPostSearchQuery, viewerUserId);
       const body: ApiResponse<PaginatedResponse<JobPost>> = { success: true, data: result };
       res.json(body);
     } catch (error) {

@@ -596,6 +596,39 @@ const templates: { [T in NotificationType]: Renderer<T> } = {
     };
   },
 
+  // AD-26 D8 — chỉ trong app; email gộp mỗi ngày đi riêng qua JobAlertService (bước 6).
+  // Thông báo được cập nhật tại chỗ khi có tin mới trong ngày, nên tiêu đề luôn là tổng trong ngày.
+  JOB_ALERT: (data) => {
+    const latest = `"${data.jobPostTitle}" của ${data.companyName}, phù hợp ${data.score}%`;
+    return {
+      title: `${data.todayCount} tin mới phù hợp với bạn`,
+      body: data.todayCount > 1 ? `Mới nhất: ${latest}.` : `${latest}.`,
+      link: "/recommended-jobs",
+      email: null,
+    };
+  },
+
+  // AD-26 D10 — nhắc một lần cho tài khoản ≥ 24 giờ chưa có kỹ năng. Có email: người chưa
+  // điền kỹ năng thường cũng ít mở app.
+  PROFILE_SKILLS_REMINDER: (_data, ctx) => {
+    const title = "Thêm kỹ năng để nhận việc làm phù hợp";
+    const body =
+      "Hồ sơ của bạn chưa có kỹ năng nào. Hệ thống dựa vào kỹ năng để gợi ý việc làm, báo khi có tin mới phù hợp và giúp nhà tuyển dụng tìm thấy bạn.";
+    const link = "/profile";
+    return {
+      title,
+      body,
+      link,
+      email: {
+        subject: "Thêm kỹ năng vào hồ sơ để nhận việc làm phù hợp",
+        html: emailHtml(title, [body, "Chỉ mất vài phút: mở hồ sơ và thêm những kỹ năng bạn đang có."], {
+          label: "Cập nhật hồ sơ",
+          url: absolute(ctx, link),
+        }),
+      },
+    };
+  },
+
   // Tin nhắn cố ý không có loại notification: không ghi DB mỗi tin, chỉ push
   // realtime qua RealtimeNotifier.pushMessageToUser (Phase 9 bổ sung).
 };

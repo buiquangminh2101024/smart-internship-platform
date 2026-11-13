@@ -75,7 +75,14 @@ function buildService(): MatchScoreService {
     config,
   } as unknown as ConstructorParameters<typeof CandidateOutreachService>[0]);
 
-  return new MatchScoreService({ matchScoreRepository, candidateOutreachService, candidateMatchProfileLoader, logger });
+  // Script chỉ gọi rescoreJob / rescoreAll, không qua lối (a) ⇒ không sinh job alert (AD-26 D7).
+  return new MatchScoreService({
+    matchScoreRepository,
+    candidateOutreachService,
+    candidateMatchProfileLoader,
+    logger,
+    jobScoredListener: () => {},
+  });
 }
 
 const seconds = (ms: number) => `${(ms / 1000).toFixed(1)} giây`;

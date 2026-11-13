@@ -2,6 +2,7 @@ import { Router } from "express";
 import { asClass, asFunction, type AwilixContainer } from "awilix";
 import { authenticate } from "../../shared/middleware/authenticate";
 import { authorize } from "../../shared/middleware/authorize";
+import { optionalAuthenticate } from "../../shared/middleware/optional-authenticate";
 import { validate } from "../../shared/middleware/validate";
 import type { Logger } from "../../shared/logger";
 import type { RequirementExtractor } from "../../shared/ports/RequirementExtractor";
@@ -142,9 +143,16 @@ export function jobPostsRouter(container: AwilixContainer): Router {
 
   // ─── Public (Guest) ────────────────────────────────────────────────────
   // Không guard — tin đã PUBLISHED là nội dung công khai (API_CONVENTIONS.md §11).
-  router.get("/job-posts", validate(jobPostSearchQuerySchema, "query"), (req, res, next) => {
-    void resolveController().search(req, res, next);
-  });
+  // AD-26 (D5): đọc token nếu có — ứng viên nhận thêm điểm / đã lưu / đã ứng tuyển và
+  // được sắp theo điểm; không token thì như khách. Token sai ⇒ 401 (optionalAuthenticate).
+  router.get(
+    "/job-posts",
+    optionalAuthenticate(container),
+    validate(jobPostSearchQuerySchema, "query"),
+    (req, res, next) => {
+      void resolveController().search(req, res, next);
+    },
+  );
   router.get("/job-posts/:id", (req, res, next) => {
     void resolveController().publicDetail(req, res, next);
   });

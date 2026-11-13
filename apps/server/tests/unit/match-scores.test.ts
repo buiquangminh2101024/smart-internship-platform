@@ -98,6 +98,7 @@ function buildService(options: FakeOptions = {}) {
   const errors: Array<Record<string, unknown>> = [];
   const loader = fakeLoader(options.existingCandidates ?? [...new Set(Object.values(pools).flat())]);
   const clock = { now: 1_000_000 };
+  const scoredListened: string[] = [];
 
   const service = new MatchScoreService({
     matchScoreRepository: {
@@ -127,9 +128,10 @@ function buildService(options: FakeOptions = {}) {
     },
     candidateMatchProfileLoader: loader,
     logger: { info: () => {}, warn: () => {}, error: (_msg: string, meta: Record<string, unknown>) => errors.push(meta) },
+    jobScoredListener: (jobPostId: string) => scoredListened.push(jobPostId),
   } as unknown as ConstructorParameters<typeof MatchScoreService>[0]);
 
-  return { service, written, scoredChunks, errors, loader, clock };
+  return { service, written, scoredChunks, errors, loader, clock, scoredListened };
 }
 
 test("rescoreJob: ghi người có điểm, bỏ điểm null, semanticPending theo embedding", async () => {
@@ -261,4 +263,38 @@ test("job đêm: xoá điểm của tin hết hiển thị trước, rồi chấ
   assert.deepEqual(calls, ["cleanup", `rescore:${MATCH_SCORE_NIGHTLY_BUDGET_MS}`]);
   assert.equal(MATCH_SCORE_NIGHTLY_BUDGET_MS, 45 * 60 * 1000);
   assert.deepEqual(result.cleaned, { deletedRows: 12, resetJobs: 2 });
+});
+
+// ─── Lối (a) → job alert (AD-26 D7) ─────────────────────────────────────────
+
+const settle = async (): Promise<void> => {
+  for (let i = 0; i < 20; i++) await new Promise((resolve) => setImmediate(resolve));
+};
+
+test("trigger: chấm xong (DONE) ⇒ báo jobScoredListener đúng một lần", async () => {
+  const { service, scoredListened } = buildService();
+  service.trigger("job-1");
+  await settle();
+  assert.deepEqual(scoredListened, ["job-1"]);
+});
+
+test("trigger: tin không hiển thị / thôi hiển thị lúc chấm / lỗi ⇒ không báo job alert", async () => {
+  const notVisible = buildService({ visible: [] });
+  notVisible.service.trigger("job-1");
+  const gone = buildService({ goneWhileScoring: ["job-1"] });
+  gone.service.trigger("job-1");
+  const failing = buildService({ failingJobs: ["job-1"] });
+  failing.service.trigger("job-1");
+  await settle();
+  assert.deepEqual(notVisible.scoredListened, []);
+  assert.deepEqual(gone.scoredListened, []);
+  assert.deepEqual(failing.scoredListened, []);
+  assert.equal(failing.errors.length, 1);
+});
+
+test("rescoreJob / rescoreAll (lượt đêm, script) ⇒ không báo job alert", async () => {
+  const { service, scoredListened } = buildService({ pools: { "job-1": ["a"], "job-2": ["b"] } });
+  await service.rescoreJob("job-1");
+  await service.rescoreAll({ budgetMs: 60_000 });
+  assert.deepEqual(scoredListened, []);
 });

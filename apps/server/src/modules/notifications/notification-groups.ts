@@ -19,6 +19,10 @@ export const NOTIFICATION_GROUP_BY_TYPE: Record<NotificationType, NotificationGr
   CANDIDATE_OUTREACH_INVITATION_RECEIVED: "INVITATIONS",
   CANDIDATE_OUTREACH_INVITATION_RESPONDED: "INVITATIONS",
   AUTO_OUTREACH_SENT: "INVITATIONS",
+  // AD-26: phía ứng viên không có nhóm "việc làm"; job alert là cơ hội việc làm được đưa tới
+  // ứng viên giống lời mời, nên vào tab "Lời mời". Nhắc thêm kỹ năng là việc của tài khoản/hồ sơ.
+  JOB_ALERT: "INVITATIONS",
+  PROFILE_SKILLS_REMINDER: "ACCOUNT",
   SUBSCRIPTION_EXPIRING: "SUBSCRIPTION",
   CATALOG_ENTRY_SUGGESTED: "CATALOG",
   PAYMENT_COMPLETED: "PAYMENTS",

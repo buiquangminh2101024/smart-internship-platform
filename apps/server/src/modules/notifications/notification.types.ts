@@ -112,6 +112,20 @@ export interface NotificationPayloadMap {
     /** Trạng thái tài khoản trùng email người gửi; null = email chưa có tài khoản. */
     accountStatus: UserStatus | null;
   };
+  // AD-26 D8 — một thông báo mỗi ứng viên mỗi ngày (upsertDaily, khoá
+  // job-alert:<ứng viên>:<ngày giờ VN>); tin sau trong ngày cập nhật lại thông báo đó.
+  JOB_ALERT: {
+    /** Tin mới nhất vừa được báo. */
+    jobPostId: string;
+    jobPostTitle: string;
+    companyName: string;
+    /** Điểm phù hợp của ứng viên với tin này lúc báo. */
+    score: number;
+    /** Số tin đã báo cho ứng viên trong ngày (giờ VN), tính cả tin này — đếm từ `job_alerts`. */
+    todayCount: number;
+  };
+  // AD-26 D10 — nhắc một lần (notifyOnce, khoá profile-skills-reminder:<ứng viên>). Nội dung cố định.
+  PROFILE_SKILLS_REMINDER: Record<string, never>;
 }
 
 // Khoá của map phải trùng khít enum Prisma: thêm giá trị vào enum mà quên khai

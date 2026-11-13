@@ -18,6 +18,7 @@ import type {
   UpdateJobPostRequest,
 } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
+import { parseOffsetCursor } from "../../shared/utils/offset-cursor";
 import type { AuditLogService } from "../audit-log/audit-log.service";
 import type { AutoOutreachTrigger } from "../candidate-outreach/auto-outreach.service";
 import type { CompanyRepository } from "../companies/company.repository";
@@ -30,7 +31,12 @@ import type { NotificationsService } from "../notifications/notifications.servic
 import type { SubscriptionsService } from "../subscriptions/subscriptions.service";
 import type { UserRepository } from "../users/user.repository";
 import { toJobPostDto } from "./job-post.mapper";
-import type { JobPostRepository, JobPostWithRelations, JobPostWriteData } from "./job-post.repository";
+import {
+  JOB_POST_PAGE_SIZE,
+  type JobPostRepository,
+  type JobPostWithRelations,
+  type JobPostWriteData,
+} from "./job-post.repository";
 
 // Employer tự chọn ngày hết hạn nhưng không quá 90 ngày kể từ lúc đặt —
 // quyết định chốt khi lên kế hoạch Phase 6 (xem
@@ -97,10 +103,98 @@ export class JobPostsService {
 
   // ─── Public (Guest) ──────────────────────────────────────────────────────
 
-  async search(query: JobPostSearchQuery): Promise<PaginatedResponse<JobPostDto>> {
-    const { cursor, ...filter } = query;
-    const page = await this.jobPostRepository.findPublishedForSearch(filter, cursor);
-    return this.toPage(page, { publicOnly: true });
+  /**
+   * Tìm kiếm công khai. `viewerUserId` chỉ truyền khi người xem đăng nhập vai trò ứng viên
+   * (AD-26 D5): mỗi tin có thêm `viewer`, và được dùng `sort=match` / `minMatch`. Khách
+   * (và vai trò khác) đi đúng đường cũ, chỉ thêm `total` và các bộ lọc mới.
+   */
+  async search(query: JobPostSearchQuery, viewerUserId?: string): Promise<PaginatedResponse<JobPostDto>> {
+    const { cursor, sort, minMatch, ...filter } = query;
+    const candidateIdPromise = viewerUserId ? this.findCandidateId(viewerUserId) : Promise.resolve(null);
+
+    if (viewerUserId && (sort === "match" || minMatch !== undefined)) {
+      const [candidateId, ids] = await Promise.all([
+        candidateIdPromise,
+        this.jobPostRepository.findPublishedIdsForSearch(filter),
+      ]);
+      if (candidateId) return this.searchByMatch(candidateId, ids, { sort, minMatch, cursor });
+    }
+
+    const [candidateId, page] = await Promise.all([
+      candidateIdPromise,
+      this.jobPostRepository.findPublishedForSearch(filter, cursor),
+    ]);
+    const result = { ...this.toPage(page, { publicOnly: true }), total: page.total };
+    if (!candidateId) return result;
+    return { ...result, items: await this.attachViewer(candidateId, result.items) };
+  }
+
+  /**
+   * Đường theo điểm (AD-26 D5): ghép điểm lưu của ứng viên vào mọi id qua bộ lọc, lọc
+   * `minMatch`, sắp điểm cao trước (tin chưa có điểm xếp cuối, hoà thì giữ thứ tự mới đăng),
+   * rồi phân trang offset. Cursor của đường này là offset, khác cursor theo id của đường cũ.
+   */
+  private async searchByMatch(
+    candidateId: string,
+    ids: string[],
+    options: {
+      sort: JobPostSearchQuery["sort"] | undefined;
+      minMatch: JobPostSearchQuery["minMatch"] | undefined;
+      cursor: string | undefined;
+    },
+  ): Promise<PaginatedResponse<JobPostDto>> {
+    const offset = parseOffsetCursor(options.cursor);
+    const scores = await this.matchScoreRepository.scoresForCandidate(candidateId, ids);
+    const minMatch = options.minMatch;
+    const passing = minMatch === undefined ? ids : ids.filter((id) => (scores.get(id) ?? -1) >= minMatch);
+    // Array.prototype.sort ổn định ⇒ hoà điểm giữ thứ tự mới đăng của `ids`.
+    const ordered =
+      options.sort === "match"
+        ? [...passing].sort((left, right) => (scores.get(right) ?? -1) - (scores.get(left) ?? -1))
+        : passing;
+
+    const pageIds = ordered.slice(offset, offset + JOB_POST_PAGE_SIZE);
+    const [rows, state] = await Promise.all([
+      this.jobPostRepository.findManyWithRelationsByIds(pageIds),
+      this.jobPostRepository.findViewerState(candidateId, pageIds),
+    ]);
+    const nextOffset = offset + pageIds.length;
+    const hasMore = nextOffset < ordered.length;
+    return {
+      items: rows.map((row) => ({
+        ...toJobPostDto(row, { publicOnly: true }),
+        viewer: {
+          matchScore: scores.get(row.id) ?? null,
+          saved: state.saved.has(row.id),
+          applied: state.applied.has(row.id),
+        },
+      })),
+      hasMore,
+      ...(hasMore ? { nextCursor: String(nextOffset) } : {}),
+      total: ordered.length,
+    };
+  }
+
+  /** Điểm lưu / đã lưu / đã ứng tuyển cho các tin của trang — ba câu đọc chạy song song. */
+  private async attachViewer(candidateId: string, items: JobPostDto[]): Promise<JobPostDto[]> {
+    const ids = items.map((item) => item.id);
+    const [scores, state] = await Promise.all([
+      this.matchScoreRepository.scoresForCandidate(candidateId, ids),
+      this.jobPostRepository.findViewerState(candidateId, ids),
+    ]);
+    return items.map((item) => ({
+      ...item,
+      viewer: {
+        matchScore: scores.get(item.id) ?? null,
+        saved: state.saved.has(item.id),
+        applied: state.applied.has(item.id),
+      },
+    }));
+  }
+
+  private async findCandidateId(userId: string): Promise<string | null> {
+    const candidate = await this.prisma.candidate.findUnique({ where: { userId }, select: { id: true } });
+    return candidate?.id ?? null;
   }
 
   /** Chi tiết công khai — chỉ tin PUBLISHED, mỗi lượt xem tăng viewCount. */

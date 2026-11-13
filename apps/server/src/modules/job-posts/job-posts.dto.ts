@@ -82,6 +82,16 @@ export const jobPostSearchQuerySchema = z.object({
       return list.map((item) => String(item).trim()).filter(Boolean);
     }, z.array(z.string().min(1)).max(10))
     .optional(),
+  // AD-26 (D6, Q3/Q4) — bộ lọc mới, chỉ dựa trên cột đã có.
+  skillMode: z.enum(["any", "all"]).default("any"),
+  experience: z.enum(["none", "lt1", "1to2", "gt2"]).optional(),
+  salaryKind: z.enum(["disclosed", "negotiable"]).optional(),
+  // `match` và `minMatch` chỉ có tác dụng với token ứng viên; khách gửi thì service bỏ qua.
+  sort: z.enum(["newest", "match"]).default("newest"),
+  minMatch: z
+    .literal("70")
+    .transform(() => 70 as const)
+    .optional(),
   cursor: z.string().optional(),
 });
 

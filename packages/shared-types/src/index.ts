@@ -81,6 +81,8 @@ export interface PaginatedResponse<T> {
   items: T[];
   nextCursor?: string;
   hasMore: boolean;
+  /** Tổng số kết quả cùng điều kiện lọc — chỉ endpoint nào ghi rõ mới có (vd. GET /job-posts, AD-26). */
+  total?: number;
 }
 
 // ─── Health check (Phase 1) ──────────────────────────────────────────────
@@ -768,6 +770,22 @@ export interface JobPost {
    * cho người khác cùng công ty). Chỉ có ở GET /employer/job-posts và GET /employer/job-posts/:id.
    */
   isOwner?: boolean;
+  /**
+   * AD-26 (D5) — chỉ có ở GET /job-posts khi người xem đăng nhập vai trò ứng viên.
+   * Khách và vai trò khác không có trường này.
+   */
+  viewer?: JobPostViewerInfo;
+}
+
+export interface JobPostViewerInfo {
+  /**
+   * Điểm phù hợp lưu trong bảng điểm (AD-24: chấm khi tin được đăng và mỗi đêm), không
+   * chấm lại theo hồ sơ vừa sửa. null = chưa có điểm (không chung kỹ năng nào với tin).
+   */
+  matchScore: number | null;
+  saved: boolean;
+  /** Có đơn vào tin ở mọi trạng thái trừ CANCELLED (Q1, cùng quy tắc D3). */
+  applied: boolean;
 }
 
 export interface CreateJobPostRequest {
@@ -1159,6 +1177,22 @@ export interface OutreachSettings {
   isOpenToOutreach: boolean;
 }
 
+// ─── Job alert (AD-26 D7–D9, docs/06-backend/job-discovery/PLAN.md bước 5) ──
+/** GET/PATCH /candidate/job-alert-settings. Bật sẵn `enabled`, `emailEnabled`. */
+export interface JobAlertSettings {
+  /** Báo khi có tin mới phù hợp (điểm ≥ max(ngưỡng tự mời của tin, 70)). */
+  enabled: boolean;
+  /** Email tổng hợp mỗi ngày 8h; chỉ có tác dụng khi `enabled`. */
+  emailEnabled: boolean;
+  /** Chỉ tin cùng thành phố với hồ sơ. Bật khi hồ sơ chưa có thành phố ⇒ 400 `JOB_ALERT_CITY_REQUIRED`. */
+  sameCityOnly: boolean;
+  /** Thành phố trên hồ sơ (chỉ đọc); null ⇒ chưa điền, `sameCityOnly` không báo tin nào. */
+  cityName: string | null;
+}
+
+/** PATCH: gửi ít nhất một công tắc. */
+export type UpdateJobAlertSettingsRequest = Partial<Pick<JobAlertSettings, "enabled" | "emailEnabled" | "sameCityOnly">>;
+
 // ─── Trang "Lời mời" của Employer (docs/06-backend/outreach-hub/PLAN.md) ──
 // Cấp công ty (Q1). Trạng thái luôn là trạng thái hiển thị (PENDING quá hạn hoặc
 // tin không còn PUBLISHED ⇒ EXPIRED), ở cả bộ lọc lẫn số đếm.
@@ -1283,10 +1317,29 @@ export interface JobPostSearchQuery {
   industryId?: string;
   jobType?: JobPostType;
   salaryMin?: number;
-  /** Lọc theo kỹ năng — tin phải có ĐỦ tất cả skill được chọn. */
+  /** Lọc theo kỹ năng; cách kết hợp theo `skillMode`. */
   skillIds?: string[];
+  /** `any` (mặc định, Q4) = tin có ít nhất một kỹ năng đã chọn; `all` = có đủ tất cả. */
+  skillMode?: JobPostSkillMode;
+  /** Kinh nghiệm tin yêu cầu (Q3): không yêu cầu / dưới 1 năm / 1–2 năm / trên 2 năm. */
+  experience?: JobPostExperienceFilter;
+  /** `disclosed` = có ghi mức lương; `negotiable` = thoả thuận. */
+  salaryKind?: JobPostSalaryKind;
+  /** `match` chỉ có tác dụng khi đăng nhập vai trò ứng viên; khách luôn `newest`. */
+  sort?: JobPostSort;
+  /** "Chỉ tin phù hợp với tôi" — chỉ nhận 70, chỉ có tác dụng khi đăng nhập vai trò ứng viên. */
+  minMatch?: 70;
+  /**
+   * `sort=newest` (không `minMatch`): id của tin cuối trang trước. `sort=match` hoặc có
+   * `minMatch`: offset do trang trước trả về. Đổi cách sắp / bộ lọc thì bỏ cursor.
+   */
   cursor?: string;
 }
+
+export type JobPostSkillMode = "any" | "all";
+export type JobPostExperienceFilter = "none" | "lt1" | "1to2" | "gt2";
+export type JobPostSalaryKind = "disclosed" | "negotiable";
+export type JobPostSort = "newest" | "match";
 
 export interface EmployerJobPostListQuery {
   status?: JobPostStatus;

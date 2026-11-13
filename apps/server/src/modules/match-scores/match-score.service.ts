@@ -12,6 +12,12 @@ import { MATCH_SCORE_CHUNK_SIZE, MATCH_SCORE_MAX_NEW_EMBEDDINGS } from "./match-
  */
 export type MatchScoreTrigger = (jobPostId: string) => void;
 
+/**
+ * Gọi sau khi lối (a) chấm xong một tin (`trigger` → DONE), không gọi từ lượt đêm hay script
+ * (AD-26 D7: chỉ tin mới được báo). Module job-alerts đăng ký dưới tên `jobScoredListener`.
+ */
+export type JobScoredListener = (jobPostId: string) => void;
+
 export type RescoreJobResult =
   /** RUNNING: tin đang được chấm ở lượt khác. NOT_VISIBLE: tin không còn hiển thị. */
   | { status: "SKIPPED"; reason: "RUNNING" | "NOT_VISIBLE" }
@@ -68,6 +74,7 @@ export class MatchScoreService {
   private readonly outreachService: CandidateOutreachService;
   private readonly profileLoader: CandidateMatchProfileLoader;
   private readonly logger: Logger;
+  private readonly jobScoredListener: JobScoredListener;
   /** Tin đang chấm (một process, AD-23 mục 8): lượt gọi sau cho cùng tin thì bỏ qua. */
   private readonly runningJobs = new Set<string>();
   private allRunning = false;
@@ -77,23 +84,31 @@ export class MatchScoreService {
     candidateOutreachService,
     candidateMatchProfileLoader,
     logger,
+    jobScoredListener,
   }: {
     matchScoreRepository: MatchScoreRepository;
     candidateOutreachService: CandidateOutreachService;
     candidateMatchProfileLoader: CandidateMatchProfileLoader;
     logger: Logger;
+    jobScoredListener: JobScoredListener;
   }) {
     this.repository = matchScoreRepository;
     this.outreachService = candidateOutreachService;
     this.profileLoader = candidateMatchProfileLoader;
     this.logger = logger;
+    this.jobScoredListener = jobScoredListener;
   }
 
-  /** Lối kích hoạt khi tin chuyển PUBLISHED: cache mới, chỉ nạp hồ sơ của pool tin đó. */
+  /**
+   * Lối kích hoạt khi tin chuyển PUBLISHED: cache mới, chỉ nạp hồ sơ của pool tin đó. Chấm
+   * xong (DONE) thì báo `jobScoredListener` (job alert); SKIPPED / GONE thì không.
+   */
   trigger(jobPostId: string): void {
     void this.rescoreJob(jobPostId)
       .then((result) => {
-        if (result.status === "DONE") this.logger.info("Match scores rescored", { jobPostId, ...result });
+        if (result.status !== "DONE") return;
+        this.logger.info("Match scores rescored", { jobPostId, ...result });
+        this.jobScoredListener(jobPostId);
       })
       .catch((error: unknown) => {
         this.logger.error("Match score rescoring failed", {
