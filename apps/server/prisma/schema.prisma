@@ -87,6 +87,8 @@ enum NotificationType {
   PASSWORD_RESET_SUGGESTED // AD-18 — người dùng: Admin gửi hướng dẫn đặt lại mật khẩu (link /forgot-password)
   AUTO_OUTREACH_SENT // AD-23 — employer: hệ thống đã tự gửi lời mời cho tin (gộp tối đa 1 thông báo/tin/ngày)
   APPLICATIONS_NEED_ATTENTION // AD-25 — employer: nhắc hằng tuần về hồ sơ tồn (gộp 1 thông báo/công ty/tuần)
+  JOB_ALERT // AD-26 — ứng viên: có tin mới phù hợp (gộp 1 thông báo/ứng viên/ngày)
+  PROFILE_SKILLS_REMINDER // AD-26 — ứng viên: nhắc một lần thêm kỹ năng (tài khoản ≥ 24 giờ chưa có kỹ năng)
 }
 
 // AD-16 M2 — lịch phỏng vấn. "Đã diễn ra" suy ra từ scheduledAt, không lưu COMPLETED.
@@ -411,6 +413,11 @@ model Candidate {
   isOpenToOutreach    Boolean                        @default(false)
   outreachInvitations CandidateOutreachInvitation[]
   matchScores         JobCandidateMatchScore[]
+  // AD-26 — job alert: bật sẵn, tắt được ở Cài đặt.
+  jobAlertEnabled      Boolean    @default(true)
+  jobAlertEmailEnabled Boolean    @default(true)
+  jobAlertSameCityOnly Boolean    @default(false)
+  jobAlerts            JobAlert[]
 
   @@map("candidates")
 }
@@ -763,6 +770,7 @@ model JobPost {
   outreachInvitations CandidateOutreachInvitation[]
   dailyStats          JobPostDailyStat[]
   matchScores         JobCandidateMatchScore[]
+  jobAlerts           JobAlert[]
 
   @@index([companyId, status])
   @@index([status, createdAt])
@@ -855,7 +863,27 @@ model JobCandidateMatchScore {
 
   @@id([jobPostId, candidateId])
   @@index([jobPostId, score])
+  // AD-26 — "Việc làm phù hợp" đọc bảng điểm theo ứng viên, sắp điểm giảm dần.
+  @@index([candidateId, score(sort: Desc)])
   @@map("job_candidate_match_scores")
+}
+
+// AD-26 — job alert: mỗi cặp tin–ứng viên báo một lần. Sinh ngay sau khi tin
+// được chấm lúc đăng (AD-24 lối a); email gộp mỗi ngày đánh dấu emailedAt.
+model JobAlert {
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  jobPostId   String
+  jobPost     JobPost   @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  // Điểm lúc báo.
+  score       Int
+  createdAt   DateTime  @default(now())
+  // null ⇒ chưa gửi trong email gộp.
+  emailedAt   DateTime?
+
+  @@id([candidateId, jobPostId])
+  @@index([emailedAt, createdAt])
+  @@map("job_alerts")
 }
 
 // Đầu ra LLM của "Phân tích hồ sơ" (AD-14, gộp A1+A4; KHÔNG bao gồm "Việc làm

@@ -846,7 +846,13 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 
 **Ngày:** 2026-11-12 · **Phase liên quan:** không thuộc phase đánh số. Mục 0.5 của `docs/01-project/FEATURE_BACKLOG.md`, theo nhận xét của giáo viên ở buổi demo 05/11/2026 ("hệ thống sẽ giúp em làm sao tìm được công việc phù hợp với mình nhất", "không phải chỉ có một cái phù hợp mà có rất nhiều cái phù hợp tại vì có quá nhiều tiêu chí", "tự động nó làm"). Kế hoạch chi tiết: `docs/06-backend/job-discovery/PLAN.md`, `docs/05-frontend/phases/job-discovery/PLAN.md`.
 
-> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-12, chủ dự án duyệt từng điểm trong buổi trao đổi). CHƯA TRIỂN KHAI.**
+> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-12, chủ dự án duyệt từng điểm trong buổi trao đổi). ĐANG TRIỂN KHAI.** Bước 0 (đo trên Neon, chỉ đọc) xong 2026-11-13. Kết quả ở plan backend, đã dẫn tới chỉnh trọng số ở mục 8. Bước 1 (schema, migration `20261113120000_add_job_discovery`) đã áp lên Neon 2026-11-13.
+>
+> Số đo chính của bước 0:
+> - mỗi ứng viên có trung vị 61 tin điểm ≥ 20;
+> - 46% tin đang hiển thị đăng quá 30 ngày;
+> - một trang "Việc làm phù hợp" ≈ 0,8 giây (đường cũ 1,36 giây);
+> - nếu 20 tin gần nhất được duyệt cùng ngày, 31% ứng viên nhận báo sẽ nhận ≥ 2 tin.
 
 **Bối cảnh:**
 
@@ -899,13 +905,17 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
      | Cửa vào: thiếu là mất hẳn một tính năng | Kỹ năng (không có gợi ý, báo tin, không được tìm thấy) | 30 |
      | | CV (nộp đơn bắt buộc chọn CV) | 15 |
      | | Bật cho nhà tuyển dụng liên hệ (không nhận lời mời, kể cả tự động) | 10 |
-     | Ảnh hưởng điểm phù hợp (trọng số `hybrid-v2`: kỹ năng ≈ 43%, nội dung 40%, kinh nghiệm ≈ 13%, học vấn ≈ 4%) | Kinh nghiệm | 10 |
+     | Ảnh hưởng điểm phù hợp (trọng số `hybrid-v2`: kỹ năng ≈ 43%, nội dung 40%, kinh nghiệm ≈ 13%, học vấn ≈ 4%) | Kinh nghiệm | 15 |
      | | Dự án (vào văn bản nội dung; với sinh viên thường thay cho kinh nghiệm) | 10 |
-     | | Tiêu đề và giới thiệu (vào văn bản nội dung) | 10 |
+     | | Tiêu đề và giới thiệu (vào văn bản nội dung) | 5 |
      | | Học vấn **có chọn ngành trong danh mục** (không chọn ngành thì bộ chấm coi như chưa có) | 10 |
      | Chỉ dùng để lọc | Thành phố | 5 |
 
-     Thứ tự giữa các nhóm có căn cứ trong code; con số trong từng nhóm là **số do thiết kế, không có nguồn**.
+     Thứ tự giữa các nhóm có căn cứ trong code. Con số trong từng nhóm là **số do thiết kế**. Riêng nhóm "ảnh hưởng điểm" được chỉnh ngày 2026-11-13 theo khảo sát NACE: kinh nghiệm 10 → 15, tiêu đề/giới thiệu 10 → 5. Nguồn:
+     - *Job Outlook 2022*: thực tập ở chính công ty 4,4/5; thực tập cùng ngành 4,3; ngành học 3,8; kinh nghiệm làm việc chung 3,7; GPA 3,1.
+     - *Job Outlook 2026 Spring Update*: khi hai ứng viên ngang nhau, nhà tuyển dụng chọn người có kinh nghiệm thực tập.
+
+     Đây là khảo sát nhà tuyển dụng ở Mỹ, chỉ dùng để định hướng. Link và số đo ở bước 0 của plan backend.
    - **"Nên làm trước" theo từng ứng viên:** một mục còn thiếu được chọn từ chính các tin hợp nhất với ứng viên (trang đầu "Việc làm phù hợp"). Thứ tự: thiếu kỹ năng thì luôn là kỹ năng; sau đó mục mà ≥ 3/10 tin hợp nhất cần nhưng hồ sơ chưa có dữ liệu (tin yêu cầu kinh nghiệm mà kinh nghiệm `UNKNOWN`; tin ghi ngành mà học vấn `UNKNOWN`), kèm số tin làm bằng chứng; không có thì mục thiếu có trọng số cao nhất. Tính bằng code từ `MatchResult`, không gọi LLM.
    - **Lời khuyên nói "giúp điểm chính xác hơn", không hứa "tăng điểm":** theo AD-13, mục thiếu bị bỏ ra khỏi công thức, nên khai ngành khác hoặc ít năm hơn tin yêu cầu có thể làm điểm giảm.
    - Độ hoàn thiện **chỉ để hiển thị**, không ảnh hưởng điểm phù hợp hay độ tin cậy. Giữ D10 của candidate-insights và quy tắc "thiếu dữ liệu không trừ điểm" của AD-13. Độ tin cậy của bộ chấm vẫn tính trên bốn cờ cũ của `CandidateMatchProfile.completeness`; tám mục mới tính riêng, không sửa cờ đó.

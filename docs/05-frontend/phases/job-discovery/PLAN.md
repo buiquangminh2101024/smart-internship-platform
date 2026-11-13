@@ -65,7 +65,7 @@ Trung tâm thông báo → JOB_ALERT, PROFILE_SKILLS_REMINDER; realtime JOB_ALER
 
 - **Bộ lọc trên URL:** `q`, `cityId`, `industryId`, `jobType`, `salaryMin`, `salaryKind`, `experience`, `skillIds` (danh sách), `skillMode`, `sort`, `minMatch`. Bấm vào tin rồi quay lại giữ nguyên bộ lọc và vị trí "Xem thêm" đã tải (React Query giữ cache trang).
 - **Thanh lọc:** giữ ô từ khoá, Địa điểm, Ngành nghề, Loại hình, Lương. Thêm:
-  - "Kinh nghiệm" (Không yêu cầu / Dưới 1 năm / 1–2 năm / Trên 2 năm — theo Q3 đã chốt ở bước 0 backend);
+  - "Kinh nghiệm" (Không yêu cầu / Dưới 1 năm / 1–2 năm / Trên 2 năm — Q3/Q5 của plan backend; "Trên 2 năm" hiện ra 0 tin, hiện trạng thái trống như mọi bộ lọc khác);
   - "Lương" thêm hai lựa chọn "Có ghi mức lương" / "Thoả thuận" (tách khỏi "Từ x triệu" thành ô riêng nếu gộp gây rối — chọn khi làm, ghi vào ghi chú);
   - **kỹ năng:** combobox tìm và chọn nhiều thay cho danh sách chip toàn danh mục; công tắc "Có ít nhất một / Đủ tất cả";
   - ứng viên đăng nhập: công tắc "Chỉ tin phù hợp với tôi (≥ 70%)".
@@ -108,7 +108,10 @@ Trung tâm thông báo → JOB_ALERT, PROFILE_SKILLS_REMINDER; realtime JOB_ALER
 ### Bước F6 — FAQ và kiểm trên trình duyệt
 
 - FAQ chatbot hỗ trợ: thêm câu hỏi về job alert (ở đâu tắt, vì sao nhận), "Việc làm phù hợp" xếp thế nào, độ hoàn thiện hồ sơ; sinh lại `faq-index` và chạy eval như 0.4.
-- Kiểm trên `localhost:8080` (chủ dự án chạy server) với ứng viên trưng bày của bộ `large-demo` và một ứng viên mới tạo:
+- Kiểm trên `localhost:8080` (chủ dự án chạy server). Tài khoản dùng để kiểm:
+  - ứng viên trưng bày của bộ `large-demo` (`uv-backend-1@…` và các tài khoản khác). Lưu ý cả sáu người đều đủ 100% nên thẻ độ hoàn thiện ẩn;
+  - **`ung-vien-0248@large-demo.local`** cho thẻ độ hoàn thiện (Q7 của plan backend): thiếu kinh nghiệm, nên 85%, và "Nên làm trước: thêm kinh nghiệm — 4/10 tin…". Dự phòng `ung-vien-0599@large-demo.local`;
+  - một ứng viên mới tạo (chưa có kỹ năng).
   1. "Việc làm phù hợp": > 10 tin, "Xem thêm", lý do trên thẻ khớp trang chi tiết tin, khối kỹ năng nên bổ sung, thanh gọn.
   2. `/jobs` khi là khách và khi là ứng viên: tổng số, "Xem thêm", sắp "Phù hợp nhất", từng bộ lọc, chip "Đang lọc", quay lại giữ bộ lọc, nhãn trên thẻ; 375 px không cuộn ngang, ngăn kéo bộ lọc dùng được.
   3. `/profile`: thanh luôn hiện, tám mục đúng ba nhóm, link tới đúng chỗ, điền thêm mục thì % tăng; "Nên làm trước" đổi theo hồ sơ (ứng viên thiếu kinh nghiệm mà nhiều tin hợp nhất yêu cầu kinh nghiệm thấy "thêm kinh nghiệm" kèm số tin); học vấn không chọn ngành vẫn tính là thiếu; thẻ AI đổi tên, không còn thanh và gợi ý code.

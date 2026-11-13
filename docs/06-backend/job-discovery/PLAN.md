@@ -1,6 +1,6 @@
 # Ứng viên thấy nhiều việc phù hợp, xếp theo ưu tiên (0.5) — Backend
 
-> **Trạng thái: ĐÃ LẬP KẾ HOẠCH (2026-11-12), CHƯA TRIỂN KHAI.** Hướng đã chốt ở AD-26 trong buổi trao đổi với chủ dự án ngày 2026-11-12.
+> **Trạng thái: ĐÃ LẬP KẾ HOẠCH (2026-11-12). XONG BƯỚC 0 (2026-11-13, chỉ đọc). Q1–Q7 đã chốt. XONG BƯỚC 1 (2026-11-13, đã áp lên Neon). Sẵn sàng bước 2 khi có lệnh.** Hướng đã chốt ở AD-26 trong buổi trao đổi với chủ dự án ngày 2026-11-12. Kết quả đo ở "Ghi chú triển khai".
 
 Mục 0.5 của `docs/01-project/FEATURE_BACKLOG.md`. Quyết định kiến trúc: AD-26 (sửa một phần AD-14). Frontend: `docs/05-frontend/phases/job-discovery/PLAN.md`. Nền:
 - AD-24 (bảng điểm `job_candidate_match_scores`, lối chấm (a) khi tin được đăng);
@@ -40,9 +40,12 @@ Tóm tắt từ AD-26; chi tiết và lý do ở AD-26.
 ## Câu hỏi đã chốt (2026-11-13)
 
 - **Q1 — "Đã ứng tuyển" trên `/jobs`:** tính mọi trạng thái trừ `CANCELLED` (gồm `JOB_CLOSED`, `REJECTED`), cùng quy tắc D3.
-- **Q2 — Độ hoàn thiện:** tám mục chia theo hậu quả khi thiếu (AD-26 mục 8): kỹ năng 30, CV 15, bật cho liên hệ 10, kinh nghiệm 10, dự án 10, tiêu đề/giới thiệu 10, học vấn có chọn ngành 10, thành phố 5. Kèm "Nên làm trước" theo từng ứng viên. Bộ cũ (40/25/25/10 chia lại) bị bỏ vì không bám vào cách hệ thống chấm. Nếu bước 0 tìm được nguồn về việc nhà tuyển dụng thực tập xem gì trước và nguồn bác thứ tự trên thì chỉnh lại.
-- **Q3 — Nhóm kinh nghiệm cho bộ lọc:** "Không yêu cầu" (`null` hoặc 0), "Dưới 1 năm" (0 < x < 1), "1–2 năm" (1 ≤ x ≤ 2), "Trên 2 năm" (x > 2). Bước 0 vẫn đếm phân bố để biết nhóm nào trống.
+- **Q2 — Độ hoàn thiện:** tám mục chia theo hậu quả khi thiếu (AD-26 mục 8): kỹ năng 30, CV 15, bật cho liên hệ 10, **kinh nghiệm 15**, dự án 10, **tiêu đề/giới thiệu 5**, học vấn có chọn ngành 10, thành phố 5. Kèm "Nên làm trước" theo từng ứng viên. Bộ cũ (40/25/25/10 chia lại) bị bỏ vì không bám vào cách hệ thống chấm. Kinh nghiệm 15 và tiêu đề/giới thiệu 5 chỉnh theo nguồn NACE ở Q6 (2026-11-13).
+- **Q3 — Nhóm kinh nghiệm cho bộ lọc:** "Không yêu cầu" (`null` hoặc 0), "Dưới 1 năm" (0 < x < 1), "1–2 năm" (1 ≤ x ≤ 2), "Trên 2 năm" (x > 2). Giữ cả bốn nhóm dù bước 0 thấy "Trên 2 năm" hiện có 0 tin (Q5).
 - **Q4 — Mặc định chế độ kỹ năng:** đổi thành "có ít nhất một"; vẫn chọn lại được "đủ tất cả".
+- **Q5 — Nhóm "Trên 2 năm" đang trống (chốt 2026-11-13):** giữ bốn nhóm như Q3. Bộ lọc ra 0 tin ở nhóm này thì trang hiện trạng thái "không có tin" như mọi bộ lọc khác.
+- **Q6 — Trọng số theo nguồn NACE (chốt 2026-11-13):** kinh nghiệm 10 → 15, tiêu đề/giới thiệu 10 → 5 (đã ghi vào Q2).
+- **Q7 — Tài khoản demo cho thẻ độ hoàn thiện (chốt 2026-11-13):** `ung-vien-0248@large-demo.local` (định hướng Backend JavaScript; có đủ mọi mục trừ kinh nghiệm ⇒ 85%; 4/10 tin hợp nhất yêu cầu kinh nghiệm; 54 tin điểm ≥ 20, cao nhất 87). Dự phòng: `ung-vien-0599@large-demo.local` (150 tin, 5/10 tin yêu cầu kinh nghiệm). Không sửa hồ sơ trưng bày. Đo ngày 2026-11-13; dữ liệu đổi (seed lại, lượt đêm) thì chọn lại bằng cùng tiêu chí.
 
 ## Phần 1 — Công nghệ / package / kiến trúc
 
@@ -109,13 +112,13 @@ Kết quả ghi vào "Ghi chú triển khai". Nếu số đo bác một quyết 
 - `NotificationType`: thêm `JOB_ALERT`, `PROFILE_SKILLS_REMINDER`.
 - `Candidate`: `jobAlertEnabled Boolean @default(true)`, `jobAlertEmailEnabled Boolean @default(true)`, `jobAlertSameCityOnly Boolean @default(false)`.
 - Bảng `job_alerts` (`JobAlert`): `candidateId`, `jobPostId`, `score Int` (điểm lúc báo), `createdAt`, `emailedAt DateTime?`. Khoá chính `(candidateId, jobPostId)`; index `(emailedAt, createdAt)` cho cron email; cascade khi xoá tin / ứng viên.
-- Index `(candidateId, score DESC)` trên `job_candidate_match_scores` (nếu bước 0 xác nhận).
+- Index `(candidateId, score DESC)` trên `job_candidate_match_scores` (bước 0 chốt giữ: lần lạnh 230 ms, quét khoá chính theo cột thứ hai tăng theo cỡ bảng).
 - Migration viết tay, chạy `prisma migrate deploy`; ghi số dòng / thời gian tạo index.
 
 ### Bước 2 — "Việc làm phù hợp" đọc bảng điểm
 
 - `JobRecommendationRepository.findScoredPage(candidateId, { offset, take })`: câu SQL trên `job_candidate_match_scores` ⋈ `job_posts` (điều kiện `VISIBLE_JOB` dùng lại từ `match-score.repository.ts`), trừ tin theo D3 (`NOT EXISTS` trên `applications`, `candidate_outreach_invitations`), sắp `score DESC, publishedAt DESC, id`, kèm tổng số dòng. Ngưỡng tối thiểu giữ `MIN_RECOMMENDATION_SCORE = 20`.
-- Phân trang bằng offset (`cursor` là số nguyên mã hoá chuỗi) vì thứ tự theo điểm không ổn định với cursor theo id. Kích thước trang 10 (chốt theo bước 0.3).
+- Phân trang bằng offset (`cursor` là số nguyên mã hoá chuỗi) vì thứ tự theo điểm không ổn định với cursor theo id. Kích thước trang 10 (bước 0 mục 3: chấm 10 hay 20 tin đều ~650 ms; một trang ≈ 0,8 giây).
 - `JobRecommendationService.listForCandidate(candidateId, { cursor })`:
   - có dòng → nạp hồ sơ ứng viên một lần, nạp `JobMatchProfile` của các tin trên trang, chấm hybrid (cùng `rescoreHybrid` hiện có), **sắp lại trong trang** theo điểm vừa chấm;
   - không có dòng nào → đường cũ (`findCandidatePool` + rule + hybrid), bỏ điều kiện `publishedSince`, áp D3, chỉ một trang (không "Xem thêm"), trả `source: "LIVE"`.
@@ -217,7 +220,105 @@ Chặn toàn bộ thư trong các lượt kiểm như 0.4 (outbox không gửi r
 
 ## Ghi chú triển khai
 
-*(Ghi trong quá trình làm, theo từng bước.)*
+### Bước 0 — kết quả đo trên Neon (2026-11-13, chỉ đọc)
+
+Cách đo: script tạm ngoài repo, một kết nối thẳng tới endpoint Neon (không qua pooler, vì pooler không giữ cài đặt phiên), phiên `READ ONLY`; script tự thử một câu `UPDATE … WHERE false` và dừng nếu câu đó không bị từ chối. Chấm hybrid ở mục 3 đọc cosine sẵn có (`cosinesForCandidate`), không tính embedding mới, để không ghi gì. Server local không chạy, nên mục 4 đo ở tầng repository (`findPublishedForSearch`), không qua HTTP. Thời gian đo từ máy dev tới Neon (Singapore), cùng đường mạng với server dev.
+
+**1. Câu trang đầu theo ứng viên (6 ứng viên trưng bày).**
+
+- Bảng `job_candidate_match_scores` chỉ có khoá chính `(jobPostId, candidateId)` và index `(jobPostId, score)`. Câu lọc theo `candidateId` dùng khoá chính (cột thứ hai) qua bitmap index scan.
+- Thời gian thực thi trong Postgres 5–14 ms; một lần lạnh 269 ms (`uv-audit-5`, phần lớn ở index scan 230 ms). Trang đầu + câu đếm tổng, đo từ client: ~110 ms (lần lạnh 242 ms), phần lớn là độ trễ mạng.
+- **Giữ index `(candidateId, score DESC)` ở bước 1.** Hiện chưa chậm, nhưng quét khoá chính theo cột thứ hai tăng theo cỡ bảng (0.6 sẽ thêm dòng), và lần lạnh đã 230 ms. Index nhỏ, ghi thêm không đáng kể so với lượt chấm.
+
+**2. Số tin có điểm theo ứng viên** (tin đang hiển thị, đã trừ đơn / lời mời theo D3), 1.523 ứng viên:
+
+| | trung vị | p90 | max |
+|---|---|---|---|
+| điểm ≥ 20 (vào "Việc làm phù hợp") | 61 | 123 | 218 |
+| điểm ≥ 70 | 6 | 14 | — |
+| điểm ≥ 80 | 3 | 10 | — |
+
+- 1.417/1.523 ứng viên có hơn 10 tin ⇒ "Xem thêm" có ý nghĩa với gần hết ứng viên. 6 người không có dòng nào (đi đường dự phòng D2).
+- 6 ứng viên trưng bày: 48–103 tin (trước đây chỉ thấy 10); quy tắc D3 loại 4–6 tin mỗi người.
+- **143/312 tin đang hiển thị (46%) đăng quá 30 ngày** — trước đây "Việc làm phù hợp" không bao giờ xét tới.
+
+**3. Chấm hybrid lại các tin của một trang:** 10 tin và 20 tin cùng ~650 ms (lần đầu 690–1.530 ms). Thời gian gần như không phụ thuộc số tin: phần lớn là các câu nạp hồ sơ ứng viên và tin (nhiều lượt đi về Neon). Một trang "Việc làm phù hợp" ≈ 110 + 650 ≈ **0,8 giây**, nhanh hơn mức 1,36 giây (trung vị) của đường cũ đo ở 0.1. **Chốt cỡ trang 10** (chi phí như nhau, thẻ có lý do khá dài). Điểm vừa chấm trùng điểm trong bảng ở cả 60 cặp (chênh 0) vì hồ sơ trưng bày không đổi từ lượt đêm.
+
+**4. `/job-posts` của khách (mốc cho bước 8.4),** 7 lần mỗi bộ lọc, ở tầng repository:
+
+| Bộ lọc | p50 | max |
+|---|---|---|
+| không lọc | 542 ms | 1.104 ms |
+| `q=react` | 523 ms | 848 ms |
+| thành phố | 518 ms | 853 ms |
+| lương ≥ 5 triệu | 538 ms | 2.452 ms |
+| 2 kỹ năng (đủ tất cả) | 518 ms | 859 ms |
+| `q` + thành phố + thực tập | 502 ms | 830 ms |
+
+Khớp số đo HTTP ở AD-24 (p50 475–485 ms). Phần lớn là `jobPostInclude` (nhiều quan hệ) và độ trễ mạng.
+
+**Q4 có số:** với 2 kỹ năng phổ biến nhất, "đủ tất cả" còn **20** tin, "có ít nhất một" ra **158** tin (trên 312).
+
+**5. Cột của 312 tin đang hiển thị:**
+
+- Kinh nghiệm: không yêu cầu 243, dưới 1 năm 37, 1–2 năm 32, **trên 2 năm 0**.
+- Lương: thoả thuận 90, có ghi mức 214, cả hai 0, không cả hai 8.
+- Không có thành phố: 8.
+
+⇒ Nhóm "Trên 2 năm" của Q3 luôn trống trên dữ liệu hiện tại (xem câu hỏi Q5 bên dưới).
+
+**6. Khối lượng job alert** (20 tin đang hiển thị đăng gần nhất, quy tắc D7 + D3):
+
+- Cả 20 tin đều có ngưỡng 80 (mặc định), nên sàn 70 chưa có tác dụng trên dữ liệu demo.
+- Mỗi tin báo cho 0–56 người, trung vị 14; tổng 450 lượt. Nếu ứng viên bật "chỉ thành phố của tôi" thì còn 128 (28%).
+- Nếu 20 tin được duyệt cùng ngày: 294 ứng viên nhận báo, **92 người (31%) nhận ≥ 2 tin**, nhiều nhất 5 ⇒ gộp theo ngày (D8) là cần.
+
+**7. Ứng viên chưa có kỹ năng:** **0** (cả 1.500 `large-demo`, 21 `match-demo`, 2 tài khoản khác). Lượt nhắc đầu tiên không gửi thư nào. Để demo phải tạo tài khoản mới.
+
+**8. Độ hoàn thiện theo tám mục (Q2):**
+
+| Nhóm | n | p10 | p50 | p90 | đủ 100% | Thiếu nhiều nhất |
+|---|---|---|---|---|---|---|
+| `large-demo` | 1.500 | 80 | 90 | 100 | 699 | kinh nghiệm 434, bật liên hệ 422, dự án 230, CV 129 |
+| `match-demo` | 21 | 75 | 85 | 85 | 0 | thành phố 21, bật liên hệ 20, kinh nghiệm 8 |
+| khác | 2 | 30 | 85 | 85 | 0 | — |
+
+- Câu tính tám mục cho **cả 1.523 ứng viên** mất 234 ms ⇒ cho một người không đáng kể.
+- Không ai có học vấn mà thiếu ngành (bộ seed luôn gán ngành).
+- **Cả 6 ứng viên trưng bày đủ 100%** ⇒ thẻ độ hoàn thiện ẩn và không có "Nên làm trước" với các tài khoản demo đang dùng. F6 cần thêm một ứng viên còn thiếu mục (xem dưới).
+- **"Nên làm trước" trên người thiếu kinh nghiệm** (434 người `large-demo`, 428 có điểm): trong top 10 tin, trung vị 2 tin yêu cầu kinh nghiệm, nhiều nhất 5; **116 người (27%) đạt ≥ 3/10** ⇒ thấy dòng có bằng chứng, 74 người không có tin nào yêu cầu ⇒ theo thứ tự trọng số. Ứng viên không có dòng kinh nghiệm nào được bộ chấm coi là `null` (`UNKNOWN`), không phải 0, nên quy tắc đúng như thiết kế. Không ai có kinh nghiệm chỉ toàn dòng thiếu ngày.
+
+**9. Nguồn cho Q2** (đọc trực tiếp ngày 2026-11-13):
+
+- NACE, *Job Outlook 2022* (bài ngày 07/01/2022, "Employers Prefer Candidates With Work Experience"): mức ảnh hưởng (thang 5) khi chọn giữa các ứng viên mới tốt nghiệp: đã thực tập ở chính công ty 4,4; có kinh nghiệm thực tập cùng ngành 4,3; **ngành học 3,8**; kinh nghiệm làm việc chung 3,7; từng giữ vị trí lãnh đạo 3,6; hoạt động ngoại khoá 3,5; GPA ≥ 3.0: 3,1; trường theo học 2,6. Chỉ hai mục đầu được xếp "ảnh hưởng rất nhiều". https://www.naceweb.org/talent-acquisition/candidate-selection/employers-prefer-candidates-with-work-experience/
+- NACE, *Job Outlook 2026 Spring Update* (bài ngày 23/04/2026, 185 nhà tuyển dụng): khi hai ứng viên ngang nhau, nhà tuyển dụng "overwhelmingly choose the candidate who has internship experience"; kỹ năng được tìm nhiều nhất là làm việc nhóm, giải quyết vấn đề, giao tiếp, rồi kỹ năng kỹ thuật. https://naceweb.org/about-us/press/2026/the-high-impact-skills-college-students-should-showcase-on-their-resumes
+- Không dùng: bài LinkedIn 2018 về "5 kỹ năng trở lên" (link gốc đã bị gỡ, chỉ còn trang khác chép lại); nghiên cứu eye-tracking 7,4 giây của Ladders (2018) (do một trang việc làm thương mại công bố, không nêu số người tham gia, đã bị phê bình về phương pháp).
+- Đây là khảo sát nhà tuyển dụng Mỹ, không phải Việt Nam; dùng làm căn cứ định hướng, không phải số đo trên người dùng của hệ thống.
+- **Ý nghĩa với Q2:** nguồn không bác thứ tự giữa các nhóm (kỹ năng, kinh nghiệm, ngành đều là thứ nhà tuyển dụng xem và hệ thống chấm). Trong nhóm "ảnh hưởng điểm", nguồn cho thấy **kinh nghiệm/thực tập nặng hơn** và **ngành học đáng kể**, còn bộ hiện tại để kinh nghiệm, dự án, tiêu đề/giới thiệu, ngành đều 10. Đã chỉnh ở Q6.
+
+**Câu hỏi phát sinh sau bước 0 — đã chốt 2026-11-13** (chi tiết ở mục "Câu hỏi đã chốt" đầu file):
+
+- **Q5:** giữ bốn nhóm kinh nghiệm, kể cả "Trên 2 năm" đang có 0 tin. (Đề xuất gộp thành "Từ 1 năm trở lên" không được chọn.)
+- **Q6:** kinh nghiệm 10 → 15, tiêu đề/giới thiệu 10 → 5. Lý do: thực tập/kinh nghiệm là yếu tố nhà tuyển dụng đánh giá cao nhất; tiêu đề/giới thiệu không có trong bảng của NACE và chỉ là một phần văn bản nội dung.
+- **Q7:** tài khoản demo `ung-vien-0248@large-demo.local`, dự phòng `ung-vien-0599@large-demo.local`. Chọn bằng một câu đọc trên Neon (cùng cách bảo vệ chỉ đọc): ứng viên sinh thêm (`ung-vien-…`, không phải hồ sơ trưng bày `uv-…`), tài khoản `ACTIVE`, chưa có kinh nghiệm, có đủ bảy mục còn lại, ≥ 3/10 tin hợp nhất yêu cầu kinh nghiệm. Có 8 người đạt (4–5/10 tin); chọn người cùng lĩnh vực CNTT với Mây Xanh để dùng chung kịch bản demo.
+
+### Bước 1 — schema và migration (2026-11-13)
+
+- Trước khi sửa: `prisma migrate status` báo Neon đã áp đủ 36 migration; `migrate diff` từ Neon sang schema ra "empty migration", nên SQL chỉ chứa phần của 0.5.
+- `schema.prisma`:
+  - `NotificationType` thêm `JOB_ALERT`, `PROFILE_SKILLS_REMINDER`;
+  - `Candidate` thêm `jobAlertEnabled` (mặc định `true`), `jobAlertEmailEnabled` (`true`), `jobAlertSameCityOnly` (`false`), quan hệ ngược `jobAlerts`;
+  - model `JobAlert` (`job_alerts`): khoá chính `(candidateId, jobPostId)`, `score`, `createdAt`, `emailedAt` null được, index `(emailedAt, createdAt)`, hai khoá ngoại `ON DELETE CASCADE`; quan hệ ngược `jobAlerts` trên `JobPost`;
+  - `JobCandidateMatchScore` thêm `@@index([candidateId, score(sort: Desc)])`.
+- Migration `20261113120000_add_job_discovery`: SQL sinh bằng `prisma migrate diff --from-schema-datasource --to-schema-datamodel --script` (chỉ đọc cấu trúc Neon, không dùng shadow DB). Gồm 2 câu `ALTER TYPE … ADD VALUE`, 1 câu `ALTER TABLE candidates ADD COLUMN` × 3, 1 bảng, 2 index, 2 khoá ngoại. Không ghi dữ liệu, không câu nào dùng giá trị enum mới.
+- Không chạy `prisma format` (lý do như 0.3: căn lại cột ở model khác). `prisma validate` đạt; đã chạy `prisma generate`.
+- `tsc` của `apps/server` báo lỗi đúng như dự kiến, chỉ trong module notifications: `notification-groups.ts`, `notification.mapper.ts` (enum Prisma sang `NotificationType` của shared-types), `notification.types.ts` (payload), `notifications.service.ts`, `notification-templates.ts` (thiếu renderer). Hết ở bước 5–7 khi có payload, template và shared-types.
+- **Đã áp lên Neon (2026-11-13)** sau khi chủ dự án xác nhận (`npm run db:deploy`). Migration chạy 0,49 s (gồm tạo index trên 132.073 dòng điểm). Kiểm lại bằng kết nối chỉ đọc:
+  - hai giá trị enum mới đã có;
+  - 1.523/1.523 ứng viên nhận `jobAlertEnabled = true`, `jobAlertEmailEnabled = true`, `jobAlertSameCityOnly = false`;
+  - `job_alerts` rỗng, có khoá chính và index `(emailedAt, createdAt)`;
+  - `EXPLAIN ANALYZE` câu lấy 11 dòng điểm ≥ 20 của một ứng viên dùng index mới (`Index Scan using job_candidate_match_scores_candidateId_score_idx`), 0,58 ms;
+  - `prisma migrate status` báo đủ 37 migration; `migrate diff` ra "empty migration".
 
 ## Phần 4 — Ghi chú của chủ dự án
 
