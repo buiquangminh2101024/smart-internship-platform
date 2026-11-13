@@ -51,7 +51,9 @@ export class JobMatchingController {
 
   listJobRecommendations = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const result = await this.jobRecommendationService.recommendForUser(req.user!.id);
+      // AD-26 — `?cursor=` là offset do trang trước trả về; service kiểm định dạng (400).
+      const cursor = typeof req.query.cursor === "string" ? req.query.cursor : undefined;
+      const result = await this.jobRecommendationService.recommendForUser(req.user!.id, { cursor });
       const body: ApiResponse<JobRecommendationList> = { success: true, data: result };
       res.json(body);
     } catch (error) {

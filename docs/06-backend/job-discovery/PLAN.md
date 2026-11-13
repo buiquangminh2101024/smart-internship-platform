@@ -1,6 +1,6 @@
 # Ứng viên thấy nhiều việc phù hợp, xếp theo ưu tiên (0.5) — Backend
 
-> **Trạng thái: ĐÃ LẬP KẾ HOẠCH (2026-11-12). XONG BƯỚC 0 (2026-11-13, chỉ đọc). Q1–Q7 đã chốt. XONG BƯỚC 1 (2026-11-13, đã áp lên Neon). Sẵn sàng bước 2 khi có lệnh.** Hướng đã chốt ở AD-26 trong buổi trao đổi với chủ dự án ngày 2026-11-12. Kết quả đo ở "Ghi chú triển khai".
+> **Trạng thái: ĐÃ LẬP KẾ HOẠCH (2026-11-12). XONG BƯỚC 0 (2026-11-13, chỉ đọc). Q1–Q7 đã chốt. XONG BƯỚC 1 (2026-11-13, đã áp lên Neon). XONG BƯỚC 2 (2026-11-13). XONG BƯỚC 3 (2026-11-13). Sẵn sàng bước 4 khi có lệnh.** Hướng đã chốt ở AD-26 trong buổi trao đổi với chủ dự án ngày 2026-11-12. Kết quả đo ở "Ghi chú triển khai".
 
 Mục 0.5 của `docs/01-project/FEATURE_BACKLOG.md`. Quyết định kiến trúc: AD-26 (sửa một phần AD-14). Frontend: `docs/05-frontend/phases/job-discovery/PLAN.md`. Nền:
 - AD-24 (bảng điểm `job_candidate_match_scores`, lối chấm (a) khi tin được đăng);
@@ -319,6 +319,71 @@ Khớp số đo HTTP ở AD-24 (p50 475–485 ms). Phần lớn là `jobPostIncl
   - `job_alerts` rỗng, có khoá chính và index `(emailedAt, createdAt)`;
   - `EXPLAIN ANALYZE` câu lấy 11 dòng điểm ≥ 20 của một ứng viên dùng index mới (`Index Scan using job_candidate_match_scores_candidateId_score_idx`), 0,58 ms;
   - `prisma migrate status` báo đủ 37 migration; `migrate diff` ra "empty migration".
+
+### Bước 2 — "Việc làm phù hợp" đọc bảng điểm (2026-11-13)
+
+- `job-recommendation.repository.ts`:
+  - `findScoredPage(candidateId, { minScore, offset, take })` trả `{ rows, total }`. Hai câu chạy song song: trang và đếm, cùng điều kiện. Điều kiện gồm `VISIBLE_JOB` (import từ `match-score.repository.ts`), điểm ≥ 20, và `NOT EXISTS` đơn (trừ `CANCELLED`) / lời mời `PENDING`/`ACCEPTED`/`DECLINED`. Sắp `score DESC, publishedAt DESC NULLS LAST, jobPostId`.
+  - `hasScoredVisibleJob(candidateId)`: ứng viên có dòng điểm cho ít nhất một tin đang hiển thị, bất kể điểm, đơn hay lời mời. Dùng để quyết định có đi đường LIVE không.
+  - `findCandidatePool` bỏ `publishedSince` (bỏ giới hạn 30 ngày), nhận thêm `candidateId` và trừ đơn / lời mời theo D3.
+- `job-recommendation.service.ts`:
+  - `listForCandidate(candidateId, { cursor })`: trang 10 tin.
+  - `getTopMatches` gọi cùng lối đó cho trang đầu, nên trợ lý hồ sơ và "Việc làm phù hợp" ra cùng danh sách.
+  - Đường TABLE: chấm rule (và hybrid nếu bật) các tin của trang, rồi sắp lại trong trang. Thứ tự của bảng dùng làm thứ tự hoà (sort ổn định). Tin đã bị xoá thì bỏ qua.
+  - `total = 0` và `hasScoredVisibleJob = false` thì đi đường LIVE. Đường này chỉ có một trang; trang sau trả rỗng, không lọc lại.
+  - Có dòng điểm nhưng không tin nào qua lọc thì trả danh sách rỗng, không chạy LIVE.
+  - Chưa có kỹ năng thì trả `INSUFFICIENT_PROFILE` như cũ.
+  - `suggestions = buildCodeSuggestions(items)` chỉ có ở trang đầu. Hàm import từ `candidate-insights/profile-suggestions.util.ts`, không chép. `candidate-insights.service.ts` đổi sang dùng `recommendations.suggestions`, kết quả không đổi.
+  - `cursor` là offset dạng chuỗi (`^\d{1,5}$`, tối đa 10.000); sai định dạng thì trả 400 `INVALID_CURSOR`.
+  - Nạp hồ sơ chạy song song với câu trang; chấm điểm chạy song song với nạp tin công khai (xem số đo dưới).
+  - Đã xoá `RECOMMENDATION_RECENT_DAYS` vì không còn chỗ dùng.
+- Controller đọc `?cursor=`, route không đổi. API trả `{ status, source, items, total, nextCursor, suggestions }`.
+- `packages/shared-types`: `JobRecommendationList` thêm `source` (`JobRecommendationSource` = `TABLE` | `LIVE`), `total`, `nextCursor`, `suggestions`. Phần này của bước 7 làm luôn ở đây vì server cần kiểu để biên dịch. Đã build lại `dist`; `tsc` web vẫn sạch vì web chỉ đọc `status` và `items`.
+- Test `tests/unit/job-recommendation-service.test.ts` có 11 ca: TABLE sắp lại trong trang, `nextCursor`/`total`, gợi ý chỉ ở trang đầu, tin bị xoá, bảng có dòng nhưng rỗng, LIVE một trang, LIVE trang sau, chưa có kỹ năng, 404, `getTopMatches`, hybrid kèm semantic PENDING, cursor sai. Toàn bộ unit test server: 516/516 qua. `tsc` server chỉ còn lỗi notifications đã biết từ bước 1.
+- **Kiểm trên Neon (chỉ đọc, chế độ rule để không ghi vector, pool 5 kết nối):**
+  - Đối tượng: 6 ứng viên trưng bày `uv-ads-1…6`, hai tài khoản Q7 và ứng viên có nhiều đơn nhất (`ung-vien-0918`).
+  - Duyệt hết mọi trang: số tin trả về đúng bằng `total` (54–150), không trùng, không tin nào đã ứng tuyển / được mời; 1–6 tin như vậy mỗi người bị ẩn đúng.
+  - Trang sau không có gợi ý; trang đầu có 1–6 gợi ý.
+  - `cursor=abc` trả 400.
+  - Đường LIVE: lọc thô ra 50 tin trong ~105 ms. Hiện **0 ứng viên có kỹ năng mà đi đường LIVE** (mọi người đều đã có dòng điểm).
+- **Thời gian trang đầu** (đo từ máy local tới Neon Singapore, chế độ rule):
+  - Tách từng phần: câu trang 55–110 ms, nạp hồ sơ ~350 ms, nạp `JobMatchProfile` ~300 ms, nạp tin công khai ~600 ms. Phần lớn là độ trễ mạng của các câu Prisma nối tiếp nhau.
+  - Chạy tuần tự: 1,2–1,7 s (lần lạnh 2,7 s).
+  - Sau khi cho các bước độc lập chạy song song: 0,9–1,1 s (lần lạnh 2,1 s).
+  - Chế độ hybrid cộng thêm thời gian lấy vector (~650 ms theo bước 0), phần này chạy song song với nạp tin công khai. Ước khoảng 1,3 s, ngang đường cũ (1,36 s ở bước 0) nhưng giờ có phân trang và không giới hạn 30 ngày.
+  - Số đo hybrid thật làm ở bước 8, khi server chạy.
+
+### Bước 3 — Độ hoàn thiện hồ sơ (2026-11-13)
+
+- `GET /candidate/profile-completeness` (vai trò `CANDIDATE`) trong `candidate-insights` trả `{ score, items: [{ key, done, weight, group }], nextStep: { key, evidence } | null }`. Không gọi LLM, không tốn hạn mức "Phân tích hồ sơ", tính lại mỗi lần gọi.
+- `candidate-insights.config.ts`: `PROFILE_COMPLETENESS_ITEMS` (tám mục, trọng số và nhóm theo Q2/Q6) thay `COMPLETENESS_WEIGHTS`. Thứ tự mảng là thứ tự hoà của "Nên làm trước".
+- `profile-completeness.util.ts` (hàm thuần): `buildCompletenessItems`, `computeCompletenessScore`, `pickNextStep`, `needsTopMatchesForNextStep`, `buildProfileCompleteness`. `computeCompletenessScore` cũ trong `profile-suggestions.util.ts` đã chuyển sang đây.
+- `CandidateInsightsRepository.loadCompletenessFacts`: một câu Prisma đọc `headline`, `bio`, `cityId`, `isOpenToOutreach` và `_count` các quan hệ. Hai chỗ cần lưu ý:
+  - **CV chỉ đếm CV hiện trong "Quản lý CV"** (`isHidden = false`). CV tải lên lúc nộp đơn mà không lưu vào danh sách có `isHidden = true`; ứng viên không chọn lại được CV đó cho đơn sau, nên không tính.
+  - Học vấn chỉ đếm dòng có `majorId`.
+- **"Nên làm trước" dùng lối nhẹ `JobRecommendationService.getTopMatchResults`** thay vì `getTopMatches` như plan ghi:
+  - cùng tập 10 tin của trang đầu (cùng câu `findScoredPage`), chỉ chấm rule, không nạp tin công khai, không lấy vector;
+  - "Nên làm trước" chỉ đọc `experience.status` và `education.status`, hai thứ không phụ thuộc thành phần nội dung, nên số đếm giống hệt (đã đối chiếu trên Neon, xem dưới);
+  - chỉ chạy khi ứng viên có kỹ năng và thiếu kinh nghiệm hoặc ngành; các trường hợp khác endpoint chỉ có một câu đọc;
+  - ứng viên đi đường LIVE thì dùng trang LIVE như `getTopMatches`.
+- `generate()` của "Phân tích hồ sơ" ghi `completenessScore` bằng công thức mới (không đổi cột). `CandidateInsightsService` không còn phụ thuộc `CandidateMatchProfileLoader`. `CandidateMatchProfile.completeness` (bốn cờ cho độ tin cậy của bộ chấm) **không đổi**.
+- Chatbot hỗ trợ: công cụ `getMyProfileCompleteness` đổi sang tám mục và cùng công thức, đọc qua `loadCompletenessFacts`; nhãn tiếng Việt của tám mục nằm trong công cụ (chatbot là chữ do server sinh). Bỏ `candidateMatchProfileLoader` khỏi `SupportChatToolRegistry` vì không còn chỗ dùng. FAQ `02-ung-vien-ho-so-cv.md` vẫn nói độ hoàn thiện nằm trong "Phân tích hồ sơ"; sửa cùng FAQ ở phía frontend (plan frontend, mục FAQ).
+- `packages/shared-types`: thêm `ProfileCompleteness`, `ProfileCompletenessItem`, `ProfileCompletenessKey`, `ProfileCompletenessGroup`, `ProfileCompletenessNextStep` (phần của bước 7, làm luôn để server biên dịch); sửa chú thích `ProfileInsight.completenessScore`. Đã build lại `dist`; `tsc` web vẫn sạch.
+- Test: `tests/unit/profile-completeness.test.ts` 12 ca (trọng số, điểm, bốn quy tắc của "Nên làm trước" kể cả hoà và dưới ngưỡng, khi nào cần chấm trang đầu, service, 404); thêm 2 ca `getTopMatchResults` vào `job-recommendation-service.test.ts`. Toàn bộ unit test server: 530/530 qua. `tsc` server chỉ còn lỗi notifications đã biết.
+- **Kiểm trên Neon (chỉ đọc, chế độ rule):**
+  - Tám cờ của `loadCompletenessFacts` khớp một câu SQL viết tay độc lập ở cả 8 ứng viên kiểm.
+  - `ung-vien-0248`: 85%, thiếu kinh nghiệm, "Nên làm trước: kinh nghiệm 4/10" (đúng Q7). `ung-vien-0599`: 85%, "kinh nghiệm 5/10".
+  - `uv-ads-2`: 85%, thiếu kinh nghiệm nhưng chỉ 1/10 tin cần ⇒ "kinh nghiệm" không kèm bằng chứng (theo trọng số). Năm hồ sơ trưng bày còn lại: 100%, `nextStep = null`.
+  - Số tin `UNKNOWN` đếm qua `getTopMatches` (đường đầy đủ) bằng đúng số của lối nhẹ ở mọi ứng viên.
+  - Phân bố điểm mới trên 1.523 ứng viên: trung vị 90, thấp nhất 30, 699 người đủ 100%, khớp bước 0.
+  - Trên Neon không có ứng viên chưa có kỹ năng, có học vấn mà không chọn ngành, hay chỉ có CV ẩn, nên ba trường hợp này chỉ kiểm bằng unit test. Bước 8 cần tạo tài khoản thử để kiểm tay.
+- **Thời gian** (máy local tới Neon, ấm, 3 lượt × 2 ứng viên Q7):
+  - câu tám mục ~50 ms;
+  - nạp hồ sơ ~330–390 ms, song song với câu trang ~50 ms;
+  - nạp `JobMatchProfile` ~240 ms;
+  - cả endpoint **0,61–0,71 s**, lần lạnh 1,2–1,6 s. Đi qua `getTopMatches` là 0,83–1,1 s ở chế độ rule, chậm hơn nữa ở hybrid.
+  - Ứng viên không cần bằng chứng (đủ mục, hoặc chỉ thiếu mục khác): ~50 ms.
+  - Dưới ngưỡng ~1 giây của plan. Frontend vẫn nên gọi endpoint bằng query riêng (`useProfileCompleteness`) để thẻ có skeleton riêng, không chặn phần còn lại của trang.
 
 ## Phần 4 — Ghi chú của chủ dự án
 

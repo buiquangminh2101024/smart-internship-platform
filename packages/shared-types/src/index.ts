@@ -959,10 +959,23 @@ export interface JobRecommendation {
  */
 export type JobRecommendationStatus = "OK" | "INSUFFICIENT_PROFILE";
 
+/**
+ * AD-26 — TABLE: đọc bảng điểm lưu sẵn, có "Xem thêm". LIVE: ứng viên chưa có dòng
+ * nào trong bảng điểm (vd. vừa tạo hồ sơ), chấm trực tiếp, chỉ một trang.
+ */
+export type JobRecommendationSource = "TABLE" | "LIVE";
+
 export interface JobRecommendationList {
   status: JobRecommendationStatus;
-  /** Tối đa 10, giảm dần theo điểm; có thể ít hơn — không phải lỗi. */
+  source: JobRecommendationSource;
+  /** Một trang (tối đa 10), giảm dần theo điểm vừa chấm; có thể ít hơn — không phải lỗi. */
   items: JobRecommendation[];
+  /** Tổng số tin phù hợp (mọi trang). LIVE: bằng số tin của trang. */
+  total: number;
+  /** Gửi lại qua `?cursor=` để lấy trang sau; null = hết. */
+  nextCursor: string | null;
+  /** SKILL_GAP / INDUSTRY_MISMATCH tính bằng code từ trang đầu; trang sau luôn rỗng. */
+  suggestions: ProfileInsightSuggestion[];
 }
 
 // ─── Việc làm tương tự (trang chi tiết tin) ──────────────────────────────
@@ -1197,6 +1210,46 @@ export interface CompanyOutreachInvitationQuery {
   limit?: number;
 }
 
+// ─── Độ hoàn thiện hồ sơ (AD-26 mục 8) ──────────────────────────────────
+// docs/06-backend/job-discovery/PLAN.md bước 3. Tính bằng code mỗi lần gọi, không LLM,
+// chỉ để hiển thị (không ảnh hưởng điểm phù hợp hay độ tin cậy). Nhãn, lợi ích và
+// link của từng mục do frontend giữ theo `key`.
+
+export type ProfileCompletenessKey =
+  | "skills"
+  | "cv"
+  | "outreach"
+  | "experience"
+  | "projects"
+  | "headlineOrBio"
+  | "educationMajor"
+  | "city";
+
+/** GATE = thiếu là mất hẳn một tính năng; MATCH = ảnh hưởng điểm phù hợp; FILTER = chỉ để lọc. */
+export type ProfileCompletenessGroup = "GATE" | "MATCH" | "FILTER";
+
+export interface ProfileCompletenessItem {
+  key: ProfileCompletenessKey;
+  done: boolean;
+  weight: number;
+  group: ProfileCompletenessGroup;
+}
+
+export interface ProfileCompletenessNextStep {
+  key: ProfileCompletenessKey;
+  /** `jobCount`/`ofJobs` tin hợp nhất cần mục này mà hồ sơ chưa có; null = chọn theo trọng số. */
+  evidence: { jobCount: number; ofJobs: number } | null;
+}
+
+export interface ProfileCompleteness {
+  /** 0..100 — tổng trọng số các mục đã có. */
+  score: number;
+  /** Đủ tám mục, theo thứ tự cố định (nhóm GATE → MATCH → FILTER). */
+  items: ProfileCompletenessItem[];
+  /** "Nên làm trước"; null khi đủ cả tám mục. */
+  nextStep: ProfileCompletenessNextStep | null;
+}
+
 // ─── Phân tích hồ sơ (A1 + A4, AD-14) ───────────────────────────────────
 // docs/06-backend/candidate-insights/PLAN.md. Lưu persistent, chỉ tính lại khi
 // Candidate bấm "Phân tích hồ sơ".
@@ -1214,7 +1267,7 @@ export interface ProfileInsightSuggestion {
 }
 
 export interface ProfileInsight {
-  /** 0..100 — kỹ năng 40, kinh nghiệm 25, học vấn 25, headline/bio 10. */
+  /** 0..100 — cùng công thức `ProfileCompleteness.score` (AD-26 mục 8) lúc phân tích. */
   completenessScore: number;
   strengths: string[];
   suggestions: ProfileInsightSuggestion[];

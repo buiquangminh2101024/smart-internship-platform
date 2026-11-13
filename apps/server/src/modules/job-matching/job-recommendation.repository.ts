@@ -1,11 +1,21 @@
-import { Prisma, type PrismaClient } from "@prisma/client";
+import { Prisma, type OutreachInvitationStatus, type PrismaClient } from "@prisma/client";
 import type { JobPost as JobPostDto } from "@sip/shared-types";
 import { toJobPostDto } from "../job-posts/job-post.mapper";
 import { jobPostInclude } from "../job-posts/job-post.repository";
+import { VISIBLE_JOB } from "../match-scores/match-score.repository";
 
-// Giai đoạn A của "Việc làm phù hợp" (docs/06-backend/candidate-insights/PLAN.md):
-// SQL lọc thô tin còn nhận hồ sơ. Chỉ đọc bảng job_posts — không sửa module job-posts,
-// chỉ dùng lại jobPostInclude/toJobPostDto để trả đúng hình dạng JobPost công khai.
+// "Việc làm phù hợp" (docs/06-backend/candidate-insights/PLAN.md, AD-26): đọc bảng
+// điểm lưu sẵn theo ứng viên, hoặc SQL lọc thô tin còn nhận hồ sơ cho đường chấm trực
+// tiếp. Chỉ đọc — không sửa module job-posts, chỉ dùng lại jobPostInclude/toJobPostDto
+// để trả đúng hình dạng JobPost công khai.
+
+/** D3 — lời mời còn hiệu lực hoặc đã được trả lời thì tin không hiện ở "Việc làm phù hợp". */
+const EXCLUDED_INVITATION_STATUSES: OutreachInvitationStatus[] = ["PENDING", "ACCEPTED", "DECLINED"];
+
+export interface ScoredJobRow {
+  jobPostId: string;
+  score: number;
+}
 
 export class JobRecommendationRepository {
   private readonly prisma: PrismaClient;
@@ -15,22 +25,24 @@ export class JobRecommendationRepository {
   }
 
   /**
-   * Id tin PUBLISHED, chưa hết hạn, đăng trong `publishedSince` trở lại, mới nhất trước.
+   * Id tin PUBLISHED, chưa hết hạn, chưa ứng tuyển / được mời (D3), mới nhất trước.
    * Candidate không khai ngành/loại việc mong muốn, nên điều kiện thu hẹp là "tin
    * yêu cầu ít nhất một kỹ năng (đã duyệt) mà hồ sơ có". Nếu được ít hơn `minPool`
    * tin thì nới lỏng đúng 1 lần — bỏ điều kiện kỹ năng, gộp thêm tin gần đây. Vẫn
    * thiếu thì trả ít hơn, không độn tin ngẫu nhiên.
    */
   async findCandidatePool(options: {
+    candidateId: string;
     skillIds: string[];
-    publishedSince: Date;
     poolSize: number;
     minPool: number;
   }): Promise<string[]> {
+    // AD-26: bỏ giới hạn 30 ngày; trừ tin đã ứng tuyển / đã được mời (D3).
     const base: Prisma.JobPostWhereInput = {
       status: "PUBLISHED",
-      publishedAt: { gte: options.publishedSince },
       OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+      applications: { none: { candidateId: options.candidateId, status: { not: "CANCELLED" } } },
+      outreachInvitations: { none: { candidateId: options.candidateId, status: { in: EXCLUDED_INVITATION_STATUSES } } },
     };
 
     const narrowed = await this.findIds(
@@ -44,6 +56,63 @@ export class JobRecommendationRepository {
       options.poolSize - narrowed.length,
     );
     return [...narrowed, ...relaxed];
+  }
+
+  /**
+   * AD-26 D1 — một trang "Việc làm phù hợp" từ bảng điểm lưu sẵn: tin đang hiển thị,
+   * điểm ≥ `minScore`, trừ tin đã ứng tuyển / đã được mời (D3); điểm cao trước, hoà thì
+   * mới đăng trước. Phân trang offset vì thứ tự theo điểm không hợp với cursor theo id.
+   * Dùng index (candidateId, score DESC).
+   */
+  async findScoredPage(
+    candidateId: string,
+    options: { minScore: number; offset: number; take: number },
+  ): Promise<{ rows: ScoredJobRow[]; total: number }> {
+    const where = Prisma.sql`
+      s."candidateId" = ${candidateId}
+      AND s."score" >= ${options.minScore}
+      AND ${VISIBLE_JOB}
+      AND NOT EXISTS (
+        SELECT 1 FROM applications a
+        WHERE a."jobPostId" = s."jobPostId" AND a."candidateId" = s."candidateId" AND a."status" <> 'CANCELLED')
+      AND NOT EXISTS (
+        SELECT 1 FROM candidate_outreach_invitations i
+        WHERE i."jobPostId" = s."jobPostId" AND i."candidateId" = s."candidateId"
+          AND i."status" IN ('PENDING', 'ACCEPTED', 'DECLINED'))
+    `;
+    const [rows, counts] = await Promise.all([
+      this.prisma.$queryRaw<ScoredJobRow[]>(Prisma.sql`
+        SELECT s."jobPostId", s."score"
+        FROM job_candidate_match_scores s
+        JOIN job_posts j ON j."id" = s."jobPostId"
+        WHERE ${where}
+        ORDER BY s."score" DESC, j."publishedAt" DESC NULLS LAST, s."jobPostId"
+        OFFSET ${options.offset}
+        LIMIT ${options.take}
+      `),
+      this.prisma.$queryRaw<Array<{ total: number }>>(Prisma.sql`
+        SELECT count(*)::int AS total
+        FROM job_candidate_match_scores s
+        JOIN job_posts j ON j."id" = s."jobPostId"
+        WHERE ${where}
+      `),
+    ]);
+    return { rows, total: counts[0]?.total ?? 0 };
+  }
+
+  /**
+   * Ứng viên đã có dòng điểm cho ít nhất một tin đang hiển thị (bất kể điểm, đơn, lời
+   * mời) — tức là đã qua lượt chấm. Không có ⇒ dùng đường chấm trực tiếp (D2).
+   */
+  async hasScoredVisibleJob(candidateId: string): Promise<boolean> {
+    const rows = await this.prisma.$queryRaw<Array<{ ok: number }>>(Prisma.sql`
+      SELECT 1 AS ok
+      FROM job_candidate_match_scores s
+      JOIN job_posts j ON j."id" = s."jobPostId"
+      WHERE s."candidateId" = ${candidateId} AND ${VISIBLE_JOB}
+      LIMIT 1
+    `);
+    return rows.length > 0;
   }
 
   /** JobPost công khai (chỉ skill APPROVED) theo đúng thứ tự `ids`; id không còn tồn tại bị bỏ qua. */

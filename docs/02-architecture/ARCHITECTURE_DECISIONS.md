@@ -846,7 +846,7 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 
 **Ngày:** 2026-11-12 · **Phase liên quan:** không thuộc phase đánh số. Mục 0.5 của `docs/01-project/FEATURE_BACKLOG.md`, theo nhận xét của giáo viên ở buổi demo 05/11/2026 ("hệ thống sẽ giúp em làm sao tìm được công việc phù hợp với mình nhất", "không phải chỉ có một cái phù hợp mà có rất nhiều cái phù hợp tại vì có quá nhiều tiêu chí", "tự động nó làm"). Kế hoạch chi tiết: `docs/06-backend/job-discovery/PLAN.md`, `docs/05-frontend/phases/job-discovery/PLAN.md`.
 
-> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-12, chủ dự án duyệt từng điểm trong buổi trao đổi). ĐANG TRIỂN KHAI.** Bước 0 (đo trên Neon, chỉ đọc) xong 2026-11-13. Kết quả ở plan backend, đã dẫn tới chỉnh trọng số ở mục 8. Bước 1 (schema, migration `20261113120000_add_job_discovery`) đã áp lên Neon 2026-11-13.
+> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-12, chủ dự án duyệt từng điểm trong buổi trao đổi). ĐANG TRIỂN KHAI.** Bước 0 (đo trên Neon, chỉ đọc) xong 2026-11-13. Kết quả ở plan backend, đã dẫn tới chỉnh trọng số ở mục 8. Bước 1 (schema, migration `20261113120000_add_job_discovery`) đã áp lên Neon 2026-11-13. Bước 2 (“Việc làm phù hợp” đọc bảng điểm) và bước 3 (độ hoàn thiện hồ sơ, `GET /candidate/profile-completeness`) xong 2026-11-13.
 >
 > Số đo chính của bước 0:
 > - mỗi ứng viên có trung vị 61 tin điểm ≥ 20;

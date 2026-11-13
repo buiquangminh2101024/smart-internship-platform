@@ -1,11 +1,10 @@
 import type { ApplicationStatus, InterviewMode, InterviewStatus } from "@prisma/client";
+import type { ProfileCompletenessKey } from "@sip/shared-types";
 import { z } from "zod";
 import type { ApplicationsService } from "../../applications/applications.service";
-import { COMPLETENESS_WEIGHTS } from "../../candidate-insights/candidate-insights.config";
 import type { CandidateInsightsRepository } from "../../candidate-insights/candidate-insights.repository";
-import { computeCompletenessScore } from "../../candidate-insights/profile-suggestions.util";
+import { buildCompletenessItems, computeCompletenessScore } from "../../candidate-insights/profile-completeness.util";
 import type { InterviewsService } from "../../interviews/interviews.service";
-import type { CandidateMatchProfileLoader } from "../../job-matching/candidate-match-profile.loader";
 import { defineSupportChatTool, type SupportChatTool } from "./support-chat-tool";
 import { APPLICATION_STATUS_LABEL, DATE_FORMAT, DATE_TIME_FORMAT, excerpt, LIST_LIMIT } from "./support-chat-tool-format";
 
@@ -21,23 +20,25 @@ const APPLICATION_STATUSES = Object.keys(APPLICATION_STATUS_LABEL) as [Applicati
 const INTERVIEW_MODE_LABEL: Record<InterviewMode, string> = { ONLINE: "Trực tuyến", ONSITE: "Trực tiếp" };
 const INTERVIEW_STATUS_LABEL: Record<InterviewStatus, string> = { SCHEDULED: "Đã lên lịch", CANCELLED: "Đã huỷ" };
 
-const COMPLETENESS_LABEL: Record<keyof typeof COMPLETENESS_WEIGHTS, string> = {
-  hasSkills: "Kỹ năng",
-  hasWorkExperience: "Kinh nghiệm làm việc",
-  hasEducation: "Học vấn",
-  hasHeadlineOrBio: "Tiêu đề hoặc phần giới thiệu bản thân",
+const COMPLETENESS_LABEL: Record<ProfileCompletenessKey, string> = {
+  skills: "Kỹ năng",
+  cv: "CV trong mục Quản lý CV",
+  outreach: "Bật cho nhà tuyển dụng tìm và liên hệ",
+  experience: "Kinh nghiệm làm việc",
+  projects: "Dự án",
+  headlineOrBio: "Tiêu đề hoặc phần giới thiệu bản thân",
+  educationMajor: "Học vấn có chọn ngành",
+  city: "Thành phố",
 };
 
 export function candidateSupportChatTools({
   applicationsService,
   interviewsService,
   candidateInsightsRepository,
-  candidateMatchProfileLoader,
 }: {
   applicationsService: ApplicationsService;
   interviewsService: InterviewsService;
   candidateInsightsRepository: CandidateInsightsRepository;
-  candidateMatchProfileLoader: CandidateMatchProfileLoader;
 }): SupportChatTool[] {
   return [
     defineSupportChatTool({
@@ -121,17 +122,17 @@ export function candidateSupportChatTools({
       args: z.strictObject({}),
       run: async (userId) => {
         const candidateId = await candidateInsightsRepository.findCandidateIdByUserId(userId);
-        const profile = candidateId ? await candidateMatchProfileLoader.load(candidateId) : null;
-        if (!profile) return { error: "Chưa có hồ sơ ứng viên.", editAt: PROFILE_PAGE };
-        // D10 của candidate-insights: cùng công thức "Độ hoàn thiện hồ sơ" ở mục Phân tích hồ sơ.
-        const keys = Object.keys(COMPLETENESS_WEIGHTS) as Array<keyof typeof COMPLETENESS_WEIGHTS>;
+        const facts = candidateId ? await candidateInsightsRepository.loadCompletenessFacts(candidateId) : null;
+        if (!facts) return { error: "Chưa có hồ sơ ứng viên.", editAt: PROFILE_PAGE };
+        // AD-26 mục 8: cùng công thức với thẻ "Độ hoàn thiện hồ sơ" (GET /candidate/profile-completeness).
+        const items = buildCompletenessItems(facts);
         return {
-          score: computeCompletenessScore(profile.completeness),
+          score: computeCompletenessScore(facts),
           maxScore: 100,
-          done: keys.filter((key) => profile.completeness[key]).map((key) => COMPLETENESS_LABEL[key]),
-          missing: keys
-            .filter((key) => !profile.completeness[key])
-            .map((key) => ({ item: COMPLETENESS_LABEL[key], points: COMPLETENESS_WEIGHTS[key] })),
+          done: items.filter((item) => item.done).map((item) => COMPLETENESS_LABEL[item.key]),
+          missing: items
+            .filter((item) => !item.done)
+            .map((item) => ({ item: COMPLETENESS_LABEL[item.key], points: item.weight })),
           editAt: PROFILE_PAGE,
         };
       },

@@ -43,16 +43,16 @@ export const SEMANTIC_CALIBRATION: SemanticCalibration = { lo: 0.4442, hi: 0.727
 // rule-v1 + semanticStatus PENDING và đầy dần ở các lần tải sau. Tạm theo số đo bước 1–2.
 export const MAX_NEW_EMBEDDINGS_PER_REQUEST = 30;
 
-// "Việc làm phù hợp" (B2, AD-14 — docs/06-backend/candidate-insights/PLAN.md, D6/D8).
-/** Số tin tối đa trả về — top cố định, không phân trang (D8). */
+// "Việc làm phù hợp" (B2, AD-14 — docs/06-backend/candidate-insights/PLAN.md, D6;
+// AD-26 — docs/06-backend/job-discovery/PLAN.md, bước 2). AD-26 bỏ "top 10 cố định"
+// (D8 cũ) và giới hạn 30 ngày.
+/** Số tin mỗi trang (bước 0: chấm hybrid lại 10 hay 20 tin đều ~650 ms). */
 export const RECOMMENDATION_LIMIT = 10;
 /** Điểm (%) tối thiểu để một tin được tính là "phù hợp" — lọc theo từng tin (D6). */
 export const MIN_RECOMMENDATION_SCORE = 20;
-/** Giai đoạn A: chỉ xét tin đăng trong N ngày gần nhất. */
-export const RECOMMENDATION_RECENT_DAYS = 30;
-/** Giai đoạn A: số tin tối đa lấy từ SQL lọc thô. */
+/** Đường chấm trực tiếp (chưa có dòng trong bảng điểm): số tin tối đa lấy từ SQL lọc thô. */
 export const RECOMMENDATION_POOL_SIZE = 50;
-/** Giai đoạn B: số tin điểm rule cao nhất được chấm lại bằng hybrid. */
+/** Đường chấm trực tiếp: số tin điểm rule cao nhất được chấm lại bằng hybrid. */
 export const RECOMMENDATION_RERANK_SIZE = 20;
 
 // "Việc làm tương tự" ở trang chi tiết tin (docs/06-backend/similar-jobs/PLAN.md, S4).
