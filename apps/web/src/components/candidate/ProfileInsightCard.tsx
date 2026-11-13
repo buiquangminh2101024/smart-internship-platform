@@ -5,7 +5,6 @@ import type { ProfileInsight, ProfileInsightSuggestion, ProfileInsightSuggestion
 import { useCandidateProfileInsight, useGenerateProfileInsight } from "@/hooks/useCandidateProfileInsight";
 import { ApiError } from "@/lib/api-client";
 import { useCandidateAuthStore } from "@/stores/auth-store";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
@@ -33,10 +32,10 @@ function useToast() {
 
 // ─── Hiển thị ──────────────────────────────────────────────────────────────
 
+// AD-26 (bước F3): thẻ chỉ còn phần AI viết. Độ hoàn thiện chuyển sang ProfileCompletenessCard;
+// SKILL_GAP / INDUSTRY_MISMATCH (do code tạo) hiện ở "Việc làm phù hợp", nơi luôn tính mới.
 const SUGGESTION_GROUPS: Array<{ kind: ProfileInsightSuggestionKind; title: string; hint?: string }> = [
   { kind: "WRITING", title: "Gợi ý cải thiện cách viết" },
-  { kind: "SKILL_GAP", title: "Kỹ năng nên bổ sung", hint: "Dựa trên các tin phù hợp gần đây" },
-  { kind: "INDUSTRY_MISMATCH", title: "Có thể bạn muốn cân nhắc" },
 ];
 
 const EVIDENCE_PREVIEW = 3;
@@ -95,34 +94,11 @@ function BulletGroup({ title, hint, children }: { title: string; hint?: string |
   );
 }
 
-function CompletenessBar({ score }: { score: number }) {
-  const value = Math.max(0, Math.min(100, score));
-  return (
-    <div className="grid gap-2">
-      <div className="flex items-baseline justify-between">
-        <span className="text-sm font-semibold text-text-strong">Độ hoàn thiện hồ sơ</span>
-        <span className="text-sm font-semibold text-text-strong">{value}%</span>
-      </div>
-      <div
-        className="h-2.5 overflow-hidden rounded-full bg-surface-page"
-        role="progressbar"
-        aria-label="Độ hoàn thiện hồ sơ"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={value}
-      >
-        <div className="h-full rounded-full bg-brand-600 transition-[width]" style={{ width: `${value}%` }} />
-      </div>
-    </div>
-  );
-}
-
 function InsightResult({ insight }: { insight: ProfileInsight }) {
-  const hasAnyText = insight.strengths.length > 0 || insight.suggestions.length > 0;
+  const hasAnyText =
+    insight.strengths.length > 0 || insight.suggestions.some((suggestion) => suggestion.kind === "WRITING");
   return (
     <div className="grid gap-6">
-      <CompletenessBar score={insight.completenessScore} />
-
       {insight.strengths.length > 0 ? (
         <BulletGroup title="Điểm mạnh">
           {insight.strengths.map((strength) => (
@@ -209,14 +185,9 @@ export function ProfileInsightCard() {
   return (
     <Card className="grid gap-5" padding="lg">
       <div>
-        <div className="flex items-center gap-2">
-          <h2 className="text-xl font-semibold text-text-strong">Phân tích hồ sơ</h2>
-          <Badge tone="brand" icon="sparkles">
-            AI
-          </Badge>
-        </div>
+        <h2 className="text-xl font-semibold text-text-strong">Nhận xét cách viết hồ sơ (AI)</h2>
         <p className="mt-1 text-sm text-text-muted">
-          Nhận xét điểm mạnh, cách viết hồ sơ và kỹ năng thường gặp ở các tin tuyển dụng phù hợp với bạn.
+          AI đọc phần giới thiệu, kỹ năng, kinh nghiệm và dự án, rồi nêu điểm mạnh và chỗ nên viết lại.
         </p>
       </div>
 
@@ -245,10 +216,7 @@ export function ProfileInsightCard() {
         <>
           <InsightResult insight={insight} />
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle pt-4">
-            <p className="text-xs text-text-muted">
-              Phân tích lần cuối: {formatGeneratedAt(insight.generatedAt)}
-              {insight.basedOnJobCount > 0 ? ` · dựa trên ${insight.basedOnJobCount} tin tuyển dụng phù hợp` : ""}
-            </p>
+            <p className="text-xs text-text-muted">Nhận xét lần cuối: {formatGeneratedAt(insight.generatedAt)}</p>
             {button}
           </div>
         </>

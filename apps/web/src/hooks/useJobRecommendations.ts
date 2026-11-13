@@ -1,19 +1,28 @@
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import type { JobRecommendationList } from "@sip/shared-types";
 import { apiFetch } from "@/lib/api-client";
 
-// "Việc làm phù hợp" — docs/05-frontend/phases/candidate-insights/PLAN.md (Phần 2).
-// Không LLM, không hạn mức: tự chạy khi vào trang, không có nút "tính lại".
+// "Việc làm phù hợp" — AD-26, docs/05-frontend/phases/job-discovery/PLAN.md bước F1.
+// Không LLM, không hạn mức. Mỗi trang 10 tin; "Xem thêm" gửi lại `nextCursor`.
+// Đường LIVE (ứng viên chưa có điểm lưu sẵn) chỉ có một trang (`nextCursor = null`).
+
+/** Khoá dùng chung: /profile và thông báo JOB_ALERT (F5) invalidate khoá này. */
+export const JOB_RECOMMENDATIONS_KEY = ["candidate", "job-recommendations"] as const;
 
 /**
- * Danh sách phụ thuộc hồ sơ Candidate, mà các thao tác ở /profile không đi qua
- * react-query nên không invalidate được — staleTime ngắn (cùng lý do
- * useCandidateJobMatch) để quay lại trang là thấy kết quả mới.
+ * staleTime ngắn: danh sách phụ thuộc hồ sơ, mà /cv và các trang khác không invalidate khoá
+ * này — quay lại trang là đọc lại.
  */
 export function useJobRecommendations(enabled: boolean) {
-  return useQuery({
-    queryKey: ["candidate", "job-recommendations"],
-    queryFn: () => apiFetch<JobRecommendationList>("candidate", "/candidate/job-recommendations"),
+  return useInfiniteQuery({
+    queryKey: JOB_RECOMMENDATIONS_KEY,
+    queryFn: ({ pageParam }) =>
+      apiFetch<JobRecommendationList>(
+        "candidate",
+        `/candidate/job-recommendations${pageParam ? `?cursor=${encodeURIComponent(pageParam)}` : ""}`,
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
     enabled,
     staleTime: 30_000,
     retry: false,

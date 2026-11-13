@@ -1,6 +1,6 @@
 # Ứng viên thấy nhiều việc phù hợp, xếp theo ưu tiên (0.5) — Frontend
 
-> **Trạng thái: ĐÃ LẬP KẾ HOẠCH (2026-11-12), CHƯA TRIỂN KHAI.** Làm sau các bước backend tương ứng của `docs/06-backend/job-discovery/PLAN.md`.
+> **Trạng thái: ĐÃ LẬP KẾ HOẠCH (2026-11-12). Backend xong 2026-11-13. XONG F1 + F3 (2026-11-13, lượt 1, đã kiểm trên trình duyệt qua 8080). Còn F2, F4 + F5, F6.**
 
 Mục 0.5 của `docs/01-project/FEATURE_BACKLOG.md`. Quyết định kiến trúc: AD-26. Backend: `docs/06-backend/job-discovery/PLAN.md` (D1–D12, Q1–Q4). Nền: `docs/05-frontend/phases/candidate-insights/PLAN.md` ("Việc làm phù hợp", "Phân tích hồ sơ"), `docs/05-frontend/phases/phase-06-job-recruitment/PLAN.md` (`/jobs` bản tối giản).
 
@@ -128,6 +128,60 @@ Trung tâm thông báo → JOB_ALERT, PROFILE_SKILLS_REMINDER; realtime JOB_ALER
 ## Ghi chú triển khai
 
 *(Ghi trong quá trình làm, theo từng bước.)*
+
+Thứ tự làm, chốt với chủ dự án 2026-11-13: lượt 1 là F1 + F3 (dùng chung thẻ độ hoàn thiện, hook và khoá cache), lượt 2 là F2, lượt 3 là F4 + F5, cuối cùng F6. Kiểm trên trình duyệt sau từng lượt; F6 chỉ còn FAQ, eval và một vòng kiểm tổng.
+
+### Lượt 1 — F1 + F3 (2026-11-13)
+
+**File mới:**
+- `lib/profile-completeness.ts`:
+  - nhãn, việc cần làm, nhãn nút, lợi ích và link của tám mục;
+  - tên ba nhóm;
+  - `describeNextStep`;
+  - `PROFILE_SECTION_ID`, các neo trên `/profile`.
+- `hooks/useProfileCompleteness.ts`:
+  - `useProfileCompleteness` (`staleTime` 0, vì CV sửa ở `/cv`);
+  - `useInvalidateProfileDerived`, làm mới độ hoàn thiện và "Việc làm phù hợp".
+- `components/candidate/ProfileCompletenessCard.tsx`, dạng `compact` và `full`. `CompletenessBar` chuyển từ `ProfileInsightCard` sang đây.
+- `components/jobs/MatchReasons.tsx`: lý do theo tiêu chí và "Còn thiếu" (tối đa 3, bắt buộc trước).
+
+**F1 (`/recommended-jobs`):**
+- `useJobRecommendations` chuyển sang `useInfiniteQuery`, giữ khoá `["candidate", "job-recommendations"]` (export `JOB_RECOMMENDATIONS_KEY` để F5 dùng).
+- Có "N tin phù hợp với hồ sơ của bạn · đang xem M", "Xem thêm" và báo lỗi khi tải thêm thất bại.
+- Đường LIVE có dòng giải thích, không có "Xem thêm".
+- Thẻ độ hoàn thiện gọn ẩn khi 100%, và cả khi đang tải hoặc lỗi, để không chặn danh sách.
+- Khối "Kỹ năng nên bổ sung" / "Có thể bạn muốn cân nhắc" lấy từ `suggestions` của trang đầu. Danh sách tin liên quan nằm trong `<details>`.
+
+**Khác plan:**
+- `MatchReasons` hiện thêm hai trường hợp plan không liệt kê, vì đây đúng là thứ "Nên làm trước" nhắc tới:
+  - kinh nghiệm `UNKNOWN`: "Tin yêu cầu x năm kinh nghiệm, hồ sơ chưa có";
+  - học vấn `UNKNOWN`: "Tin ghi ngành học, hồ sơ chưa chọn ngành".
+
+  Học vấn `NONE` ghi "Khác ngành tin yêu cầu". Mỗi dòng có icon kèm chữ, màu không là kênh duy nhất.
+- Ngưỡng mức tương đồng nội dung: cao ≥ 0,7, vừa ≥ 0,4. Với `ung-vien-0248`, `semantic.normalized` của 56 tin trải từ 0,11 tới 1, nên đủ cả ba mức.
+
+**F3 (`/profile`):**
+- Thẻ độ hoàn thiện đầy đủ đặt trên thẻ AI. Khối "Nên làm trước" dùng `Card tone="brand"`.
+- Tám mục chia ba nhóm, lưới hai cột từ `sm`. Mục còn thiếu có lợi ích và link tới đúng phần.
+- Đủ 100% thì danh sách gập vào "Xem tám mục".
+- Các phần có `id` và `scroll-mt-24`. Hồ sơ tải bất đồng bộ, nên khi tải xong trang tự cuộn tới `#…` một lần.
+- Sửa hồ sơ (học vấn, kỹ năng, kinh nghiệm, dự án, thông tin cá nhân, công tắc cho liên hệ) thì gọi `useInvalidateProfileDerived`. Lần tải đầu không gọi, để thẻ không tải hai lần.
+- `ProfileInsightCard`: tiêu đề "Nhận xét cách viết hồ sơ (AI)"; bỏ thanh %, `SKILL_GAP` / `INDUSTRY_MISMATCH`, huy hiệu "AI" (tiêu đề đã ghi) và câu "dựa trên N tin" (LLM không đọc tin). Nút, hạn mức và câu chữ nút giữ như cũ.
+
+**Kiểm trên `localhost:8080`:**
+- `ung-vien-0248`:
+  - thẻ gọn 85%, lý do trên thẻ khớp `MatchResult`;
+  - "Xem thêm" 10 → 20 tin trên 56, không cuộn ngang;
+  - "Thêm kinh nghiệm" mở `/profile#ho-so-kinh-nghiem` và cuộn đúng chỗ;
+  - thẻ đầy đủ đúng ba nhóm, thẻ AI đổi tên.
+- `uv-kiem-0-5` (đường LIVE):
+  - 10 tin, có dòng LIVE, không có "Xem thêm";
+  - "Nên làm trước: chọn ngành học — 8/10 tin…";
+  - chọn thành phố rồi lưu ⇒ thẻ tự lên 35% và "Thành phố — đã có", không tải lại trang. API độ hoàn thiện của tài khoản LIVE mất khoảng 3 s.
+- Ở 375px (iframe rộng 375px), cả hai trang không cuộn ngang. Không có lỗi console.
+- `tsc` web sạch. ESLint các file đã sửa chỉ còn cảnh báo `_unused` có từ trước ở `CandidateProfileClient.tsx`.
+
+**Lưu ý dữ liệu:** hai tin kiểm `[Kiểm 0.5 #1/#2]` của bước 8 backend đang nằm trong top 10 của `ung-vien-0248`. Chúng đẩy các tin cần kinh nghiệm xuống, nên "Nên làm trước" của tài khoản này không còn kèm "4/10 tin" (chỉ còn 2/10, dưới ngưỡng 3). Đóng hai tin kiểm thì số này trở lại như Q7.
 
 ## Phần 4 — Ghi chú của chủ dự án
 
