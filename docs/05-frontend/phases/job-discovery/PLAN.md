@@ -1,6 +1,6 @@
 # Ứng viên thấy nhiều việc phù hợp, xếp theo ưu tiên (0.5) — Frontend
 
-> **Trạng thái: ĐÃ LẬP KẾ HOẠCH (2026-11-12). Backend xong 2026-11-13. XONG F1 + F3 (lượt 1), F2 (lượt 2) và F4 + F5 (lượt 3), 2026-11-13, đã kiểm trên trình duyệt qua 8080. Còn F6.**
+> **Trạng thái: ĐÃ LẬP KẾ HOẠCH (2026-11-12). Backend xong 2026-11-13. XONG F1 + F3 (lượt 1), F2 (lượt 2), F4 + F5 (lượt 3) và F6 (lượt 4), 2026-11-13, đã kiểm trên trình duyệt qua 8080. Riêng việc trang "Việc làm phù hợp" tự làm mới khi nhận `JOB_ALERT` realtime chưa kiểm đầu cuối (xem lượt 4).**
 
 Mục 0.5 của `docs/01-project/FEATURE_BACKLOG.md`. Quyết định kiến trúc: AD-26. Backend: `docs/06-backend/job-discovery/PLAN.md` (D1–D12, Q1–Q4). Nền: `docs/05-frontend/phases/candidate-insights/PLAN.md` ("Việc làm phù hợp", "Phân tích hồ sơ"), `docs/05-frontend/phases/phase-06-job-recruitment/PLAN.md` (`/jobs` bản tối giản).
 
@@ -236,6 +236,35 @@ Thứ tự làm, chốt với chủ dự án 2026-11-13: lượt 1 là F1 + F3 (
 - Mở `/settings#bao-tin-viec-lam` cuộn tới đúng thẻ. Ở 375 px (iframe) không cuộn ngang.
 - Chưa kiểm realtime `JOB_ALERT` đầu cuối vì cần Admin duyệt tin thật trên Neon. Để vào vòng kiểm tổng F6 (mục 4).
 - `tsc` web sạch; ESLint các file đã sửa không có cảnh báo.
+
+### Lượt 4 — F6 (2026-11-13)
+
+**FAQ chatbot hỗ trợ** (`apps/server/content/support-faq/`, 42 → 44 mục):
+
+- `02-ung-vien-ho-so-cv.md`:
+  - mục mới `profile-completeness`: thẻ luôn ở đầu `/profile`, ba nhóm và tám mục, "Nên làm trước", điền thêm giúp điểm chính xác hơn chứ không chắc cao hơn (AD-26 mục 8);
+  - `profile-insight` thu hẹp thành "Nhận xét cách viết hồ sơ bằng AI" (điểm mạnh, gợi ý cách viết), chỉ sang thẻ độ hoàn thiện và "Kỹ năng nên bổ sung". Câu hỏi mẫu về phần trăm / còn thiếu gì chuyển sang `profile-completeness`, câu "nên học thêm kỹ năng gì" chuyển sang `recommended-jobs`;
+  - `recommended-jobs`: xếp theo mức phù hợp, "Xem thêm", lý do theo tiêu chí, "Kỹ năng nên bổ sung", không hiện tin đã ứng tuyển / được mời, vừa thêm kỹ năng đầu tiên thì danh sách đầy đủ trong một ngày.
+- `03-tim-viec-ung-tuyen.md`:
+  - mục mới `job-alert`: khi nào nhận (tin mới, ≥ 70% hoặc ngưỡng cao hơn của tin), gộp một thông báo mỗi ngày, email 8h tối đa 10 tin, mỗi tin báo một lần, ba công tắc ở `/settings#bao-tin-viec-lam`, vì sao không nhận;
+  - `job-search`: thêm bộ lọc Lương, Kinh nghiệm, Kỹ năng;
+  - `match-score`: điểm trên `/jobs`, "Phù hợp nhất", "Chỉ tin phù hợp với tôi (≥ 70%)", điểm danh sách cập nhật mỗi đêm nên có thể lệch với thẻ trên trang tin.
+- `01-tai-khoan.md` (`account-notifications`): một dòng chỉ tới `/settings#bao-tin-viec-lam`. Widget chat biến đường dẫn có `#` thành link.
+- Đã sinh lại `faq-index.json` (44 mục) và `eval/eval-results.md`.
+
+**Eval** (`support-chat:eval`, không gọi LLM, không chạm DB), so với bản sau 0.4:
+
+- Trả thẳng 8/84, chính xác 100%; chặn ngoài phạm vi 7/15, chặn nhầm 0/95: không đổi. Ngưỡng gợi ý giữ nguyên.
+- Chọn đoạn cho prompt (`server`): top-3 giữ **74/94**, top-1 57 → 55. Hai câu đổi mục đứng đầu nhưng mục đúng vẫn trong top-3: q026 "Hồ sơ của tôi còn thiếu gì, có ai nhận xét giúp không?" giờ ra `profile-completeness` trước (đúng với nội dung mới; nhãn eval vẫn là `profile-insight`), q039 ra `recommended-jobs` trước `application-status`.
+- Câu gõ không dấu (bỏ dấu nhân tạo, so với câu mẫu bỏ dấu): top-3 31 → 27/79, top-1 19 → 18. Câu không dấu thật: q113 "muon doi pass moi thi vao dau" và q116 "giu lai tin nay de mai xem tiep" mất mục đúng khỏi top-3. Đây là điểm yếu đã biết (score của câu không dấu chồng nhau gần hết); hai mục mới chỉ thắng sát nút.
+- Lần sửa đầu kéo top-3 câu có dấu xuống 72/94. Đã chỉnh: bỏ câu mẫu chung chung "Nên làm trước nghĩa là gì?", đổi "Tắt báo tin việc làm mới ở đâu?" (hút các câu "… ở đâu") và "Có thông báo khi có việc làm mới hợp với tôi không?", chuyển đoạn "ứng viên đăng nhập thấy Phù hợp x%" từ `job-search` sang `match-score` (đoạn này làm `job-search` lọt vào top-3 của q055, q112, q116). Bỏ hẳn dòng ở `account-notifications` thì câu có dấu giảm 2, câu không dấu tăng 2, nên giữ dòng.
+
+**Kiểm tổng trên `localhost:8080`:**
+
+- Mục 1–3 và cài đặt báo tin đã kiểm sau từng lượt (ghi ở trên).
+- Mục 4, job alert: `uv-backend-1` có đúng **một** thông báo "2 tin mới phù hợp với bạn" (tạo ở bước 8 backend, hai tin `[Kiểm 0.5 #1/#2]`), thân "Mới nhất: …, phù hợp 95%". Bấm vào ⇒ mở `/recommended-jobs`, số chưa đọc giảm 4 → 3. Realtime gộp đã kiểm ở bước 8 backend. **Chưa kiểm** trang "Việc làm phù hợp" tự làm mới khi sự kiện tới, vì phải tạo và duyệt thêm tin thật trên Neon (báo cho khoảng 15 ứng viên demo, xếp email vào outbox).
+- Mục 5, nhắc kỹ năng: `npm run job-alerts -- --dry-run --reminders` ra 0 (tài khoản kiểm đã được nhắc ở bước 8, `dedupeKey` chặn nhắc lại; không còn ứng viên thiếu kỹ năng quá 24 giờ). `uv-kiem-0-5` có thông báo "Thêm kỹ năng để nhận việc làm phù hợp", bấm vào ⇒ `/profile`, thẻ độ hoàn thiện 35% và "Nên làm trước: chọn ngành học — 8/10 tin…".
+- Chatbot chưa thử trên giao diện: server đọc FAQ và `faq-index.json` lúc khởi động, cần khởi động lại server mới dùng bản mới.
 
 ## Phần 4 — Ghi chú của chủ dự án
 

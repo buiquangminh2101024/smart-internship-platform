@@ -16,9 +16,30 @@ questions:
 Vào trang **Việc thực tập** (/jobs):
 
 - Ô tìm kiếm nhận vị trí, kỹ năng hoặc tên công ty.
-- Lọc thêm theo **Địa điểm**, **Ngành nghề**, **Loại hình** (thực tập, bán thời gian, toàn thời gian, hợp đồng) và **Mức lương**.
+- Lọc thêm theo **Địa điểm**, **Ngành nghề**, **Loại hình** (thực tập, bán thời gian, toàn thời gian, hợp đồng), **Lương**, **Kinh nghiệm** và **Kỹ năng**.
 
 Danh sách công ty và trang giới thiệu từng công ty ở /companies. Bạn không cần đăng nhập để xem tin và công ty.
+
+## job-alert
+audience: candidate
+title: Báo tin việc làm phù hợp
+questions:
+- Tại sao tôi nhận thông báo có tin mới phù hợp?
+- Làm sao tắt báo tin việc làm mới?
+- Không muốn nhận email việc làm mỗi ngày
+- Chỉ nhận báo tin việc làm ở thành phố của tôi
+- Sao tôi không nhận được thông báo việc làm mới?
+- Báo tin việc làm phù hợp là gì?
+
+Khi một tin mới được duyệt và có mức độ phù hợp với hồ sơ của bạn **từ 70% trở lên** (hoặc cao hơn, nếu nhà tuyển dụng đặt ngưỡng cao hơn), hệ thống tự báo cho bạn. Bạn không cần lưu bộ lọc nào.
+
+- Các tin trong cùng một ngày gộp vào **một thông báo** ở chuông, ví dụ "3 tin mới phù hợp với bạn". Bấm vào để mở **Việc làm phù hợp** (/recommended-jobs).
+- **Email tổng hợp** gửi lúc 8 giờ sáng, tối đa 10 tin, chỉ gửi khi có tin mới.
+- Mỗi tin chỉ báo một lần. Không báo tin bạn đã ứng tuyển hoặc đã được mời.
+
+Báo tin **bật sẵn**. Để tắt, vào **Cài đặt**, thẻ **Báo tin việc làm phù hợp** (/settings#bao-tin-viec-lam), gồm ba công tắc: **Báo khi có tin mới phù hợp**, **Gửi email tổng hợp mỗi ngày** và **Chỉ tin ở thành phố của tôi** (cần chọn thành phố trong hồ sơ trước).
+
+Không nhận được báo tin thường vì hồ sơ chưa có kỹ năng (hệ thống nhắc thêm kỹ năng một lần), đã tắt báo tin, đang bật chỉ tin cùng thành phố, hoặc chưa có tin mới nào đạt 70%.
 
 ## job-save
 audience: candidate
@@ -128,6 +149,8 @@ questions:
 Ở trang chi tiết tin, thẻ **Mức độ phù hợp** so sánh hồ sơ của bạn với yêu cầu của tin: kỹ năng bắt buộc và ưu tiên, số năm kinh nghiệm, ngành học, kèm mức độ gần nghĩa giữa hồ sơ và mô tả công việc, và giải thích phần nào bạn đã đáp ứng, phần nào còn thiếu.
 
 Điểm chỉ mang tính tham khảo, không quyết định việc bạn được nhận. Hệ thống **không bao giờ tự từ chối** đơn vì điểm thấp; chỉ nhà tuyển dụng mới từ chối được. Đơn có điểm đạt ngưỡng của tin có thể được hệ thống tự chuyển sang **Đang xem xét**. Để điểm sát hơn, hãy cập nhật kỹ năng, học vấn và kinh nghiệm ở **Hồ sơ ứng viên** (/profile).
+
+Khi bạn đăng nhập, trang **Việc thực tập** (/jobs) hiện **Phù hợp x%** trên từng tin, có cách sắp xếp **Phù hợp nhất** và bộ lọc **Chỉ tin phù hợp với tôi (≥ 70%)**. Điểm ở danh sách này cập nhật mỗi đêm, nên có thể lệch một chút với thẻ trên trang tin ngay sau khi bạn sửa hồ sơ.
 
 ## candidate-interviews
 audience: candidate

@@ -1,13 +1,13 @@
 # Kết quả eval chatbot hỗ trợ — bậc 2 (so khớp FAQ)
 
-> Sinh tự động bởi `apps/server/scripts/support-chat-eval.ts` lúc 2026-11-12T14:10:34.840Z — không sửa tay; chạy lại script để cập nhật. Phương pháp: `../PLAN.md` mục "Bộ eval" và "Pipeline xử lý một câu hỏi".
+> Sinh tự động bởi `apps/server/scripts/support-chat-eval.ts` lúc 2026-11-13T09:30:19.189Z — không sửa tay; chạy lại script để cập nhật. Phương pháp: `../PLAN.md` mục "Bộ eval" và "Pipeline xử lý một câu hỏi".
 
-Model embedding `Xenova/paraphrase-multilingual-MiniLM-L12-v2`, phiên bản FAQ `d71d5d83a172`. Bộ câu hỏi do người soạn, cỡ nhỏ: con số chỉ mang tính chỉ báo. Score là cosine giữa câu hỏi và **câu hỏi mẫu gần nhất** của mỗi mục FAQ người hỏi được thấy.
+Model embedding `Xenova/paraphrase-multilingual-MiniLM-L12-v2`, phiên bản FAQ `b330fa0ec796`. Bộ câu hỏi do người soạn, cỡ nhỏ: con số chỉ mang tính chỉ báo. Score là cosine giữa câu hỏi và **câu hỏi mẫu gần nhất** của mỗi mục FAQ người hỏi được thấy.
 
 ## Dữ liệu
 
 - 118 câu: 110 câu hỏi mới (faq 84 · llm 11 · out_of_scope 15) và 8 câu nối tiếp (có `history`). 17 câu hỏi mới gõ không dấu — không trả thẳng, không chặn, luôn xuống bậc 3–4 (chọn đoạn bằng bản bỏ dấu của câu hỏi mẫu).
-- Thời gian embed một câu (đã làm nóng model): trung vị 6,2 ms, lớn nhất 199,3 ms.
+- Thời gian embed một câu (đã làm nóng model): trung vị 6,2 ms, lớn nhất 208,0 ms.
 
 ## Ngưỡng đang dùng (`support-chat.config.ts`)
 
@@ -38,9 +38,9 @@ Hai nhóm càng tách nhau thì ngưỡng càng dễ chọn.
 
 | Nhãn | n | Nhỏ nhất | P25 | Trung vị | P75 | Lớn nhất |
 | --- | --- | --- | --- | --- | --- | --- |
-| faq | 84 | 0,508 | 0,690 | 0,769 | 0,835 | 0,980 |
+| faq | 84 | 0,508 | 0,694 | 0,769 | 0,835 | 0,980 |
 | llm | 11 | 0,533 | 0,712 | 0,736 | 0,780 | 0,836 |
-| out_of_scope | 15 | 0,245 | 0,339 | 0,519 | 0,585 | 0,838 |
+| out_of_scope | 15 | 0,245 | 0,341 | 0,519 | 0,585 | 0,838 |
 | nối tiếp | 8 | 0,584 | 0,640 | 0,686 | 0,774 | 0,899 |
 
 ## Lưới `DIRECT_THRESHOLD`
@@ -51,14 +51,14 @@ Biên an toàn: câu sẽ bị trả thẳng sai có score cao nhất dưới 0,
 
 | Ngưỡng | Trả thẳng | Đúng | Chính xác | Sai mục | Trả thẳng câu llm | Trả thẳng câu ngoài PV | Phủ câu faq |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 0,600 | 75 | 49 | 65% | 14 | 10 | 2 | 58% |
-| 0,625 | 70 | 48 | 69% | 12 | 9 | 1 | 57% |
-| 0,650 | 66 | 46 | 70% | 10 | 9 | 1 | 55% |
-| 0,675 | 62 | 44 | 71% | 8 | 9 | 1 | 52% |
-| 0,700 | 56 | 40 | 71% | 6 | 9 | 1 | 48% |
-| 0,725 | 45 | 33 | 73% | 5 | 7 | 0 | 39% |
-| 0,750 | 39 | 32 | 82% | 3 | 4 | 0 | 38% |
-| 0,775 | 34 | 29 | 85% | 1 | 4 | 0 | 35% |
+| 0,600 | 75 | 48 | 64% | 15 | 10 | 2 | 57% |
+| 0,625 | 70 | 47 | 67% | 13 | 9 | 1 | 56% |
+| 0,650 | 67 | 45 | 67% | 12 | 9 | 1 | 54% |
+| 0,675 | 63 | 43 | 68% | 10 | 9 | 1 | 51% |
+| 0,700 | 56 | 39 | 70% | 7 | 9 | 1 | 46% |
+| 0,725 | 45 | 32 | 71% | 6 | 7 | 0 | 38% |
+| 0,750 | 39 | 31 | 79% | 4 | 4 | 0 | 37% |
+| 0,775 | 34 | 28 | 82% | 2 | 4 | 0 | 33% |
 | 0,800 | 24 | 22 | 92% | 1 | 1 | 0 | 26% |
 | 0,825 | 16 | 14 | 88% | 1 | 1 | 0 | 17% |
 | 0,850 | 11 | 10 | 91% | 1 | 0 | 0 | 12% |
@@ -81,8 +81,8 @@ Quy tắc: ngưỡng lớn nhất **không chặn nhầm** câu trong phạm vi 
 | 0,325 | 3/15 (20%) | 0/95 |
 | 0,350 | 5/15 (33%) | 0/95 |
 | 0,375 | 5/15 (33%) | 0/95 |
-| 0,400 | 6/15 (40%) | 0/95 |
-| 0,425 | 6/15 (40%) | 0/95 |
+| 0,400 | 5/15 (33%) | 0/95 |
+| 0,425 | 5/15 (33%) | 0/95 |
 | 0,450 | 6/15 (40%) | 0/95 |
 | 0,475 ◀ | 7/15 (47%) | 0/95 |
 | 0,500 | 7/15 (47%) | 0/95 |
@@ -112,11 +112,11 @@ Mục đúng (`faqId`) có nằm trong 3 mục đưa vào prompt không. Cột "
 
 | Cách xếp hạng | Top-1 (mọi câu có faqId) | Top-3 (mọi câu có faqId) | Top-1 (câu llm) | Top-3 (câu llm) |
 | --- | --- | --- | --- | --- |
-| `question` — score câu hỏi mẫu cao nhất | 57/94 | 73/94 | 1/10 | 5/10 |
-| `content` — score với `title + nội dung` | 46/94 | 65/94 | 3/10 | 5/10 |
-| `max` — max(câu hỏi mẫu, nội dung) | 58/94 | 76/94 | 1/10 | 6/10 |
-| `mean` — trung bình (câu hỏi mẫu, nội dung) | 57/94 | 74/94 | 1/10 | 4/10 |
-| `server` — ◀ `contextRankOf` server đang dùng | 57/94 | 74/94 | 1/10 | 4/10 |
+| `question` — score câu hỏi mẫu cao nhất | 56/94 | 72/94 | 1/10 | 5/10 |
+| `content` — score với `title + nội dung` | 44/94 | 64/94 | 3/10 | 5/10 |
+| `max` — max(câu hỏi mẫu, nội dung) | 57/94 | 75/94 | 1/10 | 6/10 |
+| `mean` — trung bình (câu hỏi mẫu, nội dung) | 55/94 | 74/94 | 1/10 | 5/10 |
+| `server` — ◀ `contextRankOf` server đang dùng | 55/94 | 74/94 | 1/10 | 5/10 |
 
 Câu nối tiếp — embed riêng câu hỏi hay ghép thêm tin user gần nhất trong lịch sử:
 
@@ -168,10 +168,10 @@ Câu hỏi gõ không dấu — score và mục cao nhất khi so với câu h�
 | q110 | minh muon huy ung tuyen 1 cong viec | application-cancel | 0,474 account-notifications ✗ | 0,837 account-suspended ✗ | không → không |
 | q111 | acc cua minh bi khoa roi | account-suspended | 0,587 jobpost-create ✗ | 0,631 account-suspended | không → không |
 | q112 | xep lich phong van cho may ung vien | employer-interviews | 0,610 jobpost-create ✗ | 0,831 employer-interviews | không → có |
-| q113 | muon doi pass moi thi vao dau | account-change-password | 0,435 messaging ✗ | 0,878 account-change-password | không → có |
+| q113 | muon doi pass moi thi vao dau | account-change-password | 0,435 messaging ✗ | 0,878 account-change-password | không → không |
 | q114 | dung gmail dang nhap duoc ko | account-google | 0,575 jobpost-create ✗ | 0,772 subscription-trial ✗ | không → không |
 | q115 | cho dong nghiep vao chung tai khoan cong ty | company-join | 0,688 jobpost-create ✗ | 0,951 company-rejected ✗ | không → không |
-| q116 | giu lai tin nay de mai xem tiep | job-save | 0,605 job-save | 0,719 application-status ✗ | có → có |
+| q116 | giu lai tin nay de mai xem tiep | job-save | 0,605 job-save | 0,719 application-status ✗ | có → không |
 | q117 | thoi tiet ha noi hom nay | — | 0,443 messaging | 0,776 company-profile-edit | — |
 | q118 | viet giup minh bai van nghi luan | — | 0,410 account-notifications | 0,838 account-forgot-password | — |
 
@@ -179,8 +179,8 @@ Bỏ dấu nhân tạo 93 câu hỏi mới có dấu (giữ nhãn) để có c�
 
 | So với | Top-1 đúng mục | Top-3 có mục đúng |
 | --- | --- | --- |
-| Câu hỏi mẫu gốc | 3/79 | 23/79 |
-| Bản bỏ dấu của câu hỏi mẫu ◀ | 19/79 | 31/79 |
+| Câu hỏi mẫu gốc | 3/79 | 19/79 |
+| Bản bỏ dấu của câu hỏi mẫu ◀ | 18/79 | 27/79 |
 
 Score cao nhất (so với bản bỏ dấu): câu trong phạm vi 0,636–0,950, câu ngoài phạm vi 0,387–0,923 — hai nhóm chồng lên nhau gần hết nên không có ngưỡng chặn an toàn.
 
@@ -189,7 +189,7 @@ Nếu trả thẳng câu không dấu (so với bản bỏ dấu):
 | Ngưỡng | Trả thẳng | Đúng | Chính xác |
 | --- | --- | --- | --- |
 | 0,850 | 60 | 10 | 17% |
-| 0,900 | 26 | 5 | 19% |
+| 0,900 | 27 | 5 | 19% |
 | 0,925 | 4 | 3 | 75% |
 | 0,950 | 1 | 1 | 100% |
 
@@ -220,12 +220,12 @@ Câu bị xếp khác nhãn mong đợi. Với câu `llm` rơi đúng bậc 3–
 | q023 | candidate | Có mẫu CV có sẵn để dùng không? | faq cv-builder | bậc 3–4 | 0,821 | cv-builder (CV tạo trên web có dùng để ứng tuyển được không?) |
 | q024 | candidate | Có cách nào lấy thông tin trong CV điền vào hồ sơ cho nhanh không? | faq cv-extract | bậc 3–4 | 0,834 | cv-extract (Có tự điền hồ sơ từ CV được không?) |
 | q025 | candidate | Phân tích CV được mấy lần? | faq cv-extract | bậc 3–4 | 0,816 | cv-extract (Phân tích CV là gì?) |
-| q026 | candidate | Hồ sơ của tôi còn thiếu gì, có ai nhận xét giúp không? | faq profile-insight | bậc 3–4 | 0,787 | profile-insight (Làm sao biết hồ sơ của tôi còn thiếu gì?) |
+| q026 | candidate | Hồ sơ của tôi còn thiếu gì, có ai nhận xét giúp không? | faq profile-insight | bậc 3–4 | 0,787 | profile-completeness (Làm sao biết hồ sơ của tôi còn thiếu gì?) |
 | q027 | candidate | Gợi ý việc làm hợp với tôi ở đâu? | faq recommended-jobs | bậc 3–4 | 0,765 | application-status (Xem đơn ứng tuyển của tôi ở đâu?) |
 | q028 | candidate | Tại sao danh sách việc làm phù hợp của tôi trống trơn? | faq recommended-jobs | bậc 3–4 | 0,725 | recommended-jobs (Tại sao không có việc làm phù hợp nào?) |
 | q029 | candidate | Làm thế nào để công ty chủ động mời tôi ứng tuyển? | faq outreach-optin | bậc 3–4 | 0,716 | job-apply (Làm sao để ứng tuyển?) |
 | q031 | guest | Tìm việc thực tập ở Đà Nẵng thế nào? | faq job-search | bậc 3–4 | 0,677 | job-search (Làm sao tìm việc thực tập?) |
-| q032 | guest | Có lọc tin theo ngành và lương được không? | faq job-search | bậc 3–4 | 0,630 | company-join (Nhiều người cùng quản lý tin tuyển dụng được không?) |
+| q032 | guest | Có lọc tin theo ngành và lương được không? | faq job-search | bậc 3–4 | 0,695 | job-alert (Báo tin việc làm phù hợp là gì?) |
 | q033 | candidate | Muốn để dành tin này xem sau thì bấm gì? | faq job-save | bậc 3–4 | 0,657 | job-save (Làm sao lưu tin để xem sau?) |
 | q034 | candidate | Những tin mình đã lưu nằm ở đâu? | faq job-save | bậc 3–4 | 0,783 | job-save (Tin đã lưu nằm ở đâu?) |
 | q035 | guest | Nộp hồ sơ vào một công ty như thế nào? | faq job-apply | bậc 3–4 | 0,875 | company-rejected (Nộp lại hồ sơ công ty thế nào?) |
@@ -292,5 +292,5 @@ Câu `llm` mà mục đúng **không** nằm trong top-3 (cách `question`): 5.
 | q076 | Đang có gói còn 10 ngày mà mua gói khác thì số tin còn lại có được cộng vào không? | subscription-payment | subscription-trial, company-join, subscription-plans |
 | q077 | Ứng viên đang ở bước phỏng vấn, tôi muốn nhận luôn thì có phải đợi phỏng vấn xong không? | employer-applications | employer-interviews, candidate-search-invite, job-apply |
 | q079 | Một tin bị hạ thì tôi có mất lượt đăng không, và ứng viên đã nộp có còn xem được không? | jobpost-status | employer-applications, subscription-plans, candidate-search-invite |
-| q083 | Hệ thống có dùng AI không, AI làm những gì? | about-internhub | jobpost-requirements-ai, recommended-jobs, employer-application-automation |
+| q083 | Hệ thống có dùng AI không, AI làm những gì? | about-internhub | jobpost-requirements-ai, profile-insight, recommended-jobs |
 
