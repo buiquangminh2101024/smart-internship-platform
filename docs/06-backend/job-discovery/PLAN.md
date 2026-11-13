@@ -1,6 +1,6 @@
 # Ứng viên thấy nhiều việc phù hợp, xếp theo ưu tiên (0.5) — Backend
 
-> **Trạng thái: ĐÃ LẬP KẾ HOẠCH (2026-11-12). XONG BƯỚC 0 (2026-11-13, chỉ đọc). Q1–Q7 đã chốt. XONG BƯỚC 1 (2026-11-13, đã áp lên Neon). XONG BƯỚC 2 (2026-11-13). XONG BƯỚC 3 (2026-11-13). XONG BƯỚC 4 (2026-11-13). XONG BƯỚC 5 (2026-11-13). XONG BƯỚC 6 (2026-11-13). XONG BƯỚC 7 (2026-11-13). Sẵn sàng bước 8 khi có lệnh.** Hướng đã chốt ở AD-26 trong buổi trao đổi với chủ dự án ngày 2026-11-12. Kết quả đo ở "Ghi chú triển khai".
+> **Trạng thái: ĐÃ LẬP KẾ HOẠCH (2026-11-12). XONG BƯỚC 0 (2026-11-13, chỉ đọc). Q1–Q7 đã chốt. XONG BƯỚC 1 (2026-11-13, đã áp lên Neon). XONG BƯỚC 2 (2026-11-13). XONG BƯỚC 3 (2026-11-13). XONG BƯỚC 4 (2026-11-13). XONG BƯỚC 5 (2026-11-13). XONG BƯỚC 6 (2026-11-13). XONG BƯỚC 7 (2026-11-13). XONG BƯỚC 8 (2026-11-13, kiểm qua gateway 8080). XONG BƯỚC 9 (2026-11-13). BACKEND 0.5 XONG; frontend F1–F6 ở `docs/05-frontend/phases/job-discovery/PLAN.md`.** Hướng đã chốt ở AD-26 trong buổi trao đổi với chủ dự án ngày 2026-11-12. Kết quả đo ở "Ghi chú triển khai".
 
 Mục 0.5 của `docs/01-project/FEATURE_BACKLOG.md`. Quyết định kiến trúc: AD-26 (sửa một phần AD-14). Frontend: `docs/05-frontend/phases/job-discovery/PLAN.md`. Nền:
 - AD-24 (bảng điểm `job_candidate_match_scores`, lối chấm (a) khi tin được đăng);
@@ -483,6 +483,76 @@ Khớp số đo HTTP ở AD-24 (p50 475–485 ms). Phần lớn là `jobPostIncl
 
   F5 vẫn còn icon, realtime và invalidate.
 - Đã build lại `dist`. `tsc` sạch ở shared-types, server (hết lỗi `notification.mapper.ts`), web và script `job-alerts.ts`. Toàn bộ unit test server: 565/565 qua.
+
+### Bước 8 — Kiểm thử qua gateway 8080 (2026-11-13)
+
+Mọi lời gọi qua `http://localhost:8080/api` (server, web, gateway do chủ dự án chạy). Server chạy với `DEV_SKIP_EMAIL_SENDING=true` nên không thư nào ra ngoài. Số liệu so sánh đọc từ DB ở phiên chỉ đọc.
+
+1. **"Việc làm phù hợp", 6 ứng viên trưng bày `uv-ads-1…6`:** đều đi đường `TABLE`.
+   - Duyệt hết trang ra 110 / 95 / 73 / 62 / 78 / 75 tin. `total` đúng, không lặp.
+   - Không lọt tin đã ứng tuyển / được mời (SQL loại 1–7 tin mỗi người).
+   - Trang đầu giảm dần theo điểm, điểm bằng bảng điểm (chênh 0), gợi ý chỉ ở trang đầu.
+   - So với điểm nhà tuyển dụng (đăng nhập đúng người đăng tin) thấy ở trang tìm ứng viên: 23/30 cặp bằng nhau, 0 cặp lệch. 7 cặp còn lại không so được vì ứng viên không nằm trong 10 người đầu của trang tìm ứng viên.
+   - Thời gian qua HTTP: trang đầu khoảng 0,94–1,2 s (lần đầu lạnh 2 s), trang sau khoảng 1 s.
+2. **Ứng viên mới** `uv-kiem-0-5@large-demo.local` (đăng ký qua API, OTP dev):
+   - Chưa có kỹ năng ⇒ `INSUFFICIENT_PROFILE`.
+   - Thêm 4 kỹ năng ⇒ đường `LIVE`: 10 tin, điểm 81…67, `nextCursor = null`. 4/10 tin đăng quá 30 ngày, tức không còn giới hạn 30 ngày.
+   - Lần gọi đầu 3,1 s, vì phải chấm trực tiếp.
+3. **Trợ lý hồ sơ:** gọi "Phân tích hồ sơ" (một lần LLM) cho tài khoản trên. `topJobPostIds` trùng đúng thứ tự trang đầu "Việc làm phù hợp" (điểm ≥ 20). `completenessScore` bằng `GET /candidate/profile-completeness` (30).
+4. **`/job-posts`:**
+   - Khách, 10 truy vấn bộ lọc cũ: duyệt hết trang ra đúng `total`, không lặp, tập của repository cũ nằm trọn trong tập mới. Trang đầu giống hệt, trừ hai truy vấn có `q` (khớp thêm tên kỹ năng). Không có `viewer`.
+   - Không lọc: code cũ ra 311 tin, code mới ra đủ 312. Đây là lỗi sót tin cùng ngày đăng mà bước 4 đã sửa.
+   - p50 qua HTTP 539–617 ms, p95 600–1.031 ms. Mốc bước 0 là 502–542 ms ở tầng repository; ngưỡng +20% là 650 ms ⇒ đạt.
+   - Ứng viên `ung-vien-0248`, `uv-ads-1`:
+     - `sort=match` ra đủ 312 tin, điểm giảm dần;
+     - `viewer` khớp SQL ở cả `match` và `newest`;
+     - `minMatch=70` ra 14 / 15 tin, đúng số SQL;
+     - trang đầu `sort=match` 0,84–0,94 s.
+   - `minMatch=50` ⇒ 400.
+5. **Job alert:** Mây Xanh đăng hai bản sao của tin `clargedemojobscmxbackendintern`, tiêu đề `[Kiểm 0.5 #1]` / `[Kiểm 0.5 #2]`.
+   - Mây Xanh là công ty không cần duyệt tin, nên tin lên `PUBLISHED` ngay khi gửi duyệt. Đường Admin duyệt (`approve`) gọi cùng `matchScoreTrigger`.
+   - Trước khi đăng, tắt alert của `uv-backend-6` và bật "chỉ cùng thành phố" cho `uv-backend-2` (Hà Nội, tin ở TP.HCM); khôi phục sau khi kiểm.
+   - `job_alerts` có sau khoảng 2–6 s: 15 và 14 người, đúng tập của SQL tay. 17 và 16 người đạt điểm trước khi lọc; hai người bị loại do cài đặt không nhận.
+   - `uv-backend-1` nghe socket qua 8080. Tin #1 ⇒ một thông báo realtime "1 tin mới phù hợp với bạn". Tin #2 ⇒ **cùng thông báo** (cùng id) thành "2 tin mới…", phần thân "Mới nhất: …", realtime lần hai.
+   - `uv-backend-6` không nhận sự kiện nào. Không ai có hơn một thông báo `JOB_ALERT`. `/notifications?group=INVITATIONS` trả thông báo với link `/recommended-jobs`.
+   - Chạy lại lối (a) bằng `job-alerts --job` cho tin #1: báo đúng 2 người vừa khôi phục cài đặt, không báo lại 15 người cũ. Lần chạy sau ra 0.
+   - Lượt đêm (`rescoreAll`) không đi qua `trigger` nên không gọi listener. Đã có unit test `match-scores.test.ts`; không chạy cả lượt đêm trên Neon.
+6. **Email gộp:** `--dry-run --digest` ⇒ 17 email (31 tin).
+   - Chạy thật ⇒ 17 outbox `NOTIFICATION_EMAIL`, mỗi ứng viên một dòng, mọi dòng `job_alerts` có `emailedAt`. Chạy lại ⇒ 0.
+   - Sau ≤ 1 phút worker xử lý xong 17/17 `COMPLETED`, không lỗi.
+   - Email mẫu "2 tin mới phù hợp với bạn": hai tin xếp theo điểm, link `/jobs/<id>`, `/recommended-jobs`, `/settings`. Link theo `CORS_ORIGIN` như mọi email khác.
+7. **Nhắc một lần:** tài khoản kiểm chưa đủ 24 giờ ⇒ dry-run 0. Lùi `users.createdAt` của riêng tài khoản này 25 giờ (một câu `UPDATE`).
+   - Dry-run ⇒ 1. Lần 1 ⇒ tạo 1 thông báo kèm email. Lần 2 ⇒ 0.
+   - Có đúng một thông báo (link `/profile`) và một outbox; `/notifications?group=ACCOUNT` có thông báo này.
+8. **Độ hoàn thiện, so tay bằng SQL độc lập** (điểm, tám mục, "Nên làm trước"):
+   - `uv-ads-1` 100%, `null`;
+   - `ung-vien-0248` 85%, "kinh nghiệm 4/10";
+   - tài khoản kiểm: chưa có kỹ năng ⇒ "kỹ năng", không bằng chứng. Sau khi thêm học vấn **không chọn ngành** và kỹ năng ⇒ 30%, "ngành học 8/10" (8 tin ghi ngành nhiều hơn 4 tin cần kinh nghiệm).
+   - Không có ứng viên demo nào "có học vấn nhưng chưa chọn ngành" nên dùng tài khoản kiểm. Độ tin cậy của bộ chấm không đổi: đã kiểm ở bước 3, bước này không đụng.
+9. `tsc` sạch ở server, web, shared-types (bước 7). Unit test server 565/565.
+
+**Dữ liệu kiểm còn lại trên Neon:**
+
+- hai tin `[Kiểm 0.5 #1/#2]` của Mây Xanh, đang hiển thị;
+- tài khoản `uv-kiem-0-5@large-demo.local`;
+- thông báo `JOB_ALERT` của 17 ứng viên demo;
+- 31 dòng `job_alerts`.
+
+Tất cả thuộc phần `@large-demo.local`, nên `seed-large-demo --reset` xoá được.
+
+### Bước 9 — Tài liệu (2026-11-13)
+
+- `FEATURE_BACKLOG.md`:
+  - dòng 0.5 ghi "backend xong, frontend F1–F6 chưa làm", kèm số đo;
+  - dòng "Thông báo việc làm mới" ở mục 3 trỏ về 0.5; phần lưu bộ lọc tìm kiếm làm job alert vẫn mở;
+  - thêm dòng 🟢 cho bộ lọc hình thức làm việc, cấp bậc và tìm không dấu (`job_posts` chưa có cột cho hai bộ lọc đầu, DB chưa có `unaccent`).
+- AD-26: dòng trạng thái ghi backend xong bước 0–9.
+- `docs/06-backend/candidate-insights/PLAN.md`: thêm ghi chú đầu file và đánh dấu tại chỗ:
+  - D8 (top 10 cố định) đã thay bằng phân trang;
+  - `RECOMMENDATION_RECENT_DAYS` đã xoá;
+  - D10 (bốn cờ 40/25/25/10) đã thay bằng tám mục của AD-26 mục 8;
+  - mục "Ngoài phạm vi" ghi phân trang đã làm.
+- FAQ chatbot hỗ trợ: backend chưa sửa file FAQ nào, nên không cần sinh lại `faq-index`. Câu hỏi về job alert, "Việc làm phù hợp" và độ hoàn thiện (kể cả sửa `02-ung-vien-ho-so-cv.md`, nơi vẫn nói độ hoàn thiện nằm trong "Phân tích hồ sơ") làm ở F6, rồi sinh lại `faq-index` và chạy eval như 0.4.
 
 ## Phần 4 — Ghi chú của chủ dự án
 
