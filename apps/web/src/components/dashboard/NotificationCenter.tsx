@@ -11,6 +11,7 @@ import {
   NOTIFICATION_GROUP_META,
   WARNING_NOTIFICATION_TYPES,
   formatRelativeTime,
+  notificationIcon,
 } from "@/lib/notifications";
 import {
   NOTIFICATION_GROUPS_BY_AREA,
@@ -182,7 +183,7 @@ export function NotificationCenter({ area, limit = 8, notify, className = "" }: 
           >
             <span aria-hidden className={`grid shrink-0 place-items-center ${skin.icon} ${iconTone}`}>
               <Icon
-                name={warning ? warningIcon(notification.type) : NOTIFICATION_GROUP_META[group].icon}
+                name={warning ? warningIcon(notification.type) : notificationIcon(notification.type)}
                 size={skin.iconSize}
               />
             </span>

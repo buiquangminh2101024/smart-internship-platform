@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import type { JobPostStatus } from "@sip/shared-types";
 import { JOB_STATUS_LABEL } from "@/lib/job-post-display";
 import { Card } from "./Card";
@@ -22,6 +23,11 @@ export interface JobCardProps {
   /** Khu vực hành động/ghi chú ở cuối card (vd. nút Sửa/Đóng tin). */
   footer?: ReactNode | undefined;
   onClick?: (() => void) | undefined;
+  /**
+   * Có thì tiêu đề là link phủ cả thẻ (bấm chỗ nào trên thẻ cũng mở, Tab tới được, Ctrl+bấm mở
+   * tab mới). Không đặt cùng `onClick`, và `footer` khi đó không nên chứa phần tử bấm được.
+   */
+  href?: string | undefined;
 }
 
 export function JobCard({
@@ -36,18 +42,28 @@ export function JobCard({
   deadline,
   footer,
   onClick,
+  href,
 }: JobCardProps) {
   const statusInfo = status ? JOB_STATUS_LABEL[status] : undefined;
 
   return (
-    <Card padding="md" interactive={!!onClick} onClick={onClick} className="grid gap-3">
+    <Card padding="md" interactive={!!onClick || !!href} onClick={onClick} className={`grid gap-3${href ? " relative" : ""}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-surface-page text-sm font-semibold text-text-muted">
             {company.charAt(0).toUpperCase()}
           </span>
           <div className="grid min-w-0 gap-0.5">
-            <span className="truncate font-semibold text-text-strong">{title}</span>
+            {href ? (
+              <Link
+                href={href}
+                className="truncate font-semibold text-text-strong outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:ring-2 focus-visible:after:ring-brand-300"
+              >
+                {title}
+              </Link>
+            ) : (
+              <span className="truncate font-semibold text-text-strong">{title}</span>
+            )}
             <span className="inline-flex items-center gap-1 truncate text-sm text-text-muted">
               {company}
               {verified ? <Icon name="badge-check" size={14} title="Đã xác minh" className="text-success-600" /> : null}

@@ -1,6 +1,6 @@
 # Ứng viên thấy nhiều việc phù hợp, xếp theo ưu tiên (0.5) — Frontend
 
-> **Trạng thái: ĐÃ LẬP KẾ HOẠCH (2026-11-12). Backend xong 2026-11-13. XONG F1 + F3 (2026-11-13, lượt 1, đã kiểm trên trình duyệt qua 8080). Còn F2, F4 + F5, F6.**
+> **Trạng thái: ĐÃ LẬP KẾ HOẠCH (2026-11-12). Backend xong 2026-11-13. XONG F1 + F3 (lượt 1), F2 (lượt 2) và F4 + F5 (lượt 3), 2026-11-13, đã kiểm trên trình duyệt qua 8080. Còn F6.**
 
 Mục 0.5 của `docs/01-project/FEATURE_BACKLOG.md`. Quyết định kiến trúc: AD-26. Backend: `docs/06-backend/job-discovery/PLAN.md` (D1–D12, Q1–Q4). Nền: `docs/05-frontend/phases/candidate-insights/PLAN.md` ("Việc làm phù hợp", "Phân tích hồ sơ"), `docs/05-frontend/phases/phase-06-job-recruitment/PLAN.md` (`/jobs` bản tối giản).
 
@@ -182,6 +182,60 @@ Thứ tự làm, chốt với chủ dự án 2026-11-13: lượt 1 là F1 + F3 (
 - `tsc` web sạch. ESLint các file đã sửa chỉ còn cảnh báo `_unused` có từ trước ở `CandidateProfileClient.tsx`.
 
 **Lưu ý dữ liệu:** hai tin kiểm `[Kiểm 0.5 #1/#2]` của bước 8 backend đang nằm trong top 10 của `ung-vien-0248`. Chúng đẩy các tin cần kinh nghiệm xuống, nên "Nên làm trước" của tài khoản này không còn kèm "4/10 tin" (chỉ còn 2/10, dưới ngưỡng 3). Đóng hai tin kiểm thì số này trở lại như Q7.
+
+### Lượt 2 — F2 (2026-11-13)
+
+**File mới:**
+- `lib/job-search-params.ts`: đọc / ghi bộ lọc trên URL (tên tham số trùng GET /job-posts, `skillIds` dạng `a,b`), chuyển sang query API, chip "Đang lọc", "Xoá tất cả" (giữ cách sắp xếp).
+- `components/jobs/SkillFilter.tsx`: combobox kỹ năng (mẫu ARIA combobox + listbox, ↑/↓/Enter/Esc, tìm không phân biệt dấu, tối đa 8 gợi ý, tối đa 10 kỹ năng như server). Có từ hai kỹ năng thì hiện "Có ít nhất một / Có đủ tất cả". Không dùng lại `SkillMultiSelect` vì ô đó gắn với đề xuất kỹ năng mới và số năm.
+- `components/jobs/JobFilters.tsx`: thanh lọc từ `md` (từ khoá + năm ô chọn + kỹ năng + công tắc ≥ 70%) và ngăn kéo `Dialog` dưới `md` (nút "Bộ lọc (n)", cuối ngăn kéo "Xoá bộ lọc" / "Xem N việc làm").
+
+**Sửa:**
+- `app/jobs/page.tsx` viết lại: Suspense bọc phần dùng `useSearchParams`; đổi bộ lọc bằng `router.replace(…, { scroll: false })`; tổng số "N việc làm · đang xem M"; "Sắp xếp" chỉ cho ứng viên, khách thấy link "Đăng nhập để xếp theo mức phù hợp"; khung chờ thẻ; trạng thái trống có / không có bộ lọc; lỗi có nút "Thử lại"; ghi chú điểm cập nhật hằng đêm.
+- `hooks/useJobPosts.ts`: thêm `useJobPostSearch` (`useInfiniteQuery`, khoá có `guest` / `candidate`, `keepPreviousData`, chờ đọc xong phiên đăng nhập mới gọi). `usePublicJobPosts` giữ nguyên cho trang chủ và trang công ty.
+- `components/ui/JobCard.tsx`: thêm prop `href` — tiêu đề là link phủ cả thẻ (Tab tới được, Ctrl+bấm mở tab mới). Chỗ dùng cũ không đổi.
+
+**Quyết định khi làm:**
+- **Một ô "Lương"** gộp `salaryKind` và `salaryMin`: Mọi mức lương / Có ghi mức lương / Thoả thuận / Từ 3, 5, 8, 12 triệu. Hai tham số không đi cùng nhau ("từ x triệu" đã ngầm là có ghi lương), nên tách hai ô chỉ thêm tổ hợp vô nghĩa.
+- Mọi thao tác lọc truyền hàm cập nhật và tính trên bộ lọc mới nhất đã gửi, vì `router.replace` chưa đổi URL ngay: chọn hai kỹ năng liền nhau trước đây làm mất kỹ năng đầu (gặp khi kiểm).
+- Khách có `sort=match` / `minMatch` trên URL thì bị bỏ qua (không gửi, không hiện chip), cùng cách server xử lý.
+- Thẻ tin giữ nhãn loại hình và ngành như cũ, chưa thêm kỹ năng.
+
+**Kiểm trên `localhost:8080`:**
+- Khách: 314 việc làm · đang xem 20, không có công tắc ≥ 70%, có link đăng nhập để xếp theo mức phù hợp.
+- `uv-kiem-0-5`: chọn React rồi Node.js ⇒ 38 tin; "Có đủ tất cả" ⇒ 10 tin; thêm "Trên 2 năm" ⇒ 0 tin, thẻ trống có "Xoá tất cả bộ lọc"; bỏ chip React ⇒ chip "Có đủ tất cả" tự mất. Từ khoá "backend" + "Thoả thuận" ⇒ 7 tin. Mở tin rồi Back ⇒ giữ bộ lọc. "Xem thêm" lên 40 tin, mở tin thứ 31 rồi Back ⇒ vẫn 40 tin, đúng vị trí cuộn.
+- `ung-vien-0248`: thẻ có "Phù hợp x%"; "Phù hợp nhất" sắp 88, 87, 82, … giảm dần; bật ≥ 70% ⇒ 16 tin, chip "Phù hợp từ 70%"; nhãn "Đã ứng tuyển" hiện trên tin đã nộp.
+- 375 px (iframe): không cuộn ngang, "Bộ lọc (1)" mở ngăn kéo toàn màn hình, nút cuối "Xem 37 việc làm". Lỗi console duy nhất là thuộc tính `fdprocessedid` do tiện ích trình duyệt chèn vào nút, không do code.
+- `tsc` web sạch; ESLint các file đã sửa không có cảnh báo.
+
+### Lượt 3 — F4 + F5 (2026-11-13)
+
+**File mới:**
+
+- `hooks/useJobAlertSettings.ts`: `useJobAlertSettings` (khoá `["candidate", "job-alert-settings"]`, `staleTime: 0` vì thành phố đổi ở `/profile`) và `useUpdateJobAlertSettings` (mỗi công tắc một PATCH; đổi ngay khi bấm, lỗi thì trả lại như cũ).
+- `components/settings/JobAlertSettingsCard.tsx`: thẻ "Báo tin việc làm phù hợp" có câu giải thích ngưỡng 70% và ba công tắc. Thẻ có neo `#bao-tin-viec-lam` để FAQ (F6) link thẳng tới. Có khung chờ, lỗi tải kèm "Thử lại", lỗi lưu hiện dưới thẻ.
+
+**Sửa:**
+
+- `components/settings/SettingsPage.tsx`: ứng viên thấy thẻ báo tin ở đầu trang Cài đặt. Sửa luôn nền công tắc khi tắt: `bg-border-strong` không có trong token nên trước đây nền trong suốt, nay dùng `bg-text-subtle` như các công tắc khác.
+- `lib/notifications.ts`: thêm `notificationIcon(type)`, có icon riêng cho `JOB_ALERT` (`briefcase`) và `PROFILE_SKILLS_REMINDER` (`user-round-pen`), các loại khác dùng icon nhóm. `NotificationCenter` dùng hàm này. Nhãn nút giữ như bước 7 backend ("Xem việc làm phù hợp", "Cập nhật hồ sơ"), khớp link server trả về (`/recommended-jobs`, `/profile`).
+- `components/realtime/SocketProvider.tsx`: nhận `JOB_ALERT` thì làm mới `JOB_RECOMMENDATIONS_KEY`. Danh sách thông báo vốn đã được làm mới với mọi sự kiện. Thông báo gộp được sửa tại chỗ (cùng id), nên làm mới là đủ, không chèn thêm vào cache. Thông báo trình duyệt dùng tag theo id nên trình duyệt cũng thay bản cũ.
+
+**Quyết định khi làm:**
+
+- Hai công tắc sau ("Gửi email tổng hợp mỗi ngày", "Chỉ tin ở thành phố của tôi") đều mờ khi tắt công tắc đầu, vì cả hai chỉ có tác dụng khi đang bật báo tin. Plan chỉ ghi công tắc email. Hai công tắc này vẫn bấm được để chuẩn bị sẵn trước khi bật lại.
+- Chưa có thành phố thì công tắc "Chỉ tin ở thành phố của tôi" vẫn bấm được. Server trả 400 `JOB_ALERT_CITY_REQUIRED` thì hiện câu nhắc kèm link "Chọn thành phố" (`/profile#ho-so-thong-tin`). Dòng mô tả cũng nói trước điều này. Đã bật rồi bỏ thành phố khỏi hồ sơ thì dòng mô tả báo hiện không có tin nào được báo.
+- Trong lúc đang lưu, cả ba công tắc tạm khoá để các PATCH không về lệch thứ tự.
+- Phía ứng viên, chuông và trang `/notifications` không hiện icon theo loại (chỉ có chấm chưa đọc), còn `NotificationCenter` chỉ dùng ở Employer / Admin. Vì vậy icon mới chưa hiện ở đâu với ứng viên. Muốn hiện thì phải thêm icon vào chuông và trang thông báo dùng chung cho cả ba khu vực, chưa làm vì ngoài plan.
+
+**Kiểm trên `localhost:8080` (`ung-vien-0248`, có thành phố Đà Nẵng):**
+
+- Thẻ hiện đúng ba công tắc theo dữ liệu server (bật, bật, tắt) và dòng "Thành phố trên hồ sơ: Đà Nẵng".
+- Tắt "Báo khi có tin mới phù hợp" ⇒ hai công tắc sau mờ, dòng email đổi thành câu nhắc bật công tắc đầu. Tải lại trang vẫn tắt (đã lưu). Bật lại ⇒ trở về như cũ.
+- Giả lập server trả 400 `JOB_ALERT_CITY_REQUIRED` (chặn XHR trong trang, không ghi dữ liệu) ⇒ công tắc trả về tắt, hiện "Hồ sơ của bạn chưa có thành phố. Chọn thành phố trước rồi bật lại." với link `/profile#ho-so-thong-tin`. Lỗi khác ⇒ "Không lưu được cài đặt. Kiểm tra kết nối rồi thử lại."
+- Mở `/settings#bao-tin-viec-lam` cuộn tới đúng thẻ. Ở 375 px (iframe) không cuộn ngang.
+- Chưa kiểm realtime `JOB_ALERT` đầu cuối vì cần Admin duyệt tin thật trên Neon. Để vào vòng kiểm tổng F6 (mục 4).
+- `tsc` web sạch; ESLint các file đã sửa không có cảnh báo.
 
 ## Phần 4 — Ghi chú của chủ dự án
 

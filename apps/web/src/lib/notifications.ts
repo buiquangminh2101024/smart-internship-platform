@@ -92,6 +92,19 @@ export const NOTIFICATION_GROUP_META: Record<NotificationGroup, { label: string;
 };
 
 /**
+ * Icon riêng cho loại mà icon nhóm không tả đúng (AD-26: báo tin việc làm nằm nhóm "Lời mời",
+ * nhắc thêm kỹ năng nằm nhóm "Tài khoản"). Loại không có ở đây dùng icon nhóm.
+ */
+const NOTIFICATION_TYPE_ICON: Partial<Record<NotificationType, string>> = {
+  JOB_ALERT: "briefcase",
+  PROFILE_SKILLS_REMINDER: "user-round-pen",
+};
+
+export function notificationIcon(type: NotificationType): string {
+  return NOTIFICATION_TYPE_ICON[type] ?? NOTIFICATION_GROUP_META[NOTIFICATION_GROUP_BY_TYPE[type]].icon;
+}
+
+/**
  * Nhãn nút hành động theo loại (API không trả nhãn). Nút dẫn tới `link` server
  * đã render, nên nhãn phải khớp nơi link trỏ tới.
  */

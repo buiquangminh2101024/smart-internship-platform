@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { COMPANY_APPLICATIONS_KEY } from "@/hooks/useApplications";
 import { OUTREACH_KEY } from "@/hooks/useCandidateOutreach";
+import { JOB_RECOMMENDATIONS_KEY } from "@/hooks/useJobRecommendations";
 import { useSocketConnection, isMessagingArea, type SocketStatus } from "@/hooks/useSocket";
 import { showBrowserNotification } from "@/lib/browser-notification";
 import { markNotificationRead } from "@/lib/notifications";
@@ -54,6 +55,12 @@ export function SocketProvider({
         if (area === "candidate" && event.type.startsWith("INTERVIEW_")) {
           void queryClient.invalidateQueries({ queryKey: ["candidate", "interviews"] });
           void queryClient.invalidateQueries({ queryKey: ["candidate", "applications"] });
+        }
+        // Báo tin việc làm (AD-26): có tin mới vừa được chấm ≥ ngưỡng nên "Việc làm phù hợp" đã cũ.
+        // Thông báo gộp trong ngày được sửa tại chỗ (cùng id) — làm mới danh sách ở trên là đủ,
+        // không chèn thêm vào cache nên không nhân đôi.
+        if (area === "candidate" && event.type === "JOB_ALERT") {
+          void queryClient.invalidateQueries({ queryKey: JOB_RECOMMENDATIONS_KEY });
         }
         // Ứng viên trả lời lời mời, hoặc hệ thống vừa tự gửi lời mời (AD-23):
         // trạng thái dòng và số đếm ở trang "Lời mời" đã cũ.
