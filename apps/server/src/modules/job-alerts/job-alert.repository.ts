@@ -10,6 +10,13 @@ export interface InsertedJobAlert {
   score: number;
 }
 
+/** Một cặp vừa ghi vào `job_alerts` khi ứng viên lần đầu có điểm (0.6, Q3), kèm thông tin tin. */
+export interface FirstScoredJobAlert extends InsertedJobAlert {
+  jobPostId: string;
+  jobPostTitle: string;
+  companyName: string;
+}
+
 export interface JobAlertJobSummary {
   title: string;
   companyName: string;
@@ -86,21 +93,22 @@ const NOT_APPLIED_OR_INVITED = Prisma.sql`
 `;
 
 /**
- * Người nhận job alert cho một tin — dùng chung cho lượt thật (`insertForJob`) và `--dry-run`
- * (`countTargetsForJob`). Bí danh `s` (điểm), `j`, `c`, `u`. Điều kiện:
+ * Người nhận job alert — dùng chung cho lượt thật theo tin (`insertForJob`), `--dry-run`
+ * (`countTargetsForJob`) và lần đầu có điểm (`insertFirstForCandidates`, 0.6). `scope` lọc
+ * theo tin hoặc theo ứng viên. Bí danh `s` (điểm), `j`, `c`, `u`. Điều kiện:
  * - tin đang hiển thị; điểm trong bảng ≥ max(`autoOutreachMinScore` của tin, `minScoreFloor`) (D7);
  * - ứng viên bật job alert; bật "chỉ thành phố của tôi" thì phải cùng thành phố với tin
  *   (hồ sơ hoặc tin không có thành phố ⇒ không báo) (D9);
  * - tài khoản `ACTIVE` (bị khoá hay chưa xác thực thì không đăng nhập được để xem);
  * - D3 (`NOT_APPLIED_OR_INVITED`).
  */
-function alertTargetsSource(jobPostId: string, minScoreFloor: number): Prisma.Sql {
+function alertTargetsSource(scope: Prisma.Sql, minScoreFloor: number): Prisma.Sql {
   return Prisma.sql`
     FROM job_candidate_match_scores s
     JOIN job_posts j ON j."id" = s."jobPostId"
     JOIN candidates c ON c."id" = s."candidateId"
     JOIN users u ON u."id" = c."userId"
-    WHERE s."jobPostId" = ${jobPostId}
+    WHERE ${scope}
       AND ${VISIBLE_JOB}
       AND s."score" >= GREATEST(j."autoOutreachMinScore", ${minScoreFloor})
       AND c."jobAlertEnabled"
@@ -127,7 +135,7 @@ export class JobAlertRepository {
       WITH inserted AS (
         INSERT INTO job_alerts ("candidateId", "jobPostId", "score", "createdAt")
         SELECT s."candidateId", s."jobPostId", s."score", ${createdAt}
-        ${alertTargetsSource(jobPostId, minScoreFloor)}
+        ${alertTargetsSource(Prisma.sql`s."jobPostId" = ${jobPostId}`, minScoreFloor)}
         ON CONFLICT ("candidateId", "jobPostId") DO NOTHING
         RETURNING "candidateId", "score"
       )
@@ -138,6 +146,36 @@ export class JobAlertRepository {
     `);
   }
 
+  /**
+   * Job alert lần đầu (0.6, AD-27 mục 6, Q3), một câu cho cả lô: với các ứng viên **chưa từng
+   * có dòng `job_alerts` nào**, ghi mọi tin đạt điều kiện (`alertTargetsSource`, cùng luật với
+   * `insertForJob`), chỉ với dòng có điểm đầy đủ (không `semanticPending`). Ứng viên đã từng được báo thì bỏ qua cả người, để sửa hồ sơ về sau không
+   * sinh báo. Trả các cặp vừa ghi kèm tiêu đề tin, theo ứng viên, điểm cao trước.
+   */
+  async insertFirstForCandidates(candidateIds: string[], minScoreFloor: number, createdAt: Date): Promise<FirstScoredJobAlert[]> {
+    if (candidateIds.length === 0) return [];
+    // Chỉ dòng có điểm đầy đủ: không báo theo điểm rule-only (chờ embedding / model lỗi).
+    const scope = Prisma.sql`s."candidateId" IN (${Prisma.join(candidateIds)})
+      AND NOT s."semanticPending"
+      AND NOT EXISTS (SELECT 1 FROM job_alerts prior WHERE prior."candidateId" = s."candidateId")`;
+    return this.prisma.$queryRaw<FirstScoredJobAlert[]>(Prisma.sql`
+      WITH inserted AS (
+        INSERT INTO job_alerts ("candidateId", "jobPostId", "score", "createdAt")
+        SELECT s."candidateId", s."jobPostId", s."score", ${createdAt}
+        ${alertTargetsSource(scope, minScoreFloor)}
+        ON CONFLICT ("candidateId", "jobPostId") DO NOTHING
+        RETURNING "candidateId", "jobPostId", "score"
+      )
+      SELECT ins."candidateId", c."userId", ins."score", ins."jobPostId",
+             j."title" AS "jobPostTitle", co."name" AS "companyName"
+      FROM inserted ins
+      JOIN candidates c ON c."id" = ins."candidateId"
+      JOIN job_posts j ON j."id" = ins."jobPostId"
+      JOIN companies co ON co."id" = j."companyId"
+      ORDER BY ins."candidateId", ins."score" DESC, ins."jobPostId"
+    `);
+  }
+
   /** `--dry-run` của script: số người đạt điều kiện và trong đó bao nhiêu người đã được báo tin này. */
   async countTargetsForJob(jobPostId: string, minScoreFloor: number): Promise<{ eligible: number; alreadyAlerted: number }> {
     const rows = await this.prisma.$queryRaw<Array<{ eligible: number; alreadyAlerted: number }>>(Prisma.sql`
@@ -145,7 +183,7 @@ export class JobAlertRepository {
              count(*) FILTER (WHERE EXISTS (
                SELECT 1 FROM job_alerts ja WHERE ja."candidateId" = s."candidateId" AND ja."jobPostId" = s."jobPostId"
              ))::int AS "alreadyAlerted"
-      ${alertTargetsSource(jobPostId, minScoreFloor)}
+      ${alertTargetsSource(Prisma.sql`s."jobPostId" = ${jobPostId}`, minScoreFloor)}
     `);
     return rows[0] ?? { eligible: 0, alreadyAlerted: 0 };
   }

@@ -19,6 +19,19 @@ export interface LiveRescoreRunSummary {
   timedOut: boolean;
   /** Số ứng viên còn dấu khi lượt kết thúc. */
   remaining: number;
+  /** Việc kéo theo (bước 4). Không có ở tóm tắt lưu trước bước 4. */
+  followUps?: {
+    /** Cặp (ứng viên, tin) vừa đạt ngưỡng. */
+    reached: number;
+    /** Công ty được kích hoạt tự mời. */
+    outreachCompanies: number;
+    /** Ứng viên gửi sang tự chuyển "Đang xem xét". */
+    reviewCandidates: number;
+    /** Ứng viên lần đầu có điểm (gửi sang job alert). */
+    firstScored: number;
+    /** Công ty nhận sự kiện `match-scores:updated` (trước khi chặn 15 giây). */
+    matchUpdateCompanies: number;
+  };
 }
 
 const LAST_RUN_KEY = "live-rescore:last-run";

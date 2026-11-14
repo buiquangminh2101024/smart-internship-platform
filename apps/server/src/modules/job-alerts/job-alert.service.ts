@@ -82,6 +82,23 @@ interface JobAlertConfig {
   CORS_ORIGIN: string;
 }
 
+/**
+ * Lượt chấm theo ứng viên (0.6) báo "các ứng viên này lần đầu có điểm": gọi, không chờ, lỗi
+ * chỉ ghi log. Đăng ký trong awilix dưới tên `candidateFirstScoredListener`, resolve
+ * JobAlertService lúc gọi (giống `jobScoredListener`).
+ */
+export type CandidateFirstScoredListener = (candidateIds: string[]) => void;
+
+export interface FirstScoredAlertResult {
+  /** Số ứng viên vừa được ghi ít nhất một dòng `job_alerts`. */
+  candidates: number;
+  /** Tổng số cặp (ứng viên, tin) vừa ghi. */
+  jobs: number;
+  created: number;
+  updated: number;
+  failed: number;
+}
+
 export interface JobAlertRunResult {
   /** Số ứng viên vừa được ghi vào `job_alerts` cho tin. */
   alerted: number;
@@ -154,6 +171,70 @@ export class JobAlertService {
         });
       }
     });
+  }
+
+  /**
+   * Lối gọi từ lượt chấm theo ứng viên (0.6, AD-27 mục 6, Q3): cùng hàng đợi với `trigger` để
+   * hai lối không cùng lúc cập nhật một thông báo trong ngày. Không chờ, lỗi chỉ ghi log.
+   */
+  triggerFirstScored(candidateIds: string[]): void {
+    if (candidateIds.length === 0) return;
+    this.queue = this.queue.then(async () => {
+      try {
+        const result = await this.onCandidatesFirstScored(candidateIds);
+        if (result.candidates > 0) this.logger.info("First-score job alerts sent", { ...result });
+      } catch (error) {
+        this.logger.error("First-score job alert failed", {
+          candidates: candidateIds.length,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    });
+  }
+
+  /**
+   * Job alert lần đầu (Q3): ghi `job_alerts` cho các tin đạt điều kiện của những ứng viên chưa
+   * từng được báo (một câu cho cả lô), rồi mỗi ứng viên một lần `upsertDaily` với tin điểm cao
+   * nhất ("N tin mới phù hợp với bạn", N đếm trong ngày). Cùng luật lọc với `onJobScored`.
+   * Lỗi thông báo của một người chỉ ghi log rồi đi tiếp.
+   */
+  async onCandidatesFirstScored(candidateIds: string[], now: Date = new Date()): Promise<FirstScoredAlertResult> {
+    const result: FirstScoredAlertResult = { candidates: 0, jobs: 0, created: 0, updated: 0, failed: 0 };
+    const inserted = await this.repository.insertFirstForCandidates(candidateIds, JOB_ALERT_MIN_SCORE_FLOOR, now);
+    result.jobs = inserted.length;
+    // Đã sắp theo ứng viên, điểm cao trước ⇒ dòng đầu của mỗi người là tin để hiện.
+    const top = new Map<string, (typeof inserted)[number]>();
+    for (const row of inserted) if (!top.has(row.candidateId)) top.set(row.candidateId, row);
+    result.candidates = top.size;
+    if (top.size === 0) return result;
+
+    const todayCounts = await this.repository.countSince([...top.keys()], vnDayStart(now));
+    for (const row of top.values()) {
+      try {
+        const outcome = await this.notificationsService.upsertDaily(
+          "JOB_ALERT",
+          row.userId,
+          {
+            jobPostId: row.jobPostId,
+            jobPostTitle: row.jobPostTitle,
+            companyName: row.companyName,
+            score: row.score,
+            todayCount: todayCounts.get(row.candidateId) ?? 1,
+          },
+          jobAlertDedupeKey(row.candidateId, now),
+        );
+        if (outcome === "CREATED") result.created += 1;
+        else if (outcome === "UPDATED") result.updated += 1;
+        else result.failed += 1;
+      } catch (error) {
+        result.failed += 1;
+        this.logger.error("First-score job alert notification failed", {
+          candidateId: row.candidateId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    return result;
   }
 
   /**

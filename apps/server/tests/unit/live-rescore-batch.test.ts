@@ -29,7 +29,8 @@ import { CandidateOutreachService } from "../../src/modules/candidate-outreach/c
 import { InMemoryJobProfileCache } from "../../src/modules/live-rescore/job-profile-cache";
 import { LiveRescoreService } from "../../src/modules/live-rescore/live-rescore.service";
 import type { LiveRescoreRunSummary } from "../../src/modules/live-rescore/live-rescore-run-store";
-import type { CandidateScoreRow } from "../../src/modules/match-scores/match-score.repository";
+import type { CandidateScoreRow, MatchTransition } from "../../src/modules/match-scores/match-score.repository";
+import type { FollowUpRun } from "../../src/modules/live-rescore/live-rescore-follow-ups";
 import { MatchScoreService } from "../../src/modules/match-scores/match-score.service";
 import { MATCH_SCORE_REMARK_CLOCK_MARGIN_MS } from "../../src/modules/match-scores/match-scores.config";
 
@@ -356,6 +357,10 @@ interface LiveOptions {
   advancePerBatchMs?: number;
   batchGate?: Promise<void>;
   failSaveRun?: boolean;
+  /** Cặp đổi ngưỡng mà lần ghi thứ n (từ 1) trả về. */
+  transitionsByWrite?: Record<number, MatchTransition[]>;
+  /** Lần chọn lô thứ n (từ 1) ném lỗi. */
+  failSelectCall?: number;
 }
 
 function buildLive(options: LiveOptions) {
@@ -367,11 +372,16 @@ function buildLive(options: LiveOptions) {
   const saved: LiveRescoreRunSummary[] = [];
   const { logger, errors, warns, infos } = quietLogger();
   let writeCalls = 0;
+  let selectCalls = 0;
+  const afterBatch: Array<{ transitions: MatchTransition[]; newlyScored: string[] }> = [];
+  const finished: FollowUpRun[] = [];
 
   const service = new LiveRescoreService({
     liveRescoreRepository: {
       findMarkedBatch: async (limit: number, exclude: ReadonlySet<string>) => {
         await options.batchGate;
+        selectCalls += 1;
+        if (selectCalls === options.failSelectCall) throw new Error("select failed");
         clock.now += options.advancePerBatchMs ?? 0;
         const ids = [...marks]
           .filter(([id]) => !exclude.has(id))
@@ -403,7 +413,8 @@ function buildLive(options: LiveOptions) {
           }
         }
         const rows = [...input.rowsByCandidate.values()].reduce((sum, list) => sum + list.length, 0);
-        return { rows, marksCleared: cleared };
+        const transitions = options.transitionsByWrite?.[writeCalls] ?? [];
+        return { rows, marksCleared: cleared, transitions, newlyScored: [`new-${writeCalls}`] };
       },
     },
     candidateOutreachService: {
@@ -441,6 +452,14 @@ function buildLive(options: LiveOptions) {
         saved.push(summary);
       },
     },
+    liveRescoreFollowUps: {
+      afterBatch: async (written: { transitions: MatchTransition[]; newlyScored: string[] }, run: FollowUpRun) => {
+        afterBatch.push(written);
+        run.reached += written.transitions.filter((transition) => transition.matched).length;
+        for (const transition of written.transitions) run.outreachCompanies.add(transition.companyId);
+      },
+      finishRun: (run: FollowUpRun) => finished.push(run),
+    },
     logger,
     liveRescoreServiceOptions: {
       batchSize: options.batchSize ?? 2,
@@ -450,7 +469,7 @@ function buildLive(options: LiveOptions) {
     },
   } as unknown as ConstructorParameters<typeof LiveRescoreService>[0]);
 
-  return { service, marks, writes, batchesSelected, saved, errors, warns, infos, clock };
+  return { service, marks, writes, batchesSelected, saved, errors, warns, infos, clock, afterBatch, finished };
 }
 
 test("drain: chấm theo lô, mỗi lô một lần ghi kèm xoá dấu, lưu tóm tắt lượt", async (t) => {
@@ -565,6 +584,46 @@ test("drain: không có dấu ⇒ không ghi, không log info; lưu tóm tắt l
   assert.equal(live.warns.length, 1);
 });
 
+function transition(candidateId: string, jobPostId: string, matched = true, companyId = "co-1"): MatchTransition {
+  return { candidateId, jobPostId, companyId, autoOutreachEnabled: true, matched };
+}
+
+test("drain (bước 4): mỗi lô ghi xong thì chạy việc kéo theo, lô lỗi thì không; cuối lượt finishRun một lần", async (t) => {
+  const live = buildLive({
+    marks: ["a", "b", "c", "d", "e"],
+    pools: { a: ["j1"], b: ["j1"], c: ["j1"], d: ["j1"], e: ["j1"] },
+    failWriteCall: 2,
+    transitionsByWrite: { 1: [transition("a", "j1"), transition("b", "j1", false)], 3: [transition("e", "j1", true, "co-2")] },
+  });
+  t.after(() => live.service.stop());
+  const result = await live.service.drain();
+  assert.deepEqual(
+    live.afterBatch.map((written) => written.newlyScored),
+    [["new-1"], ["new-3"]],
+    "lô 2 lỗi ⇒ không có việc kéo theo",
+  );
+  assert.equal(live.afterBatch[0]?.transitions.length, 2);
+  assert.equal(live.finished.length, 1);
+  assert.deepEqual([...live.finished[0]!.outreachCompanies].sort(), ["co-1", "co-2"], "gom công ty qua các lô");
+  assert.equal(result.status === "DONE" && result.followUps?.reached, 2);
+  assert.equal(result.status === "DONE" && result.followUps?.outreachCompanies, 2);
+});
+
+test("drain (bước 4): lượt hỏng giữa chừng (FAILED) vẫn gửi việc kéo theo của các lô đã ghi", async (t) => {
+  const live = buildLive({
+    marks: ["a", "b", "c"],
+    pools: { a: ["j1"], b: ["j1"], c: ["j1"] },
+    failSelectCall: 2,
+    transitionsByWrite: { 1: [transition("a", "j1")] },
+  });
+  t.after(() => live.service.stop());
+  const result = await live.service.drain();
+  assert.equal(result.status, "FAILED");
+  assert.equal(live.afterBatch.length, 1);
+  assert.equal(live.finished.length, 1);
+  assert.deepEqual([...live.finished[0]!.outreachCompanies], ["co-1"]);
+});
+
 // ─── MatchScoreService (Q2) ─────────────────────────────────────────────────
 
 function buildMatchScoreService(options: { gone?: boolean; failRemark?: boolean; remarked?: number; noRequester?: boolean } = {}) {
@@ -575,7 +634,7 @@ function buildMatchScoreService(options: { gone?: boolean; failRemark?: boolean;
     matchScoreRepository: {
       isJobVisible: async () => true,
       findScoringPool: async () => ["a", "b"],
-      replaceForJob: async () => !options.gone,
+      replaceForJob: async () => (options.gone ? null : { pendingBefore: [] }),
       markChangedSince: async (ids: string[], since: Date) => {
         if (options.failRemark) throw new Error("db down");
         remarks.push({ ids, since });

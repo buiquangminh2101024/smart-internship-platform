@@ -1003,6 +1003,19 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
    - **tự chuyển "Đang xem xét":** gọi `autoReviewTrigger` cho đơn "Chờ duyệt" của ứng viên ở tin đang hiển thị (thêm dạng `{ candidateId }`);
    - **job alert chỉ lần đầu:** ứng viên **lần đầu** có dòng điểm (trước lượt này không có dòng nào) thì báo các tin ≥ max(ngưỡng tin, 70) theo đúng luật AD-26 mục 6. Sửa hồ sơ về sau **không** sinh báo, để tránh spam;
    - **realtime cho nhà tuyển dụng:** gộp theo lượt, mỗi công ty có tin vừa thêm người đạt ngưỡng nhận một sự kiện nhẹ để giao diện làm mới số "Phù hợp" (không ghi bảng `notifications`).
+   - **Chính xác hoá khi làm bước 4 (2026-11-14):**
+     - "Vừa đạt ngưỡng" lấy từ dòng cũ mà câu xoá trong transaction ghi trả lại (`DELETE … RETURNING`), so với dòng mới. Không thêm round trip.
+     - Tự chuyển và job alert chạy theo lô ứng viên (`autoReviewTrigger({ candidateIds })`, một câu ghi `job_alerts` cho cả lô), không theo từng người.
+     - "Lần đầu có điểm" chỉ tính dòng có phần ngữ nghĩa: người đang chờ embedding (điểm rule-only) được báo ở lượt có điểm đầy đủ. Ứng viên đã từng có dòng `job_alerts` không được báo lần đầu.
+     - Realtime gửi cả khi có người vừa rớt khỏi ngưỡng, vì số "Phù hợp" giảm cũng cần làm mới.
+     - Tự mời kích hoạt cả tin chưa có dấu "hết ứng viên", nhưng chỉ khi có người vừa đạt ngưỡng và còn mời được.
+     - Việc kéo theo chỉ ghi log khi lỗi. Các lô đã ghi vẫn được kích hoạt tự mời và realtime khi lượt hỏng giữa chừng.
+     - **Model lỗi lúc chấm (chủ dự án chọn D+, 2026-11-14):** người chỉ có dòng rule-only vì model lỗi bị xoá dấu. Lượt đêm sửa điểm của họ và báo luôn job alert lần đầu:
+       - câu xoá theo tin của lượt đêm trả người có dòng cũ rule-only (không thêm câu);
+       - cuối lượt, người có **mọi** dòng cũ đều rule-only được gửi sang job alert lần đầu;
+       - job alert lần đầu chỉ báo theo dòng có điểm đầy đủ.
+
+       Không chọn giữ dấu (chấm lại vô ích mỗi 15 phút khi model hỏng) hay dò định kỳ `semanticPending` (quét bảng, hoặc phải có cờ trong bộ nhớ dễ mất khi khởi động lại). Script `rescore-match-scores` không báo.
 7. **Tự mời (AD-23) đọc bảng điểm** thay cho lọc SQL ≤ 50 rồi chấm. Chọn từ bảng những người điểm ≥ ngưỡng và còn mời được, điểm giảm dần, và **không chấm lại**: lời mời chỉ lưu `matchScore` và `matchWeightsVersion` (AD-15), cả hai có sẵn trong bảng. Độ mới của điểm do mục 3–4 bảo đảm. Tin chưa được chấm lần nào (`matchScoresAt = null`) thì đi đường cũ. (Sửa 2026-11-14: bản đầu chấm trực tiếp lại người sắp mời với lý do cần `MatchResult`, lý do đó không đúng.)
 8. **Trang tìm ứng viên đọc bảng điểm** (mục 5 của buổi trao đổi): lấy top 10 người còn mời được theo điểm lưu, chấm trực tiếp lại 10 người đó để có lý do, tổng số "phù hợp" lấy từ bảng. Hết giới hạn 50. Tin chưa được chấm thì đi đường cũ.
 9. **Script mô phỏng dữ liệu đổ vào** (mục 6 của buổi trao đổi): thêm ứng viên và tin theo từng đợt, **đi qua service** để mọi lối kích hoạt chạy như người dùng thật. Dùng lại bộ thư viện của `large-demo`, tiền tố email / id riêng để `--reset` xoá được. Chi tiết (gọi HTTP qua gateway hay dựng container trong script) ở plan backend.

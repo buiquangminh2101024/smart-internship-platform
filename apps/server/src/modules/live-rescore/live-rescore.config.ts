@@ -40,3 +40,9 @@ export const LIVE_RESCORE_CONTINUE_DELAY_MS = 1_000;
 /** Cache hồ sơ tin (D5): hạn của một mục và trần số mục (vượt thì bỏ mục dùng lâu nhất). */
 export const JOB_PROFILE_CACHE_TTL_MS = 60 * 60 * 1000;
 export const JOB_PROFILE_CACHE_MAX_ENTRIES = 5_000;
+
+/**
+ * Realtime cho nhà tuyển dụng (Q5): tối đa một sự kiện `match-scores:updated` mỗi công ty
+ * trong khoảng này; thay đổi trong lúc chờ gộp vào sự kiện sau.
+ */
+export const LIVE_RESCORE_PUSH_THROTTLE_MS = 15_000;

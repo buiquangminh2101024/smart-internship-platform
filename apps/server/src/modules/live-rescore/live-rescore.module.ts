@@ -3,6 +3,10 @@ import type { Logger } from "../../shared/logger";
 import { CandidateRescoreMarker } from "./candidate-rescore-marker";
 import type { JobMatchProfileLoader } from "../job-matching/job-match-profile.loader";
 import { InMemoryJobProfileCache } from "./job-profile-cache";
+import { LiveRescoreFollowUps } from "./live-rescore-follow-ups";
+import { MatchUpdatePublisher } from "./match-update-publisher";
+import type { RealtimeNotifier } from "../../shared/ports/RealtimeNotifier";
+import type { EmployerRepository } from "../employers/employer.repository";
 import { LiveRescoreRepository } from "./live-rescore.repository";
 import { LiveRescoreRunStore } from "./live-rescore-run-store";
 import { LiveRescoreScheduler, type LiveRescoreDrainRequester } from "./live-rescore.scheduler";
@@ -18,6 +22,10 @@ import { LiveRescoreService } from "./live-rescore.service";
  * `liveRescoreDrainRequester`, resolve `liveRescoreService` lúc gọi. Service cần
  * `matchScoreRepository`, `candidateOutreachService`, `candidateMatchProfileLoader`,
  * `jobMatchProfileLoader` và `redis` — đăng ký ở module khác, chỉ resolve khi dùng.
+ *
+ * Việc kéo theo (bước 4) cần `autoOutreachRepository`, `autoOutreachTrigger` (candidate-outreach),
+ * `autoReviewTrigger` (application-automation), `candidateFirstScoredListener` (job-alerts),
+ * `realtimeNotifier` và `employerRepository`; các trigger tự resolve service lúc gọi.
  */
 export function registerLiveRescore(container: AwilixContainer): void {
   container.register({
@@ -40,8 +48,22 @@ export function registerLiveRescore(container: AwilixContainer): void {
           candidateMatchProfileLoader: deps.candidateMatchProfileLoader,
           jobProfileCache: deps.jobProfileCache,
           liveRescoreRunStore: deps.liveRescoreRunStore,
+          liveRescoreFollowUps: deps.liveRescoreFollowUps,
           logger: deps.logger,
         }),
+    ).singleton(),
+    liveRescoreFollowUps: asClass(LiveRescoreFollowUps).singleton(),
+    // Singleton bắt buộc: mốc "lần gửi gần nhất" theo công ty phải dùng chung cho mọi lượt.
+    matchUpdatePublisher: asFunction(
+      ({
+        realtimeNotifier,
+        employerRepository,
+        logger,
+      }: {
+        realtimeNotifier: RealtimeNotifier;
+        employerRepository: EmployerRepository;
+        logger: Logger;
+      }) => new MatchUpdatePublisher({ realtimeNotifier, employerRepository, logger }),
     ).singleton(),
     liveRescoreDrainRequester: asValue<LiveRescoreDrainRequester>(() => {
       container.resolve<LiveRescoreService>("liveRescoreService").requestDrain();

@@ -88,6 +88,13 @@ interface FakeOptions {
   poolGate?: Promise<void>;
   /** Mỗi lần chấm đẩy đồng hồ giả lên chừng này ms. */
   advancePerJobMs?: number;
+  /** Người có dòng cũ rule-only theo tin (câu xoá của replaceForJob trả về). */
+  pendingBefore?: Record<string, string[]>;
+  /** Số dòng với tin đang hiển thị sau lượt, theo ứng viên (countVisibleRows). */
+  rowsNow?: Record<string, number>;
+  failCountRows?: boolean;
+  /** Không truyền candidateFirstScoredListener (như script). */
+  noFirstScoredListener?: boolean;
 }
 
 function buildService(options: FakeOptions = {}) {
@@ -100,6 +107,8 @@ function buildService(options: FakeOptions = {}) {
   const clock = { now: 1_000_000 };
   const scoredListened: string[] = [];
   const remarks: Array<{ ids: string[]; since: Date }> = [];
+  const firstScored: string[][] = [];
+  const countCalls: string[][] = [];
 
   const service = new MatchScoreService({
     matchScoreRepository: {
@@ -119,9 +128,14 @@ function buildService(options: FakeOptions = {}) {
         return 0;
       },
       replaceForJob: async (id: string, rows: MatchScoreRow[], scoredAt: Date) => {
-        if (options.goneWhileScoring?.includes(id)) return false;
+        if (options.goneWhileScoring?.includes(id)) return null;
         written.set(id, { rows, scoredAt });
-        return true;
+        return { pendingBefore: options.pendingBefore?.[id] ?? [] };
+      },
+      countVisibleRows: async (ids: string[]) => {
+        countCalls.push(ids);
+        if (options.failCountRows) throw new Error("db down");
+        return new Map(ids.filter((id) => options.rowsNow?.[id] !== undefined).map((id) => [id, options.rowsNow![id]!]));
       },
     },
     candidateOutreachService: {
@@ -134,9 +148,10 @@ function buildService(options: FakeOptions = {}) {
     candidateMatchProfileLoader: loader,
     logger: { info: () => {}, warn: () => {}, error: (_msg: string, meta: Record<string, unknown>) => errors.push(meta) },
     jobScoredListener: (jobPostId: string) => scoredListened.push(jobPostId),
+    ...(options.noFirstScoredListener ? {} : { candidateFirstScoredListener: (ids: string[]) => firstScored.push(ids) }),
   } as unknown as ConstructorParameters<typeof MatchScoreService>[0]);
 
-  return { service, written, scoredChunks, errors, loader, clock, scoredListened, remarks };
+  return { service, written, scoredChunks, errors, loader, clock, scoredListened, remarks, firstScored, countCalls };
 }
 
 test("rescoreJob: ghi người có điểm, bỏ điểm null, semanticPending theo embedding", async () => {
@@ -302,4 +317,47 @@ test("rescoreJob / rescoreAll (lượt đêm, script) ⇒ không báo job alert"
   await service.rescoreJob("job-1");
   await service.rescoreAll({ budgetMs: 60_000 });
   assert.deepEqual(scoredListened, []);
+});
+
+// ─── Job alert lần đầu sau lượt đêm (AD-27 mục 6, D+) ─────────────────────
+
+test("lượt đêm: người có mọi dòng cũ là rule-only ⇒ gửi sang job alert lần đầu; chỉ vài tin rule-only thì không", async () => {
+  const { service, firstScored, countCalls } = buildService({
+    pools: { "job-1": ["a", "b", "c"], "job-2": ["a", "b"] },
+    // a: rule-only ở cả 2 tin; b: rule-only ở job-1, đầy đủ ở job-2; c: rule-only ở tin duy nhất.
+    pendingBefore: { "job-1": ["a", "b", "c"], "job-2": ["a"] },
+    rowsNow: { a: 2, b: 2, c: 1 },
+  });
+  const result = await service.rescoreAll({ budgetMs: 60_000 });
+  assert.equal(result.status === "DONE" && result.firstScoreCandidates, 2);
+  assert.deepEqual(countCalls, [["a", "b", "c"]]);
+  assert.deepEqual(firstScored, [["a", "c"]]);
+});
+
+test("lượt đêm: không có dòng rule-only ⇒ không đếm, không báo (không thêm câu nào)", async () => {
+  const { service, firstScored, countCalls } = buildService({ pools: { "job-1": ["a", "b"] } });
+  const result = await service.rescoreAll({ budgetMs: 60_000 });
+  assert.equal(result.status === "DONE" && result.firstScoreCandidates, 0);
+  assert.deepEqual(countCalls, []);
+  assert.deepEqual(firstScored, []);
+});
+
+test("lượt đêm: script không truyền listener ⇒ không báo; lỗi câu đếm ⇒ ghi log, lượt vẫn DONE", async () => {
+  const script = buildService({ pendingBefore: { "job-1": ["a"] }, rowsNow: { a: 1 }, noFirstScoredListener: true });
+  const scriptResult = await script.service.rescoreAll({ budgetMs: 60_000 });
+  assert.equal(scriptResult.status === "DONE" && scriptResult.firstScoreCandidates, 0);
+  assert.deepEqual(script.countCalls, []);
+
+  const broken = buildService({ pendingBefore: { "job-1": ["a"] }, failCountRows: true });
+  const brokenResult = await broken.service.rescoreAll({ budgetMs: 60_000 });
+  assert.equal(brokenResult.status, "DONE");
+  assert.deepEqual(broken.firstScored, []);
+  assert.equal(broken.errors.length, 1);
+});
+
+test("lối a (trigger) và rescoreJob lẻ ⇒ không gửi job alert lần đầu dù có dòng cũ rule-only", async () => {
+  const { service, firstScored } = buildService({ pendingBefore: { "job-1": ["a"] }, rowsNow: { a: 1 } });
+  const outcome = await service.rescoreJob("job-1");
+  assert.deepEqual(outcome.status === "DONE" && outcome.pendingBefore, ["a"]);
+  assert.deepEqual(firstScored, []);
 });

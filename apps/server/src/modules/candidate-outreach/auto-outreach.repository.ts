@@ -1,5 +1,5 @@
 import { Prisma, type AutoOutreachExhaustedReason, type PrismaClient } from "@prisma/client";
-import { CANDIDATE_DAILY_INVITATION_CAP } from "./candidate-outreach.config";
+import { BLOCKING_INVITATION_STATUSES, CANDIDATE_DAILY_INVITATION_CAP } from "./candidate-outreach.config";
 import { NOW_UTC, START_OF_UTC_DAY, startOfUtcDay } from "./candidate-outreach.repository";
 
 // Đọc/ghi các cột tự động mời trên job_posts (AD-23 mục 2) và đếm số liệu của thẻ
@@ -177,6 +177,50 @@ export class AutoOutreachRepository {
         RETURNING j."companyId"
       )
       SELECT DISTINCT "companyId" FROM cleared
+    `);
+    return rows.map((row) => row.companyId);
+  }
+
+  /**
+   * Sau lượt chấm theo ứng viên (0.6, AD-27 mục 6, plan live-rescore bước 4): trong các cặp
+   * (ứng viên, tin) vừa đạt ngưỡng, giữ cặp có tin đang chạy tự mời (cùng điều kiện
+   * `findRunnableJobs`) và ứng viên còn mời được (cùng điều kiện `searchCandidatePool` có
+   * `excludeCappedToday`: bật cho liên hệ, chưa nộp đơn, không có lời mời chặn, chưa đủ trần
+   * hôm nay). Xoá dấu "hết ứng viên" của các tin đó và trả các công ty của chúng (kể cả tin
+   * chưa có dấu) để kích hoạt lượt tự mời. Một câu.
+   */
+  async clearExhaustedForMatches(pairs: Array<{ candidateId: string; jobPostId: string }>): Promise<string[]> {
+    if (pairs.length === 0) return [];
+    const rows = await this.prisma.$queryRaw<Array<{ companyId: string }>>(Prisma.sql`
+      WITH eligible AS (
+        SELECT DISTINCT j."id", j."companyId"
+        FROM unnest(${pairs.map((pair) => pair.candidateId)}::text[], ${pairs.map((pair) => pair.jobPostId)}::text[])
+          AS p("candidateId", "jobPostId")
+        JOIN job_posts j ON j."id" = p."jobPostId"
+        JOIN candidates c ON c."id" = p."candidateId" AND c."isOpenToOutreach" = true
+        WHERE j."status" = 'PUBLISHED'
+          AND j."autoOutreachEnabled" = true
+          AND (j."expiresAt" IS NULL OR j."expiresAt" > ${NOW_UTC})
+          AND NOT EXISTS (
+            SELECT 1 FROM applications a
+            WHERE a."candidateId" = p."candidateId" AND a."jobPostId" = j."id"
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM candidate_outreach_invitations i
+            WHERE i."candidateId" = p."candidateId" AND i."jobPostId" = j."id"
+              AND i."status"::text IN (${Prisma.join(BLOCKING_INVITATION_STATUSES)})
+          )
+          AND (
+            SELECT COUNT(*) FROM candidate_outreach_invitations r
+            WHERE r."candidateId" = p."candidateId" AND r."createdAt" >= ${START_OF_UTC_DAY}
+          ) < ${CANDIDATE_DAILY_INVITATION_CAP}
+      ),
+      cleared AS (
+        UPDATE job_posts
+        SET "autoOutreachExhaustedAt" = NULL, "autoOutreachExhaustedReason" = NULL
+        WHERE "id" IN (SELECT "id" FROM eligible) AND "autoOutreachExhaustedAt" IS NOT NULL
+      )
+      SELECT DISTINCT "companyId" FROM eligible ORDER BY "companyId"
     `);
     return rows.map((row) => row.companyId);
   }

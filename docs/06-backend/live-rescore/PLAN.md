@@ -4,7 +4,7 @@
 > - **Q7:** model embedding chạy trong một `worker_threads`;
 > - **Q8:** chấm theo lô.
 >
-> **Bước 1 (schema, migration) đã làm và áp lên Neon 2026-11-14. Bước 2 (đánh dấu, hẹn giờ), bước 2b (model embedding trong worker) và bước 3 (chấm theo lô, ghi bảng, cron 15 phút, Q2) đã làm cùng ngày**. Việc kéo theo sau khi chấm (tự mời, tự chuyển, job alert, realtime) chưa có. Việc tiếp theo: bước 4.
+> **Bước 1 (schema, migration) đã làm và áp lên Neon 2026-11-14. Bước 2 (đánh dấu, hẹn giờ), bước 2b (model embedding trong worker), bước 3 (chấm theo lô, ghi bảng, cron 15 phút, Q2) và bước 4 (việc kéo theo: tự mời, tự chuyển, job alert lần đầu, realtime) đã làm cùng ngày**. Bước 3–4 chưa kiểm đầu cuối qua gateway 8080. Việc tiếp theo: bước 5.
 
 Mục 0.6 của `docs/01-project/FEATURE_BACKLOG.md`. Quyết định kiến trúc: AD-27 (sửa một phần AD-23, AD-24). Frontend: `docs/05-frontend/phases/live-rescore/PLAN.md`. Nền:
 - AD-24 và `docs/06-backend/hiring-progress/PLAN.md` (bảng điểm, `scoreProfiles`, lượt đêm, cache hồ sơ một lượt);
@@ -477,7 +477,7 @@ Kiểm:
   - Có người được đánh dấu lại thì yêu cầu ngay một lượt chấm theo ứng viên, không hẹn giờ cho từng người. Đang có lượt thì lượt đó chạy thêm một lượt. Script chạy process riêng (`rescore-match-scores`) không gọi được lượt của server, nên dấu chờ cron 15 phút.
   - Lượt đêm thêm một câu `UPDATE` mỗi tin, khoảng 314 câu ≈ 14 giây trên ~2–3 phút.
 - **Tóm tắt lượt (Q6) làm luôn ở bước này.** Bước 8 chỉ còn phần đọc cho API Admin.
-- **Chưa có việc kéo theo (bước 4):** tự mời, tự chuyển "Đang xem xét", job alert lần đầu, realtime. Bảng điểm đã đúng sau ~45 giây, nhưng tự mời vẫn đi đường cũ (cron 15 phút và các lối kích hoạt sẵn có).
+- **Việc kéo theo** làm ở bước 4 (xem mục dưới).
 
 **Kiểm:**
 - `tests/unit/live-rescore-batch.test.ts`, 22 test:
@@ -497,6 +497,85 @@ Kiểm:
   - một lô 50 người qua `rescoreBatch`, chưa tính ghi: 1,4 giây khi cache tin trống, 0,67–0,71 giây khi cache nóng. Phần ghi khoảng 8–9 round trip ≈ 0,4 giây, nên một lô ≈ 1,1 giây, 200 người ≈ 5 giây cộng 25 ms mỗi vector mới;
   - `EXPLAIN` xoá dòng (Hash Join), xoá dấu (Bitmap Heap Scan) và `markChangedSince` đều chạy được. Sau khi kiểm, Neon vẫn có 0 dấu.
 - **Chưa chạy transaction ghi thật và chưa kiểm đầu cuối qua gateway 8080.** Chủ dự án sửa kỹ năng của một ứng viên. Sau ~45 giây, log server phải có "Live rescore run" với `candidates: 1`; DB có `matchRescoreRequestedAt` về null và dòng điểm của ứng viên có `scoredAt` mới.
+
+### Bước 4 — Việc kéo theo (2026-11-14)
+
+**Cách lấy "vừa đạt ngưỡng":** `replaceForCandidates` đổi câu xoá thành `DELETE … RETURNING`, trả lại dòng cũ. Câu lọc tin đang hiển thị trả thêm công ty, ngưỡng (`autoOutreachMinScore`) và cờ tự mời. Hàm thuần `diffCandidateScores` so cũ / mới và trả:
+- `transitions`: cặp (ứng viên, tin) vừa vào ngưỡng (trước dưới ngưỡng hoặc chưa có dòng) hoặc vừa ra (nay dưới ngưỡng, hoặc dòng bị xoá vì hết chung kỹ năng);
+- `newlyScored`: ứng viên lần đầu có điểm đầy đủ.
+
+Không thêm round trip nào. Mỗi lô 50 người trả lại khoảng 4.000 dòng cũ.
+
+**File mới trong `src/modules/live-rescore/`:**
+- `live-rescore-follow-ups.ts` (`LiveRescoreFollowUps`):
+  - `afterBatch` chạy sau mỗi lô đã commit;
+  - `finishRun` chạy cuối lượt, cả khi lượt hỏng giữa chừng: các lô đã ghi vẫn được kích hoạt.
+  - Mọi lỗi chỉ ghi log. Lô đã commit không bị tính là lô lỗi.
+- `match-update-publisher.ts` (`MatchUpdatePublisher`): gửi `match-scores:updated` cho mọi employer của công ty. Mỗi công ty tối đa một sự kiện mỗi 15 giây (`LIVE_RESCORE_PUSH_THROTTLE_MS`). Phần dồn lại được gộp và gửi khi hết khoảng (hẹn giờ `unref`).
+
+**Bốn việc:**
+- **Tự mời:** lọc các cặp vừa đạt ngưỡng ở tin bật tự mời, rồi gọi `AutoOutreachRepository.clearExhaustedForMatches(pairs)`. Câu này làm ba việc:
+  - lọc tin đang chạy tự mời (cùng điều kiện `findRunnableJobs`) và ứng viên còn mời được (cùng điều kiện `searchCandidatePool` có `excludeCappedToday`);
+  - xoá dấu "hết ứng viên" của các tin đó;
+  - trả công ty.
+
+  Cuối lượt, mỗi công ty gọi `autoOutreachTrigger` một lần.
+- **Tự chuyển "Đang xem xét":** `autoReviewTrigger({ candidateIds })` mỗi lô, với người có tin vừa đạt ngưỡng. `AutomationScope` thêm `candidateIds`; câu chọn sẵn có lọc thêm `a."candidateId" IN (…)`.
+- **Job alert lần đầu (Q3):** gọi `candidateFirstScoredListener(newlyScored)` mỗi lô. Listener đăng ký ở module job-alerts, giống `jobScoredListener`, và gọi `JobAlertService.triggerFirstScored`, chạy trong cùng hàng đợi với `onJobScored`. Hàm `onCandidatesFirstScored`:
+  - dùng một câu `insertFirstForCandidates` cho cả lô, cùng luật `alertTargetsSource` (ngưỡng max(X, 70), công tắc, thành phố, tài khoản `ACTIVE`, chưa ứng tuyển / được mời), thêm điều kiện ứng viên **chưa từng có** dòng `job_alerts`;
+  - mỗi người một lần `upsertDaily("JOB_ALERT")`, với tin điểm cao nhất và số tin trong ngày.
+- **Realtime (Q5):** gom công ty → tin có cặp vừa vào **hoặc vừa ra** ngưỡng. Cuối lượt gửi qua `MatchUpdatePublisher`. Port `RealtimeNotifier` thêm `pushMatchUpdate(userId, { jobPostIds })`; bản Socket.IO emit `match-scores:updated`, bản no-op bỏ qua.
+
+**Khác so với plan:**
+- **Theo lô thay cho từng người:** `autoReviewTrigger` nhận `{ candidateIds }` thay cho `{ candidateId }`; job alert là `onCandidatesFirstScored(candidateIds)`. Tránh 50 câu song song mỗi lô.
+- **"Lần đầu có điểm"** = trước lô không có dòng nào **có phần ngữ nghĩa** với tin đang hiển thị, nay có ít nhất một dòng như vậy, **và** chưa từng có dòng `job_alerts`.
+  - Dòng `semanticPending` (rule-only, người vượt giới hạn embedding) không tính. Người đó được báo ở lượt có điểm đầy đủ, không báo theo điểm rule-only.
+  - Dòng với tin đã thôi hiển thị không xét.
+  - Người mới được lượt đêm chấm trước lượt theo ứng viên thì không được báo lần đầu (đúng chữ của AD-27 mục 6).
+- **Realtime gửi cả khi có người vừa rớt khỏi ngưỡng:** số "Phù hợp" giảm cũng phải làm mới. Chi phí như nhau.
+- **Kích hoạt tự mời cả với tin chưa có dấu "hết ứng viên":** tin đó còn thiếu người, nên cũng cần xét ngay người vừa đạt ngưỡng. Chỉ kích hoạt khi có người **vừa** đạt ngưỡng và còn mời được, vì đến bước 6 một lượt tự mời vẫn chấm trực tiếp (Mây Xanh ~27 giây, bước 0 mục 5).
+- **Kiểu payload** `MatchScoresUpdatedPayload` tạm đặt ở port. Bước 8 đưa vào `packages/shared-types` cho frontend.
+- Tóm tắt lượt (Q6) thêm `followUps`: số cặp vừa đạt ngưỡng, công ty được kích hoạt tự mời, người gửi sang tự chuyển, người lần đầu có điểm, công ty nhận realtime. Tóm tắt lưu trước bước 4 không có trường này.
+
+**Kiểm:**
+- `tests/unit/live-rescore-follow-ups.test.ts`, 13 test:
+  - `diffCandidateScores`: vào / ra ngưỡng, ngưỡng bằng điểm là đạt, dòng bị xoá, tin thôi hiển thị, các trường hợp "lần đầu";
+  - việc kéo theo: chỉ cặp vừa đạt ở tin bật tự mời; tự chuyển theo người vừa đạt; job alert; gom công ty qua các lô; lỗi DB / trigger chỉ ghi log;
+  - realtime: gửi ngay lần đầu, gộp trong khoảng chặn, công ty khác không bị chặn, lỗi tìm employer chỉ cảnh báo;
+  - job alert lần đầu: sàn 70, một thông báo mỗi người với tin điểm cao nhất, số tin trong ngày, lỗi một người đi tiếp, hàng đợi;
+  - scope `candidateIds` của tự chuyển (danh sách rỗng ⇒ `AND false`).
+- `live-rescore-batch.test.ts` thêm 2 test: việc kéo theo chạy sau mỗi lô đã ghi, không chạy cho lô lỗi, `finishRun` một lần; lượt `FAILED` giữa chừng vẫn gửi việc kéo theo của lô đã ghi.
+- Toàn bộ unit test của server: 631 / 631 qua. `tsc --noEmit` qua.
+- Trên Neon, script tạm (đã xoá), chỉ đọc:
+  - `EXPLAIN` (không `ANALYZE`) cho `DELETE … RETURNING` lô 50 người (Bitmap Heap Scan + Hash Join), `clearExhaustedForMatches` 200 cặp, `insertFirstForCandidates` 50 người: đều lập kế hoạch được;
+  - chạy thật câu lọc tin kèm ngưỡng (314 tin, ~100 ms) và `findAutoReviewTargets({ candidateIds })` (~150 ms);
+  - Neon vẫn 0 dấu.
+- **Hiện Neon không có tin nào bật tự mời** (314 tin `PUBLISHED`, đều tắt). Kiểm đầu cuối phần tự mời cần bật tự mời cho một tin của Mây Xanh trước.
+- **Chưa kiểm đầu cuối qua gateway 8080** (cùng lần kiểm bước 3).
+
+**Bổ sung: model lỗi lúc chấm và job alert lần đầu (D+, chủ dự án chọn 2026-11-14):**
+- **Lỗ hổng:** model lỗi (nạp hỏng, một lần embed quá 10 giây, worker chết) thì ứng viên có dòng rule-only. Người đó không vượt giới hạn 300 vector nên dấu bị xoá. Điểm được lượt đêm sửa, nhưng job alert lần đầu bị mất hẳn.
+- **Đã cân nhắc:**
+  - A: giữ dấu, cron chấm lại rule-only mỗi 15 phút;
+  - A': định kỳ dò `semanticPending`, có hoặc không kèm cờ "vừa có lỗi";
+  - D: để nguyên.
+
+  Chọn D+: lượt đêm (vốn sửa điểm) báo luôn job alert lần đầu. Không có cờ trong bộ nhớ, không có câu quét riêng, không cần index.
+- **Cách làm:**
+  - `replaceForJob` đổi `deleteMany` thành `DELETE … RETURNING` trong CTE, trả `pendingBefore` (người có dòng cũ rule-only với tin). Không thêm câu; bình thường rỗng. Kiểu trả về đổi từ `boolean` sang `{ pendingBefore } | null` (null = tin thôi hiển thị).
+  - `rescoreAll` đếm, với mỗi người, số tin có dòng cũ rule-only. Cuối lượt, chỉ khi có người như vậy, gọi `countVisibleRows`. Người có số tin rule-only ≥ số dòng hiện có, tức **mọi** dòng cũ đều rule-only, được gửi sang `candidateFirstScoredListener`.
+  - `candidateFirstScoredListener` là tham số không bắt buộc của `MatchScoreService`; server truyền qua awilix.
+- **Vì sao phải "mọi dòng":** câu xoá chạy theo từng tin. Nếu một tin thiếu vector, cả pool của tin có dòng rule-only. Báo cho cả pool thì mọi ứng viên chưa từng nhận job alert (phần lớn dữ liệu demo tạo trước 0.5) bị báo cùng lúc.
+- `insertFirstForCandidates` thêm `NOT s."semanticPending"`: chỉ báo theo dòng có điểm đầy đủ, ở cả lối theo ứng viên lẫn lượt đêm. Nếu đêm đó model vẫn hỏng thì không ai bị báo; người đó còn dòng rule-only nên đêm sau được xét lại.
+- Thông báo trong app tạo lúc ~3h30. Email gộp lúc 8h có các tin này.
+- **Hạn chế:**
+  - Script `rescore-match-scores` (process riêng) không truyền listener nên không báo. Nếu script chấm lại trước lượt đêm của server, người đó mất job alert lần đầu.
+  - Lối a (tin mới đăng) và `rescoreJob` lẻ không báo.
+  - Lượt đêm hết giờ giữa chừng thì tin chưa chấm còn dòng rule-only. Người đó bị loại ở đêm đó, vì số đếm không khớp.
+- **Kiểm:**
+  - `match-scores.test.ts` thêm 4 test: mọi dòng rule-only thì báo, vài tin thì không; không có dòng rule-only thì không thêm câu; script không báo; lỗi câu đếm chỉ ghi log; lối a không báo.
+  - Toàn bộ 635 / 635 qua, `tsc` qua.
+  - Neon, chỉ đọc: `EXPLAIN` câu xoá có `RETURNING` (tin 882 dòng) và câu job alert có điều kiện mới; `countVisibleRows` 50 người ~150 ms.
 
 ### Câu hỏi mới sau bước 0 (đã chốt 2026-11-14: Q7 = b, Q8 = b; xem "Câu hỏi đã chốt" và AD-27 mục 5, 11)
 

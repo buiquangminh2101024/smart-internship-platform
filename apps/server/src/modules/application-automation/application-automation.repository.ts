@@ -15,11 +15,15 @@ import {
   STALE_AFTER_DAYS,
 } from "./application-automation.config";
 
-/** Giới hạn phạm vi một lượt: cả hệ thống, một công ty (script `--company`), một tin, một hồ sơ. */
+/**
+ * Giới hạn phạm vi một lượt: cả hệ thống, một công ty (script `--company`), một tin, một hồ
+ * sơ, hoặc các ứng viên vừa được chấm lại (0.6, AD-27 mục 6).
+ */
 export interface AutomationScope {
   companyId?: string | undefined;
   jobPostId?: string | undefined;
   applicationId?: string | undefined;
+  candidateIds?: string[] | undefined;
 }
 
 /** Số hồ sơ tồn của một công ty cho nhắc tuần (bước 5). Nghĩa từng số: payload `APPLICATIONS_NEED_ATTENTION`. */
@@ -98,6 +102,11 @@ function scopeWhere(scope: AutomationScope): Prisma.Sql {
   if (scope.companyId) conditions.push(Prisma.sql`AND j."companyId" = ${scope.companyId}`);
   if (scope.jobPostId) conditions.push(Prisma.sql`AND a."jobPostId" = ${scope.jobPostId}`);
   if (scope.applicationId) conditions.push(Prisma.sql`AND a."id" = ${scope.applicationId}`);
+  if (scope.candidateIds) {
+    conditions.push(
+      scope.candidateIds.length > 0 ? Prisma.sql`AND a."candidateId" IN (${Prisma.join(scope.candidateIds)})` : Prisma.sql`AND false`,
+    );
+  }
   return conditions.length > 0 ? Prisma.join(conditions, " ") : Prisma.empty;
 }
 

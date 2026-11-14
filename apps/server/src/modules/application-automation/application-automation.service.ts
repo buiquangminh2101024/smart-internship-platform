@@ -21,12 +21,13 @@ import type {
 } from "./application-automation.repository";
 
 /**
- * Tự chuyển "Đang xem xét" cho một hồ sơ (vừa nộp) hoặc một tin (vừa hạ X / bật lại công tắc):
- * gọi, không chờ, lỗi chỉ ghi log. Đăng ký trong awilix dưới tên `autoReviewTrigger`, resolve
+ * Tự chuyển "Đang xem xét" cho một hồ sơ (vừa nộp), một tin (vừa hạ X / bật lại công tắc) hoặc
+ * các ứng viên vừa được chấm lại có tin vừa đạt ngưỡng (0.6, AD-27 mục 6): gọi, không chờ, lỗi chỉ ghi log. Đăng ký trong awilix dưới tên `autoReviewTrigger`, resolve
  * ApplicationAutomationService lúc gọi ⇒ ApplicationsService dùng được mà không tạo vòng phụ
  * thuộc (giống `autoOutreachTrigger`, `matchScoreTrigger`).
  */
-export type AutoReviewTrigger = (target: { applicationId: string } | { jobPostId: string }) => void;
+export type AutoReviewTarget = { applicationId: string } | { jobPostId: string } | { candidateIds: string[] };
+export type AutoReviewTrigger = (target: AutoReviewTarget) => void;
 
 /** Kết quả một phần của lượt chạy — để ghi log, script và test đọc. */
 export interface AutomationPartResult {
@@ -199,8 +200,11 @@ export class ApplicationAutomationService {
     }
   }
 
-  /** Lối 2 và 3 của bước 4b. Hồ sơ đang được lượt khác xử lý thì câu UPDATE có điều kiện chặn trùng. */
-  trigger(scope: { applicationId: string } | { jobPostId: string }): void {
+  /**
+   * Lối 2 và 3 của bước 4b, và lối "vừa chấm lại theo ứng viên" (0.6). Hồ sơ đang được lượt
+   * khác xử lý thì câu UPDATE có điều kiện chặn trùng.
+   */
+  trigger(scope: AutoReviewTarget): void {
     void this.autoReview(scope)
       .then((result) => {
         if (result.changed > 0 || result.failed > 0) this.logger.info("Auto review", { ...scope, ...result });

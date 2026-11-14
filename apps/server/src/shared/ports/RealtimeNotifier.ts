@@ -27,6 +27,14 @@ export interface ConversationUnavailablePayload {
 }
 
 /**
+ * Điểm của các tin này vừa đổi số "Phù hợp" (0.6, AD-27 mục 6, Q5): giao diện nhà tuyển dụng
+ * làm mới số liệu đang hiển thị. Không gắn với bản ghi Notification nào.
+ */
+export interface MatchScoresUpdatedPayload {
+  jobPostIds: string[];
+}
+
+/**
  * Điểm nối realtime cho notification. Mọi thứ realtime ngoài nội dung chat đi
  * qua port này — bản Socket.IO đăng ký trong main.ts, fallback no-op khi
  * Socket.IO khởi tạo lỗi.
@@ -38,6 +46,8 @@ export interface RealtimeNotifier {
   pushMessageToUser(userId: string, payload: RealtimeMessagePayload): Promise<void> | void;
   /** Event `conversation:unavailable` — khoá gửi tin ở phía chưa xoá. */
   notifyConversationUnavailable(userId: string, payload: ConversationUnavailablePayload): Promise<void> | void;
+  /** Event `match-scores:updated` — số "Phù hợp" của các tin đã đổi (0.6, Q5). */
+  pushMatchUpdate(userId: string, payload: MatchScoresUpdatedPayload): Promise<void> | void;
   /** Ngắt mọi socket đang mở của user — gọi sau khi Admin khoá tài khoản (AD-17). */
   disconnectUser(userId: string): Promise<void> | void;
 }

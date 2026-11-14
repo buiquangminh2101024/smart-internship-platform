@@ -22,6 +22,12 @@ export type MatchScoreTrigger = (jobPostId: string) => void;
  */
 export type JobScoredListener = (jobPostId: string) => void;
 
+/**
+ * Lượt đêm báo "các ứng viên này trước chỉ có điểm rule-only, nay được chấm lại" để gửi job
+ * alert lần đầu (AD-27 mục 6). Module job-alerts đăng ký dưới tên `candidateFirstScoredListener`.
+ */
+export type FirstScoredListener = (candidateIds: string[]) => void;
+
 export type RescoreJobResult =
   /** RUNNING: tin đang được chấm ở lượt khác. NOT_VISIBLE: tin không còn hiển thị. */
   | { status: "SKIPPED"; reason: "RUNNING" | "NOT_VISIBLE" }
@@ -35,6 +41,8 @@ export type RescoreJobResult =
       rows: number;
       /** Số dòng rule-only vì chưa có embedding. */
       pendingRows: number;
+      /** Ứng viên có dòng cũ rule-only với tin (từ câu xoá). */
+      pendingBefore: string[];
       durationMs: number;
     };
 
@@ -54,6 +62,11 @@ export type RescoreAllResult =
       pendingRows: number;
       /** Số hồ sơ ứng viên đã nạp từ DB trong lượt. */
       profilesLoaded: number;
+      /**
+       * Ứng viên trước lượt chỉ có dòng rule-only, gửi sang job alert lần đầu (AD-27 mục 6).
+       * Job alert tự bỏ người đã từng được báo và chỉ báo theo dòng có điểm đầy đủ.
+       */
+      firstScoreCandidates: number;
       durationMs: number;
     };
 
@@ -80,6 +93,7 @@ export class MatchScoreService {
   private readonly logger: Logger;
   private readonly jobScoredListener: JobScoredListener;
   private readonly requestLiveRescore: (() => void) | undefined;
+  private readonly firstScoredListener: FirstScoredListener | undefined;
   /** Tin đang chấm (một process, AD-23 mục 8): lượt gọi sau cho cùng tin thì bỏ qua. */
   private readonly runningJobs = new Set<string>();
   private allRunning = false;
@@ -91,6 +105,7 @@ export class MatchScoreService {
     logger,
     jobScoredListener,
     liveRescoreDrainRequester,
+    candidateFirstScoredListener,
   }: {
     matchScoreRepository: MatchScoreRepository;
     candidateOutreachService: CandidateOutreachService;
@@ -103,6 +118,11 @@ export class MatchScoreService {
      * trong DB cho cron 15 phút của server.
      */
     liveRescoreDrainRequester?: () => void;
+    /**
+     * Job alert lần đầu sau lượt đêm (AD-27 mục 6). Server truyền qua awilix (module
+     * job-alerts); script chạy process riêng không truyền nên không báo.
+     */
+    candidateFirstScoredListener?: FirstScoredListener;
   }) {
     this.repository = matchScoreRepository;
     this.outreachService = candidateOutreachService;
@@ -110,6 +130,7 @@ export class MatchScoreService {
     this.logger = logger;
     this.jobScoredListener = jobScoredListener;
     this.requestLiveRescore = liveRescoreDrainRequester;
+    this.firstScoredListener = candidateFirstScoredListener;
   }
 
   /**
@@ -120,7 +141,8 @@ export class MatchScoreService {
     void this.rescoreJob(jobPostId)
       .then((result) => {
         if (result.status !== "DONE") return;
-        this.logger.info("Match scores rescored", { jobPostId, ...result });
+        const { pendingBefore, ...summary } = result;
+        this.logger.info("Match scores rescored", { jobPostId, ...summary, pendingBefore: pendingBefore.length });
         this.jobScoredListener(jobPostId);
       })
       .catch((error: unknown) => {
@@ -174,6 +196,7 @@ export class MatchScoreService {
         pool: pool.length,
         rows: rows.length,
         pendingRows: rows.filter((row) => row.semanticPending).length,
+        pendingBefore: written.pendingBefore,
         durationMs: Date.now() - startedAt,
       };
     } finally {
@@ -208,8 +231,11 @@ export class MatchScoreService {
         rows: 0,
         pendingRows: 0,
         profilesLoaded: 0,
+        firstScoreCandidates: 0,
         durationMs: 0,
       };
+      /** Ứng viên → số tin mà người đó có dòng cũ rule-only (bình thường rỗng). */
+      const pendingBefore = new Map<string, number>();
 
       for (const [index, job] of jobs.entries()) {
         if (Date.now() >= deadline) {
@@ -223,6 +249,7 @@ export class MatchScoreService {
             result.jobsScored += 1;
             result.rows += outcome.rows;
             result.pendingRows += outcome.pendingRows;
+            for (const id of outcome.pendingBefore) pendingBefore.set(id, (pendingBefore.get(id) ?? 0) + 1);
           } else {
             result.jobsSkipped += 1;
           }
@@ -238,6 +265,7 @@ export class MatchScoreService {
       }
 
       result.profilesLoaded = cache.loaded;
+      result.firstScoreCandidates = await this.notifyFirstScored(pendingBefore);
       result.durationMs = Date.now() - startedAt;
       return result;
     } finally {
@@ -268,6 +296,30 @@ export class MatchScoreService {
         jobPostId,
         error: error instanceof Error ? error.message : String(error),
       });
+    }
+  }
+
+  /**
+   * Job alert lần đầu sau lượt đêm (AD-27 mục 6, D+): chỉ người có **mọi** dòng cũ với tin
+   * đang hiển thị là rule-only, tức số tin có dòng cũ rule-only ≥ số dòng hiện có. Người chỉ
+   * có dòng rule-only ở vài tin (ví dụ tin thiếu vector) không phải "lần đầu" nên không báo.
+   * Thêm một câu đếm, chỉ khi lượt có dòng cũ rule-only. Lỗi chỉ ghi log.
+   */
+  private async notifyFirstScored(pendingBefore: Map<string, number>): Promise<number> {
+    if (!this.firstScoredListener || pendingBefore.size === 0) return 0;
+    try {
+      const rowsNow = await this.repository.countVisibleRows([...pendingBefore.keys()]);
+      const candidateIds = [...pendingBefore]
+        .filter(([candidateId, pendingJobs]) => pendingJobs >= (rowsNow.get(candidateId) ?? 0))
+        .map(([candidateId]) => candidateId);
+      if (candidateIds.length > 0) this.firstScoredListener(candidateIds);
+      return candidateIds.length;
+    } catch (error) {
+      this.logger.error("Match scores: first-score job alert after nightly run failed", {
+        candidates: pendingBefore.size,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return 0;
     }
   }
 

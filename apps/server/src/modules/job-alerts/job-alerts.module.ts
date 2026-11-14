@@ -1,7 +1,7 @@
 import { asClass, asValue, type AwilixContainer } from "awilix";
 import type { JobScoredListener } from "../match-scores/match-score.service";
 import { JobAlertRepository } from "./job-alert.repository";
-import { JobAlertService } from "./job-alert.service";
+import { JobAlertService, type CandidateFirstScoredListener } from "./job-alert.service";
 import { JobAlertsController } from "./job-alerts.controller";
 
 /**
@@ -18,6 +18,10 @@ export function registerJobAlerts(container: AwilixContainer): void {
     jobAlertsController: asClass(JobAlertsController).singleton(),
     jobScoredListener: asValue<JobScoredListener>((jobPostId) => {
       container.resolve<JobAlertService>("jobAlertService").trigger(jobPostId);
+    }),
+    // Lượt chấm theo ứng viên (0.6, AD-27 mục 6) báo người lần đầu có điểm; cùng cách resolve lúc gọi.
+    candidateFirstScoredListener: asValue<CandidateFirstScoredListener>((candidateIds) => {
+      container.resolve<JobAlertService>("jobAlertService").triggerFirstScored(candidateIds);
     }),
   });
 }

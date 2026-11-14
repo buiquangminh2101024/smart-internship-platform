@@ -48,9 +48,111 @@ export interface CandidateScoreRow {
   weightsVersion: string;
 }
 
+/**
+ * Một cặp đổi trạng thái "đạt ngưỡng" (điểm ≥ `autoOutreachMinScore` của tin, cùng mốc với
+ * số "Phù hợp") sau khi chấm theo ứng viên (0.6, việc kéo theo ở bước 4).
+ */
+export interface MatchTransition {
+  candidateId: string;
+  jobPostId: string;
+  companyId: string;
+  autoOutreachEnabled: boolean;
+  /** true ⇒ vừa đạt ngưỡng (trước dưới ngưỡng hoặc chưa có dòng); false ⇒ vừa rớt khỏi ngưỡng. */
+  matched: boolean;
+}
+
+export interface CandidateScoreWriteResult {
+  rows: number;
+  marksCleared: number;
+  transitions: MatchTransition[];
+  /**
+   * Ứng viên lần đầu có điểm đầy đủ: trước lô không có dòng nào (với tin đang hiển thị) mà
+   * điểm có phần ngữ nghĩa, nay có ít nhất một dòng như vậy (job alert lần đầu, Q3).
+   * Dòng `semanticPending` (rule-only, chờ embedding) không tính, để báo theo điểm đầy đủ.
+   */
+  newlyScored: string[];
+}
+
+/** Dòng cũ (bị thay) của một ứng viên với tin đang hiển thị. */
+export interface PreviousScoreRow {
+  candidateId: string;
+  jobPostId: string;
+  score: number;
+  semanticPending: boolean;
+}
+
+/** Tin đang hiển thị của các dòng vừa ghi hoặc vừa xoá, kèm ngưỡng. */
+export interface TransitionJobRow {
+  id: string;
+  companyId: string;
+  minScore: number;
+  autoOutreachEnabled: boolean;
+}
+
+/**
+ * So dòng cũ và dòng mới của một lô (thuần, để test). Chỉ xét tin còn trong `jobs` (đang
+ * hiển thị lúc ghi). Dòng mới bị lọc vì tin thôi hiển thị không có trong `jobs` nên bỏ qua.
+ */
+export function diffCandidateScores(
+  previous: PreviousScoreRow[],
+  rowsByCandidate: Map<string, CandidateScoreRow[]>,
+  jobs: Map<string, TransitionJobRow>,
+): Pick<CandidateScoreWriteResult, "transitions" | "newlyScored"> {
+  const before = new Map<string, Map<string, PreviousScoreRow>>();
+  for (const row of previous) {
+    let byJob = before.get(row.candidateId);
+    if (!byJob) before.set(row.candidateId, (byJob = new Map()));
+    byJob.set(row.jobPostId, row);
+  }
+
+  const transitions: MatchTransition[] = [];
+  const newlyScored: string[] = [];
+  const push = (candidateId: string, job: TransitionJobRow, matched: boolean) =>
+    transitions.push({
+      candidateId,
+      jobPostId: job.id,
+      companyId: job.companyId,
+      autoOutreachEnabled: job.autoOutreachEnabled,
+      matched,
+    });
+
+  for (const [candidateId, rows] of rowsByCandidate) {
+    const old = before.get(candidateId) ?? new Map<string, PreviousScoreRow>();
+    const seen = new Set<string>();
+    let hasFullNow = false;
+    for (const row of rows) {
+      const job = jobs.get(row.jobPostId);
+      if (!job) continue;
+      seen.add(row.jobPostId);
+      if (!row.semanticPending) hasFullNow = true;
+      const was = (old.get(row.jobPostId)?.score ?? -1) >= job.minScore;
+      const now = row.score >= job.minScore;
+      if (was !== now) push(candidateId, job, now);
+    }
+    for (const [jobPostId, row] of old) {
+      const job = jobs.get(jobPostId);
+      if (!job || seen.has(jobPostId)) continue;
+      if (row.score >= job.minScore) push(candidateId, job, false);
+    }
+    const hadFullBefore = [...old.values()].some((row) => !row.semanticPending);
+    if (hasFullNow && !hadFullBefore) newlyScored.push(candidateId);
+  }
+  return { transitions, newlyScored };
+}
+
 export interface RescoreJobRow {
   id: string;
   matchScoresAt: Date | null;
+}
+
+/** Kết quả thay điểm của một tin khi tin còn hiển thị. */
+export interface ReplaceForJobResult {
+  /**
+   * Ứng viên có dòng cũ `semanticPending` (rule-only) với tin này, lấy từ câu xoá
+   * (`RETURNING`, không thêm câu). Lượt đêm gom lại để báo job alert lần đầu cho người
+   * trước đó chỉ có điểm rule-only (AD-27 mục 6). Bình thường rỗng.
+   */
+  pendingBefore: string[];
 }
 
 /**
@@ -131,20 +233,26 @@ export class MatchScoreRepository {
   /**
    * Thay toàn bộ điểm của một tin trong một transaction: người đọc không bao giờ thấy
    * bảng của tin trống giữa chừng. Tin đã thôi hiển thị trong lúc chấm thì không ghi
-   * (trả false) và xoá dòng cũ của tin.
+   * (trả null) và xoá dòng cũ của tin. Câu xoá trả thêm người có dòng cũ rule-only.
    *
    * `matchScoresAt` ghi bằng SQL để không đổi `updatedAt` của tin: đây là việc của hệ
    * thống, không phải người đăng tin sửa tin (cùng lý do với `markExhausted` của 0.2).
    */
-  async replaceForJob(jobPostId: string, rows: MatchScoreRow[], scoredAt: Date): Promise<boolean> {
+  async replaceForJob(jobPostId: string, rows: MatchScoreRow[], scoredAt: Date): Promise<ReplaceForJobResult | null> {
     return this.prisma.$transaction(
       async (tx) => {
         const touched = await tx.$executeRaw(Prisma.sql`
           UPDATE job_posts j SET "matchScoresAt" = ${scoredAt}
           WHERE j."id" = ${jobPostId} AND ${VISIBLE_JOB}
         `);
-        await tx.jobCandidateMatchScore.deleteMany({ where: { jobPostId } });
-        if (touched === 0) return false;
+        const pending = await tx.$queryRaw<Array<{ candidateId: string }>>(Prisma.sql`
+          WITH deleted AS (
+            DELETE FROM job_candidate_match_scores WHERE "jobPostId" = ${jobPostId}
+            RETURNING "candidateId", "semanticPending"
+          )
+          SELECT "candidateId" FROM deleted WHERE "semanticPending"
+        `);
+        if (touched === 0) return null;
 
         for (let i = 0; i < rows.length; i += INSERT_CHUNK_SIZE) {
           await tx.jobCandidateMatchScore.createMany({
@@ -158,7 +266,7 @@ export class MatchScoreRepository {
             })),
           });
         }
-        return true;
+        return { pendingBefore: pending.map((row) => row.candidateId) };
       },
       // Mặc định 5 giây không đủ chắc cho Neon ở xa khi tin có ~1.000 dòng.
       { maxWait: 10_000, timeout: 30_000 },
@@ -180,39 +288,47 @@ export class MatchScoreRepository {
    *   trong lúc chấm thì giữ dấu cho lượt sau.
    *
    * `batchStartedAt` lấy từ đồng hồ DB lúc chọn lô (cùng đồng hồ với dấu), trước khi nạp hồ sơ.
+   *
+   * Việc kéo theo (bước 4): câu xoá trả lại dòng cũ (`RETURNING`), câu lọc tin đang hiển thị
+   * trả thêm công ty và ngưỡng, nên so được cũ / mới (`diffCandidateScores`) mà không thêm
+   * round trip.
    */
   async replaceForCandidates(input: {
     rowsByCandidate: Map<string, CandidateScoreRow[]>;
     clearMarksFor: string[];
     batchStartedAt: Date;
     scoredAt: Date;
-  }): Promise<{ rows: number; marksCleared: number }> {
+  }): Promise<CandidateScoreWriteResult> {
     const candidateIds = [...input.rowsByCandidate.keys()];
-    if (candidateIds.length === 0 && input.clearMarksFor.length === 0) return { rows: 0, marksCleared: 0 };
-    const jobIds = [...new Set([...input.rowsByCandidate.values()].flat().map((row) => row.jobPostId))];
+    if (candidateIds.length === 0 && input.clearMarksFor.length === 0) {
+      return { rows: 0, marksCleared: 0, transitions: [], newlyScored: [] };
+    }
+    const newJobIds = [...input.rowsByCandidate.values()].flat().map((row) => row.jobPostId);
 
     return this.prisma.$transaction(
       async (tx) => {
-        if (candidateIds.length > 0) {
-          await tx.$executeRaw(Prisma.sql`
-            DELETE FROM job_candidate_match_scores s
-            USING job_posts j
-            WHERE j."id" = s."jobPostId" AND s."candidateId" IN (${Prisma.join(candidateIds)}) AND ${VISIBLE_JOB}
-          `);
-        }
+        const previous =
+          candidateIds.length === 0
+            ? []
+            : await tx.$queryRaw<PreviousScoreRow[]>(Prisma.sql`
+                DELETE FROM job_candidate_match_scores s
+                USING job_posts j
+                WHERE j."id" = s."jobPostId" AND s."candidateId" IN (${Prisma.join(candidateIds)}) AND ${VISIBLE_JOB}
+                RETURNING s."candidateId", s."jobPostId", s."score", s."semanticPending"
+              `);
 
         let written = 0;
+        const jobIds = [...new Set([...newJobIds, ...previous.map((row) => row.jobPostId)])];
+        const jobs = new Map<string, TransitionJobRow>();
         if (jobIds.length > 0) {
-          const visible = new Set(
-            (
-              await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
-                SELECT j."id" FROM job_posts j WHERE j."id" IN (${Prisma.join(jobIds)}) AND ${VISIBLE_JOB}
-              `)
-            ).map((row) => row.id),
-          );
+          const rows = await tx.$queryRaw<TransitionJobRow[]>(Prisma.sql`
+            SELECT j."id", j."companyId", j."autoOutreachMinScore" AS "minScore", j."autoOutreachEnabled"
+            FROM job_posts j WHERE j."id" IN (${Prisma.join(jobIds)}) AND ${VISIBLE_JOB}
+          `);
+          for (const row of rows) jobs.set(row.id, row);
           const data = [...input.rowsByCandidate].flatMap(([candidateId, rows]) =>
             rows
-              .filter((row) => visible.has(row.jobPostId))
+              .filter((row) => jobs.has(row.jobPostId))
               .map((row) => ({
                 jobPostId: row.jobPostId,
                 candidateId,
@@ -239,10 +355,26 @@ export class MatchScoreRepository {
                 WHERE "id" IN (${Prisma.join(input.clearMarksFor)})
                   AND "matchRescoreRequestedAt" <= ${input.batchStartedAt}
               `);
-        return { rows: written, marksCleared };
+        return { rows: written, marksCleared, ...diffCandidateScores(previous, input.rowsByCandidate, jobs) };
       },
       { maxWait: 10_000, timeout: 30_000 },
     );
+  }
+
+  /**
+   * Số dòng điểm với tin đang hiển thị của từng ứng viên (lượt đêm, job alert lần đầu: so
+   * với số tin mà người đó có dòng rule-only). Ứng viên không có dòng ⇒ không có trong Map.
+   */
+  async countVisibleRows(candidateIds: string[]): Promise<Map<string, number>> {
+    if (candidateIds.length === 0) return new Map();
+    const rows = await this.prisma.$queryRaw<Array<{ candidateId: string; count: number }>>(Prisma.sql`
+      SELECT s."candidateId", COUNT(*)::int AS "count"
+      FROM job_candidate_match_scores s
+      JOIN job_posts j ON j."id" = s."jobPostId"
+      WHERE s."candidateId" IN (${Prisma.join(candidateIds)}) AND ${VISIBLE_JOB}
+      GROUP BY s."candidateId"
+    `);
+    return new Map(rows.map((row) => [row.candidateId, row.count]));
   }
 
   /**
