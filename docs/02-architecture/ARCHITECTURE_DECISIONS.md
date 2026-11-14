@@ -950,3 +950,77 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 - Module mới `apps/server/src/modules/job-alerts/` (service, repository, cron email hằng ngày, cron nhắc một lần, API cài đặt, script chạy tay). `match-scores` gọi job alert sau lối (a). `notifications` thêm lối cập nhật thông báo gộp theo ngày.
 - `packages/shared-types`: kiểu mới cho danh sách gợi ý, thông tin theo người xem, độ hoàn thiện, cài đặt job alert.
 - Frontend: "Việc làm phù hợp", `/jobs`, `/profile`, Cài đặt, trung tâm thông báo, FAQ của chatbot hỗ trợ.
+
+## AD-27 — Chấm lại theo ứng viên gần thời gian thực (0.6): đánh dấu tường minh, chờ người dùng ngừng sửa rồi chấm, tự mời và trang tìm ứng viên đọc bảng điểm (sửa một phần AD-23, AD-24)
+
+**Ngày:** 2026-11-14 · **Phase liên quan:** không thuộc phase đánh số. Mục 0.6 của `docs/01-project/FEATURE_BACKLOG.md`, theo nhận xét của giáo viên ở buổi demo 05/11/2026 ("dữ liệu của mình liên tục đẩy lên… hồ sơ người ta liên tục đẩy lên, em phải xử lý được những cái đó", "tự động nó làm"). Kế hoạch chi tiết: `docs/06-backend/live-rescore/PLAN.md`, `docs/05-frontend/phases/live-rescore/PLAN.md`.
+
+> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-14, chủ dự án duyệt từng điểm trong buổi trao đổi). CHƯA TRIỂN KHAI.** Q1–Q6 của plan backend đã chốt cùng ngày (chấm lại theo tin khi danh mục đổi; thêm cột `matchProfileChangedAt`; job alert lần đầu dùng lại `JOB_ALERT`; script mô phỏng gọi HTTP API; tóm tắt lượt gần nhất lưu ở Redis; realtime cho nhà tuyển dụng qua sự kiện Socket.IO `match-scores:updated`, tối đa một sự kiện mỗi công ty mỗi 15 giây, dự phòng bằng `refetchOnWindowFocus`). Bước 0 của plan (đo, chỉ đọc) có thể đổi các hằng số ở dưới; quyết định nào bị số đo bác thì dừng và hỏi lại.
+
+**Bối cảnh:**
+
+- Bảng điểm `job_candidate_match_scores` (AD-24) chỉ cập nhật khi tin chuyển `PUBLISHED` (lối a) và ở lượt đêm 3h30. Ứng viên mới hoặc vừa sửa hồ sơ phải chờ tới đêm mới có điểm. Hệ quả:
+  - số "Phù hợp" (0.3) cũ tới gần 24 giờ;
+  - đơn của ứng viên chưa có điểm không được tự chuyển "Đang xem xét" (AD-25 mục 1);
+  - "Việc làm phù hợp" của ứng viên chưa có dòng điểm đi đường chấm trực tiếp (AD-26 mục 1, dự phòng); `/jobs` phải ghi "điểm cập nhật hằng đêm".
+- Tự mời (AD-23) và trang tìm ứng viên vẫn chấm trực tiếp trên ≤ 50 người lọc bằng SQL (AD-24 mục 7), bỏ sót khoảng 7% người phù hợp ở tin lớn. Tin bị đánh dấu `NO_MATCH` chỉ được kiểm lại sau 3 giờ; ứng viên bật cho liên hệ hay thêm kỹ năng không xoá được dấu này.
+- Không suy được "ai vừa đổi hồ sơ" từ `Candidate.updatedAt`, vì sửa kỹ năng, học vấn, kinh nghiệm, dự án không đổi cột này (AD-24, phương án không chọn).
+- Script `seed-large-demo` ghi thẳng bằng Prisma, không qua service, nên không kích hoạt việc tự động nào. Chưa có cách demo "dữ liệu đổ vào liên tục".
+
+**Quyết định:**
+
+1. **Đánh dấu tường minh bằng một cột trên `Candidate`:** `matchRescoreRequestedAt DateTime?` (chủ dự án chọn cách A, 2026-11-14). Mọi chỗ ghi dữ liệu mà bộ chấm đọc đặt cột này bằng `now()`:
+   - `CandidateService`: `updateProfile` (tiêu đề, giới thiệu), thêm / sửa / xoá kỹ năng, học vấn (kể cả đặt học vấn hiện tại), kinh nghiệm, dự án;
+   - `CandidateCvImportService.importFromCv` (AI trích xuất CV);
+   - phía danh mục: Admin duyệt / từ chối / gộp kỹ năng, duyệt / gộp ngành: đánh dấu **mọi** ứng viên có kỹ năng hoặc ngành đó bằng một câu SQL (mục 3 của buổi trao đổi).
+
+   Chứng chỉ, giải thưởng, ảnh đại diện không vào bộ chấm nên không đánh dấu. Bật / tắt `isOpenToOutreach` không đổi điểm nên không đánh dấu, nhưng xoá dấu "hết ứng viên" và kích hoạt tự mời (mục 6).
+2. **Chỉ xoá dấu khi dấu không mới hơn lúc bắt đầu chấm** (`UPDATE … SET "matchRescoreRequestedAt" = NULL WHERE "matchRescoreRequestedAt" <= <lúc bắt đầu>`). Ứng viên sửa tiếp trong lúc đang chấm thì dấu mới còn lại và được chấm ở lượt sau.
+3. **Hai lối kích hoạt, cùng một hàm "rút hàng":**
+   - **chờ người dùng ngừng sửa (debounce):** mỗi lần đánh dấu thì đặt lại hẹn giờ của ứng viên đó; hết khoảng chờ (mặc định 45 giây, trong khoảng 30–60 giây chủ dự án duyệt) thì gọi lượt chấm. Hẹn giờ nằm trong bộ nhớ của process;
+   - **cron mỗi 15 phút:** chấm mọi ứng viên còn dấu. Đây là lưới an toàn khi server khởi động lại (hẹn giờ mất nhưng dấu còn trong DB) hoặc khi lượt trước hết thời gian.
+
+   Lượt chấm đêm của AD-24 giữ nguyên.
+4. **Chấm lại một ứng viên = chấm hồ sơ đó với mọi tin đang hiển thị có chung ≥ 1 kỹ năng `APPROVED`**, bằng **cùng bộ chấm** với bảng điểm (AD-24 mục 4: cùng quy tắc, cùng cosine, cùng cách xử lý thiếu embedding), rồi thay toàn bộ dòng điểm của ứng viên với các tin đang hiển thị trong một transaction. Tin không còn chung kỹ năng thì dòng bị xoá. Kết quả phải bằng đúng kết quả chấm theo tin; có test so hai chiều.
+5. **Bảo vệ tải, chạy chung process** (giữ AD-23 mục 8; chủ dự án chốt không tách worker, 2026-11-14):
+   - mỗi lúc chỉ một lượt chấm; chấm **lần lượt** từng ứng viên, dấu cũ nhất trước; nhường event loop giữa hai ứng viên;
+   - mỗi lượt có giới hạn thời gian (mặc định 60 giây); hết giờ thì dừng, người còn lại giữ dấu;
+   - giới hạn số embedding mới mỗi lượt; người vượt có điểm rule-only (`semanticPending`) và giữ dấu;
+   - **cache hồ sơ tin đang hiển thị trong bộ nhớ** (`JobMatchProfile` kèm vector), singleton. Xoá khi danh mục kỹ năng / ngành đổi, mỗi mục sống tối đa 1 giờ. Tin `PUBLISHED` không sửa được nội dung (AD-24 mục 5), và câu lấy pool luôn lọc tin đang hiển thị, nên mục của tin đã thôi hiển thị không bao giờ được đọc. Cache chỉ dùng cho chấm theo ứng viên (và "Việc làm phù hợp" nếu bước 0 thấy có lợi); lượt chấm theo tin giữ cách cũ;
+   - các con số (khoảng chờ, giới hạn thời gian, số embedding mới, TTL cache) là **số do thiết kế**, đặt trong `live-rescore.config.ts`, chỉnh theo số đo ở bước 0 và bước kiểm thử.
+6. **Việc kéo theo sau khi chấm lại một ứng viên** (mục 4 của buổi trao đổi):
+   - **tự mời:** với các tin bật tự mời mà ứng viên vừa đạt ngưỡng và còn mời được (bật cho liên hệ, chưa nộp đơn, chưa có lời mời chặn, chưa đủ trần ngày), xoá dấu "hết ứng viên" của tin rồi kích hoạt lượt tự mời của công ty (`autoOutreachTrigger`, có khoá theo công ty sẵn);
+   - **tự chuyển "Đang xem xét":** gọi `autoReviewTrigger` cho đơn "Chờ duyệt" của ứng viên ở tin đang hiển thị (thêm dạng `{ candidateId }`);
+   - **job alert chỉ lần đầu:** ứng viên **lần đầu** có dòng điểm (trước lượt này không có dòng nào) thì báo các tin ≥ max(ngưỡng tin, 70) theo đúng luật AD-26 mục 6. Sửa hồ sơ về sau **không** sinh báo, để tránh spam;
+   - **realtime cho nhà tuyển dụng:** gộp theo lượt, mỗi công ty có tin vừa thêm người đạt ngưỡng nhận một sự kiện nhẹ để giao diện làm mới số "Phù hợp" (không ghi bảng `notifications`).
+7. **Tự mời (AD-23) đọc bảng điểm** thay cho lọc SQL ≤ 50 rồi chấm. Chọn từ bảng những người điểm ≥ ngưỡng và còn mời được, điểm giảm dần; chỉ **chấm trực tiếp lại số ít người sắp mời** để có `MatchResult` lưu kèm lời mời (AD-15), bỏ người mà điểm mới dưới ngưỡng. Tin chưa được chấm lần nào (`matchScoresAt = null`) thì đi đường cũ.
+8. **Trang tìm ứng viên đọc bảng điểm** (mục 5 của buổi trao đổi): lấy top 10 người còn mời được theo điểm lưu, chấm trực tiếp lại 10 người đó để có lý do, tổng số "phù hợp" lấy từ bảng. Hết giới hạn 50. Tin chưa được chấm thì đi đường cũ.
+9. **Script mô phỏng dữ liệu đổ vào** (mục 6 của buổi trao đổi): thêm ứng viên và tin theo từng đợt, **đi qua service** để mọi lối kích hoạt chạy như người dùng thật. Dùng lại bộ thư viện của `large-demo`, tiền tố email / id riêng để `--reset` xoá được. Chi tiết (gọi HTTP qua gateway hay dựng container trong script) ở plan backend.
+10. **Bổ sung đi kèm:**
+    - sửa lỗi còn treo của 0.2: tỉ lệ tự động của công ty là 0% thì trạng thái thẻ tự mời không ghi "Hệ thống tự mời bù…" (mục 8 của buổi trao đổi);
+    - Admin có thẻ "Hệ thống tự động": số ứng viên đang chờ chấm lại, dấu cũ nhất, lượt chấm gần nhất, số lời mời tự động / báo tin hôm nay (frontend 7h).
+
+**Sửa so với AD-23:** mục 11 ("chưa có bảng điểm, mỗi lượt chấm lại lúc chạy") được thay bằng mục 7 ở trên. Quy tắc kiểm lại `NO_MATCH` sau 3 giờ giữ làm lưới an toàn, nhưng dấu được xoá sớm khi có ứng viên mới đạt ngưỡng (mục 6).
+
+**Sửa so với AD-24:** mục 7 ("tự mời và trang tìm ứng viên vẫn chấm trực tiếp") được thực hiện bằng mục 7–8 ở trên. Câu "ứng viên sửa hồ sơ trong lúc chạy thì đêm sau mới vào bảng" (mục 6) không còn đúng: dấu của ứng viên đó vẫn còn và được chấm trong vài phút.
+
+**Phương án không chọn:**
+
+- *Bảng hàng đợi riêng (`candidate_rescore_queue`, mỗi thay đổi một dòng):* biết được lý do và lịch sử, nhưng phải gộp nhiều dòng của cùng người, phải dọn dòng cũ, và không màn hình nào cần lịch sử này. Ghi log là đủ để gỡ lỗi.
+- *Chấm ngay trong request lưu hồ sơ:* vài giây cho khoảng 87 tin mỗi lần lưu; ứng viên mới sửa 5–10 mục liên tiếp thì chấm lại 5–10 lần vô ích.
+- *Chỉ cron 15 phút:* demo trực tiếp phải chờ tới 15 phút mới thấy hệ thống phản ứng.
+- *Tách worker (`worker_threads`, process riêng, BullMQ):* số đo của AD-23 (bước 7c–7d) và AD-24 cho thấy chung process vẫn ổn ở quy mô demo. Process riêng còn phải xử lý lại realtime (Socket.IO chạy chung process với Express), thêm pool kết nối Neon, và web vẫn phải nạp model vì có nhiều chỗ embed trong request. Bước 0 so ba cấu hình (chung process, `worker_threads`, giới hạn số luồng của onnxruntime); nếu cần đổi thì viết AD riêng.
+- *Cache hồ sơ tin trên Redis:* chỉ có một process nên không cần chia sẻ; Redis Cloud ở xa nên một lượt `MGET` cộng chuyển đổi khoảng 87 vector gần bằng một lượt đọc Neon; xoá cache phức tạp hơn. Cache đặt sau interface nhỏ (`getMany`, `invalidate`, `clear`) để sau này đổi sang cache hai tầng (bộ nhớ + Redis, xoá qua pub/sub) khi chạy nhiều instance.
+- *Báo job alert mỗi khi sửa hồ sơ làm có thêm tin đạt ngưỡng:* ứng viên sửa hồ sơ nhiều lần thì nhận báo liên tục.
+- *Suy thay đổi từ `updatedAt`:* sót các thay đổi ở bảng con (Bối cảnh).
+
+**Hướng mở rộng (không làm ở 0.6):** embedding chạy trên máy riêng (thêm một `HttpEmbeddingProvider` sau port `EmbeddingProvider` có sẵn), hàng đợi kèm nhiều worker khi phải chấm hàng chục nghìn người cùng lúc, truy hồi hai tầng bằng index vector, read replica của Neon cho các trang chỉ đọc.
+
+**Ảnh hưởng:**
+
+- `schema.prisma` + 1 migration viết tay: `Candidate.matchRescoreRequestedAt` kèm index một phần (`WHERE … IS NOT NULL`); `Candidate.matchProfileChangedAt` (chống lượt chấm theo tin ghi đè điểm mới, Q2 của plan backend); có thể thêm index `job_post_skills("skillId")` tuỳ bước 0.
+- Module mới `apps/server/src/modules/live-rescore/` (đánh dấu, hẹn giờ, lượt chấm, cron 15 phút, cache hồ sơ tin, số liệu cho Admin).
+- `candidates`, `skills`, `education-catalog`, `candidate-outreach` (đặt dấu, tự mời và trang tìm ứng viên đọc bảng), `match-scores` (ghi theo ứng viên), `application-automation` (`autoReviewTrigger` theo ứng viên), `job-alerts` (báo lần đầu), `RealtimeNotifier` (một sự kiện mới), `main.ts` (cron mới).
+- Script mới `simulate-inflow`.
+- `packages/shared-types`: trạng thái thẻ tự mời khi tỉ lệ 0%, DTO thẻ "Hệ thống tự động", payload sự kiện realtime.
+- Frontend: dòng chú thích ở `/jobs`, thẻ tự mời, làm mới số "Phù hợp" theo realtime, thẻ "Hệ thống tự động" của Admin, FAQ chatbot.
