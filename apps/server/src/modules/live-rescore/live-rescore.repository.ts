@@ -95,6 +95,34 @@ export class LiveRescoreRepository {
     return rows.map((row) => row.candidateId);
   }
 
+  /**
+   * Tin đang hiển thị gắn ít nhất một kỹ năng trong danh sách (mọi trạng thái của kỹ năng),
+   * cho hàng chờ chấm lại theo tin khi danh mục đổi (Q1). Gọi **trước** khi đổi, như
+   * `findCandidateIdsBySkills`.
+   */
+  async findVisibleJobIdsBySkills(skillIds: string[]): Promise<string[]> {
+    if (skillIds.length === 0) return [];
+    const rows = await this.prisma.$queryRaw<Array<{ jobPostId: string }>>(Prisma.sql`
+      SELECT DISTINCT jps."jobPostId"
+      FROM job_post_skills jps
+      JOIN job_posts j ON j."id" = jps."jobPostId"
+      WHERE jps."skillId" IN (${Prisma.join(skillIds)}) AND ${VISIBLE_JOB}
+    `);
+    return rows.map((row) => row.jobPostId);
+  }
+
+  /** Như `findVisibleJobIdsBySkills`, cho ngành (`job_post_majors`). */
+  async findVisibleJobIdsByMajors(majorIds: string[]): Promise<string[]> {
+    if (majorIds.length === 0) return [];
+    const rows = await this.prisma.$queryRaw<Array<{ jobPostId: string }>>(Prisma.sql`
+      SELECT DISTINCT jpm."jobPostId"
+      FROM job_post_majors jpm
+      JOIN job_posts j ON j."id" = jpm."jobPostId"
+      WHERE jpm."majorId" IN (${Prisma.join(majorIds)}) AND ${VISIBLE_JOB}
+    `);
+    return rows.map((row) => row.jobPostId);
+  }
+
   /** Ứng viên có ít nhất một dòng học vấn gắn ngành trong danh sách. */
   async findCandidateIdsByMajors(majorIds: string[]): Promise<string[]> {
     if (majorIds.length === 0) return [];

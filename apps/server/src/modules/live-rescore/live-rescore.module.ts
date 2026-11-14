@@ -9,7 +9,11 @@ import type { RealtimeNotifier } from "../../shared/ports/RealtimeNotifier";
 import type { EmployerRepository } from "../employers/employer.repository";
 import { LiveRescoreRepository } from "./live-rescore.repository";
 import { LiveRescoreRunStore } from "./live-rescore-run-store";
-import { LiveRescoreScheduler, type LiveRescoreDrainRequester } from "./live-rescore.scheduler";
+import {
+  LiveRescoreScheduler,
+  type LiveRescoreDrainRequester,
+  type LiveRescoreJobRequester,
+} from "./live-rescore.scheduler";
 import { LiveRescoreService } from "./live-rescore.service";
 
 /**
@@ -20,7 +24,7 @@ import { LiveRescoreService } from "./live-rescore.service";
  * Marker chỉ phụ thuộc prisma, logger và cache hồ sơ tin, nên các module kia nhận marker
  * trực tiếp mà không tạo vòng phụ thuộc. Chiều ngược lại (marker → lượt chấm) đi qua
  * `liveRescoreDrainRequester`, resolve `liveRescoreService` lúc gọi. Service cần
- * `matchScoreRepository`, `candidateOutreachService`, `candidateMatchProfileLoader`,
+ * `matchScoreRepository`, `matchScoreService` (hàng chờ theo tin, Q1), `candidateOutreachService`, `candidateMatchProfileLoader`,
  * `jobMatchProfileLoader` và `redis` — đăng ký ở module khác, chỉ resolve khi dùng.
  *
  * Việc kéo theo (bước 4) cần `autoOutreachRepository`, `autoOutreachTrigger` (candidate-outreach),
@@ -44,6 +48,7 @@ export function registerLiveRescore(container: AwilixContainer): void {
         new LiveRescoreService({
           liveRescoreRepository: deps.liveRescoreRepository,
           matchScoreRepository: deps.matchScoreRepository,
+          matchScoreService: deps.matchScoreService,
           candidateOutreachService: deps.candidateOutreachService,
           candidateMatchProfileLoader: deps.candidateMatchProfileLoader,
           jobProfileCache: deps.jobProfileCache,
@@ -67,6 +72,10 @@ export function registerLiveRescore(container: AwilixContainer): void {
     ).singleton(),
     liveRescoreDrainRequester: asValue<LiveRescoreDrainRequester>(() => {
       container.resolve<LiveRescoreService>("liveRescoreService").requestDrain();
+    }),
+    // Danh mục đổi (Q1): marker xếp tin vào hàng chờ theo tin, cùng cách resolve lúc gọi.
+    liveRescoreJobRequester: asValue<LiveRescoreJobRequester>((jobPostIds) => {
+      container.resolve<LiveRescoreService>("liveRescoreService").requestJobRescore(jobPostIds);
     }),
     // Singleton bắt buộc: Map hẹn giờ phải dùng chung cho mọi request.
     liveRescoreScheduler: asFunction(

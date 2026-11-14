@@ -6,6 +6,7 @@ import type {
   CandidateScoreWriteResult,
   MatchScoreRepository,
 } from "../match-scores/match-score.repository";
+import type { MatchScoreService } from "../match-scores/match-score.service";
 import type { JobProfileCache } from "./job-profile-cache";
 import { newFollowUpRun, type FollowUpRun, type LiveRescoreFollowUps } from "./live-rescore-follow-ups";
 import {
@@ -42,6 +43,9 @@ interface BatchOutcome {
   written: Pick<CandidateScoreWriteResult, "transitions" | "newlyScored">;
 }
 
+/** Phần của MatchScoreService mà hàng chờ theo tin (Q1) dùng. */
+type JobRescorer = Pick<MatchScoreService, "rescoreJob">;
+
 const yieldToEventLoop = (): Promise<void> => new Promise((resolve) => setImmediate(resolve));
 
 /**
@@ -51,12 +55,17 @@ const yieldToEventLoop = (): Promise<void> => new Promise((resolve) => setImmedi
  * bảng và xoá dấu trong một transaction mỗi lô. Mỗi lô ghi xong thì chạy việc kéo theo
  * (`LiveRescoreFollowUps`, bước 4); phần gom theo công ty gửi cuối lượt.
  *
+ * Danh mục đổi (Q1, bước 5): tin gắn mục đó nằm trong một hàng chờ trong bộ nhớ, chấm lại
+ * theo tin (`MatchScoreService.rescoreJob`, không sinh job alert) sau phần theo ứng viên của
+ * lượt, trong cùng giới hạn thời gian. Khởi động lại server thì mất hàng chờ; lượt đêm sửa.
+ *
  * Chung process với API (D5): một lượt mỗi lúc, nhường event loop giữa hai lô, giới hạn
  * thời gian và số vector mới mỗi lượt. Model embedding chạy trong worker (Q7).
  */
 export class LiveRescoreService {
   private readonly repository: LiveRescoreRepository;
   private readonly matchScoreRepository: MatchScoreRepository;
+  private readonly matchScoreService: JobRescorer;
   private readonly outreachService: CandidateOutreachService;
   private readonly profileLoader: CandidateMatchProfileLoader;
   private readonly jobProfileCache: JobProfileCache;
@@ -70,10 +79,13 @@ export class LiveRescoreService {
   private running = false;
   private rerunRequested = false;
   private continueTimer: NodeJS.Timeout | null = null;
+  /** Hàng chờ chấm lại theo tin (Q1), theo thứ tự xếp vào. */
+  private readonly pendingJobs = new Set<string>();
 
   constructor({
     liveRescoreRepository,
     matchScoreRepository,
+    matchScoreService,
     candidateOutreachService,
     candidateMatchProfileLoader,
     jobProfileCache,
@@ -84,6 +96,7 @@ export class LiveRescoreService {
   }: {
     liveRescoreRepository: LiveRescoreRepository;
     matchScoreRepository: MatchScoreRepository;
+    matchScoreService: JobRescorer;
     candidateOutreachService: CandidateOutreachService;
     candidateMatchProfileLoader: CandidateMatchProfileLoader;
     jobProfileCache: JobProfileCache;
@@ -94,6 +107,7 @@ export class LiveRescoreService {
   }) {
     this.repository = liveRescoreRepository;
     this.matchScoreRepository = matchScoreRepository;
+    this.matchScoreService = matchScoreService;
     this.outreachService = candidateOutreachService;
     this.profileLoader = candidateMatchProfileLoader;
     this.jobProfileCache = jobProfileCache;
@@ -109,6 +123,15 @@ export class LiveRescoreService {
   /** Lối của hẹn giờ và của danh mục đổi (`liveRescoreDrainRequester`): gọi, không chờ. */
   requestDrain(): void {
     void this.drain("request");
+  }
+
+  /**
+   * Danh mục đổi (Q1, `liveRescoreJobRequester`): xếp tin vào hàng chờ theo tin rồi yêu cầu
+   * một lượt. Đang có lượt thì lượt đó (hoặc lượt chạy tiếp) lấy tin trong hàng.
+   */
+  requestJobRescore(jobPostIds: string[]): void {
+    for (const id of jobPostIds) this.pendingJobs.add(id);
+    this.requestDrain();
   }
 
   /** Huỷ lượt chạy tiếp đã hẹn (test, dừng server). Lượt đang chạy vẫn chạy xong. */
@@ -140,7 +163,7 @@ export class LiveRescoreService {
     }
 
     if (summary) {
-      if (summary.candidates > 0 || summary.kept > 0) this.logger.info("Live rescore run", { ...summary });
+      if (summary.candidates > 0 || summary.kept > 0 || (summary.jobs?.rescored ?? 0) > 0) this.logger.info("Live rescore run", { ...summary });
       try {
         await this.runStore.saveLastRun(summary);
       } catch (error) {
@@ -148,7 +171,8 @@ export class LiveRescoreService {
       }
     }
 
-    if (this.rerunRequested || (summary?.timedOut && summary.remaining > 0)) this.scheduleContinue();
+    const workLeft = (summary?.remaining ?? 0) > 0 || this.pendingJobs.size > 0;
+    if (this.rerunRequested || (summary?.timedOut && workLeft)) this.scheduleContinue();
     return summary ? { status: "DONE", ...summary } : { status: "FAILED" };
   }
 
@@ -169,6 +193,7 @@ export class LiveRescoreService {
     const totals = { batches: 0, candidates: 0, rows: 0, marksCleared: 0, kept: 0, embedded: 0 };
     let timedOut = false;
     const followUps: FollowUpRun = newFollowUpRun();
+    const jobs = { rescored: 0, deferred: 0, failed: 0 };
 
     try {
       for (;;) {
@@ -201,6 +226,8 @@ export class LiveRescoreService {
         }
         await yieldToEventLoop();
       }
+      // Q1: sau phần theo ứng viên, nếu còn giờ.
+      if (!timedOut) timedOut = await this.rescoreQueuedJobs(deadline, jobs);
     } finally {
       // Cả khi lượt hỏng giữa chừng: các lô đã ghi vẫn được kích hoạt tự mời / realtime.
       this.followUps.finishRun(followUps);
@@ -213,6 +240,7 @@ export class LiveRescoreService {
       ...totals,
       timedOut,
       remaining: await this.repository.countMarked(),
+      jobs: { ...jobs, remaining: this.pendingJobs.size },
       followUps: {
         reached: followUps.reached,
         outreachCompanies: followUps.outreachCompanies.size,
@@ -221,6 +249,41 @@ export class LiveRescoreService {
         matchUpdateCompanies: followUps.matchUpdates.size,
       },
     };
+  }
+
+  /**
+   * Hàng chờ theo tin (Q1): lần lượt từng tin, nhường event loop giữa hai tin. Tin đang được
+   * chấm ở lối khác (lượt đêm, lối a) có thể dùng hồ sơ nạp trước lúc danh mục đổi, nên xếp
+   * lại cho lượt sau. Tin lỗi chỉ ghi log và bỏ khỏi hàng (lượt đêm sửa). Trả true nếu hết giờ
+   * khi hàng còn tin.
+   */
+  private async rescoreQueuedJobs(
+    deadline: number,
+    jobs: { rescored: number; deferred: number; failed: number },
+  ): Promise<boolean> {
+    const deferred: string[] = [];
+    try {
+      for (const jobPostId of [...this.pendingJobs]) {
+        if (Date.now() >= deadline) return true;
+        this.pendingJobs.delete(jobPostId);
+        try {
+          const result = await this.matchScoreService.rescoreJob(jobPostId);
+          if (result.status === "DONE") jobs.rescored += 1;
+          else if (result.status === "SKIPPED" && result.reason === "RUNNING") {
+            deferred.push(jobPostId);
+            jobs.deferred += 1;
+          }
+        } catch (error) {
+          jobs.failed += 1;
+          this.logger.error("Live rescore: catalog job rescore failed", { jobPostId, error: errorMessage(error) });
+        }
+        await yieldToEventLoop();
+      }
+      return false;
+    } finally {
+      for (const id of deferred) this.pendingJobs.add(id);
+      if (deferred.length > 0) this.rerunRequested = true;
+    }
   }
 
   /**

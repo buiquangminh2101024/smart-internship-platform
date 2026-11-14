@@ -361,6 +361,10 @@ interface LiveOptions {
   transitionsByWrite?: Record<number, MatchTransition[]>;
   /** Lần chọn lô thứ n (từ 1) ném lỗi. */
   failSelectCall?: number;
+  /** Q1: kết quả rescoreJob theo tin, lần lượt mỗi lần gọi (thiếu ⇒ DONE). */
+  jobResults?: Record<string, Array<"DONE" | "RUNNING" | "NOT_VISIBLE" | "THROW">>;
+  /** Mỗi lần rescoreJob đẩy đồng hồ giả lên chừng này ms. */
+  advancePerJobMs?: number;
 }
 
 function buildLive(options: LiveOptions) {
@@ -375,6 +379,9 @@ function buildLive(options: LiveOptions) {
   let selectCalls = 0;
   const afterBatch: Array<{ transitions: MatchTransition[]; newlyScored: string[] }> = [];
   const finished: FollowUpRun[] = [];
+  /** Thứ tự ghi lô ("write") và chấm theo tin ("job:<id>"). */
+  const events: string[] = [];
+  const jobCalls = new Map<string, number>();
 
   const service = new LiveRescoreService({
     liveRescoreRepository: {
@@ -404,6 +411,7 @@ function buildLive(options: LiveOptions) {
         writeCalls += 1;
         if (writeCalls === options.failWriteCall) throw new Error("tx failed");
         writes.push({ rowsByCandidate: input.rowsByCandidate, clearMarksFor: input.clearMarksFor });
+        events.push("write");
         let cleared = 0;
         for (const id of input.clearMarksFor) {
           const mark = marks.get(id);
@@ -415,6 +423,19 @@ function buildLive(options: LiveOptions) {
         const rows = [...input.rowsByCandidate.values()].reduce((sum, list) => sum + list.length, 0);
         const transitions = options.transitionsByWrite?.[writeCalls] ?? [];
         return { rows, marksCleared: cleared, transitions, newlyScored: [`new-${writeCalls}`] };
+      },
+    },
+    matchScoreService: {
+      rescoreJob: async (jobPostId: string) => {
+        const call = jobCalls.get(jobPostId) ?? 0;
+        jobCalls.set(jobPostId, call + 1);
+        events.push(`job:${jobPostId}`);
+        clock.now += options.advancePerJobMs ?? 0;
+        const outcome = options.jobResults?.[jobPostId]?.[call] ?? "DONE";
+        if (outcome === "THROW") throw new Error("job failed");
+        if (outcome === "RUNNING") return { status: "SKIPPED", reason: "RUNNING" };
+        if (outcome === "NOT_VISIBLE") return { status: "SKIPPED", reason: "NOT_VISIBLE" };
+        return { status: "DONE", pool: 1, rows: 1, pendingRows: 0, pendingBefore: [], durationMs: 1 };
       },
     },
     candidateOutreachService: {
@@ -469,7 +490,7 @@ function buildLive(options: LiveOptions) {
     },
   } as unknown as ConstructorParameters<typeof LiveRescoreService>[0]);
 
-  return { service, marks, writes, batchesSelected, saved, errors, warns, infos, clock, afterBatch, finished };
+  return { service, marks, writes, batchesSelected, saved, errors, warns, infos, clock, afterBatch, finished, events };
 }
 
 test("drain: chấm theo lô, mỗi lô một lần ghi kèm xoá dấu, lưu tóm tắt lượt", async (t) => {
@@ -687,4 +708,63 @@ test("rescoreJob (Q2): tin thôi hiển thị (GONE) thì không đánh dấu l�
   const failing = buildMatchScoreService({ failRemark: true });
   assert.equal((await failing.service.rescoreJob("job-1")).status, "DONE");
   assert.equal(failing.errors.length, 1);
+});
+
+// ─── Q1 (bước 5): hàng chờ chấm lại theo tin khi danh mục đổi ───────────────
+
+test("Q1: tin trong hàng chấm sau phần theo ứng viên, tin trùng chỉ chấm một lần; tóm tắt có jobs", async (t) => {
+  const live = buildLive({ marks: ["a", "b", "c"], pools: { a: ["j1"], b: ["j1"], c: ["j1"] } });
+  t.after(() => live.service.stop());
+  live.service.requestJobRescore(["j1", "j2"]);
+  live.service.requestJobRescore(["j2", "j3"]);
+  await sleep(40);
+  assert.deepEqual(live.events, ["write", "write", "job:j1", "job:j2", "job:j3"]);
+  const summary = live.saved[0]!;
+  assert.deepEqual(summary.jobs, { rescored: 3, deferred: 0, failed: 0, remaining: 0 });
+  assert.ok(live.infos.includes("Live rescore run"));
+});
+
+test("Q1: tin đang được chấm ở lối khác ⇒ xếp lại, lượt tiếp chấm; tin lỗi bỏ khỏi hàng, ghi log; tin thôi hiển thị thì bỏ", async (t) => {
+  const live = buildLive({
+    marks: [],
+    jobResults: { j1: ["RUNNING", "DONE"], j2: ["THROW"], j3: ["NOT_VISIBLE"] },
+  });
+  t.after(() => live.service.stop());
+  live.service.requestJobRescore(["j1", "j2", "j3"]);
+  await sleep(60);
+  assert.deepEqual(live.events, ["job:j1", "job:j2", "job:j3", "job:j1"]);
+  assert.deepEqual(live.saved[0]!.jobs, { rescored: 0, deferred: 1, failed: 1, remaining: 1 });
+  assert.deepEqual(live.saved[1]!.jobs, { rescored: 1, deferred: 0, failed: 0, remaining: 0 });
+  assert.equal(live.errors.length, 1);
+});
+
+test("Q1: hết giờ giữa hàng chờ ⇒ dừng, timedOut, lượt tiếp chấm phần còn lại", async (t) => {
+  const live = buildLive({ marks: [], budgetMs: 1_000, advancePerJobMs: 600 });
+  t.mock.method(Date, "now", () => live.clock.now);
+  t.after(() => live.service.stop());
+  live.service.requestJobRescore(["j1", "j2", "j3"]);
+  await sleep(60);
+  const first = live.saved[0]!;
+  assert.equal(first.timedOut, true);
+  assert.deepEqual(first.jobs, { rescored: 2, deferred: 0, failed: 0, remaining: 1 });
+  assert.deepEqual(live.events, ["job:j1", "job:j2", "job:j3"]);
+  assert.equal(live.saved[1]!.jobs?.remaining, 0);
+});
+
+test("Q1: phần theo ứng viên hết giờ ⇒ chưa chấm tin, để lượt tiếp", async (t) => {
+  const live = buildLive({
+    marks: ["a", "b"],
+    pools: { a: ["j1"], b: ["j1"] },
+    batchSize: 1,
+    budgetMs: 1_000,
+    advancePerBatchMs: 600,
+  });
+  t.mock.method(Date, "now", () => live.clock.now);
+  t.after(() => live.service.stop());
+  live.service.requestJobRescore(["j9"]);
+  await sleep(60);
+  assert.equal(live.saved[0]!.jobs?.rescored, 0);
+  assert.equal(live.saved[0]!.jobs?.remaining, 1);
+  assert.ok(live.events.includes("job:j9"), "lượt tiếp đã chấm tin");
+  assert.ok(live.events.indexOf("job:j9") > live.events.lastIndexOf("write"));
 });

@@ -4,7 +4,7 @@
 > - **Q7:** model embedding chạy trong một `worker_threads`;
 > - **Q8:** chấm theo lô.
 >
-> **Bước 1 (schema, migration) đã làm và áp lên Neon 2026-11-14. Bước 2 (đánh dấu, hẹn giờ), bước 2b (model embedding trong worker), bước 3 (chấm theo lô, ghi bảng, cron 15 phút, Q2) và bước 4 (việc kéo theo: tự mời, tự chuyển, job alert lần đầu, realtime) đã làm cùng ngày**. Bước 3–4 chưa kiểm đầu cuối qua gateway 8080. Việc tiếp theo: bước 5.
+> **Bước 1 (schema, migration) đã làm và áp lên Neon 2026-11-14. Bước 2 (đánh dấu, hẹn giờ), bước 2b (model embedding trong worker), bước 3 (chấm theo lô, ghi bảng, cron 15 phút, Q2), bước 4 (việc kéo theo: tự mời, tự chuyển, job alert lần đầu, realtime) và bước 5 (danh mục đổi: chấm lại theo tin, Q1) đã làm cùng ngày**. Bước 3–5 chưa kiểm đầu cuối qua gateway 8080. Việc tiếp theo: bước 6.
 
 Mục 0.6 của `docs/01-project/FEATURE_BACKLOG.md`. Quyết định kiến trúc: AD-27 (sửa một phần AD-23, AD-24). Frontend: `docs/05-frontend/phases/live-rescore/PLAN.md`. Nền:
 - AD-24 và `docs/06-backend/hiring-progress/PLAN.md` (bảng điểm, `scoreProfiles`, lượt đêm, cache hồ sơ một lượt);
@@ -576,6 +576,28 @@ Không thêm round trip nào. Mỗi lô 50 người trả lại khoảng 4.000 d
   - `match-scores.test.ts` thêm 4 test: mọi dòng rule-only thì báo, vài tin thì không; không có dòng rule-only thì không thêm câu; script không báo; lỗi câu đếm chỉ ghi log; lối a không báo.
   - Toàn bộ 635 / 635 qua, `tsc` qua.
   - Neon, chỉ đọc: `EXPLAIN` câu xoá có `RETURNING` (tin 882 dòng) và câu job alert có điều kiện mới; `countVisibleRows` 50 người ~150 ms.
+
+### Bước 5 — Danh mục đổi (2026-11-14)
+
+Đánh dấu hàng loạt người có mục đó đã làm ở bước 2. Bước này thêm Q1: chấm lại theo tin cho các tin gắn mục đó.
+
+- **Lấy tin trước khi đổi.** `LiveRescoreRepository.findVisibleJobIdsBySkills` / `findVisibleJobIdsByMajors`: tin đang hiển thị gắn kỹ năng (mọi trạng thái) hoặc ngành. Gọi trước thao tác, cùng lý do với danh sách người: từ chối xoá liên kết (cascade), gộp chuyển liên kết sang mục đích.
+- **`CandidateRescoreMarker.markHolders`:** lấy người, lấy tin, chạy thao tác, xoá cache hồ sơ tin, **xếp tin vào hàng chờ**, rồi đánh dấu người. Xếp trước khi đánh dấu để lượt mà đánh dấu yêu cầu đã có sẵn tin trong hàng. Lấy tin hay xếp hàng lỗi chỉ ghi log; thao tác lỗi thì không xếp. Áp cho mọi lối đã nối ở bước 2 (Admin duyệt / từ chối / gộp kỹ năng, sửa tên / từ chối / gộp ngành, cron gộp LLM).
+- **Hàng chờ nằm trong `LiveRescoreService`** (một `Set` trong bộ nhớ, tin trùng chỉ một lần). Marker gọi qua `liveRescoreJobRequester` (đăng ký `asValue`, resolve service lúc gọi, như `liveRescoreDrainRequester`). `requestJobRescore(ids)` xếp tin rồi yêu cầu một lượt.
+- **Trong lượt:** phần theo ứng viên chạy trước. Còn giờ thì lần lượt từng tin gọi `MatchScoreService.rescoreJob` (không qua `trigger`, nên không gọi `jobScoredListener`, không sinh job alert), nhường event loop giữa hai tin, dùng chung giới hạn 60 giây. Hết giờ thì dừng, phần còn lại sang lượt chạy tiếp.
+  - Tin đang được chấm ở lối khác (`SKIPPED RUNNING`, ví dụ lượt đêm đang chấm tin đó với hồ sơ nạp trước lúc đổi) thì xếp lại cho lượt sau.
+  - Tin thôi hiển thị thì bỏ. Tin lỗi thì ghi log và bỏ khỏi hàng (lượt đêm sửa).
+  - `rescoreJob` dùng cache hồ sơ riêng cho từng tin, như lối (a). Người trong pool sửa hồ sơ trong lúc chấm thì Q2 đánh dấu lại như thường.
+- **Tóm tắt lượt** có thêm `jobs { rescored, deferred, failed, remaining }`. Lượt chạy tiếp khi hết giờ mà còn dấu **hoặc còn tin trong hàng**.
+- **Không làm:** việc kéo theo của bước 4 (xoá dấu "hết ứng viên", kích hoạt tự mời, realtime) cho các dòng do hàng chờ theo tin ghi. Lối theo tin hiện có (lượt đêm, lối a) cũng không có. Người vừa đạt ngưỡng vì yêu cầu của tin đổi vẫn được cron tự mời 15 phút xét, trừ tin đang có dấu "hết ứng viên".
+- **Hạn chế:** khởi động lại server thì mất hàng chờ. Người có mục đó vẫn còn dấu trong DB; người khác trong pool của tin giữ điểm cũ đến lượt đêm.
+
+Kiểm:
+- `live-rescore-marker.test.ts` thêm 3 test (thứ tự lấy tin → đổi → xếp → đánh dấu; không ai có ngành nhưng có tin vẫn xếp; lỗi lấy tin / xếp hàng / thao tác). Hai test cũ sửa thứ tự mong đợi vì có thêm bước lấy tin.
+- `live-rescore-batch.test.ts` thêm 4 test (tin chấm sau phần theo ứng viên, trùng chỉ một lần; `RUNNING` xếp lại, lỗi và thôi hiển thị bỏ; hết giờ giữa hàng; phần theo ứng viên hết giờ thì tin sang lượt sau).
+- Toàn bộ 642 / 642 qua, `tsc` qua.
+- Neon, chỉ đọc: hai câu tìm tin với kỹ năng gắn nhiều tin nhất (96 tin) và ngành gắn nhiều tin nhất (43 tin), mỗi câu ~50 ms (gần như chỉ là round trip). Neon vẫn 0 dấu.
+- Chưa đo trên branch `PERF_DATABASE_URL` thời gian đến khi hết dấu sau khi gộp một kỹ năng lớn (plan ghi ở mục kiểm của bước 5). Ước theo bước 0: ~96 tin × ~0,5 s ≈ 50 giây, tức một đến hai lượt.
 
 ### Câu hỏi mới sau bước 0 (đã chốt 2026-11-14: Q7 = b, Q8 = b; xem "Câu hỏi đã chốt" và AD-27 mục 5, 11)
 

@@ -32,6 +32,17 @@ export interface LiveRescoreRunSummary {
     /** Công ty nhận sự kiện `match-scores:updated` (trước khi chặn 15 giây). */
     matchUpdateCompanies: number;
   };
+  /** Hàng chờ chấm lại theo tin khi danh mục đổi (Q1, bước 5). Không có ở tóm tắt lưu trước bước 5. */
+  jobs?: {
+    /** Tin chấm lại xong trong lượt. */
+    rescored: number;
+    /** Tin đang được chấm ở lối khác, xếp lại cho lượt sau. */
+    deferred: number;
+    /** Tin lỗi, bỏ khỏi hàng (lượt đêm sửa). */
+    failed: number;
+    /** Tin còn trong hàng khi lượt kết thúc. */
+    remaining: number;
+  };
 }
 
 const LAST_RUN_KEY = "live-rescore:last-run";

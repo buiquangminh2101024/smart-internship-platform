@@ -7,6 +7,12 @@ import { LIVE_RESCORE_DEBOUNCE_MS, LIVE_RESCORE_MAX_TIMERS } from "./live-rescor
  */
 export type LiveRescoreDrainRequester = () => void;
 
+/**
+ * Xếp các tin vào hàng chờ chấm lại theo tin của lượt chấm (Q1, danh mục đổi) rồi yêu cầu
+ * một lượt. Tin trùng chỉ chấm một lần.
+ */
+export type LiveRescoreJobRequester = (jobPostIds: string[]) => void;
+
 export interface LiveRescoreSchedulerOptions {
   debounceMs?: number;
   maxTimers?: number;

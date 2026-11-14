@@ -1,7 +1,7 @@
 import type { Logger } from "../../shared/logger";
 import type { JobProfileCache } from "./job-profile-cache";
 import type { LiveRescoreRepository } from "./live-rescore.repository";
-import type { LiveRescoreDrainRequester, LiveRescoreScheduler } from "./live-rescore.scheduler";
+import type { LiveRescoreDrainRequester, LiveRescoreJobRequester, LiveRescoreScheduler } from "./live-rescore.scheduler";
 
 /**
  * Đánh dấu "cần chấm lại theo ứng viên" (AD-27 mục 1, D1; bước 2 của
@@ -16,6 +16,7 @@ export class CandidateRescoreMarker {
   private readonly repository: LiveRescoreRepository;
   private readonly scheduler: LiveRescoreScheduler;
   private readonly requestDrain: LiveRescoreDrainRequester;
+  private readonly requestJobRescore: LiveRescoreJobRequester;
   private readonly jobProfileCache: JobProfileCache;
   private readonly logger: Logger;
 
@@ -23,18 +24,21 @@ export class CandidateRescoreMarker {
     liveRescoreRepository,
     liveRescoreScheduler,
     liveRescoreDrainRequester,
+    liveRescoreJobRequester,
     jobProfileCache,
     logger,
   }: {
     liveRescoreRepository: LiveRescoreRepository;
     liveRescoreScheduler: LiveRescoreScheduler;
     liveRescoreDrainRequester: LiveRescoreDrainRequester;
+    liveRescoreJobRequester: LiveRescoreJobRequester;
     jobProfileCache: JobProfileCache;
     logger: Logger;
   }) {
     this.repository = liveRescoreRepository;
     this.scheduler = liveRescoreScheduler;
     this.requestDrain = liveRescoreDrainRequester;
+    this.requestJobRescore = liveRescoreJobRequester;
     this.jobProfileCache = jobProfileCache;
     this.logger = logger;
   }
@@ -66,18 +70,37 @@ export class CandidateRescoreMarker {
    * thái kỹ năng, tên ngành, nên tin gắn mục đó đã đổi yêu cầu.
    */
   markSkillHolders<T>(skillIds: string[], change: () => Promise<T>): Promise<T> {
-    return this.markHolders("skill", skillIds, (ids) => this.repository.findCandidateIdsBySkills(ids), change);
+    return this.markHolders(
+      "skill",
+      skillIds,
+      (ids) => this.repository.findCandidateIdsBySkills(ids),
+      (ids) => this.repository.findVisibleJobIdsBySkills(ids),
+      change,
+    );
   }
 
-  /** Như `markSkillHolders`, cho ngành (học vấn của ứng viên gắn ngành đó). */
+  /** Như `markSkillHolders`, cho ngành (học vấn của ứng viên, yêu cầu ngành của tin). */
   markMajorHolders<T>(majorIds: string[], change: () => Promise<T>): Promise<T> {
-    return this.markHolders("major", majorIds, (ids) => this.repository.findCandidateIdsByMajors(ids), change);
+    return this.markHolders(
+      "major",
+      majorIds,
+      (ids) => this.repository.findCandidateIdsByMajors(ids),
+      (ids) => this.repository.findVisibleJobIdsByMajors(ids),
+      change,
+    );
   }
 
+  /**
+   * Q1 (bước 5): ngoài người có mục đó, các tin đang hiển thị gắn mục đó cũng đổi yêu cầu, nên
+   * người khác trong pool của tin đang giữ điểm tính theo yêu cầu cũ. Lấy danh sách tin
+   * **trước** khi đổi (cùng lý do với người), sau khi đổi thì xếp vào hàng chờ chấm lại theo
+   * tin của lượt chấm (chạy sau phần theo ứng viên, không sinh job alert).
+   */
   private async markHolders<T>(
     kind: "skill" | "major",
     entryIds: string[],
     findHolders: (ids: string[]) => Promise<string[]>,
+    findJobs: (ids: string[]) => Promise<string[]>,
     change: () => Promise<T>,
   ): Promise<T> {
     let holders: string[] | null = null;
@@ -86,9 +109,25 @@ export class CandidateRescoreMarker {
     } catch (error) {
       this.logFailure(`find ${kind} holders`, error, { entryIds });
     }
+    let jobs: string[] = [];
+    try {
+      jobs = await findJobs(entryIds);
+    } catch (error) {
+      this.logFailure(`find ${kind} jobs`, error, { entryIds });
+    }
 
     const result = await change();
     this.jobProfileCache.clear();
+
+    if (jobs.length > 0) {
+      try {
+        // Xếp hàng trước khi đánh dấu: lượt mà requester yêu cầu đã có sẵn tin trong hàng.
+        this.requestJobRescore(jobs);
+        this.logger.info(`Live rescore: xếp ${jobs.length} tin chấm lại vì danh mục ${kind} đổi`, { entryIds });
+      } catch (error) {
+        this.logFailure(`queue ${kind} jobs`, error, { entryIds, jobs: jobs.length });
+      }
+    }
 
     if (holders && holders.length > 0) {
       try {

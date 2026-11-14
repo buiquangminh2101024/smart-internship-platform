@@ -105,6 +105,11 @@ interface FakeRepoOptions {
   failFind?: boolean;
   skillHolders?: string[];
   majorHolders?: string[];
+  /** Tin đang hiển thị gắn mục đó (Q1). */
+  skillJobs?: string[];
+  majorJobs?: string[];
+  failFindJobs?: boolean;
+  failQueue?: boolean;
 }
 
 function buildMarker(options: FakeRepoOptions = {}) {
@@ -112,6 +117,7 @@ function buildMarker(options: FakeRepoOptions = {}) {
   const log: string[] = [];
   const marked: string[][] = [];
   const touched: string[] = [];
+  const queued: string[][] = [];
   let drains = 0;
   const repository = {
     markCandidates: async (ids: string[]) => {
@@ -130,6 +136,16 @@ function buildMarker(options: FakeRepoOptions = {}) {
       if (options.failFind) throw new Error("db down");
       return options.majorHolders ?? [];
     },
+    findVisibleJobIdsBySkills: async () => {
+      log.push("find-jobs");
+      if (options.failFindJobs) throw new Error("db down");
+      return options.skillJobs ?? [];
+    },
+    findVisibleJobIdsByMajors: async () => {
+      log.push("find-jobs");
+      if (options.failFindJobs) throw new Error("db down");
+      return options.majorJobs ?? [];
+    },
   } as unknown as LiveRescoreRepository;
   const scheduler = { touch: (id: string) => touched.push(id) } as unknown as LiveRescoreScheduler;
   const jobProfileCache = {
@@ -143,10 +159,15 @@ function buildMarker(options: FakeRepoOptions = {}) {
     liveRescoreDrainRequester: () => {
       drains += 1;
     },
+    liveRescoreJobRequester: (jobPostIds: string[]) => {
+      log.push("queue");
+      if (options.failQueue) throw new Error("boom");
+      queued.push(jobPostIds);
+    },
     jobProfileCache,
     logger,
   });
-  return { marker, log, marked, touched, drains: () => drains, errors };
+  return { marker, log, marked, touched, queued, drains: () => drains, errors };
 }
 
 test("mark: một câu đánh dấu rồi đặt hẹn giờ", async () => {
@@ -170,7 +191,7 @@ test("markSkillHolders: lấy người trước khi đổi, đánh dấu sau khi
     return 42;
   });
   assert.equal(result, 42);
-  assert.deepEqual(log, ["find", "change", "clear-job-cache", "mark"], "xoá cache hồ sơ tin sau khi đổi");
+  assert.deepEqual(log, ["find", "find-jobs", "change", "clear-job-cache", "mark"], "xoá cache hồ sơ tin sau khi đổi");
   assert.deepEqual(marked, [["c1", "c2"]]);
   assert.deepEqual(touched, [], "danh mục đổi không hẹn giờ cho từng người");
   assert.equal(drains(), 1);
@@ -207,8 +228,51 @@ test("markSkillHolders: lấy người lỗi thì thao tác vẫn chạy; đánh
 test("markMajorHolders: không ai có ngành thì không ghi, không yêu cầu chấm (vẫn xoá cache hồ sơ tin)", async () => {
   const { marker, log, drains } = buildMarker({ majorHolders: [] });
   await marker.markMajorHolders(["m1"], async () => undefined);
-  assert.deepEqual(log, ["find", "clear-job-cache"], "tin gắn ngành vẫn đổi yêu cầu dù không ứng viên nào có ngành");
+  assert.deepEqual(log, ["find", "find-jobs", "clear-job-cache"], "tin gắn ngành vẫn đổi yêu cầu dù không ứng viên nào có ngành");
   assert.equal(drains(), 0);
+});
+
+// ─── Q1 (bước 5): tin gắn mục đó vào hàng chờ chấm lại theo tin ─────────────
+
+test("markSkillHolders (Q1): lấy tin trước khi đổi, xếp hàng sau khi đổi và trước khi đánh dấu người", async () => {
+  const { marker, log, queued, marked, drains } = buildMarker({ skillHolders: ["c1"], skillJobs: ["j1", "j2"] });
+  await marker.markSkillHolders(["s1"], async () => {
+    log.push("change");
+  });
+  assert.deepEqual(log, ["find", "find-jobs", "change", "clear-job-cache", "queue", "mark"]);
+  assert.deepEqual(queued, [["j1", "j2"]]);
+  assert.deepEqual(marked, [["c1"]]);
+  assert.equal(drains(), 1);
+});
+
+test("markMajorHolders (Q1): không ai có ngành nhưng có tin gắn ngành ⇒ vẫn xếp tin (requester tự yêu cầu lượt)", async () => {
+  const { marker, queued, marked, drains } = buildMarker({ majorHolders: [], majorJobs: ["j9"] });
+  await marker.markMajorHolders(["m1"], async () => undefined);
+  assert.deepEqual(queued, [["j9"]]);
+  assert.deepEqual(marked, []);
+  assert.equal(drains(), 0, "marker không gọi drain riêng; requestJobRescore đã yêu cầu lượt");
+});
+
+test("Q1: lấy tin lỗi hay xếp hàng lỗi chỉ ghi log, thao tác và đánh dấu người vẫn chạy; thao tác lỗi thì không xếp", async () => {
+  const findFails = buildMarker({ skillHolders: ["c1"], skillJobs: ["j1"], failFindJobs: true });
+  assert.equal(await findFails.marker.markSkillHolders(["s1"], async () => "ok"), "ok");
+  assert.deepEqual(findFails.queued, []);
+  assert.deepEqual(findFails.marked, [["c1"]]);
+  assert.equal(findFails.errors.length, 1);
+
+  const queueFails = buildMarker({ skillHolders: ["c1"], skillJobs: ["j1"], failQueue: true });
+  assert.equal(await queueFails.marker.markSkillHolders(["s1"], async () => "ok"), "ok");
+  assert.deepEqual(queueFails.marked, [["c1"]]);
+  assert.equal(queueFails.errors.length, 1);
+
+  const changeFails = buildMarker({ skillHolders: ["c1"], skillJobs: ["j1"] });
+  await assert.rejects(
+    changeFails.marker.markSkillHolders(["s1"], async () => {
+      throw new Error("conflict");
+    }),
+    /conflict/,
+  );
+  assert.deepEqual(changeFails.queued, []);
 });
 
 // ─── CandidateService: mọi lối ghi bộ chấm đọc ──────────────────────────────
