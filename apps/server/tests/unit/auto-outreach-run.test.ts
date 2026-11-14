@@ -123,6 +123,7 @@ function row(id: string, patch: Partial<RunnableJobRow> = {}): RunnableJobRow {
     exhaustedReason: null,
     active: 0,
     hired: 0,
+    matchScoresAt: null,
     ...patch,
   };
 }
@@ -143,6 +144,8 @@ interface RunOptions {
   /** Sau N lời mời đã tạo thì mọi lần sau trả QUOTA. */
   quotaAfter?: number;
   cappedMatch?: boolean;
+  /** 0.6 bước 6: hàng chờ từ bảng điểm theo tin (đã lọc người không mời được), điểm giảm dần. */
+  scoredQueues?: Record<string, Array<{ candidateId: string; score: number }>>;
 }
 
 function buildRunService(options: RunOptions = {}) {
@@ -155,6 +158,7 @@ function buildRunService(options: RunOptions = {}) {
     notified: [] as Array<{ userId: string; data: unknown; key: string }>,
     lastRun: [] as string[],
     unlocked: [] as string[],
+    scoredQueue: [] as Array<{ jobPostId: string; minScore: number; limit: number }>,
   };
   let created = 0;
   const service = new AutoOutreachService({
@@ -203,6 +207,14 @@ function buildRunService(options: RunOptions = {}) {
         calls.cleared.push(jobPostId);
       },
       hasCappedSkillMatch: async () => options.cappedMatch ?? false,
+      // Như câu thật: lọc theo ngưỡng của tin, cắt theo giới hạn.
+      findScoredQueue: async (jobPostId: string, minScore: number, limit: number) => {
+        calls.scoredQueue.push({ jobPostId, minScore, limit });
+        return (options.scoredQueues?.[jobPostId] ?? [])
+          .filter((entry) => entry.score >= minScore)
+          .slice(0, limit)
+          .map((entry) => ({ ...entry, weightsVersion: "hybrid-v2" }));
+      },
     },
     notificationsService: {
       notifyOnce: async (_type: string, userId: string, data: unknown, key: string) => {
@@ -515,4 +527,66 @@ test("tự đăng tin đã bật tự mời ⇒ kích hoạt; tin chưa bật ho
     assert.deepEqual(triggered, expected, `requiresApproval=${requiresApproval}, enabled=${autoOutreachEnabled}`);
     assert.deepEqual(rescored, expectedRescored, `bảng điểm: requiresApproval=${requiresApproval}, enabled=${autoOutreachEnabled}`);
   }
+});
+
+// ─── 0.6 bước 6: tự mời đọc bảng điểm (AD-27 mục 7) ─────────────────────────
+
+const SCORED_AT = new Date("2026-11-14T03:30:00.000Z");
+
+test("bảng điểm: tin đã chấm ⇒ đọc hàng chờ từ bảng (ngưỡng của tin, tối đa 2R), không lọc pool, không chấm lại", async () => {
+  const { service, calls } = buildRunService({
+    jobs: [row("A", { active: 2, matchScoresAt: SCORED_AT, minScore: 75 })], // target 5 ⇒ thiếu 3
+    scoredQueues: { A: [{ candidateId: "a9", score: 96 }, { candidateId: "a2", score: 88 }, { candidateId: "a7", score: 80 }, { candidateId: "a1", score: 70 }] },
+    refuse: { a2: "BLOCKED" },
+  });
+  const result = done(await service.runForCompany("co-1", FUTURE()));
+  assert.deepEqual(calls.scoredQueue, [{ jobPostId: "A", minScore: 75, limit: 22 }], "R = 11 ⇒ 22 người");
+  assert.deepEqual(calls.pool, []);
+  assert.deepEqual(calls.scored, []);
+  assert.deepEqual(
+    calls.invites.map((input) => input.candidateId),
+    ["a9", "a2", "a7"],
+    "theo thứ tự của bảng; a2 bị bỏ qua thì a7 thế chỗ; a1 dưới ngưỡng",
+  );
+  assert.deepEqual(calls.invites[0]!.match, { score: 96, weightsVersion: "hybrid-v2" }, "lưu điểm và phiên bản trọng số từ bảng");
+  assert.equal(result.sent, 2);
+  assert.deepEqual(result.skipped, { BLOCKED: 1 });
+});
+
+test("bảng điểm: không ai đạt ngưỡng ⇒ đặt dấu như đường cũ; có người lại thì xoá dấu", async () => {
+  const old = new Date(Date.now() - 4 * HOUR_MS);
+  const { service, calls } = buildRunService({
+    jobs: [
+      row("X", { matchScoresAt: SCORED_AT }),
+      row("Z", { matchScoresAt: SCORED_AT, exhaustedAt: old, exhaustedReason: "NO_MATCH" }),
+    ],
+    scoredQueues: { X: [{ candidateId: "x1", score: 60 }], Z: [{ candidateId: "z1", score: 85 }] },
+  });
+  const result = done(await service.runForCompany("co-1", FUTURE()));
+  assert.deepEqual(calls.marked, [["X", "NO_MATCH"]]);
+  assert.deepEqual(calls.cleared, ["Z"]);
+  assert.deepEqual(
+    calls.invites.map((input) => input.candidateId),
+    ["z1"],
+  );
+  assert.equal(result.jobsExhausted, 1);
+});
+
+test("bảng điểm: tin chưa chấm lần nào (matchScoresAt null) vẫn đi đường cũ, cùng lượt với tin đọc bảng", async () => {
+  const { service, calls } = buildRunService({
+    jobs: [row("A", { matchScoresAt: SCORED_AT }), row("B")],
+    scoredQueues: { A: [{ candidateId: "a1", score: 90 }] },
+    pools: { B: ["b1"] },
+    scores: { b1: 90 },
+  });
+  done(await service.runForCompany("co-1", FUTURE()));
+  assert.deepEqual(
+    calls.scoredQueue.map((call) => call.jobPostId),
+    ["A"],
+  );
+  assert.deepEqual(
+    calls.pool.map((call) => call.jobPostId),
+    ["B"],
+  );
+  assert.deepEqual(calls.invites.map((input) => input.candidateId).sort(), ["a1", "b1"]);
 });

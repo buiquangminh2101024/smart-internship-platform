@@ -28,7 +28,7 @@ import {
 } from "./candidate-outreach.config";
 import type { UpdateJobAutoOutreachInput } from "./candidate-outreach.dto";
 import type { CandidateOutreachRepository, OutreachEmployer } from "./candidate-outreach.repository";
-import type { CandidateOutreachService, OutreachQuotaPolicy } from "./candidate-outreach.service";
+import type { CandidateOutreachService, InvitationMatch, OutreachQuotaPolicy } from "./candidate-outreach.service";
 
 /**
  * Kích hoạt một lượt tự động mời cho công ty: gọi, không chờ, lỗi chỉ ghi log (bước 5).
@@ -64,7 +64,7 @@ interface ScannedJob {
   row: RunnableJobRow;
   target: number;
   deficit: number;
-  queue: Array<{ candidateId: string; match: MatchResult }>;
+  queue: Array<{ candidateId: string; match: InvitationMatch }>;
   sent: number;
 }
 
@@ -278,7 +278,8 @@ export class AutoOutreachService {
         break;
       }
       if (index > 0) await yieldToEventLoop();
-      const queue = await this.buildQueue(job.row);
+      // Đọc bảng: lấy tối đa 2R người (phần dư bù cho người bị bỏ qua do lượt khác vừa mời).
+      const queue = await this.buildQueue(job.row, remaining * 2);
       if (queue === null) continue; // chấm lỗi ⇒ bỏ qua tin lượt này, không đặt dấu
       if (queue.length === 0) {
         const reason = (await this.repository.hasCappedSkillMatch(job.row.id)) ? "CANDIDATE_CAP" : "NO_MATCH";
@@ -334,8 +335,17 @@ export class AutoOutreachService {
     };
   }
 
-  /** Pool (bỏ người đủ trần hôm nay) → chấm → lọc ≥ ngưỡng → điểm giảm dần. null khi chấm lỗi. */
-  private async buildQueue(row: RunnableJobRow): Promise<ScannedJob["queue"] | null> {
+  /**
+   * Hàng chờ của một tin, điểm giảm dần. Tin đã có bảng điểm (`matchScoresAt`) thì đọc thẳng
+   * từ bảng, không chấm lại (0.6 bước 6, AD-27 mục 7): điểm được giữ mới bởi chấm lại theo
+   * ứng viên. Tin chưa chấm lần nào thì đi đường cũ: pool ≤ 50 (bỏ người đủ trần hôm nay) →
+   * chấm → lọc ≥ ngưỡng; null khi chấm lỗi.
+   */
+  private async buildQueue(row: RunnableJobRow, scoredLimit: number): Promise<ScannedJob["queue"] | null> {
+    if (row.matchScoresAt) {
+      const scored = await this.repository.findScoredQueue(row.id, row.minScore, scoredLimit);
+      return scored.map(({ candidateId, score, weightsVersion }) => ({ candidateId, match: { score, weightsVersion } }));
+    }
     const poolIds = await this.outreachRepository.searchCandidatePool(row.id, AUTO_OUTREACH_PREFILTER_LIMIT, {
       excludeCappedToday: true,
     });

@@ -296,3 +296,60 @@ test("searchCandidates: người đã nhận đủ trần vẫn hiện, kèm cap
     ],
   );
 });
+
+test("searchCandidates: tin đã chấm ⇒ lấy 10 người từ bảng (không lọc trần ngày), không lọc pool, chấm lại và sắp theo điểm mới", async () => {
+  const { service } = buildService();
+  const deps = service as unknown as Record<string, unknown>;
+  const scoredCalls: unknown[][] = [];
+  let poolCalled = false;
+  deps.employerIdentityCache = { require: async () => ({ employerId: "emp-1", companyId: "co-1" }) };
+  Object.assign(deps.repository as object, {
+    findOutreachCompany: async () => ({ id: "co-1", name: "Công ty A", verifiedAt: new Date() }),
+    findJobPost: async () => ({
+      id: "job-1",
+      title: JOB.title,
+      status: "PUBLISHED",
+      employerId: "emp-1",
+      companyId: "co-1",
+      matchScoresAt: new Date("2026-11-14T03:30:00.000Z"),
+    }),
+    searchCandidatePool: async () => {
+      poolCalled = true;
+      return [];
+    },
+    findSearchCards: async (ids: string[]) =>
+      ids.map((id) => ({ candidateId: id, fullName: id, avatarUrl: null, headline: null, cityName: null, education: null })),
+    findExpiredInvitedCandidateIds: async () => new Set<string>(),
+    countReceivedTodayByCandidate: async () => new Map([["cand-b", CANDIDATE_DAILY_INVITATION_CAP]]),
+  });
+  // Thứ tự của bảng (điểm lưu giảm dần): a, b, c, d.
+  deps.autoOutreachRepository = {
+    findScoredQueue: async (...args: unknown[]) => {
+      scoredCalls.push(args);
+      return ["cand-a", "cand-b", "cand-c", "cand-d"].map((candidateId) => ({ candidateId, score: 0, weightsVersion: "hybrid-v2" }));
+    },
+  };
+  deps.subscriptionsService = { getCompanySubscriptionAccess: async () => ({ mode: "TRIAL" }) };
+  deps.jobMatchProfileLoader = { load: async () => ({ jobPostId: "job-1", matchText: "" }) };
+  deps.candidateMatchProfileLoader = {
+    loadMany: async (ids: string[]) => new Map(ids.map((id) => [id, { candidateId: id, skills: [] }])),
+  };
+  // Điểm vừa chấm: c tăng lên đầu; a và d bằng điểm ⇒ giữ thứ tự của bảng.
+  const scoreById: Record<string, number> = { "cand-a": 80, "cand-b": 85, "cand-c": 95, "cand-d": 80 };
+  deps.ruleJobMatcher = {
+    match: ({ candidate }: { candidate: { candidateId: string } }) => ({ score: scoreById[candidate.candidateId] }),
+  };
+
+  const results = await service.searchCandidates("user-emp-1", "job-1");
+  assert.deepEqual(scoredCalls, [["job-1", 0, 10, { includeCappedToday: true }]], "không lọc ngưỡng, tối đa 10, giữ người đủ trần");
+  assert.equal(poolCalled, false, "không đi pool 50");
+  assert.deepEqual(
+    results.map((result) => [result.candidateId, result.cappedToday]),
+    [
+      ["cand-c", false],
+      ["cand-b", true],
+      ["cand-a", false],
+      ["cand-d", false],
+    ],
+  );
+});

@@ -55,6 +55,15 @@ export interface RunnableJobRow {
   exhaustedReason: AutoOutreachExhaustedReason | null;
   active: number;
   hired: number;
+  /** Lần chấm bảng điểm gần nhất của tin (AD-24). null ⇒ chưa chấm, lượt tự mời đi đường cũ. */
+  matchScoresAt: Date | null;
+}
+
+/** Một người trong hàng chờ tự mời đọc từ bảng điểm (0.6 bước 6, AD-27 mục 7). */
+export interface ScoredOutreachCandidate {
+  candidateId: string;
+  score: number;
+  weightsVersion: string;
 }
 
 export class AutoOutreachRepository {
@@ -110,6 +119,7 @@ export class AutoOutreachRepository {
         (u."status" = 'SUSPENDED') AS "posterSuspended",
         j."expiresAt", j."hiringTarget", j."autoOutreachMinScore" AS "minScore",
         j."autoOutreachExhaustedAt" AS "exhaustedAt", j."autoOutreachExhaustedReason" AS "exhaustedReason",
+        j."matchScoresAt",
         (
           SELECT COUNT(*)::int FROM candidate_outreach_invitations i
           WHERE i."jobPostId" = j."id"
@@ -223,6 +233,60 @@ export class AutoOutreachRepository {
       SELECT DISTINCT "companyId" FROM eligible ORDER BY "companyId"
     `);
     return rows.map((row) => row.companyId);
+  }
+
+  /**
+   * Hàng chờ tự mời của một tin đọc từ bảng điểm (0.6 bước 6, AD-27 mục 7), không chấm lại:
+   * điểm ≥ `minScore` và còn mời được (cùng điều kiện `searchCandidatePool` có
+   * `excludeCappedToday`: bật cho liên hệ, chưa nộp đơn, không có lời mời chặn, chưa đủ trần
+   * hôm nay). Điểm giảm dần; bằng điểm thì nhiều kỹ năng APPROVED chung với tin hơn trước
+   * (như thứ tự của pool cũ), rồi theo id. Dòng `semanticPending` (rule-only) vẫn được lấy,
+   * như số "Phù hợp" đang đếm. Dùng index `(jobPostId, score)`.
+   *
+   * `includeCappedToday` (trang tìm ứng viên, 0.6 bước 7): không bỏ người đã nhận đủ trần
+   * hôm nay, như `searchCandidatePool` không bật `excludeCappedToday` — trang vẫn hiện họ
+   * kèm `cappedToday`.
+   */
+  async findScoredQueue(
+    jobPostId: string,
+    minScore: number,
+    limit: number,
+    options: { includeCappedToday?: boolean } = {},
+  ): Promise<ScoredOutreachCandidate[]> {
+    if (limit <= 0) return [];
+    const cappedFilter = options.includeCappedToday
+      ? Prisma.empty
+      : Prisma.sql`AND (
+          SELECT COUNT(*) FROM candidate_outreach_invitations r
+          WHERE r."candidateId" = s."candidateId" AND r."createdAt" >= ${START_OF_UTC_DAY}
+        ) < ${CANDIDATE_DAILY_INVITATION_CAP}`;
+    return this.prisma.$queryRaw<ScoredOutreachCandidate[]>(Prisma.sql`
+      SELECT s."candidateId", s."score", s."weightsVersion"
+      FROM job_candidate_match_scores s
+      JOIN candidates c ON c."id" = s."candidateId" AND c."isOpenToOutreach" = true
+      WHERE s."jobPostId" = ${jobPostId}
+        AND s."score" >= ${minScore}
+        AND NOT EXISTS (
+          SELECT 1 FROM applications a
+          WHERE a."candidateId" = s."candidateId" AND a."jobPostId" = ${jobPostId}
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM candidate_outreach_invitations i
+          WHERE i."candidateId" = s."candidateId" AND i."jobPostId" = ${jobPostId}
+            AND i."status"::text IN (${Prisma.join(BLOCKING_INVITATION_STATUSES)})
+        )
+        ${cappedFilter}
+      ORDER BY
+        s."score" DESC,
+        (
+          SELECT COUNT(*) FROM candidate_skills cs
+          JOIN job_post_skills jps ON jps."skillId" = cs."skillId" AND jps."jobPostId" = ${jobPostId}
+          JOIN skills sk ON sk."id" = cs."skillId" AND sk."status" = 'APPROVED'
+          WHERE cs."candidateId" = s."candidateId"
+        ) DESC,
+        s."candidateId"
+      LIMIT ${limit}
+    `);
   }
 
   /**

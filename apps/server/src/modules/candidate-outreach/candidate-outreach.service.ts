@@ -80,6 +80,12 @@ export type CreateInvitationResult =
   | { created: true; invitation: InvitationWithRelations }
   | { created: false; reason: InvitationSkipReason };
 
+/**
+ * Phần điểm mà lời mời lưu (`matchScore`, `matchWeightsVersion`). `MatchResult` thoả kiểu
+ * này, nên mời tay truyền nguyên kết quả chấm; tự mời đọc bảng điểm truyền thẳng hai trường.
+ */
+export type InvitationMatch = Pick<MatchResult, "score" | "weightsVersion">;
+
 export interface CreateInvitationInput {
   /** Người đứng tên lời mời. Tự động mời dùng người đăng tin (AD-23 mục 9). */
   sender: { employerId: string; companyId: string; companyName: string };
@@ -88,10 +94,10 @@ export interface CreateInvitationInput {
   source: OutreachInvitationSource;
   limit: OutreachDailyLimit;
   /**
-   * Điểm đã chấm sẵn (tự động mời chấm cả pool trước khi chọn người). Bỏ trống thì chấm
-   * lại riêng người này lúc gửi (D7).
+   * Điểm đã có sẵn (tự mời đọc bảng điểm hoặc chấm cả pool trước khi chọn người; mời tay
+   * lấy từ lần chấm của trang). Bỏ trống thì chấm lại riêng người này lúc gửi (D7).
    */
-  match?: MatchResult | null | undefined;
+  match?: InvitationMatch | null | undefined;
 }
 
 /**
@@ -177,19 +183,30 @@ export class CandidateOutreachService {
 
   // ─── Employer ────────────────────────────────────────────────────────────
 
-  /** Danh sách "Gợi ý" (D6): giai đoạn A (SQL lọc thô) + B (chấm điểm), không cache. */
+  /**
+   * Danh sách "Gợi ý" (D6), không cache. Tin đã có bảng điểm (`matchScoresAt`) thì lấy 10
+   * người còn mời được có điểm lưu cao nhất (0.6 bước 7, AD-27 mục 7), không giới hạn pool
+   * 50. Tin chưa chấm lần nào thì đi đường cũ: giai đoạn A (SQL lọc thô, ≤ 50 người nhiều kỹ
+   * năng chung nhất). Cả hai đều chấm lại những người lấy ra để có lý do và điểm mới nhất.
+   */
   async searchCandidates(userId: string, jobPostId: string): Promise<CandidateSearchResultDto[]> {
     const employer = await this.requireEmployer(userId);
     const jobPost = await this.requireOwnedJobPost(employer, jobPostId);
     assertPublished(jobPost);
     await this.resolveDailyQuota(employer);
 
-    const poolIds = await this.repository.searchCandidatePool(jobPost.id, PREFILTER_LIMIT);
+    const poolIds = jobPost.matchScoresAt
+      ? (
+          await this.autoOutreachRepository.findScoredQueue(jobPost.id, 0, TOP_RESULT_COUNT, {
+            includeCappedToday: true,
+          })
+        ).map((row) => row.candidateId)
+      : await this.repository.searchCandidatePool(jobPost.id, PREFILTER_LIMIT);
     if (poolIds.length === 0) return [];
 
     const job = await this.requireJobProfile(jobPost.id);
     const scores = await this.scoreCandidates(job, poolIds, MAX_NEW_EMBEDDINGS_PER_REQUEST);
-    // sort ổn định ⇒ điểm bằng nhau giữ thứ tự của pool (nhiều kỹ năng giao hơn trước).
+    // sort ổn định ⇒ điểm bằng nhau giữ thứ tự của pool (điểm lưu, rồi nhiều kỹ năng giao hơn trước).
     const topIds = poolIds
       .filter((id) => scores.has(id))
       .sort((left, right) => (scores.get(right)!.score ?? -1) - (scores.get(left)!.score ?? -1))

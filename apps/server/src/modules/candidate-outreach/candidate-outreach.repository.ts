@@ -46,6 +46,8 @@ export interface OutreachJobPost {
   status: JobPostStatus;
   employerId: string;
   companyId: string;
+  /** Lần chấm bảng điểm gần nhất (AD-24). Khác null ⇒ trang tìm ứng viên đọc bảng (0.6 bước 7). */
+  matchScoresAt: Date | null;
 }
 
 /** Bộ lọc của danh sách lời mời cấp công ty; `status` là trạng thái hiển thị. */
@@ -138,7 +140,7 @@ export class CandidateOutreachRepository {
   findJobPost(jobPostId: string): Promise<OutreachJobPost | null> {
     return this.prisma.jobPost.findUnique({
       where: { id: jobPostId },
-      select: { id: true, title: true, status: true, employerId: true, companyId: true },
+      select: { id: true, title: true, status: true, employerId: true, companyId: true, matchScoresAt: true },
     });
   }
 

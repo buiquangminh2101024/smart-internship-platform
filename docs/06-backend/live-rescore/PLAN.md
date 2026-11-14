@@ -4,7 +4,7 @@
 > - **Q7:** model embedding chạy trong một `worker_threads`;
 > - **Q8:** chấm theo lô.
 >
-> **Bước 1 (schema, migration) đã làm và áp lên Neon 2026-11-14. Bước 2 (đánh dấu, hẹn giờ), bước 2b (model embedding trong worker), bước 3 (chấm theo lô, ghi bảng, cron 15 phút, Q2), bước 4 (việc kéo theo: tự mời, tự chuyển, job alert lần đầu, realtime) và bước 5 (danh mục đổi: chấm lại theo tin, Q1) đã làm cùng ngày**. Bước 3–5 chưa kiểm đầu cuối qua gateway 8080. Việc tiếp theo: bước 6.
+> **Bước 1 (schema, migration) đã làm và áp lên Neon 2026-11-14. Bước 2 (đánh dấu, hẹn giờ), bước 2b (model embedding trong worker), bước 3 (chấm theo lô, ghi bảng, cron 15 phút, Q2), bước 4 (việc kéo theo: tự mời, tự chuyển, job alert lần đầu, realtime) bước 5 (danh mục đổi: chấm lại theo tin, Q1), bước 6 (tự mời đọc bảng điểm) và bước 7 (trang tìm ứng viên đọc bảng điểm) đã làm cùng ngày**. Bước 3–7 chưa kiểm đầu cuối qua gateway 8080. Việc tiếp theo: bước 8.
 
 Mục 0.6 của `docs/01-project/FEATURE_BACKLOG.md`. Quyết định kiến trúc: AD-27 (sửa một phần AD-23, AD-24). Frontend: `docs/05-frontend/phases/live-rescore/PLAN.md`. Nền:
 - AD-24 và `docs/06-backend/hiring-progress/PLAN.md` (bảng điểm, `scoreProfiles`, lượt đêm, cache hồ sơ một lượt);
@@ -598,6 +598,44 @@ Kiểm:
 - Toàn bộ 642 / 642 qua, `tsc` qua.
 - Neon, chỉ đọc: hai câu tìm tin với kỹ năng gắn nhiều tin nhất (96 tin) và ngành gắn nhiều tin nhất (43 tin), mỗi câu ~50 ms (gần như chỉ là round trip). Neon vẫn 0 dấu.
 - Chưa đo trên branch `PERF_DATABASE_URL` thời gian đến khi hết dấu sau khi gộp một kỹ năng lớn (plan ghi ở mục kiểm của bước 5). Ước theo bước 0: ~96 tin × ~0,5 s ≈ 50 giây, tức một đến hai lượt.
+
+### Bước 6 — Tự mời đọc bảng điểm (2026-11-14)
+
+- **`AutoOutreachRepository.findScoredQueue(jobPostId, minScore, limit)`**, một câu:
+  - điểm ≥ ngưỡng của tin;
+  - còn mời được, cùng điều kiện `searchCandidatePool` có `excludeCappedToday`: bật cho liên hệ, chưa nộp đơn (mọi trạng thái), không có lời mời chặn, chưa đủ trần hôm nay;
+  - sắp điểm giảm dần, bằng điểm thì nhiều kỹ năng `APPROVED` chung với tin hơn trước (như thứ tự pool cũ), rồi theo id;
+  - dòng `semanticPending` vẫn được lấy;
+  - dùng index `(jobPostId, score)`.
+- **`findRunnableJobs`** trả thêm `matchScoresAt`. `AutoOutreachService.buildQueue` đọc bảng khi tin đã chấm, **không chấm lại**. Tin chưa chấm lần nào đi đường cũ (pool ≤ 50 rồi `scorePool`), nên `AUTO_OUTREACH_PREFILTER_LIMIT` vẫn còn chỗ dùng và được giữ.
+- **Số người mỗi tin: 2R**, R là số lượt tự động còn lại của công ty lúc xét. Phần dư bù cho người bị `createInvitation` bỏ qua vì một lượt khác vừa mời, hay vừa đủ trần. Câu đọc bảng đã lọc trước những người không mời được, nên ít khi phải dùng tới phần dư.
+- **`createInvitation`** nhận `match?: InvitationMatch | null`, với `InvitationMatch = Pick<MatchResult, "score" | "weightsVersion">`. `MatchResult` vẫn thoả kiểu này, nên mời tay, "Mời tất cả" và đường cũ của tự mời không phải sửa. Lượt tự mời đọc bảng truyền thẳng `{ score, weightsVersion }` từ bảng.
+- Đặt / xoá dấu "hết ứng viên" và `hasCappedSkillMatch` giữ nguyên: hàng chờ rỗng thì đặt dấu, có người lại thì xoá dấu.
+
+Kiểm:
+- `auto-outreach-run.test.ts` thêm 3 test:
+  - đọc bảng theo ngưỡng của tin, tối đa 2R, không lọc pool, không chấm lại, lưu điểm và phiên bản trọng số từ bảng, người bị bỏ qua có người kế tiếp thế chỗ;
+  - không ai đạt ngưỡng thì đặt dấu, có người lại thì xoá dấu;
+  - tin chưa chấm đi đường cũ trong cùng lượt.
+- Toàn bộ 645 / 645 qua, `tsc` qua.
+- Neon, chỉ đọc: câu đọc bảng cho cả 34 tin đang hiển thị của Mây Xanh, giới hạn 22 người, ngưỡng của từng tin. Tổng **~1,9 giây** (381 người vào hàng chờ, chậm nhất 89 ms mỗi tin, phần lớn là round trip). Mốc của đường cũ ở bước 0 là ~27 giây. `EXPLAIN ANALYZE` tin chậm nhất: dùng index `(jobPostId, score)`, chạy 0,8 ms.
+- Chưa đo một lượt cron thật, vì Mây Xanh chưa có tin nào bật tự mời và lượt thật sẽ gửi lời mời (ghi DB).
+
+### Bước 7 — Trang tìm ứng viên đọc bảng điểm (2026-11-14)
+
+- **`CandidateOutreachService.searchCandidates`:** tin đã chấm (`matchScoresAt` khác null) thì lấy **10** người từ bảng bằng câu của bước 6 (`AutoOutreachRepository.findScoredQueue`), ngưỡng 0, kèm `includeCappedToday`. Không còn giới hạn pool 50 người nhiều kỹ năng chung nhất: người điểm cao mà ít kỹ năng chung giờ cũng hiện.
+  - `findScoredQueue` thêm tuỳ chọn `includeCappedToday`: bỏ điều kiện trần ngày, như `searchCandidatePool` không bật `excludeCappedToday`. Trang vẫn hiện người đã đủ trần kèm `cappedToday` (nút mờ). Lượt tự mời không truyền tuỳ chọn nên giữ nguyên.
+  - Chấm lại 10 người đó như trước (`scoreCandidates`), để có lý do và điểm mới nhất; sắp theo điểm vừa chấm, bằng điểm thì giữ thứ tự của bảng.
+  - Tin chưa chấm lần nào đi đường cũ (pool ≤ 50 rồi chấm).
+- **`findJobPost`** select thêm `matchScoresAt`; `OutreachJobPost` có thêm trường này.
+- Dạng response không đổi. Số "M người phù hợp" vẫn lấy từ bảng như trước.
+- **Hạn chế:** người mới chưa có dòng trong bảng (đang chờ lượt chấm theo ứng viên, ≤ 15 phút) chưa hiện ở trang. Đường cũ thì hiện ngay nếu lọt top 50 theo kỹ năng chung.
+
+Kiểm:
+- `outreach-create-invitation.test.ts` thêm 1 test: tin đã chấm thì gọi bảng (ngưỡng 0, tối đa 10, giữ người đủ trần), không gọi pool, sắp theo điểm vừa chấm, bằng điểm giữ thứ tự bảng, `cappedToday` đúng. Test cũ (tin chưa chấm) vẫn qua.
+- Toàn bộ 646 / 646 qua, `tsc` qua.
+- Neon, chỉ đọc: 6 tin (3 tin 882 dòng, 3 tin 22–91 dòng). Top 10 của câu **khớp 6 / 6** với cách tính độc lập (đọc mọi dòng của tin, lọc và sắp trong JS). Câu mất 55–116 ms mỗi tin, chủ yếu là round trip. `EXPLAIN ANALYZE`: dùng index `(jobPostId, score)`, chạy 0,8 ms.
+- Thời gian cả trang: theo mốc ở bước 0 mục 5, đọc bảng rồi chấm lại 10 người mất 966–1.349 ms, so với 1.098–1.652 ms của đường cũ. Chưa đo lại qua API, vì chấm lại có thể ghi vector còn thiếu vào DB.
 
 ### Câu hỏi mới sau bước 0 (đã chốt 2026-11-14: Q7 = b, Q8 = b; xem "Câu hỏi đã chốt" và AD-27 mục 5, 11)
 
