@@ -152,6 +152,36 @@ export class AutoOutreachRepository {
   }
 
   /**
+   * Ứng viên vừa bật cho liên hệ (AD-27 mục 1, plan live-rescore bước 2): xoá dấu "hết ứng
+   * viên" của các tin đang chạy tự mời (cùng điều kiện `findRunnableJobs`) có chung ít nhất
+   * một kỹ năng APPROVED với ứng viên (cùng điều kiện pool của bộ chấm). Trả các công ty có
+   * tin vừa được xoá dấu để kích hoạt lượt tự mời. Tin chưa có dấu không cần xoá: cron 15
+   * phút xét lại như thường.
+   */
+  async clearExhaustedForCandidate(candidateId: string): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<Array<{ companyId: string }>>(Prisma.sql`
+      WITH cleared AS (
+        UPDATE job_posts j
+        SET "autoOutreachExhaustedAt" = NULL, "autoOutreachExhaustedReason" = NULL
+        WHERE j."autoOutreachExhaustedAt" IS NOT NULL
+          AND j."status" = 'PUBLISHED'
+          AND j."autoOutreachEnabled" = true
+          AND (j."expiresAt" IS NULL OR j."expiresAt" > ${NOW_UTC})
+          AND EXISTS (
+            SELECT 1
+            FROM job_post_skills jps
+            JOIN candidate_skills cs ON cs."skillId" = jps."skillId" AND cs."candidateId" = ${candidateId}
+            JOIN skills s ON s."id" = jps."skillId" AND s."status" = 'APPROVED'
+            WHERE jps."jobPostId" = j."id"
+          )
+        RETURNING j."companyId"
+      )
+      SELECT DISTINCT "companyId" FROM cleared
+    `);
+    return rows.map((row) => row.companyId);
+  }
+
+  /**
    * Ước đoán lý do "hết ứng viên" (bước 5, mục 5): có ứng viên bật opt-in, có chung kỹ
    * năng với tin và đã nhận đủ trần hôm nay ⇒ CANDIDATE_CAP. Người đủ trần chưa chắc đạt
    * ngưỡng điểm; đoán sai chỉ làm tin được kiểm lại sau mốc 0h UTC thay vì sau 3 giờ.

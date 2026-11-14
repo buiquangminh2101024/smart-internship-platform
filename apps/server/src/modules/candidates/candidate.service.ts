@@ -1,18 +1,35 @@
 import type { PrismaClient } from "@prisma/client";
 import type { MediaStorage } from "../../shared/ports/MediaStorage";
 import { AppError } from "../../shared/errors/AppError";
+import type { CandidateRescoreMarker } from "../live-rescore/candidate-rescore-marker";
 import type { CandidateRepository } from "./candidate.repository";
 
 export class CandidateService {
   private readonly candidateRepository: CandidateRepository;
   private readonly prisma: PrismaClient;
   private readonly mediaStorage: MediaStorage;
+  private readonly rescoreMarker: CandidateRescoreMarker;
 
-  constructor({ candidateRepository, prisma, mediaStorage }: { candidateRepository: CandidateRepository; prisma: PrismaClient; mediaStorage: MediaStorage }) {
+  constructor({
+    candidateRepository,
+    prisma,
+    mediaStorage,
+    candidateRescoreMarker,
+  }: {
+    candidateRepository: CandidateRepository;
+    prisma: PrismaClient;
+    mediaStorage: MediaStorage;
+    candidateRescoreMarker: CandidateRescoreMarker;
+  }) {
     this.candidateRepository = candidateRepository;
     this.prisma = prisma;
     this.mediaStorage = mediaStorage;
+    this.rescoreMarker = candidateRescoreMarker;
   }
+
+  // AD-27 mục 1: mọi lối ghi dữ liệu mà bộ chấm đọc (tiêu đề, giới thiệu, kỹ năng, học vấn,
+  // kinh nghiệm, dự án) gọi rescoreMarker.mark SAU khi ghi thành công. Chứng chỉ, giải
+  // thưởng, ảnh, SĐT, thành phố không vào bộ chấm nên không đánh dấu. mark không ném lỗi.
 
   async uploadAvatar(userId: string, file: Express.Multer.File | undefined) {
     if (!file) throw new AppError(400, "A file is required");
@@ -98,7 +115,7 @@ export class CandidateService {
       ...(input.cityId !== undefined ? { cityId: input.cityId ? String(input.cityId) : null } : {}),
     };
 
-    return this.prisma.candidate.update({
+    const updated = await this.prisma.candidate.update({
       where: { id: candidate.id },
       data: safeData,
       include: {
@@ -111,6 +128,10 @@ export class CandidateService {
         skills: { orderBy: { skill: { name: "asc" } }, include: { skill: true } },
       },
     });
+    if (input.headline !== undefined || input.bio !== undefined) {
+      await this.rescoreMarker.mark(candidate.id);
+    }
+    return updated;
   }
 
   async createEducation(userId: string, input: Record<string, unknown>) {
@@ -128,6 +149,7 @@ export class CandidateService {
     if (education.isCurrent) {
       await this.candidateRepository.clearCurrentEducationExcept(candidate.id, education.id);
     }
+    await this.rescoreMarker.mark(candidate.id);
 
     return this.prisma.education.findUnique({
       where: { id: education.id },
@@ -157,6 +179,7 @@ export class CandidateService {
     if (updated.isCurrent) {
       await this.candidateRepository.clearCurrentEducationExcept(candidate.id, educationId);
     }
+    await this.rescoreMarker.mark(candidate.id);
 
     return this.prisma.education.findUnique({
       where: { id: updated.id },
@@ -171,6 +194,7 @@ export class CandidateService {
       throw new AppError(404, "Education not found");
     }
     await this.candidateRepository.deleteEducation(educationId, candidate.id);
+    await this.rescoreMarker.mark(candidate.id);
   }
 
   async getCandidateSkills(userId: string) {
@@ -185,6 +209,7 @@ export class CandidateService {
   async upsertSkill(userId: string, skillId: string, yearsOfExperience: number) {
     const candidate = await this.candidateRepository.ensureCandidate(userId);
     await this.candidateRepository.upsertSkill(candidate.id, skillId, yearsOfExperience);
+    await this.rescoreMarker.mark(candidate.id);
     return this.prisma.candidateSkill.findUnique({
       where: { candidateId_skillId: { candidateId: candidate.id, skillId } },
       include: { skill: true },
@@ -194,11 +219,12 @@ export class CandidateService {
   async removeSkill(userId: string, skillId: string): Promise<void> {
     const candidate = await this.candidateRepository.ensureCandidate(userId);
     await this.candidateRepository.removeSkill(candidate.id, skillId);
+    await this.rescoreMarker.mark(candidate.id);
   }
 
   async createWorkExperience(userId: string, input: Record<string, unknown>) {
     const candidate = await this.candidateRepository.ensureCandidate(userId);
-    return this.candidateRepository.createWorkExperience(candidate.id, {
+    const created = await this.candidateRepository.createWorkExperience(candidate.id, {
       company: String(input.company),
       position: String(input.position),
       ...(input.startDate ? { startDate: new Date(String(input.startDate)) } : {}),
@@ -206,11 +232,13 @@ export class CandidateService {
       isCurrent: input.isCurrent !== undefined ? Boolean(input.isCurrent) : false,
       ...(input.description !== undefined ? { description: String(input.description) } : {}),
     });
+    await this.rescoreMarker.mark(candidate.id);
+    return created;
   }
 
   async updateWorkExperience(userId: string, workExperienceId: string, input: Record<string, unknown>) {
     const candidate = await this.candidateRepository.ensureCandidate(userId);
-    return this.candidateRepository.updateWorkExperience(workExperienceId, candidate.id, {
+    const updated = await this.candidateRepository.updateWorkExperience(workExperienceId, candidate.id, {
       ...(input.company !== undefined ? { company: String(input.company) } : {}),
       ...(input.position !== undefined ? { position: String(input.position) } : {}),
       ...(input.startDate !== undefined ? { startDate: new Date(String(input.startDate)) } : {}),
@@ -218,16 +246,19 @@ export class CandidateService {
       ...(input.isCurrent !== undefined ? { isCurrent: Boolean(input.isCurrent) } : {}),
       ...(input.description !== undefined ? { description: String(input.description) } : {}),
     });
+    await this.rescoreMarker.mark(candidate.id);
+    return updated;
   }
 
   async deleteWorkExperience(userId: string, workExperienceId: string): Promise<void> {
     const candidate = await this.candidateRepository.ensureCandidate(userId);
     await this.candidateRepository.deleteWorkExperience(workExperienceId, candidate.id);
+    await this.rescoreMarker.mark(candidate.id);
   }
 
   async createProject(userId: string, input: Record<string, unknown>) {
     const candidate = await this.candidateRepository.ensureCandidate(userId);
-    return this.candidateRepository.createProject(candidate.id, {
+    const created = await this.candidateRepository.createProject(candidate.id, {
       name: String(input.name),
       ...(input.description !== undefined ? { description: String(input.description) } : {}),
       ...(input.url !== undefined ? { url: String(input.url) } : {}),
@@ -235,11 +266,13 @@ export class CandidateService {
       ...(input.startDate ? { startDate: new Date(String(input.startDate)) } : {}),
       ...(input.endDate ? { endDate: new Date(String(input.endDate)) } : {}),
     });
+    await this.rescoreMarker.mark(candidate.id);
+    return created;
   }
 
   async updateProject(userId: string, projectId: string, input: Record<string, unknown>) {
     const candidate = await this.candidateRepository.ensureCandidate(userId);
-    return this.candidateRepository.updateProject(projectId, candidate.id, {
+    const updated = await this.candidateRepository.updateProject(projectId, candidate.id, {
       ...(input.name !== undefined ? { name: String(input.name) } : {}),
       ...(input.description !== undefined ? { description: String(input.description) } : {}),
       ...(input.url !== undefined ? { url: String(input.url) } : {}),
@@ -247,11 +280,14 @@ export class CandidateService {
       ...(input.startDate !== undefined ? { startDate: new Date(String(input.startDate)) } : {}),
       ...(input.endDate !== undefined ? { endDate: new Date(String(input.endDate)) } : {}),
     });
+    await this.rescoreMarker.mark(candidate.id);
+    return updated;
   }
 
   async deleteProject(userId: string, projectId: string): Promise<void> {
     const candidate = await this.candidateRepository.ensureCandidate(userId);
     await this.candidateRepository.deleteProject(projectId, candidate.id);
+    await this.rescoreMarker.mark(candidate.id);
   }
 
   async createCertificate(userId: string, input: Record<string, unknown>) {

@@ -4,6 +4,7 @@ import type { CatalogDomain, CatalogMatchVerifier } from "../../shared/ports/Cat
 import type { SkillEmbeddingService } from "../skills/skill-embedding.service";
 import type { SkillsRepository } from "../skills/skills.repository";
 import type { EducationCatalogRepository } from "../education-catalog/education-catalog.types";
+import type { CandidateRescoreMarker } from "../live-rescore/candidate-rescore-marker";
 
 // Mỗi lượt chỉ xử lý một lô nhỏ mỗi bảng: cron chạy hàng giờ nên hàng đợi vẫn
 // được vét hết, mà không bắn hàng trăm request Gemini cùng lúc khi bị dồn.
@@ -16,6 +17,8 @@ export interface CatalogQueueDeps {
   universityRepository: EducationCatalogRepository;
   majorRepository: EducationCatalogRepository;
   catalogMatchVerifier: CatalogMatchVerifier;
+  // AD-27 D6: gộp chuyển liên kết kỹ năng / học vấn của ứng viên sang mục đích.
+  candidateRescoreMarker: CandidateRescoreMarker;
   logger: Logger;
 }
 
@@ -39,7 +42,7 @@ interface VerificationQueue {
  *  (b) backfill embedding cho skill chưa có vector (chỉ Skill có embedding).
  */
 export async function runCatalogSuggestionQueue(deps: CatalogQueueDeps): Promise<Record<CatalogDomain, QueueResult>> {
-  const { skillsRepository, universityRepository, majorRepository } = deps;
+  const { skillsRepository, universityRepository, majorRepository, candidateRescoreMarker } = deps;
 
   const skill = await verifyQueue(deps, "skill", {
     findPending: async (limit) =>
@@ -48,21 +51,30 @@ export async function runCatalogSuggestionQueue(deps: CatalogQueueDeps): Promise
         name: row.name,
         pendingMatch: row.pendingMatchSkill,
       })),
-    merge: (sourceId, targetId) => skillsRepository.merge(sourceId, targetId, "LLM_MERGE"),
+    merge: (sourceId, targetId) =>
+      candidateRescoreMarker.markSkillHolders([sourceId], () => skillsRepository.merge(sourceId, targetId, "LLM_MERGE")),
     clearPendingMatch: (id) => skillsRepository.clearPendingMatch(id),
   });
   const university = await verifyQueue(deps, "university", educationQueue(universityRepository));
-  const major = await verifyQueue(deps, "major", educationQueue(majorRepository));
+  // Chỉ ngành: bộ chấm không đọc trường.
+  const major = await verifyQueue(
+    deps,
+    "major",
+    educationQueue(majorRepository, (sourceId, merge) => candidateRescoreMarker.markMajorHolders([sourceId], merge)),
+  );
 
   await backfillEmbeddings(deps);
 
   return { skill, university, major };
 }
 
-function educationQueue(repository: EducationCatalogRepository): VerificationQueue {
+function educationQueue(
+  repository: EducationCatalogRepository,
+  wrapMerge: (sourceId: string, merge: () => Promise<void>) => Promise<void> = (_sourceId, merge) => merge(),
+): VerificationQueue {
   return {
     findPending: (limit) => repository.findPendingVerification(limit),
-    merge: (sourceId, targetId) => repository.merge(sourceId, targetId, "LLM_MERGE"),
+    merge: (sourceId, targetId) => wrapMerge(sourceId, () => repository.merge(sourceId, targetId, "LLM_MERGE")),
     clearPendingMatch: (id) => repository.clearPendingMatch(id),
   };
 }

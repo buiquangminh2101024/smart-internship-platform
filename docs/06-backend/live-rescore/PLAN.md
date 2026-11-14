@@ -4,7 +4,7 @@
 > - **Q7:** model embedding chạy trong một `worker_threads`;
 > - **Q8:** chấm theo lô.
 >
-> **Bước 1 (schema, migration) đã làm và áp lên Neon 2026-11-14.** Việc tiếp theo: bước 2.
+> **Bước 1 (schema, migration) đã làm và áp lên Neon 2026-11-14. Bước 2 (đánh dấu, hẹn giờ) đã làm cùng ngày**, lượt chấm chưa có nên dấu nằm chờ trong DB. Bước 2b để sau (chủ dự án chưa cho làm). Việc tiếp theo: bước 3.
 
 Mục 0.6 của `docs/01-project/FEATURE_BACKLOG.md`. Quyết định kiến trúc: AD-27 (sửa một phần AD-23, AD-24). Frontend: `docs/05-frontend/phases/live-rescore/PLAN.md`. Nền:
 - AD-24 và `docs/06-backend/hiring-progress/PLAN.md` (bảng điểm, `scoreProfiles`, lượt đêm, cache hồ sơ một lượt);
@@ -382,6 +382,35 @@ Mỗi người chỉ nhận một thông báo gộp ("N tin…"), nên tải là
 - Migration `20261114120000_add_live_rescore`: SQL sinh bằng `migrate diff` như trên. Gồm 1 câu `ALTER TABLE candidates ADD COLUMN` × 2 (cho phép null) và 1 `CREATE INDEX`. Không ghi dữ liệu; ứng viên cũ có dấu null (bảng điểm hiện có đã đúng nhờ lượt đêm).
 - `prisma generate` và `tsc --noEmit` của `apps/server` qua.
 - Chủ dự án áp bằng `npm run db:deploy` ngày 2026-11-14. Kiểm sau khi áp: `prisma migrate status` báo đủ 38 migration, `migrate diff` ra "empty migration"; 1.524 ứng viên đều có hai cột null, index `candidates_matchRescoreRequestedAt_idx` có trên Neon.
+
+### Bước 2 — Đánh dấu và hẹn giờ (2026-11-14)
+
+Module mới `apps/server/src/modules/live-rescore/`:
+- `live-rescore.config.ts`: `LIVE_RESCORE_DEBOUNCE_MS` 45 000, `LIVE_RESCORE_MAX_TIMERS` 5 000.
+- `live-rescore.repository.ts`: `markCandidates(ids)` (đặt dấu và `matchProfileChangedAt` bằng `NOW_UTC` của DB, ghi bằng SQL nên không đổi `updatedAt`), `findCandidateIdsBySkills`, `findCandidateIdsByMajors`.
+- `live-rescore.scheduler.ts`: `LiveRescoreScheduler.touch` (một hẹn giờ mỗi ứng viên, sửa tiếp thì dời, hẹn giờ `unref()`; quá trần thì bỏ hẹn giờ, cảnh báo một lần, chờ cron), `clear()`.
+- `candidate-rescore-marker.ts`: `mark(candidateId)`, `markSkillHolders(skillIds, change)`, `markMajorHolders(majorIds, change)`. Không hàm nào ném lỗi vì đánh dấu; lỗi của `change` được ném lại nguyên vẹn.
+- `live-rescore.module.ts`: `registerLiveRescore`, gọi trong `main.ts` **trước** mọi router. Marker chỉ phụ thuộc prisma, logger, scheduler nên các service nhận thẳng `candidateRescoreMarker`, không cần hàm resolve lười. Chiều marker → lượt chấm đi qua `liveRescoreDrainRequester`. Bước 2 đặt bản tạm chỉ ghi log; bước 3 thay bằng `liveRescoreService.requestDrain()`.
+
+Nơi gọi:
+- `CandidateService`: thêm / sửa / xoá học vấn (kể cả đặt học vấn hiện tại), kỹ năng, kinh nghiệm, dự án; `updateProfile` **chỉ khi** gửi `headline` hoặc `bio` (SĐT, thành phố, ảnh, ngày sinh không vào bộ chấm). Gọi sau khi ghi, có `await` (thêm một round trip mỗi lần lưu), response không đổi.
+- `CandidateCvImportService.importFromCv`: sau transaction.
+- `SkillsService.approve` / `reject` / `merge`; `EducationCatalogService.renameApprove` / `reject` / `merge` (chỉ miền ngành).
+- **Thêm so với plan:** cron gộp tự động mục PENDING bằng LLM (`catalog-suggestion-queue.job.ts`, kỹ năng và ngành) và Admin từ chối / sửa tên ngành, vì các lối này cũng đổi liên kết hoặc tên mà bộ chấm đọc. **Bớt so với plan:** duyệt ngành không đánh dấu (bộ chấm không đọc trạng thái ngành); trường học không đánh dấu (bộ chấm không đọc trường).
+- **Khác plan ở cách đánh dấu theo danh mục:** không dùng một câu `UPDATE … WHERE id IN (SELECT …)` sau khi đổi, vì từ chối xoá liên kết (cascade) và gộp chuyển liên kết sang mục đích, nên sau khi đổi không còn tìm được đúng người. Marker lấy danh sách người **trước**, chạy thao tác, rồi `UPDATE … WHERE id IN (danh sách)`. Không hẹn giờ cho từng người, chỉ yêu cầu một lượt chấm.
+- **Để lại cho bước sau:** `jobProfileCache.clear()` khi danh mục đổi (cache làm ở bước 3) và hàng chờ chấm lại theo tin (Q1, bước 5).
+- **Bật cho liên hệ** (`CandidateOutreachService.updateSettings` khi giá trị mới là `true`): `AutoOutreachRepository.clearExhaustedForCandidate` xoá dấu "hết ứng viên" của các tin đang chạy tự mời (điều kiện như `findRunnableJobs`) có chung ≥ 1 kỹ năng `APPROVED`, bằng một câu `UPDATE … RETURNING`, rồi gọi `autoOutreachTrigger` cho từng công ty có tin vừa được xoá dấu. Tin chưa có dấu không cần đụng, vì cron 15 phút vẫn xét như thường. Lỗi chỉ ghi log, cài đặt vẫn lưu.
+
+Kiểm:
+- `tests/unit/live-rescore-marker.test.ts`, 19 test:
+  - hẹn giờ: sửa liên tiếp ra một lượt, trần, lỗi khi yêu cầu chấm, `clear`;
+  - marker: lỗi không lan ra, thứ tự lấy người → đổi → đánh dấu, thao tác lỗi thì không đánh dấu;
+  - 12 lối ghi của `CandidateService`, các lối không đánh dấu;
+  - danh mục kỹ năng / ngành / trường, cron gộp LLM;
+  - bật / tắt cho liên hệ.
+- Toàn bộ unit test của server: 584 / 584 qua. `tsc --noEmit` qua.
+- Câu SQL mới kiểm trên Neon: hai câu tìm người chạy thật (chỉ đọc). Câu `markCandidates` và `clearExhaustedForCandidate` kiểm bằng `EXPLAIN` (không chạy). Sau khi kiểm, Neon vẫn có 0 dấu.
+- Chưa kiểm đầu cuối qua gateway 8080: chủ dự án sửa hồ sơ một ứng viên rồi xem `matchRescoreRequestedAt` được đặt và log "hết khoảng chờ" sau ~45 giây.
 
 ### Câu hỏi mới sau bước 0 (đã chốt 2026-11-14: Q7 = b, Q8 = b; xem "Câu hỏi đã chốt" và AD-27 mục 5, 11)
 

@@ -974,7 +974,7 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 1. **Đánh dấu tường minh bằng một cột trên `Candidate`:** `matchRescoreRequestedAt DateTime?` (chủ dự án chọn cách A, 2026-11-14). Mọi chỗ ghi dữ liệu mà bộ chấm đọc đặt cột này bằng `now()`:
    - `CandidateService`: `updateProfile` (tiêu đề, giới thiệu), thêm / sửa / xoá kỹ năng, học vấn (kể cả đặt học vấn hiện tại), kinh nghiệm, dự án;
    - `CandidateCvImportService.importFromCv` (AI trích xuất CV);
-   - phía danh mục: Admin duyệt / từ chối / gộp kỹ năng, duyệt / gộp ngành: đánh dấu **mọi** ứng viên có kỹ năng hoặc ngành đó bằng một câu SQL (mục 3 của buổi trao đổi).
+   - phía danh mục: Admin duyệt / từ chối / gộp kỹ năng, duyệt / gộp ngành: đánh dấu **mọi** ứng viên có kỹ năng hoặc ngành đó bằng một câu SQL (mục 3 của buổi trao đổi). *Chính xác hoá khi làm bước 2 (2026-11-14):* danh sách người lấy **trước** khi đổi (từ chối / gộp xoá hoặc chuyển liên kết), đánh dấu sau khi đổi thành công. Lối ngành là sửa tên rồi duyệt / từ chối / gộp; duyệt ngành chỉ đổi trạng thái mà bộ chấm không đọc trạng thái ngành, nên không đánh dấu. Cron gộp tự động mục PENDING (LLM) cũng đánh dấu như Admin gộp.
 
    Chứng chỉ, giải thưởng, ảnh đại diện không vào bộ chấm nên không đánh dấu. Bật / tắt `isOpenToOutreach` không đổi điểm nên không đánh dấu, nhưng xoá dấu "hết ứng viên" và kích hoạt tự mời (mục 6).
 2. **Chỉ xoá dấu khi dấu không mới hơn lúc bắt đầu chấm** (`UPDATE … SET "matchRescoreRequestedAt" = NULL WHERE "matchRescoreRequestedAt" <= <lúc bắt đầu>`). Ứng viên sửa tiếp trong lúc đang chấm thì dấu mới còn lại và được chấm ở lượt sau.

@@ -2,6 +2,7 @@ import type { CatalogEntryStatus, Prisma, Skill } from "@prisma/client";
 import type { AdminSkillDto, PaginatedResponse, SuggestSkillResponse } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
 import type { AuditLogService } from "../audit-log/audit-log.service";
+import type { CandidateRescoreMarker } from "../live-rescore/candidate-rescore-marker";
 import type { SkillDedupeService } from "./skill-dedupe.service";
 import type { AdminSkillRow, SkillsRepository } from "./skills.repository";
 
@@ -9,19 +10,23 @@ export class SkillsService {
   private readonly skillsRepository: SkillsRepository;
   private readonly skillDedupeService: SkillDedupeService;
   private readonly auditLogService: AuditLogService;
+  private readonly rescoreMarker: CandidateRescoreMarker;
 
   constructor({
     skillsRepository,
     skillDedupeService,
     auditLogService,
+    candidateRescoreMarker,
   }: {
     skillsRepository: SkillsRepository;
     skillDedupeService: SkillDedupeService;
     auditLogService: AuditLogService;
+    candidateRescoreMarker: CandidateRescoreMarker;
   }) {
     this.skillsRepository = skillsRepository;
     this.skillDedupeService = skillDedupeService;
     this.auditLogService = auditLogService;
+    this.rescoreMarker = candidateRescoreMarker;
   }
 
   // ─── Candidate / Employer ────────────────────────────────────────────────
@@ -46,10 +51,15 @@ export class SkillsService {
 
   // Nhật ký ghi SAU khi repository commit (không truyền tx): reject/merge tự mở
   // transaction riêng, AuditLogService chỉ log lỗi ở nhánh này (AD-16).
+  //
+  // AD-27 D6: duyệt / từ chối / gộp đổi pool và hồ sơ chấm của người đang có kỹ năng đó
+  // (tin chỉ tính kỹ năng APPROVED; từ chối xoá liên kết; gộp chuyển liên kết). Đánh dấu
+  // họ qua rescoreMarker.markSkillHolders: danh sách lấy trước khi đổi, đánh dấu sau khi
+  // đổi thành công. Phía tin (Q1) làm ở bước 5 của plan live-rescore.
 
   async approve(actorId: string, id: string): Promise<AdminSkillDto> {
     const skill = await this.requirePending(id);
-    await this.skillsRepository.approve(id);
+    await this.rescoreMarker.markSkillHolders([id], () => this.skillsRepository.approve(id));
     await this.recordAudit(actorId, "CATALOG_ENTRY_APPROVED", id, `Duyệt kỹ năng "${skill.name}"`);
 
     const row = await this.skillsRepository.findAdminRow(id);
@@ -61,7 +71,7 @@ export class SkillsService {
 
   async reject(actorId: string, id: string): Promise<void> {
     const skill = await this.requirePending(id);
-    await this.skillsRepository.reject(id);
+    await this.rescoreMarker.markSkillHolders([id], () => this.skillsRepository.reject(id));
     await this.recordAudit(actorId, "CATALOG_ENTRY_REJECTED", id, `Từ chối kỹ năng "${skill.name}"`);
   }
 
@@ -81,7 +91,7 @@ export class SkillsService {
       throw new AppError(409, "A skill can only be merged into an approved skill");
     }
 
-    await this.skillsRepository.merge(id, targetSkillId, "ADMIN_MERGE");
+    await this.rescoreMarker.markSkillHolders([id], () => this.skillsRepository.merge(id, targetSkillId, "ADMIN_MERGE"));
     await this.recordAudit(actorId, "CATALOG_ENTRY_MERGED", id, `Gộp kỹ năng "${skill.name}" vào "${target.name}"`, {
       targetId: targetSkillId,
     });

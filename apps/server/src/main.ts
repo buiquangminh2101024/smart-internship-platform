@@ -51,6 +51,8 @@ import type { MatchScoreService } from "./modules/match-scores/match-score.servi
 import type { AutoOutreachRepository } from "./modules/candidate-outreach/auto-outreach.repository";
 import type { AutoOutreachRunStore } from "./modules/candidate-outreach/auto-outreach-run-store";
 import type { AutoOutreachService } from "./modules/candidate-outreach/auto-outreach.service";
+import { registerLiveRescore } from "./modules/live-rescore/live-rescore.module";
+import type { CandidateRescoreMarker } from "./modules/live-rescore/candidate-rescore-marker";
 
 import { messagingRoutes } from "./modules/messaging/messaging.routes";
 
@@ -98,6 +100,10 @@ registerRealtime(container, io);
 
 app.use(cors({ origin: config.CORS_ORIGIN }));
 app.use(express.json());
+
+// Chấm lại theo ứng viên (AD-27): đăng ký trước mọi router vì candidateService,
+// candidateCvImportService, skillsService, educationCatalogService nhận candidateRescoreMarker.
+registerLiveRescore(container);
 
 app.use("/api", healthRouter(container));
 app.use("/api", authRouter(container));
@@ -249,6 +255,7 @@ startCatalogSuggestionQueueJob({
   universityRepository: container.resolve<UniversityRepository>("universityRepository"),
   majorRepository: container.resolve<MajorRepository>("majorRepository"),
   catalogMatchVerifier: container.resolve<CatalogMatchVerifier>("catalogMatchVerifier"),
+  candidateRescoreMarker: container.resolve<CandidateRescoreMarker>("candidateRescoreMarker"),
   logger,
 });
 

@@ -2,6 +2,7 @@ import type { CatalogEntryStatus, Prisma } from "@prisma/client";
 import type { AdminEducationCatalogEntryDto, PaginatedResponse, SuggestCatalogEntryResponse } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
 import type { AuditLogService } from "../audit-log/audit-log.service";
+import type { CandidateRescoreMarker } from "../live-rescore/candidate-rescore-marker";
 import type {
   AdminEducationCatalogRow,
   CatalogEntryRow,
@@ -28,6 +29,7 @@ export class EducationCatalogService {
   private readonly universityDedupeService: UniversityDedupeService;
   private readonly majorDedupeService: MajorDedupeService;
   private readonly auditLogService: AuditLogService;
+  private readonly rescoreMarker: CandidateRescoreMarker;
 
   constructor({
     universityRepository,
@@ -35,17 +37,20 @@ export class EducationCatalogService {
     universityDedupeService,
     majorDedupeService,
     auditLogService,
+    candidateRescoreMarker,
   }: {
     universityRepository: UniversityRepository;
     majorRepository: MajorRepository;
     universityDedupeService: UniversityDedupeService;
     majorDedupeService: MajorDedupeService;
     auditLogService: AuditLogService;
+    candidateRescoreMarker: CandidateRescoreMarker;
   }) {
     this.repositories = { university: universityRepository, major: majorRepository };
     this.universityDedupeService = universityDedupeService;
     this.majorDedupeService = majorDedupeService;
     this.auditLogService = auditLogService;
+    this.rescoreMarker = candidateRescoreMarker;
   }
 
   // ─── Candidate ───────────────────────────────────────────────────────────
@@ -105,7 +110,7 @@ export class EducationCatalogService {
       );
     }
 
-    await repository.renameApprove(id, name);
+    await this.whenMajor(domain, id, () => repository.renameApprove(id, name));
     await this.recordAudit(
       actorId,
       domain,
@@ -119,7 +124,7 @@ export class EducationCatalogService {
 
   async reject(actorId: string, domain: EducationCatalogDomain, id: string): Promise<void> {
     const entry = await this.requirePending(domain, id);
-    await this.repositories[domain].reject(id);
+    await this.whenMajor(domain, id, () => this.repositories[domain].reject(id));
     await this.recordAudit(actorId, domain, "CATALOG_ENTRY_REJECTED", id, `Từ chối ${LABELS[domain].toLowerCase()} "${entry.name}"`);
   }
 
@@ -139,7 +144,7 @@ export class EducationCatalogService {
       throw new AppError(409, `Chỉ được gộp vào ${LABELS[domain].toLowerCase()} đã duyệt`);
     }
 
-    await this.repositories[domain].merge(id, targetId, "ADMIN_MERGE");
+    await this.whenMajor(domain, id, () => this.repositories[domain].merge(id, targetId, "ADMIN_MERGE"));
     await this.recordAudit(
       actorId,
       domain,
@@ -148,6 +153,17 @@ export class EducationCatalogService {
       `Gộp ${LABELS[domain].toLowerCase()} "${entry.name}" vào "${target.name}"`,
       { targetId },
     );
+  }
+
+  /**
+   * AD-27 D6: đổi ngành thì đánh dấu ứng viên có học vấn gắn ngành đó (bộ chấm đọc
+   * `majorId` và tên ngành). Chỉ miền ngành: bộ chấm không đọc trường. Không gọi ở
+   * `approve`: duyệt chỉ đổi trạng thái, bộ chấm không đọc trạng thái của ngành. Sửa tên
+   * đổi văn bản embed; từ chối gỡ ngành khỏi học vấn (FK set null); gộp chuyển học vấn
+   * sang ngành đích. Phía tin (Q1) làm ở bước 5 của plan live-rescore.
+   */
+  private whenMajor(domain: EducationCatalogDomain, id: string, change: () => Promise<void>): Promise<void> {
+    return domain === "major" ? this.rescoreMarker.markMajorHolders([id], change) : change();
   }
 
   private recordAudit(

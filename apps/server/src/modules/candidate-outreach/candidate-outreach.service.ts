@@ -29,6 +29,7 @@ import type { MessagingService } from "../messaging/messaging.service";
 import type { NotificationsService } from "../notifications/notifications.service";
 import type { CompanySubscriptionRepository } from "../subscriptions/company-subscription.repository";
 import type { SubscriptionsService } from "../subscriptions/subscriptions.service";
+import type { AutoOutreachRepository } from "./auto-outreach.repository";
 import type { AutoOutreachTrigger } from "./auto-outreach.service";
 import {
   autoDailyLimit,
@@ -115,6 +116,7 @@ export class CandidateOutreachService {
   private readonly notificationsService: NotificationsService;
   private readonly logger: Logger;
   private readonly autoOutreachTrigger: AutoOutreachTrigger;
+  private readonly autoOutreachRepository: AutoOutreachRepository;
   private readonly mode: JobMatcherMode;
 
   constructor({
@@ -133,6 +135,7 @@ export class CandidateOutreachService {
     notificationsService,
     logger,
     autoOutreachTrigger,
+    autoOutreachRepository,
     config,
   }: {
     prisma: PrismaClient;
@@ -150,6 +153,7 @@ export class CandidateOutreachService {
     notificationsService: NotificationsService;
     logger: Logger;
     autoOutreachTrigger: AutoOutreachTrigger;
+    autoOutreachRepository: AutoOutreachRepository;
     config: { JOB_MATCHER_MODE: JobMatcherMode };
   }) {
     this.prisma = prisma;
@@ -167,6 +171,7 @@ export class CandidateOutreachService {
     this.notificationsService = notificationsService;
     this.logger = logger;
     this.autoOutreachTrigger = autoOutreachTrigger;
+    this.autoOutreachRepository = autoOutreachRepository;
     this.mode = config.JOB_MATCHER_MODE;
   }
 
@@ -529,7 +534,26 @@ export class CandidateOutreachService {
   async updateSettings(userId: string, settings: OutreachSettings): Promise<OutreachSettings> {
     const candidateId = await this.requireCandidateId(userId);
     const isOpenToOutreach = await this.repository.updateOpenToOutreach(candidateId, settings.isOpenToOutreach);
+    if (isOpenToOutreach) await this.reopenAutoOutreachFor(candidateId);
     return { isOpenToOutreach };
+  }
+
+  /**
+   * AD-27 mục 1 (plan live-rescore bước 2): bật cho liên hệ không đổi điểm nên không đánh
+   * dấu chấm lại, nhưng ứng viên vừa vào pool tự mời. Tin đang "hết ứng viên" có chung kỹ
+   * năng được xoá dấu và công ty của tin được kích hoạt tự mời ngay, thay vì chờ tới 3 giờ
+   * (NO_MATCH) hoặc tới 0h UTC. Lỗi chỉ ghi log: cài đặt đã lưu, cron vẫn xét lại sau.
+   */
+  private async reopenAutoOutreachFor(candidateId: string): Promise<void> {
+    try {
+      const companyIds = await this.autoOutreachRepository.clearExhaustedForCandidate(candidateId);
+      for (const companyId of companyIds) this.autoOutreachTrigger(companyId);
+    } catch (error) {
+      this.logger.error("Reopen auto outreach after opt-in failed", {
+        candidateId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   // ─── Chấm điểm ───────────────────────────────────────────────────────────
