@@ -4,7 +4,7 @@
 > - **Q7:** model embedding chạy trong một `worker_threads`;
 > - **Q8:** chấm theo lô.
 >
-> **Bước 1 (schema, migration) đã làm và áp lên Neon 2026-11-14. Bước 2 (đánh dấu, hẹn giờ) đã làm cùng ngày**, lượt chấm chưa có nên dấu nằm chờ trong DB. Bước 2b để sau (chủ dự án chưa cho làm). Việc tiếp theo: bước 3.
+> **Bước 1 (schema, migration) đã làm và áp lên Neon 2026-11-14. Bước 2 (đánh dấu, hẹn giờ) và bước 2b (model embedding trong worker) đã làm cùng ngày**, lượt chấm chưa có nên dấu nằm chờ trong DB. Việc tiếp theo: bước 3.
 
 Mục 0.6 của `docs/01-project/FEATURE_BACKLOG.md`. Quyết định kiến trúc: AD-27 (sửa một phần AD-23, AD-24). Frontend: `docs/05-frontend/phases/live-rescore/PLAN.md`. Nền:
 - AD-24 và `docs/06-backend/hiring-progress/PLAN.md` (bảng điểm, `scoreProfiles`, lượt đêm, cache hồ sơ một lượt);
@@ -411,6 +411,30 @@ Kiểm:
 - Toàn bộ unit test của server: 584 / 584 qua. `tsc --noEmit` qua.
 - Câu SQL mới kiểm trên Neon: hai câu tìm người chạy thật (chỉ đọc). Câu `markCandidates` và `clearExhaustedForCandidate` kiểm bằng `EXPLAIN` (không chạy). Sau khi kiểm, Neon vẫn có 0 dấu.
 - Chưa kiểm đầu cuối qua gateway 8080: chủ dự án sửa hồ sơ một ứng viên rồi xem `matchRescoreRequestedAt` được đặt và log "hết khoảng chờ" sau ~45 giây.
+
+### Bước 2b — Model embedding trong một worker (2026-11-14)
+
+**File:**
+- `src/infrastructure/embedding-worker.ts` (mới): file chạy trong worker. Nạp `pipeline("feature-extraction", modelId)` một lần, đặt `env.cacheDir` trên chính module vừa `import()`. Nhận `{ id, text }`, trả `{ type: "result", id, vector }` hoặc `{ …, error }`; báo `ready` hoặc `load-error` sau khi nạp.
+- `src/infrastructure/embedding-worker-client.ts` (mới): `EmbeddingWorkerClient` giữ worker, hàng đợi và thời gian chờ; `createEmbeddingWorker` chọn `embedding-worker.ts` hoặc `.js` theo phần mở rộng của chính file client. Tách khỏi service để test bằng worker giả (awilix không cho thêm tham số tuỳ chọn vào constructor của service).
+- `SkillEmbeddingService`: `embed` gọi client, thêm `close()`. Bỏ `getExtractor` và cờ `unavailable` (chuyển vào client). Chữ ký `embed` giữ nguyên; các script dựng `new SkillEmbeddingService({ prisma, logger })` không đổi.
+- `shared/ai/embedding-env.ts`: `applyEmbeddingEnv(env)` thành `resolveEmbeddingCacheDir()`, vẫn ghi log như trước, trả thư mục để truyền cho worker.
+
+**Khác so với plan:**
+- **Không sửa `main.ts`.** Plan ghi "gọi `close()` khi server dừng, như các job đang dừng", nhưng `main.ts` không có xử lý dừng nào. Thêm bắt `SIGINT` / `SIGTERM` sẽ đổi cách server tắt, ngoài phạm vi. Worker thread chết cùng process, kể cả khi `tsx watch` khởi động lại, nên không có worker thừa. Worker chỉ `ref()` khi đang có việc, nên không giữ process sống.
+- **Thời gian chờ đo một lần embed:** client gửi từng việc một, chờ kết quả rồi gửi việc sau. Không tính lúc nạp model (lần đầu có thể phải tải model) hay lúc xếp hàng (lô 200 văn bản ở bước 3 mất ~5 giây). Quá giờ thì việc đang chạy và việc đang xếp hàng trả `null`, worker bị dừng, lần gọi sau tạo worker mới.
+- **Worker chết trước khi nạp xong** (vd. không import được gói) coi như nạp model hỏng: `unavailable`, không tạo lại. Chết sau khi đã nạp thì tạo lại ở lần gọi sau.
+- **RAM tăng nhẹ:** cùng một script đo, model trên luồng chính 931 MB sau khi nạp và 1.356 MB sau 80 lần embed; trong worker 961 MB và 1.412 MB. Worker tốn thêm khoảng 30–55 MB (isolate V8 riêng). Plan ghi "không tăng"; mức này nhỏ so với ~0,9 GB của model.
+
+**Kiểm:**
+- `tests/unit/embedding-worker-client.test.ts`, 10 test với worker giả: trả vector; gửi tuần tự đúng thứ tự; worker trả lỗi một việc; nạp model hỏng; worker chết trước khi nạp xong; quá giờ (kể cả kết quả muộn của worker cũ bị bỏ qua); thời gian chờ không tính lúc nạp; worker chết sau khi nạp; `close()`; tạo worker ném lỗi.
+- Toàn bộ unit test của server: 594 / 594 qua. `tsc --noEmit` qua.
+- Model thật, script tạm (đã xoá), chỉ đọc Neon:
+  - `tsx` (file `.ts`): 20 ứng viên có hash khớp, cosine giữa vector từ worker và vector đang lưu trong `candidate_embeddings` nhỏ nhất 1,000000; 10 kỹ năng (`skills.embedding`) cũng 1,000000. Luồng chính không nạp module `@huggingface` nào (bản cũ nạp 36). Process tự thoát khi không gọi `close()`.
+  - Bản build (`tsc` ra thư mục tạm, chạy bằng `node`, file `.js`): 5 kỹ năng, cosine 1,000000.
+  - Event loop khi chấm 20 ứng viên kèm round trip Neon: p99 16 ms (bản cũ 40 ms).
+- `perf:live-rescore-embedding --config=B`: 24,7 ms / văn bản, event loop p99 22,7 ms, HTTP p95 1,1 ms (lúc rảnh 1,5 ms), khớp bước 0.
+- Chưa kiểm qua `npm run dev:server` và `npm run build && npm start` của chủ dự án: thêm một kỹ năng mới (gõ tên chưa có) hoặc mở "Việc làm phù hợp" để server nạp model, log phải có "Loading embedding model …" và không có "Embedding model unavailable".
 
 ### Câu hỏi mới sau bước 0 (đã chốt 2026-11-14: Q7 = b, Q8 = b; xem "Câu hỏi đã chốt" và AD-27 mục 5, 11)
 

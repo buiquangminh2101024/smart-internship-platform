@@ -1019,6 +1019,10 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
     - **Worker vẫn xử lý tuần tự** từng văn bản. Tốc độ embed không tăng; chỉ request web không còn bị chặn.
     - **Đóng worker khi server dừng**, để `tsx watch` ở dev không để lại worker thừa giữ RAM. Chọn đúng file worker cho cả hai cách chạy: `tsx` (`.ts`) và bản build (`dist/*.js`).
     - Trên máy chỉ có 1 vCPU, worker vẫn chia CPU với luồng chính. Request được xen vào nhờ hệ điều hành chia thời gian, nhưng không nhanh hơn. Từ 2 vCPU trở lên thì lợi ích mới đầy đủ.
+    - **Chính xác hoá khi làm bước 2b (2026-11-14):**
+      - `main.ts` không có xử lý dừng server nên không thêm. Worker thread chết cùng process (kể cả khi `tsx watch` khởi động lại). Worker chỉ giữ process sống khi đang có việc (`ref` / `unref`), nên script cũng tự thoát. `close()` có sẵn cho ai cần dừng chủ động.
+      - Thời gian chờ (10 giây) đo đúng một lần embed: client gửi từng việc một, không tính lúc nạp model hay lúc xếp hàng. Quá giờ thì dựng lại worker ở lần gọi sau. Worker chết **trước** khi nạp xong model thì coi như model không dùng được.
+      - RAM: worker tốn thêm khoảng 30–55 MB so với model trên luồng chính (đo cùng một script, 931 → 961 MB sau khi nạp model). Không có bản model thứ hai.
 
 **Sửa so với AD-23:** mục 11 ("chưa có bảng điểm, mỗi lượt chấm lại lúc chạy") được thay bằng mục 7 ở trên. Quy tắc kiểm lại `NO_MATCH` sau 3 giờ giữ làm lưới an toàn, nhưng dấu được xoá sớm khi có ứng viên mới đạt ngưỡng (mục 6).
 
