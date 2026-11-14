@@ -32,7 +32,9 @@
     "audit:archive": "dotenv -e ../../.env -- tsx scripts/audit-archive.ts",
     "audit:backfill-resubmit":"dotenv -e ../../.env -- tsx scripts/audit-backfill-resubmit.ts",
     "perf:audit-seed": "dotenv -e ../../.env -- tsx scripts/perf-audit-log-seed.ts",
-    "perf:audit-measure": "dotenv -e ../../.env -- tsx scripts/perf-audit-log-measure.ts"
+    "perf:audit-measure": "dotenv -e ../../.env -- tsx scripts/perf-audit-log-measure.ts",
+    "perf:live-rescore-measure": "dotenv -e ../../.env -- tsx scripts/perf-live-rescore-measure.ts",
+    "perf:live-rescore-embedding": "dotenv -e ../../.env -- tsx scripts/perf-live-rescore-embedding.ts"
   },
   "prisma": {
     "seed": "tsx scripts/seed.ts"

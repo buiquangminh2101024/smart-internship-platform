@@ -955,7 +955,9 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 
 **Ngày:** 2026-11-14 · **Phase liên quan:** không thuộc phase đánh số. Mục 0.6 của `docs/01-project/FEATURE_BACKLOG.md`, theo nhận xét của giáo viên ở buổi demo 05/11/2026 ("dữ liệu của mình liên tục đẩy lên… hồ sơ người ta liên tục đẩy lên, em phải xử lý được những cái đó", "tự động nó làm"). Kế hoạch chi tiết: `docs/06-backend/live-rescore/PLAN.md`, `docs/05-frontend/phases/live-rescore/PLAN.md`.
 
-> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-14, chủ dự án duyệt từng điểm trong buổi trao đổi). CHƯA TRIỂN KHAI.** Q1–Q6 của plan backend đã chốt cùng ngày (chấm lại theo tin khi danh mục đổi; thêm cột `matchProfileChangedAt`; job alert lần đầu dùng lại `JOB_ALERT`; script mô phỏng gọi HTTP API; tóm tắt lượt gần nhất lưu ở Redis; realtime cho nhà tuyển dụng qua sự kiện Socket.IO `match-scores:updated`, tối đa một sự kiện mỗi công ty mỗi 15 giây, dự phòng bằng `refetchOnWindowFocus`). Bước 0 của plan (đo, chỉ đọc) có thể đổi các hằng số ở dưới; quyết định nào bị số đo bác thì dừng và hỏi lại.
+> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-14, chủ dự án duyệt từng điểm trong buổi trao đổi). CHƯA TRIỂN KHAI.** Q1–Q6 của plan backend đã chốt cùng ngày (chấm lại theo tin khi danh mục đổi; thêm cột `matchProfileChangedAt`; job alert lần đầu dùng lại `JOB_ALERT`; script mô phỏng gọi HTTP API; tóm tắt lượt gần nhất lưu ở Redis; realtime cho nhà tuyển dụng qua sự kiện Socket.IO `match-scores:updated`, tối đa một sự kiện mỗi công ty mỗi 15 giây, dự phòng bằng `refetchOnWindowFocus`). Bước 0 của plan (đo, chỉ đọc) đã làm ngày 2026-11-14. Kết quả dẫn tới hai quyết định chủ dự án chốt cùng ngày, ghi ở mục 5 và mục 11:
+> - **Q8:** chấm theo lô thay cho từng ứng viên;
+> - **Q7:** model embedding chạy trong một `worker_threads` duy nhất.
 
 **Bối cảnh:**
 
@@ -982,8 +984,11 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 
    Lượt chấm đêm của AD-24 giữ nguyên.
 4. **Chấm lại một ứng viên = chấm hồ sơ đó với mọi tin đang hiển thị có chung ≥ 1 kỹ năng `APPROVED`**, bằng **cùng bộ chấm** với bảng điểm (AD-24 mục 4: cùng quy tắc, cùng cosine, cùng cách xử lý thiếu embedding), rồi thay toàn bộ dòng điểm của ứng viên với các tin đang hiển thị trong một transaction. Tin không còn chung kỹ năng thì dòng bị xoá. Kết quả phải bằng đúng kết quả chấm theo tin; có test so hai chiều.
-5. **Bảo vệ tải, chạy chung process** (giữ AD-23 mục 8; chủ dự án chốt không tách worker, 2026-11-14):
-   - mỗi lúc chỉ một lượt chấm; chấm **lần lượt** từng ứng viên, dấu cũ nhất trước; nhường event loop giữa hai ứng viên;
+5. **Bảo vệ tải, chạy chung process** (giữ AD-23 mục 8; chủ dự án chốt không tách process riêng, 2026-11-14; model embedding chạy trong một luồng phụ của cùng process, xem mục 11):
+   - mỗi lúc chỉ một lượt chấm; chấm **lần lượt từng lô** ứng viên (mặc định 50 người, dấu cũ nhất trước); nhường event loop giữa hai lô (sửa sau bước 0, Q8 của plan):
+     - mỗi lô dùng chung một câu lấy pool ngược, một lần nạp hồ sơ, một câu hash và một câu cosine;
+     - mỗi lô ghi điểm và xoá dấu trong **một** transaction. Mục 2 áp theo lúc bắt đầu lô.
+     - Lý do: bước 0 đo thời gian chấm gần như toàn là round trip tới Neon (~44 ms mỗi câu từ máy dev). Chấm từng người mất khoảng 0,7 giây mỗi người (11 câu cộng 4 round trip ghi), 200 người khoảng 140 giây. Theo lô thì ước khoảng 17 round trip mỗi lô, 200 người khoảng 10 giây;
    - mỗi lượt có giới hạn thời gian (mặc định 60 giây); hết giờ thì dừng, người còn lại giữ dấu;
    - giới hạn số embedding mới mỗi lượt; người vượt có điểm rule-only (`semanticPending`) và giữ dấu;
    - **cache hồ sơ tin đang hiển thị trong bộ nhớ** (`JobMatchProfile` kèm vector), singleton. Xoá khi danh mục kỹ năng / ngành đổi, mỗi mục sống tối đa 1 giờ. Tin `PUBLISHED` không sửa được nội dung (AD-24 mục 5), và câu lấy pool luôn lọc tin đang hiển thị, nên mục của tin đã thôi hiển thị không bao giờ được đọc. Cache chỉ dùng cho chấm theo ứng viên (và "Việc làm phù hợp" nếu bước 0 thấy có lợi); lượt chấm theo tin giữ cách cũ;
@@ -993,12 +998,27 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
    - **tự chuyển "Đang xem xét":** gọi `autoReviewTrigger` cho đơn "Chờ duyệt" của ứng viên ở tin đang hiển thị (thêm dạng `{ candidateId }`);
    - **job alert chỉ lần đầu:** ứng viên **lần đầu** có dòng điểm (trước lượt này không có dòng nào) thì báo các tin ≥ max(ngưỡng tin, 70) theo đúng luật AD-26 mục 6. Sửa hồ sơ về sau **không** sinh báo, để tránh spam;
    - **realtime cho nhà tuyển dụng:** gộp theo lượt, mỗi công ty có tin vừa thêm người đạt ngưỡng nhận một sự kiện nhẹ để giao diện làm mới số "Phù hợp" (không ghi bảng `notifications`).
-7. **Tự mời (AD-23) đọc bảng điểm** thay cho lọc SQL ≤ 50 rồi chấm. Chọn từ bảng những người điểm ≥ ngưỡng và còn mời được, điểm giảm dần; chỉ **chấm trực tiếp lại số ít người sắp mời** để có `MatchResult` lưu kèm lời mời (AD-15), bỏ người mà điểm mới dưới ngưỡng. Tin chưa được chấm lần nào (`matchScoresAt = null`) thì đi đường cũ.
+7. **Tự mời (AD-23) đọc bảng điểm** thay cho lọc SQL ≤ 50 rồi chấm. Chọn từ bảng những người điểm ≥ ngưỡng và còn mời được, điểm giảm dần, và **không chấm lại**: lời mời chỉ lưu `matchScore` và `matchWeightsVersion` (AD-15), cả hai có sẵn trong bảng. Độ mới của điểm do mục 3–4 bảo đảm. Tin chưa được chấm lần nào (`matchScoresAt = null`) thì đi đường cũ. (Sửa 2026-11-14: bản đầu chấm trực tiếp lại người sắp mời với lý do cần `MatchResult`, lý do đó không đúng.)
 8. **Trang tìm ứng viên đọc bảng điểm** (mục 5 của buổi trao đổi): lấy top 10 người còn mời được theo điểm lưu, chấm trực tiếp lại 10 người đó để có lý do, tổng số "phù hợp" lấy từ bảng. Hết giới hạn 50. Tin chưa được chấm thì đi đường cũ.
 9. **Script mô phỏng dữ liệu đổ vào** (mục 6 của buổi trao đổi): thêm ứng viên và tin theo từng đợt, **đi qua service** để mọi lối kích hoạt chạy như người dùng thật. Dùng lại bộ thư viện của `large-demo`, tiền tố email / id riêng để `--reset` xoá được. Chi tiết (gọi HTTP qua gateway hay dựng container trong script) ở plan backend.
 10. **Bổ sung đi kèm:**
     - sửa lỗi còn treo của 0.2: tỉ lệ tự động của công ty là 0% thì trạng thái thẻ tự mời không ghi "Hệ thống tự mời bù…" (mục 8 của buổi trao đổi);
     - Admin có thẻ "Hệ thống tự động": số ứng viên đang chờ chấm lại, dấu cũ nhất, lượt chấm gần nhất, số lời mời tự động / báo tin hôm nay (frontend 7h).
+11. **Model embedding chạy trong một `worker_threads` duy nhất** (Q7 của plan, chủ dự án chốt 2026-11-14 sau bước 0):
+    - **Số đo của bước 0:** 200 văn bản hồ sơ thật, request nhẹ gửi mỗi 50 ms.
+      - Mỗi lần embed **chặn luồng chính** khoảng 24 ms, tức suốt thời gian suy luận. Với model trên luồng chính: event loop p99 44 ms, request nhẹ p95 31 ms so với 1,8 ms lúc rảnh.
+      - Trong worker: event loop như lúc rảnh, request p95 1,1 ms, tốc độ embed không đổi.
+      - Giới hạn số luồng onnxruntime làm mỗi lần chặn **dài hơn**; embed theo lô chặn cả lô (event loop p50 0,6–1,3 giây). Cả hai đều loại.
+      - Nguyên nhân là luồng chính bị chặn, không phải tranh CPU. Khi nhiều người dùng cùng lúc, đây là điểm nghẽn đầu tiên: mỗi lần embed bắt **mọi** request phải chờ.
+    - **Một bản model:** worker nạp model **một lần**; luồng chính không nạp nữa. RAM giữ khoảng 0,8 GB như hiện tại.
+    - **Sửa ở `SkillEmbeddingService`, không sửa ở port `EmbeddingProvider`:**
+      - Mọi nơi dùng model đều đi qua `SkillEmbeddingService.embed`: chấm điểm và chatbot qua port; khử trùng kỹ năng và cron bổ sung vector kỹ năng gọi thẳng.
+      - Nếu chỉ thay bản cài của port thì khử trùng kỹ năng vẫn nạp model trên luồng chính, thành hai bản model (~1,6 GB).
+      - Chữ ký `embed(text): Promise<number[] | null>` giữ nguyên, nên các module gọi không đổi.
+    - **Giữ hành vi khi lỗi:** nạp model lỗi, worker chết, hoặc một lần embed quá thời gian chờ thì trả `null` (các tính năng lùi về cách không có embedding, như hiện tại). Worker chết thì lần gọi sau tạo lại; nạp model hỏng thì đánh dấu không dùng được như cờ `unavailable` hiện có.
+    - **Worker vẫn xử lý tuần tự** từng văn bản. Tốc độ embed không tăng; chỉ request web không còn bị chặn.
+    - **Đóng worker khi server dừng**, để `tsx watch` ở dev không để lại worker thừa giữ RAM. Chọn đúng file worker cho cả hai cách chạy: `tsx` (`.ts`) và bản build (`dist/*.js`).
+    - Trên máy chỉ có 1 vCPU, worker vẫn chia CPU với luồng chính. Request được xen vào nhờ hệ điều hành chia thời gian, nhưng không nhanh hơn. Từ 2 vCPU trở lên thì lợi ích mới đầy đủ.
 
 **Sửa so với AD-23:** mục 11 ("chưa có bảng điểm, mỗi lượt chấm lại lúc chạy") được thay bằng mục 7 ở trên. Quy tắc kiểm lại `NO_MATCH` sau 3 giờ giữ làm lưới an toàn, nhưng dấu được xoá sớm khi có ứng viên mới đạt ngưỡng (mục 6).
 
@@ -1009,16 +1029,29 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 - *Bảng hàng đợi riêng (`candidate_rescore_queue`, mỗi thay đổi một dòng):* biết được lý do và lịch sử, nhưng phải gộp nhiều dòng của cùng người, phải dọn dòng cũ, và không màn hình nào cần lịch sử này. Ghi log là đủ để gỡ lỗi.
 - *Chấm ngay trong request lưu hồ sơ:* vài giây cho khoảng 87 tin mỗi lần lưu; ứng viên mới sửa 5–10 mục liên tiếp thì chấm lại 5–10 lần vô ích.
 - *Chỉ cron 15 phút:* demo trực tiếp phải chờ tới 15 phút mới thấy hệ thống phản ứng.
-- *Tách worker (`worker_threads`, process riêng, BullMQ):* số đo của AD-23 (bước 7c–7d) và AD-24 cho thấy chung process vẫn ổn ở quy mô demo. Process riêng còn phải xử lý lại realtime (Socket.IO chạy chung process với Express), thêm pool kết nối Neon, và web vẫn phải nạp model vì có nhiều chỗ embed trong request. Bước 0 so ba cấu hình (chung process, `worker_threads`, giới hạn số luồng của onnxruntime); nếu cần đổi thì viết AD riêng.
+- *Tách việc chấm ra process riêng hoặc dùng BullMQ:* số đo của AD-23 (bước 7c–7d) và AD-24 cho thấy chung process vẫn ổn ở quy mô demo. Process riêng còn phải xử lý lại realtime (Socket.IO chạy chung process với Express), thêm pool kết nối Neon, và web vẫn phải nạp model vì có nhiều chỗ embed trong request. (Chỉ model embedding chuyển sang luồng phụ, xem mục 11.)
+- *Giới hạn số luồng của onnxruntime, embed theo lô (bước 0):* đều làm luồng chính bị chặn lâu hơn (mục 11).
+- *Bật preview `relationJoins` của Prisma để nạp hồ sơ bằng một câu (bước 0, Q8):* bước 0 đo hồ sơ ứng viên giảm 319 → 47 ms, hồ sơ tin 466 → 108 ms. Không chọn ở 0.6 vì hai lý do:
+  - bật preview thì **mọi** truy vấn có `include` / `select` quan hệ trong app đổi sang join, phải kiểm lại gần như mọi trang, và tính năng preview có thể đổi khi nâng Prisma;
+  - khi đã chấm theo lô (mục 5), nó chỉ bớt thêm khoảng 6 round trip mỗi lô.
+
+  Có thể làm thành việc tối ưu riêng cho cả app, có AD và đo từng trang. Khi server đặt cùng vùng với Neon (round trip ~1–2 ms), lợi ích nhỏ đi nhiều.
 - *Cache hồ sơ tin trên Redis:* chỉ có một process nên không cần chia sẻ; Redis Cloud ở xa nên một lượt `MGET` cộng chuyển đổi khoảng 87 vector gần bằng một lượt đọc Neon; xoá cache phức tạp hơn. Cache đặt sau interface nhỏ (`getMany`, `invalidate`, `clear`) để sau này đổi sang cache hai tầng (bộ nhớ + Redis, xoá qua pub/sub) khi chạy nhiều instance.
 - *Báo job alert mỗi khi sửa hồ sơ làm có thêm tin đạt ngưỡng:* ứng viên sửa hồ sơ nhiều lần thì nhận báo liên tục.
 - *Suy thay đổi từ `updatedAt`:* sót các thay đổi ở bảng con (Bối cảnh).
+
+**Khi triển khai lên hosting:**
+- Đặt server **cùng vùng với Neon**: round trip giảm từ ~44 ms (máy dev) còn ~1–2 ms, nên mọi thời gian chấm ở bước 0 nhỏ đi nhiều lần.
+- Chọn máy tối thiểu ~2 GB RAM (model ~0,8 GB) và 2 vCPU (mục 11).
+- **Chạy nhiều instance cần AD riêng.** Khoá "một lượt mỗi lúc", hẹn giờ chờ ngừng sửa và cache hồ sơ tin hiện nằm trong bộ nhớ của một process; khi đó phải chuyển sang Redis / DB.
 
 **Hướng mở rộng (không làm ở 0.6):** embedding chạy trên máy riêng (thêm một `HttpEmbeddingProvider` sau port `EmbeddingProvider` có sẵn), hàng đợi kèm nhiều worker khi phải chấm hàng chục nghìn người cùng lúc, truy hồi hai tầng bằng index vector, read replica của Neon cho các trang chỉ đọc.
 
 **Ảnh hưởng:**
 
-- `schema.prisma` + 1 migration viết tay: `Candidate.matchRescoreRequestedAt` kèm index một phần (`WHERE … IS NOT NULL`); `Candidate.matchProfileChangedAt` (chống lượt chấm theo tin ghi đè điểm mới, Q2 của plan backend); có thể thêm index `job_post_skills("skillId")` tuỳ bước 0.
+- `schema.prisma` + 1 migration viết tay: `Candidate.matchRescoreRequestedAt` kèm index một phần (`WHERE … IS NOT NULL`); `Candidate.matchProfileChangedAt` (chống lượt chấm theo tin ghi đè điểm mới, Q2 của plan backend). Không thêm index `job_post_skills("skillId")`: bước 0 đo mọi câu < 2 ms.
+- `skills/skill-embedding.service.ts` (gửi việc sang worker) và một file worker mới trong `apps/server/src/infrastructure/` (mục 11). Các module gọi `embed` và port `EmbeddingProvider` không đổi.
+- `main.ts`: đóng worker khi server dừng.
 - Module mới `apps/server/src/modules/live-rescore/` (đánh dấu, hẹn giờ, lượt chấm, cron 15 phút, cache hồ sơ tin, số liệu cho Admin).
 - `candidates`, `skills`, `education-catalog`, `candidate-outreach` (đặt dấu, tự mời và trang tìm ứng viên đọc bảng), `match-scores` (ghi theo ứng viên), `application-automation` (`autoReviewTrigger` theo ứng viên), `job-alerts` (báo lần đầu), `RealtimeNotifier` (một sự kiện mới), `main.ts` (cron mới).
 - Script mới `simulate-inflow`.

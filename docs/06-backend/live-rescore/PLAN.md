@@ -1,6 +1,10 @@
 # Chấm lại theo ứng viên gần thời gian thực (0.6) — Backend
 
-> **Trạng thái: ĐÃ LẬP KẾ HOẠCH (2026-11-14). CHƯA TRIỂN KHAI.** Hướng đã chốt ở AD-27 trong buổi trao đổi với chủ dự án ngày 2026-11-14. Q1–Q6 đã chốt cùng ngày. Bước 0 (đo, chỉ đọc) làm được ngay.
+> **Trạng thái: ĐÃ LẬP KẾ HOẠCH (2026-11-14). CHƯA TRIỂN KHAI.** Hướng đã chốt ở AD-27 trong buổi trao đổi với chủ dự án ngày 2026-11-14. Q1–Q6 đã chốt cùng ngày. **Bước 0 (đo, chỉ đọc) đã làm cùng ngày**, kết quả ở "Ghi chú triển khai". Hai câu hỏi bước 0 nêu ra cũng đã chốt cùng ngày (AD-27 mục 5 và mục 11):
+> - **Q7:** model embedding chạy trong một `worker_threads`;
+> - **Q8:** chấm theo lô.
+>
+> Việc tiếp theo: bước 1.
 
 Mục 0.6 của `docs/01-project/FEATURE_BACKLOG.md`. Quyết định kiến trúc: AD-27 (sửa một phần AD-23, AD-24). Frontend: `docs/05-frontend/phases/live-rescore/PLAN.md`. Nền:
 - AD-24 và `docs/06-backend/hiring-progress/PLAN.md` (bảng điểm, `scoreProfiles`, lượt đêm, cache hồ sơ một lượt);
@@ -30,10 +34,11 @@ Tóm tắt từ AD-27; chi tiết và lý do ở AD-27.
 | D2 | Chỉ xoá dấu khi dấu ≤ lúc bắt đầu chấm. |
 | D3 | Hai lối: hẹn giờ chờ người dùng ngừng sửa (mặc định 45 giây, trong khoảng 30–60) và cron 15 phút. Lượt đêm giữ nguyên. |
 | D4 | Chấm một ứng viên với mọi tin đang hiển thị có chung ≥ 1 kỹ năng `APPROVED`, cùng bộ chấm với bảng; thay toàn bộ dòng của ứng viên trong một transaction. |
-| D5 | Chung process: một lượt mỗi lúc, lần lượt từng ứng viên, nhường event loop, giới hạn 60 giây và số embedding mới mỗi lượt, cache hồ sơ tin trong bộ nhớ (TTL 1 giờ, xoá khi danh mục đổi). |
+| D5 | Chung process: một lượt mỗi lúc, **lần lượt từng lô ~50 ứng viên** (Q8), nhường event loop giữa hai lô, giới hạn 60 giây và số embedding mới mỗi lượt, cache hồ sơ tin trong bộ nhớ (TTL 1 giờ, xoá khi danh mục đổi). |
+| D13 | Model embedding chạy trong **một** `worker_threads` (Q7). Sửa bên trong `SkillEmbeddingService`, chữ ký `embed` giữ nguyên; luồng chính không nạp model. |
 | D6 | Admin đổi danh mục kỹ năng / ngành thì đánh dấu mọi ứng viên bị ảnh hưởng bằng SQL. |
 | D7 | Sau khi chấm: kích hoạt tự mời (xoá dấu "hết ứng viên"), tự chuyển "Đang xem xét", job alert **chỉ lần đầu** có điểm, sự kiện realtime cho nhà tuyển dụng (gộp theo lượt). |
-| D8 | Tự mời đọc bảng điểm; chỉ chấm trực tiếp lại số ít người sắp mời. Tin chưa chấm thì đi đường cũ. |
+| D8 | Tự mời đọc thẳng bảng điểm, không chấm lại (sửa 2026-11-14, xem bước 6). Tin chưa chấm thì đi đường cũ. |
 | D9 | Trang tìm ứng viên đọc bảng điểm; chấm trực tiếp lại 10 người hiển thị. Tin chưa chấm thì đi đường cũ. |
 | D10 | Script mô phỏng đổ dữ liệu theo đợt, đi qua service, dùng lại thư viện `large-demo`. |
 | D11 | Sửa trạng thái thẻ tự mời khi tỉ lệ tự động của công ty là 0%. |
@@ -52,9 +57,17 @@ Tóm tắt từ AD-27; chi tiết và lý do ở AD-27.
   - Không dùng polling định kỳ (tải theo số tab đang mở, trễ tới 30 giây). Không để nhà tuyển dụng tự tải lại trang.
 - **Q6 — Tóm tắt lượt gần nhất lưu ở Redis (chốt).** Lượt chấm xong thì dấu đã bị xoá, nên "lượt gần nhất lúc nào, chấm bao nhiêu người, mất bao lâu, còn bao nhiêu" không suy được từ DB. Ghi một khoá JSON vào Redis, theo mẫu `AutoOutreachRunStore`, để còn sau khi server khởi động lại (ở dev, `tsx watch` khởi động lại mỗi lần lưu file). Dòng này cho thấy hệ thống đang làm việc khi demo, và giúp phát hiện cron chết (số đang chờ tăng mà lượt gần nhất đã lâu). Số đang chờ và dấu cũ nhất đọc thẳng từ DB. Số lời mời tự động, job alert và hồ sơ tự chuyển hôm nay đếm từ bảng sẵn có.
 
+- **Q7 — Embedding chạy ở đâu (chốt sau bước 0: `worker_threads`, phương án b).**
+  - Bước 0 mục 3: mỗi lần embed chặn luồng chính ~24 ms. Trong worker, event loop và request nhẹ như lúc rảnh, tốc độ embed không đổi. Giới hạn luồng onnxruntime và embed theo lô đều tệ hơn.
+  - Làm ở bước 2b, trước bước 3 để lượt chấm và số đo ở bước 10 đã dùng worker.
+- **Q8 — Giảm round trip khi chấm (chốt sau bước 0: chấm theo lô, phương án b).**
+  - Mỗi lô ~50 ứng viên dùng chung câu pool ngược, nạp hồ sơ, câu hash, câu cosine, và một transaction ghi kèm xoá dấu.
+  - Không bật `relationJoins`: đổi cách nạp của toàn app, để làm việc tối ưu riêng nếu cần.
+
 ## Phần 1 — Công nghệ / package / kiến trúc
 
-- **Không thêm dependency.** Dùng lại: Prisma (`$queryRaw`, transaction), `node-cron`, awilix, `setTimeout` / `setImmediate` của Node, `ioredis` sẵn có (Q6).
+- **Không thêm dependency.** Dùng lại: Prisma (`$queryRaw`, transaction), `node-cron`, awilix, `setTimeout` / `setImmediate` và `worker_threads` của Node, `ioredis` sẵn có (Q6).
+- **Embedding (Q7, D13):** `SkillEmbeddingService` gửi văn bản sang một worker giữ model; file worker mới ở `apps/server/src/infrastructure/`. Port `EmbeddingProvider` và các module gọi `embed` không đổi.
 - **Bộ chấm:** `CandidateOutreachService.scoreProfiles` là nguồn điểm duy nhất (AD-24 mục 4). Thêm một lối chấm **theo ứng viên** (một hồ sơ × nhiều tin) dùng cùng `JobMatcher` và cùng cách tính cosine (`MatchEmbeddingService.similarityForJobs`). Có test bảo đảm hai chiều cho cùng điểm với cùng cặp.
 - **Module mới** `apps/server/src/modules/live-rescore/`:
   - `candidate-rescore-marker.ts`: đặt dấu theo ứng viên, theo kỹ năng, theo ngành; báo cho bộ hẹn giờ;
@@ -82,19 +95,20 @@ Admin duyệt / từ chối / gộp kỹ năng, duyệt / gộp ngành (SkillsSe
 
 Hết hẹn giờ  ─┐
 Cron 15 phút ─┴─► LiveRescoreService.drain(60 s)   [một lượt mỗi lúc]
-                   lặp người có dấu, dấu cũ nhất trước:
-                     ├─ pool ngược: tin đang hiển thị có chung kỹ năng APPROVED
+                   lặp từng lô ~50 người có dấu, dấu cũ nhất trước (Q8):
+                     ├─ pool ngược của cả lô (một câu): tin đang hiển thị có chung kỹ năng APPROVED
+                     ├─ nạp hồ sơ cả lô (một lần loadMany)
                      ├─ jobProfileCache.getMany(jobIds)  → nạp phần thiếu
+                     ├─ vector: một câu hash, embed phần cũ (worker, Q7), một câu cosine cho mọi cặp
                      ├─ chấm theo ứng viên (cùng bộ chấm với bảng)
-                     ├─ MatchScoreRepository.replaceForCandidate (transaction)
-                     ├─ xoá dấu nếu dấu ≤ lúc bắt đầu
+                     ├─ một transaction: ghi điểm cả lô + xoá dấu nếu dấu ≤ lúc bắt đầu lô
                      └─ việc kéo theo:
                           ├─ tin bật tự mời vừa có người đạt ngưỡng → clearExhausted + autoOutreachTrigger(company)
                           ├─ autoReviewTrigger({ candidateId })
                           ├─ lần đầu có điểm → JobAlertService.onCandidateFirstScored (Q3)
                           └─ gom theo công ty → realtimeNotifier.pushMatchUpdate (Q5, gửi cuối lượt)
 
-Lượt tự mời (AD-23): buildQueue đọc bảng điểm → chấm trực tiếp lại người sắp mời → createInvitation
+Lượt tự mời (AD-23): buildQueue đọc bảng điểm → createInvitation (lưu điểm và weightsVersion lấy từ bảng)
 Trang tìm ứng viên: top 10 từ bảng → chấm lại 10 người để có lý do
 GET /admin/automation-status → số người chờ, dấu cũ nhất, lượt gần nhất, số hôm nay
 ```
@@ -128,7 +142,7 @@ Script đo đặt ở `apps/server/scripts/` (tên `perf-live-rescore-*.ts`), kh
 
 - `Candidate.matchRescoreRequestedAt DateTime?` kèm index một phần `WHERE "matchRescoreRequestedAt" IS NOT NULL` (cron chỉ đọc người có dấu).
 - `Candidate.matchProfileChangedAt DateTime?` (Q2).
-- Nếu bước 0 mục 2 cần: index `job_post_skills("skillId")`.
+- ~~Index `job_post_skills("skillId")`~~: bước 0 mục 2 cho thấy không cần (mọi câu < 2 ms).
 - Migration viết tay; kiểm `migrate diff` ra "empty migration" trước khi sửa schema; chủ dự án xác nhận trước khi áp lên Neon (`npm run db:deploy`).
 
 ### Bước 2 — Đánh dấu và hẹn giờ
@@ -142,19 +156,48 @@ Script đo đặt ở `apps/server/scripts/` (tên `perf-live-rescore-*.ts`), kh
 - `isOpenToOutreach` bật: không đánh dấu; xoá dấu "hết ứng viên" của các tin đang bật tự mời có chung kỹ năng với ứng viên (một câu SQL) rồi kích hoạt tự mời của các công ty đó (ghi chú "Ngoài phạm vi" của plan 0.2).
 - Unit test: mỗi lối ghi có gọi `mark`; sửa liên tiếp chỉ ra một lượt; lỗi đánh dấu không làm hỏng request.
 
+### Bước 2b — Model embedding trong một worker (Q7, D13, AD-27 mục 11)
+
+- **Worker:** file mới ở `apps/server/src/infrastructure/` (ví dụ `embedding-worker.ts`).
+  - Nạp `pipeline("feature-extraction", EMBEDDING_MODEL_ID)` **một lần**, với `cacheDir` từ `EMBEDDING_MODEL_CACHE_DIR` như `applyEmbeddingEnv`.
+  - Nhận `{ id, text }`, trả `{ id, vector }` hoặc `{ id, error }`. Xử lý tuần tự.
+- **`SkillEmbeddingService`:**
+  - `embed` gửi việc sang worker thay vì gọi `pipeline` tại chỗ. Chữ ký `embed(text): Promise<number[] | null>` giữ nguyên.
+  - Tạo worker lười ở lần gọi đầu, như model đang nạp lười. Luồng chính **không** import `@huggingface/transformers` nữa.
+  - Giữ hành vi khi lỗi: nạp model lỗi thì đặt `unavailable` và trả `null` từ đó về sau. Một lần embed quá thời gian chờ (hằng số, ví dụ 10 giây) thì trả `null`. Worker chết thì các lần đang chờ trả `null` và lần gọi sau tạo worker mới.
+  - Thêm `close()`. `main.ts` gọi khi server dừng, như các job đang dừng.
+- **File worker cho hai cách chạy:** `tsx watch` (`.ts`) và `node dist/main.js` (`.js`). Chọn theo phần mở rộng của file đang chạy. Kiểm cả hai: `npm run dev:server` và `npm run build && npm start`.
+- **Không đổi:** port `EmbeddingProvider`, `SkillEmbeddingProvider`, `MatchEmbeddingService`, `skill-dedupe.service.ts`, `catalog-suggestion-queue.job.ts`, support-chat.
+- **Kiểm:**
+  - Unit test cho đường lỗi: worker trả lỗi, quá thời gian chờ, worker chết.
+  - Vector từ worker trùng vector cũ của cùng văn bản (so với `candidate_embeddings` đang lưu, chỉ đọc).
+  - Chạy lại `perf:live-rescore-embedding --config=B` để có mốc.
+  - RAM của process sau khi nạp model không tăng so với trước (~0,8 GB cho model).
+- **Ước:** ~0,5 ngày.
+
 ### Bước 3 — Chấm theo ứng viên và ghi bảng
 
-- `LiveRescoreRepository.findJobPool(candidateId)`: tin đang hiển thị (`VISIBLE_JOB`) có chung ≥ 1 kỹ năng `APPROVED` với ứng viên.
+- `LiveRescoreRepository.findJobPools(candidateIds)`: một câu cho cả lô, trả `candidateId → jobPostIds` của các tin đang hiển thị (`VISIBLE_JOB`) có chung ≥ 1 kỹ năng `APPROVED` (Q8). Bước 0 đo câu cho một người ~1–1,6 ms trên Postgres.
 - `JobProfileCache` (bộ nhớ): `getMany(ids)` lấy mục còn hạn, nạp phần thiếu bằng `JobMatchProfileLoader.loadMany` (một câu) và vector tin; TTL 1 giờ; trần mục (mặc định 5.000), vượt thì bỏ mục dùng lâu nhất.
-- Chấm theo ứng viên: thêm vào `CandidateOutreachService` (cạnh `scoreProfiles`) một hàm nhận một hồ sơ ứng viên và danh sách `JobMatchProfile`, cùng `JobMatcher`, cosine qua `similarityForJobs` (vector tin lấy từ cache khi có). **Test bắt buộc:** với 20 cặp lấy từ bộ demo, điểm theo ứng viên = điểm của `scoreProfiles`.
-- `MatchScoreRepository.replaceForCandidate(candidateId, rows, scoredAt)`: trong một transaction, xoá dòng của ứng viên với các tin đang hiển thị, ghi dòng mới. Tin thôi hiển thị trong lúc chấm thì bỏ dòng của tin đó (lọc `VISIBLE_JOB` lúc ghi).
+- **Chấm theo lô ứng viên** (Q8): thêm vào `CandidateOutreachService` (cạnh `scoreProfiles`) một hàm nhận danh sách hồ sơ ứng viên và `JobMatchProfile` của pool từng người. Dùng cùng `JobMatcher`.
+  - **Vector:** một câu `findHashes` cho các ứng viên của lô (vector tin: hash biết từ cache). Embed phần cũ qua worker (bước 2b). Một câu cosine cho mọi cặp (ứng viên, tin) của lô: thêm `MatchEmbeddingRepository.cosinesForPairs`, cùng biểu thức `1 - (c.embedding <=> j.embedding)` với `cosinesForJob` / `cosinesForCandidate`.
+  - **Test bắt buộc:** với 20 cặp lấy từ bộ demo, điểm theo lô = điểm của `scoreProfiles`. Bước 0 đã thấy nguyên mẫu từng người khớp bảng 2.493 / 2.494 cặp.
+- `MatchScoreRepository.replaceForCandidates(rowsByCandidate, scoredAt, batchStartedAt)`, **một** transaction cho cả lô:
+  - xoá dòng của các ứng viên trong lô với các tin đang hiển thị, ghi dòng mới (`createMany` theo khúc);
+  - xoá dấu có điều kiện (D2: dấu ≤ `batchStartedAt`), trừ người lỗi hoặc vượt giới hạn embedding (giữ dấu);
+  - tin thôi hiển thị trong lúc chấm thì bỏ dòng của tin đó (lọc `VISIBLE_JOB` lúc ghi).
 - `LiveRescoreService.drain(budgetMs)`:
   - đang có lượt thì chỉ đặt cờ "chạy thêm lượt nữa" rồi trả về (không chạy chồng);
-  - lấy người có dấu, dấu cũ nhất trước, theo lô 50;
-  - với mỗi người: ghi lúc bắt đầu, chấm, ghi bảng, xoá dấu có điều kiện (D2), gom việc kéo theo; nhường event loop;
+  - lấy người có dấu, dấu cũ nhất trước, theo lô `LIVE_RESCORE_BATCH_SIZE` (50);
+  - với mỗi lô: ghi lúc bắt đầu lô, nạp hồ sơ cả lô, lấy pool cả lô, chấm, ghi bảng kèm xoá dấu, gom việc kéo theo; nhường event loop giữa hai lô;
   - giới hạn số embedding mới mỗi lượt; người vượt có `semanticPending` và **giữ** dấu;
-  - hết giờ thì dừng; lỗi của một người chỉ ghi log và giữ dấu;
+  - hết giờ thì dừng trước lô kế tiếp. Lỗi cả lô (ví dụ transaction hỏng) chỉ ghi log và giữ dấu cả lô. Hồ sơ của một người không nạp được thì bỏ người đó, giữ dấu;
   - cuối lượt ghi tóm tắt (Q6), gửi sự kiện realtime gộp (Q5).
+- **Ước theo bước 0** (máy dev, round trip ~44 ms):
+  - khoảng 17 round trip mỗi lô ≈ 0,8 giây, cộng 25 ms mỗi vector mới;
+  - 200 ứng viên mới ≈ 10 giây, so với ~140 giây nếu chấm từng người.
+
+  Đo lại ở bước 10.
 - Cron 15 phút gọi `drain` (`startLiveRescoreJob` trong `main.ts`, mẫu `startAutoOutreachJob`).
 - Q2: `MatchScoreService.rescoreJob` sau khi ghi thì đánh dấu lại những người trong pool có `matchProfileChangedAt` > lúc nạp hồ sơ.
 
@@ -173,7 +216,10 @@ Script đo đặt ở `apps/server/scripts/` (tên `perf-live-rescore-*.ts`), kh
 
 ### Bước 6 — Tự mời đọc bảng điểm (D8)
 
-- `AutoOutreachService.buildQueue`: nếu tin đã có `matchScoresAt` thì đọc từ bảng những người điểm ≥ `minScore`, bật cho liên hệ, chưa nộp đơn, không có lời mời chặn, chưa đủ trần hôm nay; điểm giảm dần; lấy tối đa (số lượt còn lại × 2) người. Chấm trực tiếp lại nhóm này bằng `scorePool` để có `MatchResult`; bỏ người có điểm mới dưới ngưỡng. Tin chưa chấm thì giữ đường cũ.
+- `AutoOutreachService.buildQueue`: nếu tin đã có `matchScoresAt` thì đọc từ bảng những người điểm ≥ `minScore`, bật cho liên hệ, chưa nộp đơn, không có lời mời chặn, chưa đủ trần hôm nay; điểm giảm dần (bằng nhau thì nhiều kỹ năng chung hơn trước, như thứ tự cũ); lấy tối đa (số lượt còn lại × 2) người. **Không chấm lại:** lời mời chỉ lưu `matchScore` và `matchWeightsVersion` (`createInvitation`), cả hai có sẵn trong bảng. Tin chưa chấm thì giữ đường cũ.
+- *Sửa 2026-11-14 (chủ dự án hỏi lại):* bản đầu của plan chấm trực tiếp lại người sắp mời "để có `MatchResult` lưu kèm lời mời". Lý do đó sai: lời mời không lưu lý do chấm. Độ mới của điểm đã do 0.6 bảo đảm (chấm lại vài phút sau khi sửa hồ sơ, Q2 chống ghi đè), nên chấm lại chỉ tốn thêm thời gian và embedding.
+- `createInvitation` hiện nhận `match?: MatchResult | null` và tự chấm khi `match` là `undefined`. Thu hẹp kiểu đầu vào về `{ score, weightsVersion } | null` (chỉ hai trường được dùng), để lượt tự mời truyền điểm từ bảng mà không phải dựng `MatchResult` giả. Mời tay và "Mời tất cả" truyền phần tương ứng của `MatchResult` đang có, hành vi không đổi.
+- Dòng `semanticPending = true` (điểm rule-only vì chưa có embedding) vẫn được mời như dòng thường, cùng cách số "Phù hợp" của AD-24 đang đếm; người đó vẫn giữ dấu nên được chấm đầy đủ ở lượt sau.
 - `hasCappedSkillMatch` / `markExhausted` giữ nguyên ý nghĩa. Bỏ `AUTO_OUTREACH_PREFILTER_LIMIT` nếu không còn chỗ dùng.
 - Đo lại một lượt cron của Mây Xanh so với mốc ở bước 0 mục 5.
 
@@ -211,7 +257,7 @@ npm run simulate-inflow --workspace server -- --reset            # xoá mọi th
    - ứng viên nộp đơn rồi sửa hồ sơ cho đạt ngưỡng → đơn tự chuyển "Đang xem xét";
    - ứng viên mới nhận một thông báo "N tin mới phù hợp"; sửa hồ sơ tiếp không nhận thêm;
    - Admin gộp hai kỹ năng (trên dữ liệu kiểm) → hết dấu trong thời gian ước ở bước 0 mục 4.
-3. **Đo tải bằng script mô phỏng:** 200 ứng viên trong một đợt. Đo event loop p99, `/api/health`, `/job-posts` và `GET /employer/dashboard/hiring-progress` (bị gọi lại theo sự kiện realtime) p50 / p95 so với lúc rảnh, thời gian đến khi hết dấu. Ngưỡng giữ chung process: event loop p99 < 100 ms và API nhẹ chậm không quá 2 lần (cùng ngưỡng plan 0.2), hoặc chậm quá 2 lần nhưng không quá vài giây mỗi đợt. Vượt ngưỡng thì áp cấu hình đã chọn ở bước 0 mục 3, đo lại; vẫn vượt thì dừng và hỏi chủ dự án.
+3. **Đo tải bằng script mô phỏng:** 200 ứng viên trong một đợt. Đo event loop p99, `/api/health`, `/job-posts` và `GET /employer/dashboard/hiring-progress` (bị gọi lại theo sự kiện realtime) p50 / p95 so với lúc rảnh, thời gian đến khi hết dấu. Ngưỡng giữ chung process: event loop p99 < 100 ms và API nhẹ chậm không quá 2 lần (cùng ngưỡng plan 0.2), hoặc chậm quá 2 lần nhưng không quá vài giây mỗi đợt. Đo khi đã có worker embedding (bước 2b); vượt ngưỡng thì dừng và hỏi chủ dự án.
 4. **Lượt đêm vẫn đạt:** chạy `rescore-match-scores` sau khi có dữ liệu mô phỏng, thời gian và độ trễ web như mốc của AD-24.
 
 ### Bước 11 — Tài liệu
@@ -232,16 +278,122 @@ npm run simulate-inflow --workspace server -- --reset            # xoá mọi th
 | Phần | Ước |
 |---|---|
 | Bước 0 (đo, gồm so cấu hình embedding) | ~0,5 ngày |
-| Bước 1–5 (dấu, hẹn giờ, chấm theo ứng viên, việc kéo theo, danh mục) | ~1–1,5 ngày |
+| Bước 1–5 (dấu, hẹn giờ, chấm theo lô, việc kéo theo, danh mục) | ~1–1,5 ngày |
+| Bước 2b (embedding trong worker, Q7) | ~0,5 ngày |
 | Bước 6–8 (tự mời và tìm ứng viên đọc bảng, thẻ 0%, API Admin) | ~0,5–1 ngày |
 | Bước 9–11 (script mô phỏng, kiểm thử, tài liệu) | ~1 ngày |
-| **Tổng backend** | **~3–4 ngày** |
+| **Tổng backend** | **~3,5–4,5 ngày** |
 
 Ước ban đầu ở backlog (1–1,5 ngày) chưa gồm: chuyển trang tìm ứng viên sang đọc bảng, cache hồ sơ tin, so cấu hình embedding, realtime và thẻ Admin.
 
 ## Ghi chú triển khai
 
-(Chưa có.)
+### Bước 0 — kết quả đo (2026-11-14)
+
+Script: `apps/server/scripts/perf-live-rescore-measure.ts` (mục 1, 2, 4–7) và `perf-live-rescore-embedding.ts` (mục 3), chạy bằng `npm run perf:live-rescore-measure` / `perf:live-rescore-embedding`.
+- Chỉ đọc DB đang dùng (Neon, 1.524 ứng viên, 314 tin đang hiển thị, 132.863 dòng điểm). Vector tính ra không được lưu.
+- Máy đo: 12 luồng CPU logic, không chạy server.
+
+**Mục 1 — chấm lại một ứng viên** (20 ứng viên ngẫu nhiên + 5 ứng viên trưng bày, nguyên mẫu, chưa ghi bảng):
+
+| | p50 | p90 | max |
+|---|---|---|---|
+| Round trip tới Neon (`SELECT 1`) | 44 ms | 46 ms | 46 ms |
+| Pool ngược (số tin) | 103 | 153 | 158 |
+| Câu pool ngược (1 câu) | 47 ms | 48 ms | 98 ms |
+| Nạp hồ sơ ứng viên (7 câu) | 319 ms | 367 ms | 682 ms |
+| Nạp hồ sơ tin của pool (5 câu) | 470 ms | 533 ms | 570 ms |
+| Embedding + cosine (3 câu, 0 vector mới) | 229 ms | 232 ms | 301 ms |
+| Chấm trong bộ nhớ | 1,1 ms | 2,8 ms | 17 ms |
+| **Tổng, không cache tin** (16 câu) | **1.073 ms** | 1.165 ms | 1.667 ms |
+| **Tổng, có cache tin** (11 câu) | **505 ms** | 509 ms | 580 ms |
+
+- Ghi (`replaceForCandidate`), ước tính: transaction có 4 round trip, khoảng 180 ms.
+- **Gần như toàn bộ thời gian là round trip tới Neon.** Phần chấm dưới 3 ms.
+- **Thử `relationLoadStrategy: "join"`** (client tạm sinh từ bản sao schema có preview `relationJoins`, đã xoá sau khi đo):
+  - hồ sơ ứng viên: 7 câu / 319 ms → 1 câu / 47 ms;
+  - hồ sơ tin: 5 câu / 466 ms → 1 câu / 108 ms.
+- **Điểm theo ứng viên so với điểm trong bảng:** 2.493 / 2.494 cặp khớp. Cặp lệch 1 điểm, có lẽ do hồ sơ sửa sau lượt chấm. Kết quả này ủng hộ test bắt buộc ở bước 3.
+
+**Mục 2 — `EXPLAIN ANALYZE`.** Mọi câu đều dưới 2 ms:
+- pool ngược: 1–1,6 ms, có Seq Scan `job_post_skills` (2.209 dòng);
+- chọn ứng viên theo kỹ năng / ngành (D6): 0,3–0,7 ms;
+- chọn tin theo kỹ năng / ngành (Q1): 0,4–0,5 ms.
+
+**Không cần index `job_post_skills("skillId")`** ở quy mô này. Bước 1 bỏ mục index đó; xem lại khi `job_post_skills` lớn gấp chục lần.
+
+**Mục 3 — so cấu hình embedding.** 200 văn bản hồ sơ thật, trung vị của 3 lần. Đo HTTP bằng request mỗi 50 ms tới server trong cùng process.
+
+| Cấu hình | Tổng | ms / văn bản | Event loop p50 / p99 / max | HTTP p50 / p95 / max |
+|---|---|---|---|---|
+| Lúc rảnh | — | — | ~10 / 16 / — (độ phân giải đồng hồ Windows) | 1,1 / 1,8 / — |
+| **A** luồng chính (như hiện tại) | 4,8 s | 24 | 26 / 44 / 65 | 14 / 31 / 55 |
+| A, lô 16 văn bản | 7,4 s | 37 | 616 / 699 / 723 | 2.356 / 4.233 / 4.427 |
+| A, lô 32 văn bản | 8,0 s | 40 | 1.287 / 1.414 / 1.512 | 3.349 / 6.203 / 6.591 |
+| **B** `worker_threads` | 4,5 s | 23 | 16 / 22 / 25 | **0,8 / 1,1 / 1,7** |
+| C, 1 luồng onnxruntime | 11,7 s | 59 | 64 / 99 / 105 | 28 / 69 / 96 |
+| C, 2 luồng | 7,0 s | 35 | 38 / 57 / 62 | 19 / 41 / 57 |
+| C, 10 luồng | 4,2 s | 21 | 23 / 36 / 58 | 11 / 23 / 54 |
+
+**Đọc kết quả:**
+- Mỗi lần embed **chặn luồng chính** trong suốt thời gian suy luận (~24 ms). Event loop p50 của A xấp xỉ thời gian một văn bản; embed theo lô chặn cả lô.
+- Nguyên nhân không phải tranh CPU. Giới hạn luồng (C) làm mỗi lần chặn **dài hơn**, nên tệ hơn A. Embed theo lô vừa chậm hơn vừa chặn lâu: loại.
+- B giữ event loop như lúc rảnh, cùng tốc độ với A. Theo cách đọc đã ghi ở mục 3 (B tốt hơn C rõ rệt), đây là trường hợp **đề xuất `worker_threads`** (cần AD riêng, xem câu hỏi Q7 bên dưới).
+- A vẫn **đạt ngưỡng của bước 10**: event loop p99 44 ms < 100 ms. API nhẹ chậm hơn 2 lần nhưng chỉ thêm 15–30 ms, trong khoảng 25 ms × số vector mới (200 ứng viên mới ≈ 5 giây). Vì vậy D5 (chung process) không bị bác.
+
+**Mục 4 — quy mô khi đổi danh mục (D6, Q1).** Mười kỹ năng phổ biến nhất ảnh hưởng 124–452 ứng viên và 25–96 tin. Nặng nhất là "Excel": 452 người, 96 tin. Mười ngành phổ biến nhất ảnh hưởng 37–133 người và 4–43 tin.
+
+Ước thời gian nếu gộp "Excel":
+- **Theo ứng viên:** 452 × ~0,7 s (có cache, gồm ghi) ≈ 5 phút, tức khoảng 5 lượt 60 giây. Nếu chấm theo lô (Q8): dưới nửa phút.
+- **Theo tin (Q1):** 96 tin × ~0,5 s (lượt đêm hiện chấm 314 tin trong ~2–3 phút) ≈ 50 giây.
+
+**Mục 5 — mốc so sánh với đường hiện tại:**
+- **Trang tìm ứng viên:**
+  - Đường hiện tại: 1.098–1.652 ms (23 câu), gồm 3 tin pool 882 và 3 tin pool 22–91.
+  - Đọc bảng rồi chấm lại 10 người: 966–1.349 ms (22–25 câu).
+  - Riêng câu đọc bảng: 0,2–0,3 ms, dùng index `(jobPostId, score)`.
+- **Lượt tự mời Mây Xanh.** Công ty hiện **không có tin nào bật tự mời**, nên đo giả định coi cả 34 tin đang hiển thị đều bật:
+  - phần tìm và chấm của đường hiện tại: **~27 giây** (537 câu), vượt giới hạn 60 giây của lượt nếu có thêm vài công ty;
+  - đọc bảng (tối đa 20 người mỗi tin): **~1,7 giây** (35 câu).
+  - Kết quả này ủng hộ D8.
+  - Để demo, cần bật tự mời cho vài tin của Mây Xanh trước.
+
+**Mục 6 — cho `simulate-inflow` (Q4):**
+- **Rate limit và hạn mức:**
+  - OTP: 1 lần / 60 giây / email, 20 / giờ / email, **1.000 / giờ / IP**. Mỗi email chỉ cần 1 OTP, nên 200 ứng viên một đợt không vướng. **Không cần cờ dev bỏ rate limit.**
+  - Đăng nhập chỉ đếm khi sai mật khẩu. Nginx không có `limit_req`.
+  - Hạn mức thêm mục danh mục mới: 150 / tuần toàn hệ thống. Script **chỉ dùng kỹ năng / ngành đã `APPROVED`** (hiện có 184 kỹ năng).
+- **Công ty demo:** Mây Xanh, Chính Trực, Hạt Giống, Con Thoi.
+  - Cả bốn đã xác minh, `requiresApproval = false` (tin tự đăng, không cần Admin duyệt), gói `ACTIVE` đến 2027-02-07 (không vướng hạn mức đăng tin).
+  - Tài khoản nhà tuyển dụng: `tuyendung-<tên>@large-demo.local`, đều `ACTIVE`.
+  - Có 1 Admin đang hoạt động. Chưa có tài khoản `@inflow-demo.local` nào.
+- **Đánh dấu tin do script tạo để `--reset`:** chốt khi làm bước 9 (tiền tố trong tiêu đề hoặc danh sách id ghi ra file).
+
+**Mục 7 — job alert lần đầu (Q3).** Số tin một ứng viên sẽ được báo nếu là người mới (điểm ≥ max(ngưỡng, 70), chưa nộp đơn / nhận lời mời):
+- 25 ứng viên mẫu: p50 2, p90 11, max 20 (cài đặt báo tin hiện tại không làm đổi số);
+- mọi ứng viên: p50 3, p90 11, max 43.
+
+Mỗi người chỉ nhận một thông báo gộp ("N tin…"), nên tải là 1 câu ghi `job_alerts` cộng 1 `upsertDaily` mỗi ứng viên mới. Không đáng kể.
+
+### Câu hỏi mới sau bước 0 (đã chốt 2026-11-14: Q7 = b, Q8 = b; xem "Câu hỏi đã chốt" và AD-27 mục 5, 11)
+
+Đề xuất ban đầu được giữ lại dưới đây để thấy lý do. Q7 chốt khác đề xuất: chủ dự án chọn làm `worker_threads` ngay.
+
+- **Q7 — Embedding chạy ở đâu.** Số đo bác giả thuyết tranh CPU, nên cấu hình C bị loại.
+  - (a) Giữ A (như hiện tại). Đạt ngưỡng bước 10. Request chậm thêm 15–30 ms trong vài giây mỗi đợt.
+  - (b) Chuyển model sang `worker_threads` (B): request không bị ảnh hưởng. Cần AD riêng, và đụng `SkillEmbeddingService` dùng chung với khử trùng kỹ năng và support-chat.
+  - Đề xuất: **(a) cho 0.6**. Bước 10 đo lại trên server thật; vượt ngưỡng thì làm (b).
+- **Q8 — Giảm round trip khi chấm.** Thời gian chấm do số câu × 44 ms quyết định.
+  - (a) Bật preview `relationJoins`. Hai loader còn 1 câu mỗi loại: có cache ≈ 230 ms + ghi ≈ 180 ms mỗi ứng viên. Nhưng bật preview thì **mặc định của mọi truy vấn có `include` trong app đổi sang join**, phạm vi rộng.
+  - (b) Chấm **theo lô** trong `drain`. Mỗi lô ~50 người dùng chung:
+    - 1 câu pool ngược;
+    - 7 câu nạp hồ sơ;
+    - 1 câu hash / 1 câu cosine cho cả lô;
+    - 1 transaction ghi cả lô kèm xoá dấu.
+
+    Ước khoảng 17 round trip ≈ 0,8 s mỗi lô, cộng 25 ms mỗi vector mới. 200 ứng viên ≈ 10 giây, so với ~140 giây nếu chấm từng người. Đổi chữ "lần lượt từng ứng viên" ở D5 thành "lần lượt từng lô". D2 vẫn giữ: xoá dấu nếu dấu ≤ lúc bắt đầu lô.
+  - (c) Giữ từng người như D5: ~0,7 s / người, 200 người cần 2–3 lượt 60 giây (~2,5 phút sau khi ngừng sửa).
+  - Đề xuất: **(b)**. Không đổi cấu hình Prisma toàn app, và vừa sức khi demo 200 ứng viên một đợt.
 
 ## Phần 4 — Ghi chú của chủ dự án
 
