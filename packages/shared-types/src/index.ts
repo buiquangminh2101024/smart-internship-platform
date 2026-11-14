@@ -1099,6 +1099,8 @@ export type UpdateAutoOutreachSettingsRequest = Partial<AutoOutreachSettings>;
  * - `OFF`: chưa bật;
  * - `TARGET_MET`: số đơn ACCEPTED ≥ hiringTarget, hệ thống ngừng mời;
  * - `NOT_PUBLISHED`: tin không ở trạng thái PUBLISHED;
+ * - `PAUSED_BY_COMPANY_SHARE`: tỉ lệ tự động của công ty cho phần tự động 0 lời mời/ngày
+ *   (tỉ lệ 0%, hoặc quá nhỏ so với hạn mức nên làm tròn xuống 0), hệ thống không tự mời (0.6 bước 8);
  * - `NO_MATCH` / `CANDIDATES_CAPPED`: tạm dừng vì hết ứng viên, tới `nextCheckAt` thì kiểm lại;
  * - `RUNNING`: đang giữ đủ lời mời và tự mời bù.
  */
@@ -1109,6 +1111,7 @@ export type AutoOutreachState =
   | "NO_MATCH"
   | "CANDIDATES_CAPPED"
   | "NOT_PUBLISHED"
+  | "PAUSED_BY_COMPANY_SHARE"
   | "PLAN_NOT_ALLOWED";
 
 /** Số liệu của tin. Lời mời tay và tự động đều được tính. */
@@ -2046,6 +2049,54 @@ export type CatalogEntryKind = "SKILL" | "UNIVERSITY" | "MAJOR";
 export interface CatalogSuggester {
   name: string | null;
   role: Role;
+}
+
+/**
+ * GET /admin/automation-status — thẻ "Hệ thống tự động" của Admin (0.6 bước 8, AD-27 mục 10).
+ * Thời điểm là ISO. "Hôm nay" tính từ 0h giờ Việt Nam.
+ */
+export interface AdminAutomationStatus {
+  /** Chấm lại theo ứng viên (0.6). */
+  rescore: {
+    /** Số ứng viên đang chờ chấm lại (có dấu). */
+    pending: number;
+    /** Dấu cũ nhất; null khi không ai chờ. Cũ hơn ~15 phút mà lượt gần nhất đã lâu ⇒ cron có thể đã dừng. */
+    oldestRequestedAt: string | null;
+    /** Lượt gần nhất (lưu ở Redis); null khi chưa có lượt nào trong 7 ngày hoặc đọc Redis lỗi. */
+    lastRun: {
+      at: string;
+      /** Số ứng viên đã chấm trong lượt. */
+      candidates: number;
+      durationMs: number;
+      /** Số ứng viên còn dấu khi lượt kết thúc. */
+      remaining: number;
+      /** Lượt dừng vì hết thời gian (phần còn lại chạy tiếp). */
+      timedOut: boolean;
+    } | null;
+  };
+  today: {
+    /** Lời mời tự động đã gửi. */
+    autoInvitations: number;
+    /** Cặp (ứng viên, tin) được báo trong job alert. */
+    jobAlerts: number;
+    /** Hồ sơ hệ thống tự chuyển từ "Chờ duyệt" sang "Đang xem xét". */
+    autoReviewed: number;
+  };
+  /** Lượt chấm lại hằng đêm của bảng điểm (03:30); null khi chưa ghi nhận lượt nào trong 7 ngày. */
+  nightly: {
+    lastRunAt: string;
+    jobsScored: number;
+    /** Tin chưa kịp chấm vì hết thời gian, đêm sau chấm trước. */
+    jobsDeferred: number;
+  } | null;
+}
+
+/**
+ * Payload của sự kiện Socket.IO `match-scores:updated` (0.6, AD-27 mục 6): số "Phù hợp" của
+ * các tin này vừa đổi; giao diện nhà tuyển dụng làm mới các query đang hiển thị.
+ */
+export interface MatchScoresUpdatedPayload {
+  jobPostIds: string[];
 }
 
 /** GET /admin/dashboard/tasks — mỗi hàng chờ tối đa 5 mục (chờ lâu nhất trước) kèm tổng. */

@@ -39,6 +39,7 @@ test("autoOutreachRecheckAt: NO_MATCH sau 3 giờ, CANDIDATE_CAP ở 0h UTC kế
 
 const RUNNING_INPUT = {
   autoAllowed: true,
+  autoLimitToday: 11,
   enabled: true,
   jobStatus: "PUBLISHED" as const,
   hiringTarget: 2,
@@ -55,6 +56,22 @@ test("resolveAutoOutreachState: thứ tự PLAN_NOT_ALLOWED → OFF → TARGET_M
   assert.equal(state({ enabled: false, jobStatus: "DRAFT" }), "OFF");
   assert.equal(state({ hiredCount: 2, jobStatus: "CLOSED" }), "TARGET_MET");
   assert.equal(state({ jobStatus: "PENDING" }), "NOT_PUBLISHED");
+});
+
+test("resolveAutoOutreachState: phần tự động 0 lời mời/ngày ⇒ PAUSED_BY_COMPANY_SHARE, xếp sau NOT_PUBLISHED, trước hết ứng viên", () => {
+  const state = (patch: Partial<Parameters<typeof resolveAutoOutreachState>[0]>) =>
+    resolveAutoOutreachState({ ...RUNNING_INPUT, ...patch }).state;
+  assert.equal(state({ autoLimitToday: 0 }), "PAUSED_BY_COMPANY_SHARE");
+  assert.equal(
+    state({ autoLimitToday: 0, exhaustedAt: new Date(), exhaustedReason: "NO_MATCH" }),
+    "PAUSED_BY_COMPANY_SHARE",
+    "dù tin đang có dấu hết ứng viên",
+  );
+  assert.equal(state({ autoLimitToday: 0, enabled: false }), "OFF");
+  assert.equal(state({ autoLimitToday: 0, hiredCount: 2 }), "TARGET_MET");
+  assert.equal(state({ autoLimitToday: 0, jobStatus: "PENDING" }), "NOT_PUBLISHED");
+  assert.equal(state({ autoLimitToday: 0, autoAllowed: false }), "PLAN_NOT_ALLOWED");
+  assert.equal(state({ autoLimitToday: 1 }), "RUNNING");
 });
 
 test("resolveAutoOutreachState: tạm dừng vì hết ứng viên tới nextCheckAt, quá mốc thì RUNNING", () => {
@@ -345,4 +362,15 @@ test("cài đặt công ty: ai cũng xem được; chỉ quản trị viên đư
   const admin = buildService({ isCompanyAdmin: true });
   assert.deepEqual(await admin.service.updateCompanySettings("user-emp-1", { autoSharePercent: 0 }), { autoSharePercent: 0 });
   assert.equal(admin.sharePercent(), 0);
+});
+
+test("GET cài đặt tin (0.6 bước 8): tỉ lệ tự động 0% ⇒ PAUSED_BY_COMPANY_SHARE thay cho RUNNING; tin tắt vẫn OFF", async () => {
+  const { service } = buildService({ job: { autoOutreachEnabled: true } });
+  assert.equal((await service.getJobSettings("user-emp-1", "job-1")).state, "RUNNING");
+  await service.updateCompanySettings("user-emp-1", { autoSharePercent: 0 });
+  assert.equal((await service.getJobSettings("user-emp-1", "job-1")).state, "PAUSED_BY_COMPANY_SHARE");
+
+  const off = buildService();
+  await off.service.updateCompanySettings("user-emp-1", { autoSharePercent: 0 });
+  assert.equal((await off.service.getJobSettings("user-emp-1", "job-1")).state, "OFF");
 });

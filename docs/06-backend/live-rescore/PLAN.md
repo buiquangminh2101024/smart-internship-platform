@@ -4,7 +4,7 @@
 > - **Q7:** model embedding chạy trong một `worker_threads`;
 > - **Q8:** chấm theo lô.
 >
-> **Bước 1 (schema, migration) đã làm và áp lên Neon 2026-11-14. Bước 2 (đánh dấu, hẹn giờ), bước 2b (model embedding trong worker), bước 3 (chấm theo lô, ghi bảng, cron 15 phút, Q2), bước 4 (việc kéo theo: tự mời, tự chuyển, job alert lần đầu, realtime) bước 5 (danh mục đổi: chấm lại theo tin, Q1), bước 6 (tự mời đọc bảng điểm) và bước 7 (trang tìm ứng viên đọc bảng điểm) đã làm cùng ngày**. Bước 3–7 chưa kiểm đầu cuối qua gateway 8080. Việc tiếp theo: bước 8.
+> **Bước 1 (schema, migration) đã làm và áp lên Neon 2026-11-14. Bước 2 (đánh dấu, hẹn giờ), bước 2b (model embedding trong worker), bước 3 (chấm theo lô, ghi bảng, cron 15 phút, Q2), bước 4 (việc kéo theo: tự mời, tự chuyển, job alert lần đầu, realtime) bước 5 (danh mục đổi: chấm lại theo tin, Q1), bước 6 (tự mời đọc bảng điểm), bước 7 (trang tìm ứng viên đọc bảng điểm) và bước 8 (thẻ tự mời khi tỉ lệ 0%, API số liệu cho Admin) đã làm cùng ngày**. Bước 3–8 đã kiểm đầu cuối qua gateway 8080 cùng ngày, đều đạt (xem "Kiểm đầu cuối bước 3–8"). Việc tiếp theo: bước 9.
 
 Mục 0.6 của `docs/01-project/FEATURE_BACKLOG.md`. Quyết định kiến trúc: AD-27 (sửa một phần AD-23, AD-24). Frontend: `docs/05-frontend/phases/live-rescore/PLAN.md`. Nền:
 - AD-24 và `docs/06-backend/hiring-progress/PLAN.md` (bảng điểm, `scoreProfiles`, lượt đêm, cache hồ sơ một lượt);
@@ -636,6 +636,59 @@ Kiểm:
 - Toàn bộ 646 / 646 qua, `tsc` qua.
 - Neon, chỉ đọc: 6 tin (3 tin 882 dòng, 3 tin 22–91 dòng). Top 10 của câu **khớp 6 / 6** với cách tính độc lập (đọc mọi dòng của tin, lọc và sắp trong JS). Câu mất 55–116 ms mỗi tin, chủ yếu là round trip. `EXPLAIN ANALYZE`: dùng index `(jobPostId, score)`, chạy 0,8 ms.
 - Thời gian cả trang: theo mốc ở bước 0 mục 5, đọc bảng rồi chấm lại 10 người mất 966–1.349 ms, so với 1.098–1.652 ms của đường cũ. Chưa đo lại qua API, vì chấm lại có thể ghi vector còn thiếu vào DB.
+
+### Bước 8 — Thẻ tự mời khi tỉ lệ 0% (D11) và số liệu cho Admin (D12) (2026-11-14)
+
+**Thẻ tự mời (D11):**
+- `AutoOutreachState` thêm `PAUSED_BY_COMPANY_SHARE` (shared-types).
+- `resolveAutoOutreachState` nhận `autoLimitToday` = `autoDailyLimit(hạn mức, tỉ lệ)` thay cho tỉ lệ thô. Bằng 0 thì trả trạng thái mới. Lý do: tỉ lệ > 0 nhưng làm tròn xuống 0 lời mời/ngày (ví dụ hạn mức 3, tỉ lệ 10%) cũng không tự mời được, đúng như lượt chạy (`NO_ROOM`).
+- Thứ tự: `PLAN_NOT_ALLOWED` → `OFF` → `TARGET_MET` → `NOT_PUBLISHED` → **`PAUSED_BY_COMPANY_SHARE`** → hết ứng viên → `RUNNING`. Tin tắt, đã tuyển đủ hay chưa đăng vẫn hiện trạng thái cũ, vì các trạng thái đó nói rõ hơn.
+- `AutoOutreachService.toJobDto` đọc thêm tỉ lệ của công ty (một câu, chạy song song, chỉ khi gói có tự mời).
+- **Frontend chưa sửa** (thuộc phần frontend của 0.6): `AutoOutreachCard` chưa có nhánh cho trạng thái mới, nên khung trạng thái chỉ còn liên kết "lời mời" cho tới khi frontend thêm câu chữ. Web vẫn qua `tsc`.
+
+**`GET /admin/automation-status` (D12)**, chỉ Admin, type `AdminAutomationStatus`:
+- `rescore`:
+  - `pending` và `oldestRequestedAt`: một câu trên `candidates`, dùng index dấu;
+  - `lastRun { at, candidates, durationMs, remaining, timedOut }`: đọc `LiveRescoreRunStore` (Q6).
+- `today { autoInvitations, jobAlerts, autoReviewed }`: một câu, tính từ 0h giờ Việt Nam.
+  - Lời mời `source = AUTO`; số dòng `job_alerts` (mỗi dòng là một cặp ứng viên – tin được báo).
+  - `application_status_history` `PENDING → REVIEWING`, `actorId` null. Dòng khởi tạo / backfill có `fromStatus` null nên không bị đếm.
+- `nightly { lastRunAt, jobsScored, jobsDeferred }`:
+  - `MatchScoreRunStore` mới (Redis, khoá `match-scores:nightly-last-run`, TTL 7 ngày). Cron đêm ghi sau khi chạy xong; ghi lỗi chỉ cảnh báo.
+  - Không suy từ `job_posts.matchScoresAt`, vì chấm theo tin lúc đăng tin hay khi danh mục đổi cũng ghi cột đó.
+  - Script `rescore-match-scores` không ghi.
+- Redis lỗi thì `lastRun` / `nightly` là null kèm cảnh báo, phần đọc DB vẫn trả. Thẻ dùng để phát hiện sự cố, nên không được hỏng cùng thứ đang hỏng.
+- Đặt ở module `live-rescore`: `automation-status.service.ts`, `automation-status.routes.ts`, mount trong `main.ts` sau `dashboardRouter`. Hai câu đếm nằm ở `LiveRescoreRepository` (`markedSummary`, `countAutomationToday`).
+- So với plan: thêm `timedOut`, `jobsScored`, `jobsDeferred`. Lượt đêm còn tin chưa chấm (`jobsDeferred > 0`) là dấu hiệu cần xem.
+
+**Shared-types:** `AdminAutomationStatus`, `MatchScoresUpdatedPayload` (payload `match-scores:updated`). Port `RealtimeNotifier` dùng lại type này thay cho bản khai riêng.
+
+Kiểm:
+- `auto-outreach-settings.test.ts` thêm 2 test (thứ tự trạng thái khi phần tự động là 0; tỉ lệ 0% ⇒ thẻ đổi từ `RUNNING` sang trạng thái mới, tin tắt vẫn `OFF`).
+- `automation-status.test.ts` mới, 3 test (ghép số; chưa có lượt nào; Redis lỗi).
+- Toàn bộ 651 / 651 qua; `tsc` của server và web qua (đã build lại `packages/shared-types`).
+- Test hẹn giờ của bước 2 (`live-rescore-marker.test.ts`, đồng hồ thật) lỗi một lần khi chạy cả bộ lúc máy bận; chạy riêng 5 lần đều qua. Có thể đổi sang đồng hồ giả của `node:test` nếu còn gặp.
+- Neon, chỉ đọc: `markedSummary` ~120 ms, `countAutomationToday` ~130 ms (gần như chỉ là round trip; `EXPLAIN ANALYZE` 0,2 ms). Mốc "hôm nay" là 17:00 UTC hôm trước, tức 0h giờ Việt Nam. Hôm nay Neon ra 0 / 0 / 0: Mây Xanh chưa bật tự mời, chưa có ứng viên mới.
+
+### Kiểm đầu cuối bước 3–8 qua gateway 8080 (2026-11-14)
+
+Gọi API qua `localhost:8080` như người dùng thật, đọc kết quả trên Neon (chỉ `SELECT`). Dùng tin "Business Analyst (part-time)" của Mây Xanh (`clargedemojob0025`), vì trước khi kiểm tin này chưa có ứng viên nào ≥ 80, nên lời mời tự động chỉ có thể tới ứng viên kiểm. Hai ứng viên kiểm `kiem-live-N@inflow-demo.local`, đăng ký bằng OTP cố định của dev.
+
+| Bước | Thao tác | Kết quả |
+|---|---|---|
+| 3 | Ứng viên 1 điền hồ sơ BA (ngành, 5 kỹ năng, kinh nghiệm), bật cho liên hệ | Dấu đặt 12:39:31, hết dấu và có 35 dòng điểm lúc 12:40:20 (~49 s, gồm khoảng chờ 45 s). Điểm tin kiểm 95 |
+| 4 | (cùng lượt) | 1 thông báo `JOB_ALERT`, 6 dòng `job_alerts`; dấu "hết ứng viên" (`NO_MATCH`, đặt khi bật tự mời) được xoá |
+| 4 | Ứng viên 1 sửa tiêu đề | Chấm lại 12:41:27, vẫn 1 thông báo (không báo lần hai) |
+| 4 | Ứng viên 2 nộp đơn với hồ sơ trống (`PENDING`), rồi điền hồ sơ | Điểm 98, đơn tự chuyển `PENDING → REVIEWING` (`actorId` null); không bị mời vì đã nộp đơn |
+| 5 | Ứng viên 1 đề xuất kỹ năng mới (PENDING) rồi thêm vào hồ sơ; Admin gộp vào "Thuyết trình" | Gộp 12:43:44, chấm lại 12:43:45 (không qua khoảng chờ); 35 → 48 dòng điểm |
+| 6 | Bật tự mời cho tin | Có lời mời `AUTO` cho ứng viên 1 ngay trong lượt kéo theo |
+| 7 | Trang tìm ứng viên của tin | Top 10 khớp bảng điểm sau khi bỏ người đã được mời / đã nộp / không cho liên hệ; ba người cùng 69 điểm xếp theo số kỹ năng chung |
+| 8 | `GET /admin/automation-status` | `pending 0`, lượt gần nhất 1 ứng viên 1,8 s, `today` = 1 lời mời / 11 job alert / 1 hồ sơ tự chuyển, `nightly` null (chưa qua lượt đêm) |
+| 8 | Tỉ lệ tự động của Mây Xanh = 0% | Thẻ tin trả `PAUSED_BY_COMPANY_SHARE` |
+
+Chưa kiểm: sự kiện realtime `match-scores:updated` (cần trang employer mở socket), `nightly` sau lượt đêm 03:30.
+
+Dọn sau khi kiểm: trả tỉ lệ 80% và cài đặt tự mời cũ của tin (tắt); xoá hai user kiểm (cascade điểm, job alert, lời mời, đơn, CV), alias "Kiemthulive Trinhbay", audit log của lần gộp, thông báo đề xuất kỹ năng gửi Admin. Còn lại: file PDF ~300 byte trên Cloudinary (ứng dụng chưa xoá file Cloudinary khi xoá CV).
 
 ### Câu hỏi mới sau bước 0 (đã chốt 2026-11-14: Q7 = b, Q8 = b; xem "Câu hỏi đã chốt" và AD-27 mục 5, 11)
 

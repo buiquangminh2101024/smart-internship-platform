@@ -1,4 +1,7 @@
 import type { NotificationType } from "@prisma/client";
+import type { MatchScoresUpdatedPayload } from "@sip/shared-types";
+
+export type { MatchScoresUpdatedPayload };
 
 export interface RealtimeNotificationPayload {
   id: string;
@@ -24,14 +27,6 @@ export interface RealtimeMessagePayload {
 /** Phía kia vừa xoá hội thoại — người nhận chỉ còn xem lịch sử (AD-11). */
 export interface ConversationUnavailablePayload {
   conversationId: string;
-}
-
-/**
- * Điểm của các tin này vừa đổi số "Phù hợp" (0.6, AD-27 mục 6, Q5): giao diện nhà tuyển dụng
- * làm mới số liệu đang hiển thị. Không gắn với bản ghi Notification nào.
- */
-export interface MatchScoresUpdatedPayload {
-  jobPostIds: string[];
 }
 
 /**

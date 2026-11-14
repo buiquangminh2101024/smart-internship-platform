@@ -1028,6 +1028,10 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 10. **Bổ sung đi kèm:**
     - sửa lỗi còn treo của 0.2: tỉ lệ tự động của công ty là 0% thì trạng thái thẻ tự mời không ghi "Hệ thống tự mời bù…" (mục 8 của buổi trao đổi);
     - Admin có thẻ "Hệ thống tự động": số ứng viên đang chờ chấm lại, dấu cũ nhất, lượt chấm gần nhất, số lời mời tự động / báo tin hôm nay (frontend 7h).
+    - *Bước 8 (2026-11-14):*
+      - Thẻ tự mời thêm trạng thái `PAUSED_BY_COMPANY_SHARE`, xét khi phần tự động **làm tròn ra 0 lời mời/ngày** (tỉ lệ 0%, hoặc tỉ lệ quá nhỏ so với hạn mức), xếp ngay sau `NOT_PUBLISHED`.
+      - `GET /admin/automation-status` (chỉ Admin) ghép dấu (DB), lượt chấm theo ứng viên gần nhất (Redis), số hôm nay theo giờ Việt Nam (DB), và lượt đêm gần nhất. Lượt đêm lưu ở một khoá Redis mới do cron ghi, vì `matchScoresAt` cũng bị lối chấm theo tin ghi.
+      - Redis lỗi thì phần lượt gần nhất là null, phần DB vẫn trả.
 11. **Model embedding chạy trong một `worker_threads` duy nhất** (Q7 của plan, chủ dự án chốt 2026-11-14 sau bước 0):
     - **Số đo của bước 0:** 200 văn bản hồ sơ thật, request nhẹ gửi mỗi 50 ms.
       - Mỗi lần embed **chặn luồng chính** khoảng 24 ms, tức suốt thời gian suy luận. Với model trên luồng chính: event loop p99 44 ms, request nhẹ p95 31 ms so với 1,8 ms lúc rảnh.

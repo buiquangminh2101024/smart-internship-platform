@@ -1,5 +1,6 @@
 import cron from "node-cron";
 import type { Logger } from "../../shared/logger";
+import type { MatchScoreRunStore } from "./match-score-run-store";
 import type { MatchScoreRepository } from "./match-score.repository";
 import type { MatchScoreService, RescoreAllOptions, RescoreAllResult } from "./match-score.service";
 import { MATCH_SCORE_NIGHTLY_BUDGET_MS } from "./match-scores.config";
@@ -8,6 +9,11 @@ export interface MatchScoreJobDeps {
   matchScoreRepository: MatchScoreRepository;
   matchScoreService: MatchScoreService;
   logger: Logger;
+}
+
+export interface MatchScoreCronDeps extends MatchScoreJobDeps {
+  /** Lưu lượt đêm gần nhất cho thẻ "Hệ thống tự động" của Admin (0.6 bước 8). */
+  matchScoreRunStore: MatchScoreRunStore;
 }
 
 export interface MatchScoreNightlyResult {
@@ -32,7 +38,7 @@ export async function runMatchScoreNightly(
 }
 
 /** 03:30 giờ Việt Nam, sau job chuyển nhật ký sang lưu trữ lúc 03:00. */
-export function startMatchScoreJob(deps: MatchScoreJobDeps): void {
+export function startMatchScoreJob(deps: MatchScoreCronDeps): void {
   const run = async () => {
     try {
       const { cleaned, rescore } = await runMatchScoreNightly(deps);
@@ -41,6 +47,21 @@ export function startMatchScoreJob(deps: MatchScoreJobDeps): void {
         return;
       }
       deps.logger.info("Match score nightly run", { ...cleaned, ...rescore });
+      await deps.matchScoreRunStore
+        .saveNightly({
+          finishedAt: new Date().toISOString(),
+          durationMs: rescore.durationMs,
+          jobsTotal: rescore.jobsTotal,
+          jobsScored: rescore.jobsScored,
+          jobsFailed: rescore.jobsFailed,
+          jobsDeferred: rescore.jobsDeferred,
+        })
+        .catch((error: unknown) => {
+          // Chỉ là số liệu cho thẻ Admin; lượt đêm đã xong.
+          deps.logger.warn("Match score nightly summary not saved", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
     } catch (error) {
       deps.logger.error("Match score nightly run failed", {
         error: error instanceof Error ? error.message : String(error),

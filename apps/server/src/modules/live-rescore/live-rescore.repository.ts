@@ -132,4 +132,38 @@ export class LiveRescoreRepository {
     `);
     return rows.map((row) => row.candidateId);
   }
+
+  // ─── Thẻ "Hệ thống tự động" của Admin (0.6 bước 8) ─────────────────────────
+
+  /** Số ứng viên có dấu và dấu cũ nhất, một câu (dùng index `matchRescoreRequestedAt`). */
+  async markedSummary(): Promise<{ pending: number; oldestRequestedAt: Date | null }> {
+    const rows = await this.prisma.$queryRaw<Array<{ pending: number; oldest: Date | null }>>(Prisma.sql`
+      SELECT COUNT(*)::int AS "pending", MIN("matchRescoreRequestedAt") AS "oldest"
+      FROM candidates WHERE "matchRescoreRequestedAt" IS NOT NULL
+    `);
+    return { pending: rows[0]?.pending ?? 0, oldestRequestedAt: rows[0]?.oldest ?? null };
+  }
+
+  /**
+   * Việc hệ thống tự làm từ 0h giờ Việt Nam hôm nay, một câu:
+   * - lời mời `source = AUTO`;
+   * - dòng `job_alerts` (mỗi dòng là một cặp ứng viên – tin được báo);
+   * - hồ sơ tự chuyển `PENDING → REVIEWING` (`actorId` null; dòng khởi tạo / backfill có `fromStatus` null nên không bị đếm).
+   * Các cột DateTime lưu giờ UTC không múi giờ, nên mốc 0h giờ Việt Nam đổi về UTC trước khi so.
+   */
+  async countAutomationToday(): Promise<{ autoInvitations: number; jobAlerts: number; autoReviewed: number }> {
+    const rows = await this.prisma.$queryRaw<Array<{ autoInvitations: number; jobAlerts: number; autoReviewed: number }>>(Prisma.sql`
+      WITH d AS (
+        SELECT ((date_trunc('day', now() AT TIME ZONE 'Asia/Ho_Chi_Minh') AT TIME ZONE 'Asia/Ho_Chi_Minh') AT TIME ZONE 'UTC') AS "since"
+      )
+      SELECT
+        (SELECT COUNT(*)::int FROM candidate_outreach_invitations i, d
+          WHERE i."source" = 'AUTO' AND i."createdAt" >= d."since") AS "autoInvitations",
+        (SELECT COUNT(*)::int FROM job_alerts a, d WHERE a."createdAt" >= d."since") AS "jobAlerts",
+        (SELECT COUNT(*)::int FROM application_status_history h, d
+          WHERE h."toStatus" = 'REVIEWING' AND h."fromStatus" = 'PENDING' AND h."actorId" IS NULL
+            AND h."createdAt" >= d."since") AS "autoReviewed"
+    `);
+    return rows[0] ?? { autoInvitations: 0, jobAlerts: 0, autoReviewed: 0 };
+  }
 }

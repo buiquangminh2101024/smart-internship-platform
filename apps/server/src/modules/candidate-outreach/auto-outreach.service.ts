@@ -418,13 +418,16 @@ export class AutoOutreachService {
   private async toJobDto(job: JobAutoOutreachRow, policy: OutreachQuotaPolicy | null): Promise<JobAutoOutreachDto> {
     const now = new Date();
     // Số Phù hợp đọc từ bảng điểm lưu sẵn (0.3), không chấm lúc mở thẻ.
-    const [counts, progress] = await Promise.all([
+    const [counts, progress, sharePercent] = await Promise.all([
       this.repository.countJob(job.id, now),
       this.matchScoreRepository.progressForJob(job.id),
+      policy?.autoAllowed ? this.outreachRepository.findAutoSharePercent(job.companyId) : Promise.resolve(0),
     ]);
     const { state, nextCheckAt } = resolveAutoOutreachState(
       {
         autoAllowed: policy?.autoAllowed ?? false,
+        // 0.6 bước 8 (D11): tỉ lệ tự động 0% ⇒ không ghi "Hệ thống tự mời bù…".
+        autoLimitToday: policy ? autoDailyLimit(policy.dailyQuota, sharePercent ?? 0) : 0,
         enabled: job.autoOutreachEnabled,
         jobStatus: job.status,
         hiringTarget: job.hiringTarget,

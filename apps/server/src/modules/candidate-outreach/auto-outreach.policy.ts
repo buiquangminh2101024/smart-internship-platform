@@ -22,6 +22,11 @@ export function autoOutreachRecheckAt(reason: AutoOutreachExhaustedReason, exhau
 export interface AutoOutreachStateInput {
   /** false với gói Dùng thử hoặc khi không có gói còn hiệu lực. */
   autoAllowed: boolean;
+  /**
+   * Số lời mời tự động/ngày của công ty = ⌊hạn mức × tỉ lệ tự động / 100⌋ (`autoDailyLimit`).
+   * 0 ⇒ lượt chạy luôn bỏ qua công ty (NO_ROOM), thẻ báo `PAUSED_BY_COMPANY_SHARE`.
+   */
+  autoLimitToday: number;
   enabled: boolean;
   jobStatus: JobPostStatus;
   hiringTarget: number;
@@ -43,6 +48,7 @@ export function resolveAutoOutreachState(
   if (!input.enabled) return { state: "OFF", nextCheckAt: null };
   if (input.hiredCount >= input.hiringTarget) return { state: "TARGET_MET", nextCheckAt: null };
   if (input.jobStatus !== "PUBLISHED") return { state: "NOT_PUBLISHED", nextCheckAt: null };
+  if (input.autoLimitToday <= 0) return { state: "PAUSED_BY_COMPANY_SHARE", nextCheckAt: null };
   if (input.exhaustedAt && input.exhaustedReason) {
     const nextCheckAt = autoOutreachRecheckAt(input.exhaustedReason, input.exhaustedAt);
     if (nextCheckAt > now) {

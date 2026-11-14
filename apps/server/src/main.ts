@@ -46,12 +46,14 @@ import { startApplicationAutomationJob } from "./modules/application-automation/
 import { startStaleApplicationReminderJob } from "./modules/application-automation/stale-application-reminder.job";
 import type { ApplicationAutomationService } from "./modules/application-automation/application-automation.service";
 import { startMatchScoreJob } from "./modules/match-scores/match-score.job";
+import type { MatchScoreRunStore } from "./modules/match-scores/match-score-run-store";
 import type { MatchScoreRepository } from "./modules/match-scores/match-score.repository";
 import type { MatchScoreService } from "./modules/match-scores/match-score.service";
 import type { AutoOutreachRepository } from "./modules/candidate-outreach/auto-outreach.repository";
 import type { AutoOutreachRunStore } from "./modules/candidate-outreach/auto-outreach-run-store";
 import type { AutoOutreachService } from "./modules/candidate-outreach/auto-outreach.service";
 import { registerLiveRescore } from "./modules/live-rescore/live-rescore.module";
+import { automationStatusRouter } from "./modules/live-rescore/automation-status.routes";
 import { startLiveRescoreJob } from "./modules/live-rescore/live-rescore.job";
 import type { LiveRescoreService } from "./modules/live-rescore/live-rescore.service";
 import type { CandidateRescoreMarker } from "./modules/live-rescore/candidate-rescore-marker";
@@ -153,6 +155,8 @@ app.use("/api", notificationsRouter(container));
 app.use("/api", auditLogRouter(container));
 // Chỉ đọc (AD-16); các service nó gọi resolve lúc có request.
 app.use("/api", dashboardRouter(container));
+// Thẻ "Hệ thống tự động" của Admin (0.6 bước 8): đọc dấu, tóm tắt lượt ở Redis, số hôm nay.
+app.use("/api", automationStatusRouter(container));
 // Trang hỗ trợ bản A (AD-17) — công khai; notificationsService resolve lúc có request.
 app.use("/api", supportRouter(container));
 app.use("/api", jobReportsRouter(container));
@@ -240,6 +244,7 @@ startAuditLogRetentionJob({
 startMatchScoreJob({
   matchScoreRepository: container.resolve<MatchScoreRepository>("matchScoreRepository"),
   matchScoreService: container.resolve<MatchScoreService>("matchScoreService"),
+  matchScoreRunStore: container.resolve<MatchScoreRunStore>("matchScoreRunStore"),
   logger,
 });
 // Chấm lại theo ứng viên (0.6, AD-27) — cron 15 phút, lưới an toàn cho hẹn giờ chờ ngừng

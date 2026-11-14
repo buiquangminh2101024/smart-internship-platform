@@ -1,4 +1,5 @@
 import { asClass, asValue, type AwilixContainer } from "awilix";
+import { MatchScoreRunStore } from "./match-score-run-store";
 import { MatchScoreRepository } from "./match-score.repository";
 import { MatchScoreService, type MatchScoreTrigger } from "./match-score.service";
 
@@ -11,6 +12,8 @@ import { MatchScoreService, type MatchScoreTrigger } from "./match-score.service
 export function registerMatchScores(container: AwilixContainer): void {
   container.register({
     matchScoreRepository: asClass(MatchScoreRepository).singleton(),
+    // Lượt đêm gần nhất (0.6 bước 8): cron ghi, thẻ "Hệ thống tự động" của Admin đọc.
+    matchScoreRunStore: asClass(MatchScoreRunStore).singleton(),
     // Singleton bắt buộc: Set tin đang chấm phải dùng chung cho mọi lối gọi.
     matchScoreService: asClass(MatchScoreService).singleton(),
     // Lối kích hoạt cho JobPostsService khi tin chuyển PUBLISHED: resolve service lúc gọi
