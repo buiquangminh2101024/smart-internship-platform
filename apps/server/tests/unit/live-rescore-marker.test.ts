@@ -132,12 +132,18 @@ function buildMarker(options: FakeRepoOptions = {}) {
     },
   } as unknown as LiveRescoreRepository;
   const scheduler = { touch: (id: string) => touched.push(id) } as unknown as LiveRescoreScheduler;
+  const jobProfileCache = {
+    getMany: async () => new Map(),
+    invalidate: () => {},
+    clear: () => log.push("clear-job-cache"),
+  };
   const marker = new CandidateRescoreMarker({
     liveRescoreRepository: repository,
     liveRescoreScheduler: scheduler,
     liveRescoreDrainRequester: () => {
       drains += 1;
     },
+    jobProfileCache,
     logger,
   });
   return { marker, log, marked, touched, drains: () => drains, errors };
@@ -164,7 +170,7 @@ test("markSkillHolders: lấy người trước khi đổi, đánh dấu sau khi
     return 42;
   });
   assert.equal(result, 42);
-  assert.deepEqual(log, ["find", "change", "mark"]);
+  assert.deepEqual(log, ["find", "change", "clear-job-cache", "mark"], "xoá cache hồ sơ tin sau khi đổi");
   assert.deepEqual(marked, [["c1", "c2"]]);
   assert.deepEqual(touched, [], "danh mục đổi không hẹn giờ cho từng người");
   assert.equal(drains(), 1);
@@ -198,10 +204,10 @@ test("markSkillHolders: lấy người lỗi thì thao tác vẫn chạy; đánh
   assert.equal(markFails.drains(), 0);
 });
 
-test("markMajorHolders: không ai có ngành thì không ghi, không yêu cầu chấm", async () => {
+test("markMajorHolders: không ai có ngành thì không ghi, không yêu cầu chấm (vẫn xoá cache hồ sơ tin)", async () => {
   const { marker, log, drains } = buildMarker({ majorHolders: [] });
   await marker.markMajorHolders(["m1"], async () => undefined);
-  assert.deepEqual(log, ["find"]);
+  assert.deepEqual(log, ["find", "clear-job-cache"], "tin gắn ngành vẫn đổi yêu cầu dù không ứng viên nào có ngành");
   assert.equal(drains(), 0);
 });
 

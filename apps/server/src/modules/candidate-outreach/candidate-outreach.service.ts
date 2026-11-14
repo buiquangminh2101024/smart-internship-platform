@@ -23,7 +23,7 @@ import type { CandidateMatchProfileLoader } from "../job-matching/candidate-matc
 import type { JobMatchProfileLoader } from "../job-matching/job-match-profile.loader";
 import { MAX_NEW_EMBEDDINGS_PER_REQUEST } from "../job-matching/job-matching.config";
 import type { JobMatcherMode } from "../job-matching/job-matching.service";
-import type { MatchEmbeddingService } from "../job-matching/match-embedding.service";
+import type { MatchEmbeddingService, PairSimilarities } from "../job-matching/match-embedding.service";
 import { markSemanticPending } from "../job-matching/scoring-job-matcher";
 import type { MessagingService } from "../messaging/messaging.service";
 import type { NotificationsService } from "../notifications/notifications.service";
@@ -646,6 +646,50 @@ export class CandidateOutreachService {
         this.score(profile, job, similarities.get(profile.candidateId) ?? null),
       ]),
     );
+  }
+
+  /**
+   * Chấm theo lô ứng viên (0.6, AD-27 mục 5, Q8): mỗi hồ sơ với các tin trong pool của nó.
+   * Cùng bộ chấm và cùng cách lấy cosine với `scoreProfiles`, nên một cặp ra cùng điểm dù
+   * chấm theo tin hay theo ứng viên (test so điểm ở plan bước 3). Khác ở chỗ gom: một câu
+   * hash mỗi loại và một câu cosine cho mọi cặp của lô, thay vì vài câu cho mỗi tin.
+   *
+   * `deferredCandidates`: hồ sơ cần vector mới mà vượt `maxNewEmbeddings` (điểm rule-only,
+   * `semanticPending`); nơi gọi giữ dấu của họ để lượt sau tính tiếp.
+   */
+  async scoreCandidatesAgainstJobs(
+    entries: Array<{ profile: CandidateMatchProfile; jobs: JobMatchProfile[] }>,
+    maxNewEmbeddings: number,
+  ): Promise<{
+    results: Map<string, Map<string, MatchResult>>;
+    embedded: number;
+    deferredCandidates: Set<string>;
+  }> {
+    let similarities: PairSimilarities = { cosines: new Map(), embedded: 0, deferredCandidates: new Set() };
+    if (this.mode === "hybrid") {
+      // Như scoreProfiles: hồ sơ không có kỹ năng thì không lấy cosine.
+      const withSkills = entries.filter((entry) => entry.profile.skills.length > 0 && entry.jobs.length > 0);
+      const jobs = new Map<string, JobMatchProfile>();
+      for (const entry of withSkills) for (const job of entry.jobs) jobs.set(job.jobPostId, job);
+      similarities = await this.matchEmbeddingService.similarityForPairs(
+        withSkills.map((entry) => ({ id: entry.profile.candidateId, text: entry.profile.matchText })),
+        [...jobs.values()].map((job) => ({ id: job.jobPostId, text: job.matchText })),
+        withSkills.flatMap((entry) =>
+          entry.jobs.map((job) => ({ candidateId: entry.profile.candidateId, jobPostId: job.jobPostId })),
+        ),
+        maxNewEmbeddings,
+      );
+    }
+
+    const results = new Map<string, Map<string, MatchResult>>();
+    for (const { profile, jobs } of entries) {
+      const cosines = similarities.cosines.get(profile.candidateId);
+      results.set(
+        profile.candidateId,
+        new Map(jobs.map((job) => [job.jobPostId, this.score(profile, job, cosines?.get(job.jobPostId) ?? null)])),
+      );
+    }
+    return { results, embedded: similarities.embedded, deferredCandidates: similarities.deferredCandidates };
   }
 
   /** Cùng quy tắc với JobMatchingService.score. */

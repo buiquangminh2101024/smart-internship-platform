@@ -40,6 +40,14 @@ export interface MatchScoreRow {
   weightsVersion: string;
 }
 
+/** Một dòng điểm khi chấm theo ứng viên (0.6): như `MatchScoreRow` nhưng theo tin. */
+export interface CandidateScoreRow {
+  jobPostId: string;
+  score: number;
+  semanticPending: boolean;
+  weightsVersion: string;
+}
+
 export interface RescoreJobRow {
   id: string;
   matchScoresAt: Date | null;
@@ -155,6 +163,102 @@ export class MatchScoreRepository {
       // Mặc định 5 giây không đủ chắc cho Neon ở xa khi tin có ~1.000 dòng.
       { maxWait: 10_000, timeout: 30_000 },
     );
+  }
+
+  /**
+   * Chấm lại theo ứng viên (0.6, AD-27 mục 4–5, plan bước 3): thay điểm của một lô ứng viên
+   * trong **một** transaction, kèm xoá dấu "cần chấm lại".
+   * - Xoá dòng của các ứng viên trong lô với các tin đang hiển thị, rồi ghi dòng mới. Dòng
+   *   với tin đã thôi hiển thị giữ nguyên cho lượt đêm xoá (tiến độ của tin vừa đóng vẫn
+   *   đọc bảng, như trước khi có 0.6).
+   * - Tin thôi hiển thị trong lúc chấm thì bỏ dòng của tin đó (lọc lại `VISIBLE_JOB` trong
+   *   transaction).
+   * - `skipDuplicates`: lượt theo tin (lối a, lượt đêm) ghi cùng cặp xen giữa lúc xoá và lúc
+   *   ghi thì giữ dòng của lượt kia thay vì làm hỏng cả lô; Q2 đánh dấu lại người đó nếu
+   *   dòng kia tính từ hồ sơ cũ.
+   * - Xoá dấu của `clearMarksFor` chỉ khi dấu ≤ `batchStartedAt` (D2): ứng viên sửa tiếp
+   *   trong lúc chấm thì giữ dấu cho lượt sau.
+   *
+   * `batchStartedAt` lấy từ đồng hồ DB lúc chọn lô (cùng đồng hồ với dấu), trước khi nạp hồ sơ.
+   */
+  async replaceForCandidates(input: {
+    rowsByCandidate: Map<string, CandidateScoreRow[]>;
+    clearMarksFor: string[];
+    batchStartedAt: Date;
+    scoredAt: Date;
+  }): Promise<{ rows: number; marksCleared: number }> {
+    const candidateIds = [...input.rowsByCandidate.keys()];
+    if (candidateIds.length === 0 && input.clearMarksFor.length === 0) return { rows: 0, marksCleared: 0 };
+    const jobIds = [...new Set([...input.rowsByCandidate.values()].flat().map((row) => row.jobPostId))];
+
+    return this.prisma.$transaction(
+      async (tx) => {
+        if (candidateIds.length > 0) {
+          await tx.$executeRaw(Prisma.sql`
+            DELETE FROM job_candidate_match_scores s
+            USING job_posts j
+            WHERE j."id" = s."jobPostId" AND s."candidateId" IN (${Prisma.join(candidateIds)}) AND ${VISIBLE_JOB}
+          `);
+        }
+
+        let written = 0;
+        if (jobIds.length > 0) {
+          const visible = new Set(
+            (
+              await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+                SELECT j."id" FROM job_posts j WHERE j."id" IN (${Prisma.join(jobIds)}) AND ${VISIBLE_JOB}
+              `)
+            ).map((row) => row.id),
+          );
+          const data = [...input.rowsByCandidate].flatMap(([candidateId, rows]) =>
+            rows
+              .filter((row) => visible.has(row.jobPostId))
+              .map((row) => ({
+                jobPostId: row.jobPostId,
+                candidateId,
+                score: row.score,
+                semanticPending: row.semanticPending,
+                weightsVersion: row.weightsVersion,
+                scoredAt: input.scoredAt,
+              })),
+          );
+          for (let i = 0; i < data.length; i += INSERT_CHUNK_SIZE) {
+            const { count } = await tx.jobCandidateMatchScore.createMany({
+              data: data.slice(i, i + INSERT_CHUNK_SIZE),
+              skipDuplicates: true,
+            });
+            written += count;
+          }
+        }
+
+        const marksCleared =
+          input.clearMarksFor.length === 0
+            ? 0
+            : await tx.$executeRaw(Prisma.sql`
+                UPDATE candidates SET "matchRescoreRequestedAt" = NULL
+                WHERE "id" IN (${Prisma.join(input.clearMarksFor)})
+                  AND "matchRescoreRequestedAt" <= ${input.batchStartedAt}
+              `);
+        return { rows: written, marksCleared };
+      },
+      { maxWait: 10_000, timeout: 30_000 },
+    );
+  }
+
+  /**
+   * Q2 (AD-27): sau khi lượt theo tin ghi điểm, đánh dấu lại người trong pool đã sửa hồ sơ
+   * sau lúc nạp hồ sơ (`matchProfileChangedAt > since`) mà dấu đã bị xoá — tức lượt theo
+   * ứng viên đã chấm họ, rồi lượt này ghi đè bằng điểm từ hồ sơ cũ. Người còn dấu thì để
+   * nguyên (lượt theo ứng viên sắp ghi đè đúng). Ghi bằng SQL, không đổi `updatedAt`.
+   */
+  async markChangedSince(candidateIds: string[], since: Date): Promise<number> {
+    if (candidateIds.length === 0) return 0;
+    return this.prisma.$executeRaw(Prisma.sql`
+      UPDATE candidates SET "matchRescoreRequestedAt" = ${NOW_UTC}
+      WHERE "id" IN (${Prisma.join(candidateIds)})
+        AND "matchRescoreRequestedAt" IS NULL
+        AND "matchProfileChangedAt" > ${since}
+    `);
   }
 
   /**

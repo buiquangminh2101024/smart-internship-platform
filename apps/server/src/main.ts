@@ -52,6 +52,8 @@ import type { AutoOutreachRepository } from "./modules/candidate-outreach/auto-o
 import type { AutoOutreachRunStore } from "./modules/candidate-outreach/auto-outreach-run-store";
 import type { AutoOutreachService } from "./modules/candidate-outreach/auto-outreach.service";
 import { registerLiveRescore } from "./modules/live-rescore/live-rescore.module";
+import { startLiveRescoreJob } from "./modules/live-rescore/live-rescore.job";
+import type { LiveRescoreService } from "./modules/live-rescore/live-rescore.service";
 import type { CandidateRescoreMarker } from "./modules/live-rescore/candidate-rescore-marker";
 
 import { messagingRoutes } from "./modules/messaging/messaging.routes";
@@ -238,6 +240,12 @@ startAuditLogRetentionJob({
 startMatchScoreJob({
   matchScoreRepository: container.resolve<MatchScoreRepository>("matchScoreRepository"),
   matchScoreService: container.resolve<MatchScoreService>("matchScoreService"),
+  logger,
+});
+// Chấm lại theo ứng viên (0.6, AD-27) — cron 15 phút, lưới an toàn cho hẹn giờ chờ ngừng
+// sửa 45 giây: hẹn giờ mất khi khởi động lại, vượt trần, lô lỗi, người vượt giới hạn embedding.
+startLiveRescoreJob({
+  liveRescoreService: container.resolve<LiveRescoreService>("liveRescoreService"),
   logger,
 });
 // Transactional Outbox cho email notification — quét mỗi phút (AD-8).

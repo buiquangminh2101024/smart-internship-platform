@@ -3,7 +3,11 @@ import type { CandidateOutreachService } from "../candidate-outreach/candidate-o
 import type { CandidateMatchProfileLoader } from "../job-matching/candidate-match-profile.loader";
 import { CandidateProfileCache } from "./candidate-profile-cache";
 import type { MatchScoreRepository, MatchScoreRow } from "./match-score.repository";
-import { MATCH_SCORE_CHUNK_SIZE, MATCH_SCORE_MAX_NEW_EMBEDDINGS } from "./match-scores.config";
+import {
+  MATCH_SCORE_CHUNK_SIZE,
+  MATCH_SCORE_MAX_NEW_EMBEDDINGS,
+  MATCH_SCORE_REMARK_CLOCK_MARGIN_MS,
+} from "./match-scores.config";
 
 /**
  * Chấm lại một tin vừa hiển thị: gọi, không chờ, lỗi chỉ ghi log. Đăng ký trong awilix
@@ -75,6 +79,7 @@ export class MatchScoreService {
   private readonly profileLoader: CandidateMatchProfileLoader;
   private readonly logger: Logger;
   private readonly jobScoredListener: JobScoredListener;
+  private readonly requestLiveRescore: (() => void) | undefined;
   /** Tin đang chấm (một process, AD-23 mục 8): lượt gọi sau cho cùng tin thì bỏ qua. */
   private readonly runningJobs = new Set<string>();
   private allRunning = false;
@@ -85,18 +90,26 @@ export class MatchScoreService {
     candidateMatchProfileLoader,
     logger,
     jobScoredListener,
+    liveRescoreDrainRequester,
   }: {
     matchScoreRepository: MatchScoreRepository;
     candidateOutreachService: CandidateOutreachService;
     candidateMatchProfileLoader: CandidateMatchProfileLoader;
     logger: Logger;
     jobScoredListener: JobScoredListener;
+    /**
+     * Q2 (AD-27): yêu cầu một lượt chấm theo ứng viên sau khi đánh dấu lại. Server truyền
+     * qua awilix (module live-rescore); script chạy process riêng không truyền — dấu nằm
+     * trong DB cho cron 15 phút của server.
+     */
+    liveRescoreDrainRequester?: () => void;
   }) {
     this.repository = matchScoreRepository;
     this.outreachService = candidateOutreachService;
     this.profileLoader = candidateMatchProfileLoader;
     this.logger = logger;
     this.jobScoredListener = jobScoredListener;
+    this.requestLiveRescore = liveRescoreDrainRequester;
   }
 
   /**
@@ -155,6 +168,7 @@ export class MatchScoreService {
 
       const written = await this.repository.replaceForJob(jobPostId, rows, new Date(startedAt));
       if (!written) return { status: "GONE" };
+      await this.remarkChangedProfiles(jobPostId, pool, cache);
       return {
         status: "DONE",
         pool: pool.length,
@@ -228,6 +242,32 @@ export class MatchScoreService {
       return result;
     } finally {
       this.allRunning = false;
+    }
+  }
+
+  /**
+   * Q2 (AD-27): người sửa hồ sơ sau lúc cache nạp hồ sơ, đã được chấm lại theo ứng viên
+   * (dấu đã xoá), vừa bị lượt này ghi đè bằng điểm từ hồ sơ cũ ⇒ đánh dấu lại rồi yêu cầu
+   * một lượt chấm theo ứng viên (không có hẹn giờ cho từng người). Mốc lùi thêm một khoảng để bù lệch đồng hồ giữa
+   * server và DB: đánh dấu thừa chỉ tốn một lần chấm lại. Lỗi chỉ ghi log (lượt đêm sau
+   * vẫn chấm lại tin).
+   */
+  private async remarkChangedProfiles(jobPostId: string, pool: string[], cache: CandidateProfileCache): Promise<void> {
+    const loadedAt = cache.firstLoadAt;
+    if (!loadedAt || pool.length === 0) return;
+    try {
+      const since = new Date(loadedAt.getTime() - MATCH_SCORE_REMARK_CLOCK_MARGIN_MS);
+      const remarked = await this.repository.markChangedSince(pool, since);
+      if (remarked > 0) {
+        this.logger.info("Match scores: re-marked candidates changed during rescoring", { jobPostId, remarked });
+        // Đang có lượt thì lượt đó chạy thêm một lượt; không chạy chồng.
+        this.requestLiveRescore?.();
+      }
+    } catch (error) {
+      this.logger.error("Match scores: re-marking changed candidates failed", {
+        jobPostId,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 

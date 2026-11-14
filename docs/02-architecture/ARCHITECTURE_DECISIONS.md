@@ -993,6 +993,11 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
    - giới hạn số embedding mới mỗi lượt; người vượt có điểm rule-only (`semanticPending`) và giữ dấu;
    - **cache hồ sơ tin đang hiển thị trong bộ nhớ** (`JobMatchProfile` kèm vector), singleton. Xoá khi danh mục kỹ năng / ngành đổi, mỗi mục sống tối đa 1 giờ. Tin `PUBLISHED` không sửa được nội dung (AD-24 mục 5), và câu lấy pool luôn lọc tin đang hiển thị, nên mục của tin đã thôi hiển thị không bao giờ được đọc. Cache chỉ dùng cho chấm theo ứng viên (và "Việc làm phù hợp" nếu bước 0 thấy có lợi); lượt chấm theo tin giữ cách cũ;
    - các con số (khoảng chờ, giới hạn thời gian, số embedding mới, TTL cache) là **số do thiết kế**, đặt trong `live-rescore.config.ts`, chỉnh theo số đo ở bước 0 và bước kiểm thử.
+   - **Chính xác hoá khi làm bước 3 (2026-11-14):**
+     - Cache chỉ giữ `JobMatchProfile`. Hash vector tin đọc lại mỗi lô (một câu), vì vector tin có thể được tính ở lối khác. Giới hạn vector mới dùng chung cho tin và hồ sơ, tin trước.
+     - Mốc "lúc bắt đầu lô" (mục 2) lấy từ đồng hồ DB ngay trong câu chọn lô, trước khi nạp hồ sơ. Người giữ dấu (lỗi, vượt giới hạn embedding) không bị chọn lại trong cùng lượt.
+     - Lượt dừng vì hết giờ mà còn dấu, hoặc có yêu cầu chấm trong lúc chạy, thì chạy tiếp sau 1 giây, không chờ cron.
+     - Ghi theo lô dùng `skipDuplicates`: nếu lượt theo tin ghi cùng cặp xen vào giữa thì giữ dòng của lượt kia thay vì hỏng cả lô. Q2 sửa nếu dòng đó tính từ hồ sơ cũ.
 6. **Việc kéo theo sau khi chấm lại một ứng viên** (mục 4 của buổi trao đổi):
    - **tự mời:** với các tin bật tự mời mà ứng viên vừa đạt ngưỡng và còn mời được (bật cho liên hệ, chưa nộp đơn, chưa có lời mời chặn, chưa đủ trần ngày), xoá dấu "hết ứng viên" của tin rồi kích hoạt lượt tự mời của công ty (`autoOutreachTrigger`, có khoá theo công ty sẵn);
    - **tự chuyển "Đang xem xét":** gọi `autoReviewTrigger` cho đơn "Chờ duyệt" của ứng viên ở tin đang hiển thị (thêm dạng `{ candidateId }`);

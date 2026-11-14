@@ -99,6 +99,7 @@ function buildService(options: FakeOptions = {}) {
   const loader = fakeLoader(options.existingCandidates ?? [...new Set(Object.values(pools).flat())]);
   const clock = { now: 1_000_000 };
   const scoredListened: string[] = [];
+  const remarks: Array<{ ids: string[]; since: Date }> = [];
 
   const service = new MatchScoreService({
     matchScoreRepository: {
@@ -113,6 +114,10 @@ function buildService(options: FakeOptions = {}) {
         Object.keys(pools)
           .filter((id) => visible.has(id) && (!filter.jobPostId || filter.jobPostId === id))
           .map((id) => ({ id, matchScoresAt: null })),
+      markChangedSince: async (ids: string[], since: Date) => {
+        remarks.push({ ids, since });
+        return 0;
+      },
       replaceForJob: async (id: string, rows: MatchScoreRow[], scoredAt: Date) => {
         if (options.goneWhileScoring?.includes(id)) return false;
         written.set(id, { rows, scoredAt });
@@ -131,7 +136,7 @@ function buildService(options: FakeOptions = {}) {
     jobScoredListener: (jobPostId: string) => scoredListened.push(jobPostId),
   } as unknown as ConstructorParameters<typeof MatchScoreService>[0]);
 
-  return { service, written, scoredChunks, errors, loader, clock, scoredListened };
+  return { service, written, scoredChunks, errors, loader, clock, scoredListened, remarks };
 }
 
 test("rescoreJob: ghi người có điểm, bỏ điểm null, semanticPending theo embedding", async () => {

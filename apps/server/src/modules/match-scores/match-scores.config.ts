@@ -31,3 +31,11 @@ export const MATCH_SCORE_PROFILE_CACHE_MAX = 20_000;
  * chấm có `matchScoresAt` cũ nhất nên đêm sau được chấm trước.
  */
 export const MATCH_SCORE_NIGHTLY_BUDGET_MS = 45 * 60 * 1000;
+
+/**
+ * Q2 (AD-27, 0.6): sau khi lượt theo tin ghi điểm, đánh dấu lại người có
+ * `matchProfileChangedAt` > (lúc nạp hồ sơ − khoảng này). Lúc nạp đo bằng đồng hồ server,
+ * `matchProfileChangedAt` bằng đồng hồ DB; khoảng lùi bù lệch giữa hai đồng hồ. Đánh dấu
+ * thừa chỉ tốn một lần chấm lại theo ứng viên. Số do thiết kế.
+ */
+export const MATCH_SCORE_REMARK_CLOCK_MARGIN_MS = 5_000;

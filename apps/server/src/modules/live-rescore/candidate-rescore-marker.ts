@@ -1,4 +1,5 @@
 import type { Logger } from "../../shared/logger";
+import type { JobProfileCache } from "./job-profile-cache";
 import type { LiveRescoreRepository } from "./live-rescore.repository";
 import type { LiveRescoreDrainRequester, LiveRescoreScheduler } from "./live-rescore.scheduler";
 
@@ -15,22 +16,26 @@ export class CandidateRescoreMarker {
   private readonly repository: LiveRescoreRepository;
   private readonly scheduler: LiveRescoreScheduler;
   private readonly requestDrain: LiveRescoreDrainRequester;
+  private readonly jobProfileCache: JobProfileCache;
   private readonly logger: Logger;
 
   constructor({
     liveRescoreRepository,
     liveRescoreScheduler,
     liveRescoreDrainRequester,
+    jobProfileCache,
     logger,
   }: {
     liveRescoreRepository: LiveRescoreRepository;
     liveRescoreScheduler: LiveRescoreScheduler;
     liveRescoreDrainRequester: LiveRescoreDrainRequester;
+    jobProfileCache: JobProfileCache;
     logger: Logger;
   }) {
     this.repository = liveRescoreRepository;
     this.scheduler = liveRescoreScheduler;
     this.requestDrain = liveRescoreDrainRequester;
+    this.jobProfileCache = jobProfileCache;
     this.logger = logger;
   }
 
@@ -56,6 +61,9 @@ export class CandidateRescoreMarker {
    *
    * Không hẹn giờ cho từng người (có thể vài trăm): yêu cầu một lượt chấm ngay, phần còn
    * lại để lượt sau và cron.
+   *
+   * Sau khi `change` thành công thì xoá cache hồ sơ tin (bước 3): hồ sơ tin đọc tên và trạng
+   * thái kỹ năng, tên ngành, nên tin gắn mục đó đã đổi yêu cầu.
    */
   markSkillHolders<T>(skillIds: string[], change: () => Promise<T>): Promise<T> {
     return this.markHolders("skill", skillIds, (ids) => this.repository.findCandidateIdsBySkills(ids), change);
@@ -80,6 +88,7 @@ export class CandidateRescoreMarker {
     }
 
     const result = await change();
+    this.jobProfileCache.clear();
 
     if (holders && holders.length > 0) {
       try {

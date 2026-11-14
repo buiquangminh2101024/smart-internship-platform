@@ -16,6 +16,7 @@ export class CandidateProfileCache {
   private readonly maxSize: number;
   private readonly batchSize: number;
   private loadedCount = 0;
+  private firstLoad: Date | null = null;
 
   constructor(
     loader: Pick<CandidateMatchProfileLoader, "loadMany">,
@@ -29,6 +30,14 @@ export class CandidateProfileCache {
   /** Tổng số hồ sơ đã nạp từ DB từ lúc tạo cache (kể cả lần nạp lại sau khi xoá). */
   get loaded(): number {
     return this.loadedCount;
+  }
+
+  /**
+   * Giờ (đồng hồ server) ngay trước lần nạp đầu tiên; null nếu chưa nạp gì. Mọi hồ sơ trong
+   * cache được đọc sau mốc này — Q2 (AD-27) dùng để tìm người sửa hồ sơ sau khi đã nạp.
+   */
+  get firstLoadAt(): Date | null {
+    return this.firstLoad;
   }
 
   get size(): number {
@@ -48,6 +57,7 @@ export class CandidateProfileCache {
       missing = unique;
     }
 
+    if (missing.length > 0) this.firstLoad ??= new Date();
     for (let i = 0; i < missing.length; i += this.batchSize) {
       const batch = await this.loader.loadMany(missing.slice(i, i + this.batchSize));
       for (const [id, profile] of batch) this.profiles.set(id, profile);

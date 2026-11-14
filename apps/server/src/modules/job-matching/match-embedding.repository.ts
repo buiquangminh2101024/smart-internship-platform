@@ -84,6 +84,32 @@ export class MatchEmbeddingRepository {
   }
 
   /**
+   * Cosine của nhiều cặp (ứng viên, tin) trong một truy vấn — chấm lại theo lô ứng viên
+   * (0.6, Q8). Cùng biểu thức với `cosinesForJob` / `cosinesForCandidate`. Cặp thiếu vector
+   * ở một bên không có trong kết quả. Hai mảng song song qua `unnest`, nên số tham số
+   * không tăng theo số cặp (lô 50 người × ~100 tin ≈ 5.000 cặp).
+   */
+  async cosinesForPairs(pairs: Array<{ candidateId: string; jobPostId: string }>): Promise<Map<string, Map<string, number>>> {
+    const result = new Map<string, Map<string, number>>();
+    if (pairs.length === 0) return result;
+    const rows = await this.prisma.$queryRaw<Array<{ candidateId: string; jobPostId: string; cosine: number }>>(Prisma.sql`
+      SELECT p."candidateId", p."jobPostId", 1 - (c."embedding" <=> j."embedding") AS cosine
+      FROM unnest(
+        ${pairs.map((pair) => pair.candidateId)}::text[],
+        ${pairs.map((pair) => pair.jobPostId)}::text[]
+      ) AS p("candidateId", "jobPostId")
+      JOIN candidate_embeddings c ON c."candidateId" = p."candidateId"
+      JOIN job_post_embeddings j ON j."jobPostId" = p."jobPostId"
+    `);
+    for (const row of rows) {
+      let byJob = result.get(row.candidateId);
+      if (!byJob) result.set(row.candidateId, (byJob = new Map()));
+      byJob.set(row.jobPostId, Number(row.cosine));
+    }
+    return result;
+  }
+
+  /**
    * "Việc làm tương tự" (docs/06-backend/similar-jobs/PLAN.md): `take` tin gần tin
    * `jobPostId` nhất, cosine giảm dần. Chỉ tin PUBLISHED còn hạn (S5) và chỉ vector
    * cùng model + templateVersion với tin gốc (S7). Tin gốc chưa có vector ⇒ [].

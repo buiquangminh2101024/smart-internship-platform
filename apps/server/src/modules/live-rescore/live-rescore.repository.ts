@@ -1,5 +1,6 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { NOW_UTC } from "../candidate-outreach/candidate-outreach.repository";
+import { VISIBLE_JOB } from "../match-scores/match-score.repository";
 
 /**
  * Đọc / ghi dấu "cần chấm lại" trên `candidates` (AD-27 mục 1, D1). Ghi bằng SQL để
@@ -24,6 +25,64 @@ export class LiveRescoreRepository {
       SET "matchRescoreRequestedAt" = ${NOW_UTC}, "matchProfileChangedAt" = ${NOW_UTC}
       WHERE "id" IN (${Prisma.join(ids)})
     `);
+  }
+
+  /**
+   * Lô kế tiếp của lượt chấm: tối đa `limit` ứng viên có dấu, dấu cũ nhất trước, trừ người
+   * lượt này đã xử lý (người giữ dấu vì lỗi hay vượt giới hạn embedding không bị chọn lại
+   * trong cùng lượt). `startedAt` là giờ của DB lúc chọn — mốc "bắt đầu lô" để xoá dấu (D2),
+   * cùng đồng hồ với dấu và luôn trước lúc nạp hồ sơ.
+   */
+  async findMarkedBatch(limit: number, exclude: ReadonlySet<string>): Promise<{ ids: string[]; startedAt: Date }> {
+    const excluded = exclude.size > 0 ? Prisma.sql`AND NOT ("id" = ANY(${[...exclude]}::text[]))` : Prisma.empty;
+    const rows = await this.prisma.$queryRaw<Array<{ id: string | null; now: Date }>>(Prisma.sql`
+      SELECT c."id", n."now"
+      FROM (SELECT ${NOW_UTC} AS "now") n
+      LEFT JOIN LATERAL (
+        SELECT "id" FROM candidates
+        WHERE "matchRescoreRequestedAt" IS NOT NULL ${excluded}
+        ORDER BY "matchRescoreRequestedAt", "id"
+        LIMIT ${limit}
+      ) c ON true
+    `);
+    return {
+      ids: rows.flatMap((row) => (row.id ? [row.id] : [])),
+      startedAt: rows[0]?.now ?? new Date(),
+    };
+  }
+
+  /** Số ứng viên đang có dấu (tóm tắt lượt, Q6). */
+  async countMarked(): Promise<number> {
+    const rows = await this.prisma.$queryRaw<Array<{ count: number }>>(Prisma.sql`
+      SELECT COUNT(*)::int AS count FROM candidates WHERE "matchRescoreRequestedAt" IS NOT NULL
+    `);
+    return rows[0]?.count ?? 0;
+  }
+
+  /**
+   * Pool ngược của cả lô (D4, Q8), một câu: với mỗi ứng viên, các tin đang hiển thị có chung
+   * ≥ 1 kỹ năng APPROVED. Đối xứng với `MatchScoreRepository.findScoringPool` (pool theo
+   * tin), nên một cặp có trong pool theo tin thì cũng có ở đây. Ứng viên không có tin nào
+   * không có trong Map.
+   */
+  async findJobPools(candidateIds: string[]): Promise<Map<string, string[]>> {
+    const pools = new Map<string, string[]>();
+    if (candidateIds.length === 0) return pools;
+    const rows = await this.prisma.$queryRaw<Array<{ candidateId: string; jobPostId: string }>>(Prisma.sql`
+      SELECT DISTINCT cs."candidateId", jps."jobPostId"
+      FROM candidate_skills cs
+      JOIN skills s ON s."id" = cs."skillId" AND s."status" = 'APPROVED'
+      JOIN job_post_skills jps ON jps."skillId" = cs."skillId"
+      JOIN job_posts j ON j."id" = jps."jobPostId"
+      WHERE cs."candidateId" IN (${Prisma.join(candidateIds)}) AND ${VISIBLE_JOB}
+      ORDER BY cs."candidateId", jps."jobPostId"
+    `);
+    for (const row of rows) {
+      const pool = pools.get(row.candidateId);
+      if (pool) pool.push(row.jobPostId);
+      else pools.set(row.candidateId, [row.jobPostId]);
+    }
+    return pools;
   }
 
   /** Ứng viên có ít nhất một kỹ năng trong danh sách (mọi trạng thái của kỹ năng). */

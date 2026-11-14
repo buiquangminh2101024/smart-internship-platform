@@ -4,7 +4,7 @@
 > - **Q7:** model embedding chạy trong một `worker_threads`;
 > - **Q8:** chấm theo lô.
 >
-> **Bước 1 (schema, migration) đã làm và áp lên Neon 2026-11-14. Bước 2 (đánh dấu, hẹn giờ) và bước 2b (model embedding trong worker) đã làm cùng ngày**, lượt chấm chưa có nên dấu nằm chờ trong DB. Việc tiếp theo: bước 3.
+> **Bước 1 (schema, migration) đã làm và áp lên Neon 2026-11-14. Bước 2 (đánh dấu, hẹn giờ), bước 2b (model embedding trong worker) và bước 3 (chấm theo lô, ghi bảng, cron 15 phút, Q2) đã làm cùng ngày**. Việc kéo theo sau khi chấm (tự mời, tự chuyển, job alert, realtime) chưa có. Việc tiếp theo: bước 4.
 
 Mục 0.6 của `docs/01-project/FEATURE_BACKLOG.md`. Quyết định kiến trúc: AD-27 (sửa một phần AD-23, AD-24). Frontend: `docs/05-frontend/phases/live-rescore/PLAN.md`. Nền:
 - AD-24 và `docs/06-backend/hiring-progress/PLAN.md` (bảng điểm, `scoreProfiles`, lượt đêm, cache hồ sơ một lượt);
@@ -435,6 +435,68 @@ Kiểm:
   - Event loop khi chấm 20 ứng viên kèm round trip Neon: p99 16 ms (bản cũ 40 ms).
 - `perf:live-rescore-embedding --config=B`: 24,7 ms / văn bản, event loop p99 22,7 ms, HTTP p95 1,1 ms (lúc rảnh 1,5 ms), khớp bước 0.
 - Chưa kiểm qua `npm run dev:server` và `npm run build && npm start` của chủ dự án: thêm một kỹ năng mới (gõ tên chưa có) hoặc mở "Việc làm phù hợp" để server nạp model, log phải có "Loading embedding model …" và không có "Embedding model unavailable".
+
+### Bước 3 — Chấm theo ứng viên và ghi bảng (2026-11-14)
+
+**File mới trong `src/modules/live-rescore/`:**
+- `live-rescore.service.ts` (`LiveRescoreService`):
+  - `drain(trigger)`: một lượt mỗi lúc. Lặp từng lô 50 người có dấu, dấu cũ nhất trước: nạp hồ sơ → pool ngược → hồ sơ tin (cache) → chấm → một transaction ghi điểm và xoá dấu. Nhường event loop giữa hai lô.
+  - `requestDrain()`: thay bản tạm ghi log của bước 2 trong `liveRescoreDrainRequester`.
+- `job-profile-cache.ts`: interface `JobProfileCache` và bản `InMemoryJobProfileCache` (TTL 1 giờ, trần 5.000 mục, bỏ mục dùng lâu nhất).
+- `live-rescore.job.ts`: cron 15 phút gọi `drain("cron")`. `main.ts` khởi động cron cạnh các job khác.
+- `live-rescore-run-store.ts` (Q6): khoá Redis `live-rescore:last-run`, giữ 7 ngày, lưu JSON tóm tắt lượt gần nhất (thời điểm, thời gian, số lô, số người, số dòng, số dấu đã xoá, số người giữ dấu, số vector mới, có hết giờ không, số còn dấu).
+- `live-rescore.config.ts` thêm: giới hạn lượt 60 giây, lô 50 người, 300 vector mới mỗi lượt, nghỉ 1 giây trước khi chạy tiếp, TTL và trần của cache.
+- `live-rescore.repository.ts` thêm:
+  - `findMarkedBatch(limit, exclude)`: lấy người có dấu kèm giờ của DB (`NOW_UTC`);
+  - `findJobPools(candidateIds)`: pool ngược cả lô trong một câu;
+  - `countMarked()`.
+
+**Sửa ở module khác:**
+- `MatchEmbeddingRepository.cosinesForPairs(pairs)`: một câu cho mọi cặp, hai mảng song song qua `unnest`, cùng biểu thức `1 - (c <=> j)`.
+- `MatchEmbeddingService.similarityForPairs`: một câu hash mỗi loại, embed phần cũ trong giới hạn chung (tin trước), trả `deferredCandidates` (người vượt giới hạn, không phải người lỗi model). `ensureVectors` giờ trả thêm `deferred` và `embedded`; ba hàm cũ chỉ đọc `.ready`, hành vi không đổi.
+- `CandidateOutreachService.scoreCandidatesAgainstJobs(entries, maxNewEmbeddings)`: đặt cạnh `scoreProfiles`, dùng chung hàm `score()` riêng.
+- `MatchScoreRepository`:
+  - `replaceForCandidates`: một transaction gồm xoá dòng của các ứng viên trong lô với tin đang hiển thị, lọc lại tin đang hiển thị, `createMany` theo khúc 1.000 với `skipDuplicates`, xoá dấu khi dấu ≤ lúc bắt đầu lô;
+  - `markChangedSince` (Q2);
+  - kiểu `CandidateScoreRow`.
+- `MatchScoreService.rescoreJob` (Q2): ghi xong thì gọi `markChangedSince(pool, lúc cache nạp hồ sơ đầu tiên − 5 giây)`. Có người được đánh dấu lại thì gọi `liveRescoreDrainRequester` (nhận qua awilix, không bắt buộc). Lỗi chỉ ghi log. `CandidateProfileCache` thêm `firstLoadAt`.
+- `CandidateRescoreMarker.markSkillHolders` / `markMajorHolders`: sau khi thao tác thành công thì `jobProfileCache.clear()`, kể cả khi không ứng viên nào có mục đó (yêu cầu của tin vẫn đổi).
+- Awilix: `jobProfileCache` và `liveRescoreService` đăng ký bằng `asFunction`, giống hẹn giờ. Constructor có tham số tuỳ chọn cho test, mà awilix báo lỗi khi đọc một tên chưa đăng ký.
+
+**Khác so với plan:**
+- **Hash vector tin không lấy từ cache.** Mỗi lô có thêm một câu `findHashes` cho tin, vì vector tin có thể được tính lại ở lối khác (lối a, "Việc làm phù hợp"). Thêm khoảng 44 ms mỗi lô.
+- **Không kiểm `updatedAt` của tin trong cache.** Tin đã gửi duyệt / đang hiển thị không sửa được (`updateDraft` chỉ cho DRAFT), nên hồ sơ tin chỉ đổi khi danh mục đổi; lúc đó marker xoá cache.
+- **Xoá dấu trong lượt:** người giữ dấu (lô lỗi, vượt giới hạn embedding) bị loại khỏi các lô sau của cùng lượt, để lượt không chọn lại họ mãi.
+- **Chạy tiếp:**
+  - lượt dừng vì hết 60 giây mà còn dấu thì tự chạy lượt tiếp sau 1 giây, không chờ cron;
+  - có yêu cầu trong lúc đang chạy thì cũng chạy thêm một lượt;
+  - lỗi lặp lại không gây vòng lặp: lượt chỉ chạy tiếp khi hết giờ hoặc có yêu cầu mới.
+- **Ghi dùng `skipDuplicates`:** lượt theo tin ghi cùng cặp xen giữa lúc xoá và lúc ghi thì giữ dòng của lượt kia, thay vì lỗi khoá trùng làm hỏng cả lô.
+- **Q2 dùng đồng hồ server, lùi 5 giây** (`MATCH_SCORE_REMARK_CLOCK_MARGIN_MS`).
+  - Đánh dấu thừa chỉ tốn một lần chấm lại.
+  - Có người được đánh dấu lại thì yêu cầu ngay một lượt chấm theo ứng viên, không hẹn giờ cho từng người. Đang có lượt thì lượt đó chạy thêm một lượt. Script chạy process riêng (`rescore-match-scores`) không gọi được lượt của server, nên dấu chờ cron 15 phút.
+  - Lượt đêm thêm một câu `UPDATE` mỗi tin, khoảng 314 câu ≈ 14 giây trên ~2–3 phút.
+- **Tóm tắt lượt (Q6) làm luôn ở bước này.** Bước 8 chỉ còn phần đọc cho API Admin.
+- **Chưa có việc kéo theo (bước 4):** tự mời, tự chuyển "Đang xem xét", job alert lần đầu, realtime. Bảng điểm đã đúng sau ~45 giây, nhưng tự mời vẫn đi đường cũ (cron 15 phút và các lối kích hoạt sẵn có).
+
+**Kiểm:**
+- `tests/unit/live-rescore-batch.test.ts`, 22 test:
+  - `similarityForPairs`: cùng cosine với `similarityForCandidates`; giới hạn chung, tin trước; model lỗi không phải deferred; lỗi DB không ném; vector cũ không dùng;
+  - `scoreCandidatesAgainstJobs` cho cùng `MatchResult` với `scoreProfiles` ở cả `hybrid` lẫn `rule`, với bộ chấm thật (`ScoringJobMatcher`, trọng số thật);
+  - cache: nạp phần thiếu, TTL, `invalidate` / `clear`, trần;
+  - `drain`: lô và thứ tự; điểm null không có dòng; người không còn tin vẫn được xoá dòng cũ; vượt giới hạn embedding thì giữ dấu; lô lỗi; D2 (sửa trong lúc chấm thì giữ dấu); ứng viên đã xoá; BUSY rồi chạy thêm; hết giờ rồi chạy tiếp; lưu tóm tắt lỗi chỉ cảnh báo;
+  - Q2: gọi đánh dấu lại với mốc lùi 5 giây rồi yêu cầu lượt chấm; không ai bị đánh dấu lại thì không yêu cầu; không truyền requester (script) vẫn chạy; GONE không gọi; lỗi chỉ ghi log.
+- Test cũ sửa theo: marker có `jobProfileCache` giả (kiểm thứ tự tìm → đổi → xoá cache → đánh dấu); repository giả của `match-scores.test.ts` thêm `markChangedSince`.
+- Toàn bộ unit test của server: 616 / 616 qua. `tsc --noEmit` qua.
+- Trên Neon, script tạm (đã xoá), chỉ đọc. Câu ghi chỉ `EXPLAIN`, `maxNew = 0` và ghi vector bị chặn:
+  - tham số `Date` đi dưới dạng `timestamptz`, `TimeZone` của Neon là `GMT`, nên so với cột `timestamp(3)` lưu UTC đúng tới mili giây (kiểm =, <, >);
+  - `findMarkedBatch` (kèm danh sách loại trừ) chạy được, giờ DB lệch giờ server khoảng 0,1 giây;
+  - 50 ứng viên có vector khớp hash: `findJobPools` trung vị 94 tin, tổng 4.256 cặp, khớp pool tính riêng từng người (10 / 10);
+  - **theo lô = `scoreProfiles`:** 131 / 131 cặp trên 8 tin cho `MatchResult` giống hệt;
+  - **theo lô so với bảng điểm:** 4.255 / 4.256 cặp khớp, 1 lệch (như bước 0);
+  - một lô 50 người qua `rescoreBatch`, chưa tính ghi: 1,4 giây khi cache tin trống, 0,67–0,71 giây khi cache nóng. Phần ghi khoảng 8–9 round trip ≈ 0,4 giây, nên một lô ≈ 1,1 giây, 200 người ≈ 5 giây cộng 25 ms mỗi vector mới;
+  - `EXPLAIN` xoá dòng (Hash Join), xoá dấu (Bitmap Heap Scan) và `markChangedSince` đều chạy được. Sau khi kiểm, Neon vẫn có 0 dấu.
+- **Chưa chạy transaction ghi thật và chưa kiểm đầu cuối qua gateway 8080.** Chủ dự án sửa kỹ năng của một ứng viên. Sau ~45 giây, log server phải có "Live rescore run" với `candidates: 1`; DB có `matchRescoreRequestedAt` về null và dòng điểm của ứng viên có `scoredAt` mới.
 
 ### Câu hỏi mới sau bước 0 (đã chốt 2026-11-14: Q7 = b, Q8 = b; xem "Câu hỏi đã chốt" và AD-27 mục 5, 11)
 
