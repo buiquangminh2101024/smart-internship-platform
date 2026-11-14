@@ -1032,6 +1032,15 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
       - Thẻ tự mời thêm trạng thái `PAUSED_BY_COMPANY_SHARE`, xét khi phần tự động **làm tròn ra 0 lời mời/ngày** (tỉ lệ 0%, hoặc tỉ lệ quá nhỏ so với hạn mức), xếp ngay sau `NOT_PUBLISHED`.
       - `GET /admin/automation-status` (chỉ Admin) ghép dấu (DB), lượt chấm theo ứng viên gần nhất (Redis), số hôm nay theo giờ Việt Nam (DB), và lượt đêm gần nhất. Lượt đêm lưu ở một khoá Redis mới do cron ghi, vì `matchScoresAt` cũng bị lối chấm theo tin ghi.
       - Redis lỗi thì phần lượt gần nhất là null, phần DB vẫn trả.
+    - *Bước 9 (2026-11-14):*
+      - Script `simulate-inflow` gửi ứng viên và tin (lấy từ bộ sinh demo lớn) qua gateway như người dùng thật.
+      - Dữ liệu mô phỏng nhận ra bằng miền email `@inflow-demo.local` và tiền tố tiêu đề `[Mô phỏng] `; `--reset` xoá theo hai dấu này.
+      - Lượt chấm rỗng không ghi đè tóm tắt lượt gần nhất.
+    - *Bước 10 (2026-11-14), đo qua gateway 8080:*
+      - Lượt chấm 200 người (200 vector mới) xong trong 16,6 s; event loop p99 11 ms, API như lúc nền. Chung process (D5) giữ nguyên.
+      - Lượt đêm 314 tin, 150.712 dòng, 330 s, web không chậm.
+      - Realtime `match-scores:updated` tới đúng nhà tuyển dụng, cách nhau ~15 s.
+      - Phát hiện ngoài phạm vi: `bcryptjs` cost 12 chặn luồng chính khi nhiều người đăng ký / đăng nhập cùng lúc (event loop ~0,8–1,2 s với 8 song song). Chờ chủ dự án quyết.
 11. **Model embedding chạy trong một `worker_threads` duy nhất** (Q7 của plan, chủ dự án chốt 2026-11-14 sau bước 0):
     - **Số đo của bước 0:** 200 văn bản hồ sơ thật, request nhẹ gửi mỗi 50 ms.
       - Mỗi lần embed **chặn luồng chính** khoảng 24 ms, tức suốt thời gian suy luận. Với model trên luồng chính: event loop p99 44 ms, request nhẹ p95 31 ms so với 1,8 ms lúc rảnh.

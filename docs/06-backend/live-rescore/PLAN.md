@@ -4,7 +4,7 @@
 > - **Q7:** model embedding chạy trong một `worker_threads`;
 > - **Q8:** chấm theo lô.
 >
-> **Bước 1 (schema, migration) đã làm và áp lên Neon 2026-11-14. Bước 2 (đánh dấu, hẹn giờ), bước 2b (model embedding trong worker), bước 3 (chấm theo lô, ghi bảng, cron 15 phút, Q2), bước 4 (việc kéo theo: tự mời, tự chuyển, job alert lần đầu, realtime) bước 5 (danh mục đổi: chấm lại theo tin, Q1), bước 6 (tự mời đọc bảng điểm), bước 7 (trang tìm ứng viên đọc bảng điểm) và bước 8 (thẻ tự mời khi tỉ lệ 0%, API số liệu cho Admin) đã làm cùng ngày**. Bước 3–8 đã kiểm đầu cuối qua gateway 8080 cùng ngày, đều đạt (xem "Kiểm đầu cuối bước 3–8"). Việc tiếp theo: bước 9.
+> **Bước 1 (schema, migration) đã làm và áp lên Neon 2026-11-14. Bước 2 (đánh dấu, hẹn giờ), bước 2b (model embedding trong worker), bước 3 (chấm theo lô, ghi bảng, cron 15 phút, Q2), bước 4 (việc kéo theo: tự mời, tự chuyển, job alert lần đầu, realtime) bước 5 (danh mục đổi: chấm lại theo tin, Q1), bước 6 (tự mời đọc bảng điểm), bước 7 (trang tìm ứng viên đọc bảng điểm) và bước 8 (thẻ tự mời khi tỉ lệ 0%, API số liệu cho Admin) bước 9 (script `simulate-inflow`) và bước 10 (kiểm thử, đo tải) đã làm cùng ngày**. Bước 3–8 đã kiểm đầu cuối qua gateway 8080 cùng ngày, đều đạt (xem "Kiểm đầu cuối bước 3–8"). Bước 10 đạt ngưỡng; riêng băm mật khẩu lúc đăng ký / đăng nhập (`bcryptjs`, có từ trước 0.6) làm web chậm khi nhiều người đăng ký cùng lúc, chờ chủ dự án quyết (xem "Bước 10"). Việc tiếp theo: bước 11 (tài liệu).
 
 Mục 0.6 của `docs/01-project/FEATURE_BACKLOG.md`. Quyết định kiến trúc: AD-27 (sửa một phần AD-23, AD-24). Frontend: `docs/05-frontend/phases/live-rescore/PLAN.md`. Nền:
 - AD-24 và `docs/06-backend/hiring-progress/PLAN.md` (bảng điểm, `scoreProfiles`, lượt đêm, cache hồ sơ một lượt);
@@ -689,6 +689,113 @@ Gọi API qua `localhost:8080` như người dùng thật, đọc kết quả tr
 Chưa kiểm: sự kiện realtime `match-scores:updated` (cần trang employer mở socket), `nightly` sau lượt đêm 03:30.
 
 Dọn sau khi kiểm: trả tỉ lệ 80% và cài đặt tự mời cũ của tin (tắt); xoá hai user kiểm (cascade điểm, job alert, lời mời, đơn, CV), alias "Kiemthulive Trinhbay", audit log của lần gộp, thông báo đề xuất kỹ năng gửi Admin. Còn lại: file PDF ~300 byte trên Cloudinary (ứng dụng chưa xoá file Cloudinary khi xoá CV).
+
+### Bước 9 — Script mô phỏng `simulate-inflow` (2026-11-14)
+
+`apps/server/scripts/simulate-inflow.ts`, lệnh `npm run simulate-inflow --workspace server -- …`:
+- `--candidates N --jobs M` (mặc định 20 và 2), `--waves W --every S` (đợt cách nhau S giây, tính từ lúc bắt đầu đợt), `--concurrency K` (mặc định 8 ứng viên gửi song song), `--seed`, `--dry-run`, `--reset`.
+- **Thêm so với plan: `--wait`.** Sau đợt cuối, script đọc `GET /admin/automation-status` mỗi 5 giây tới khi hết người chờ chấm (tối đa 15 phút) và in thời gian. Đây là số "thời gian đến khi hết dấu" mà bước 10 cần đo.
+
+**Dữ liệu (D10):** gọi `generateLargeDemo` của thư viện demo lớn với seed của lần chạy, rồi lấy:
+- ứng viên sinh thêm (bỏ hồ sơ trưng bày): hồ sơ, học vấn, kinh nghiệm, dự án, chứng chỉ, kỹ năng, cho liên hệ hay không (~70% có);
+- tin `PUBLISHED` của bốn công ty demo (bỏ tin chính). Quy mô bộ sinh tự tính đủ cho số người và số tin cần.
+
+Danh mục (tên → id) đọc từ DB, chỉ mục `APPROVED`, nên không tạo mục danh mục mới.
+
+**Gửi qua gateway (Q4):**
+- Ứng viên:
+  - `register` → `verify-otp` (OTP cố định, lấy token từ đây, không đăng nhập lại);
+  - `PATCH /candidates/me`, rồi từng mục một (mỗi mục là một lần đánh dấu, như người thật điền form);
+  - cuối cùng bật cho liên hệ.
+- Tin:
+  - tạo nháp bằng tài khoản nhà tuyển dụng của chính công ty trong bộ sinh (mật khẩu demo lớn), rồi `submit`;
+  - nếu tin chờ duyệt thì Admin (`ADMIN_EMAIL` / `ADMIN_PASSWORD`) duyệt;
+  - tin đăng trước ứng viên trong mỗi đợt.
+
+**Đánh dấu để `--reset` (chốt bước 0 mục 6):**
+- Email `ung-vien-inflow-NNNN@inflow-demo.local`, số tiếp nối số lớn nhất đang có.
+- Tiêu đề tin bắt đầu bằng `[Mô phỏng] `. Chọn tiền tố thay cho file danh sách id: file có thể mất, tiêu đề thì không; người xem demo cũng biết đó là tin mô phỏng.
+- `--reset` xoá trong một transaction:
+  - lời mời và hội thoại của tin (khoá ngoại không cascade), tin nhắn của người gửi thuộc miền mô phỏng;
+  - audit log của tin;
+  - tin (kéo theo kỹ năng, ngành, điểm, job alert, đơn), rồi user (kéo theo candidate và mọi bảng của họ).
+
+**Chặn:**
+- Dừng nếu `NODE_ENV=production`, thiếu `OTP_HARDCODE` / `OTP_HARDCODE_VALUE`, `DEV_SKIP_EMAIL_SENDING` khác `true`, hoặc `/api/health` không `ok`.
+- Dừng nếu tổng số người đăng ký vượt 90% giới hạn OTP 1.000 / giờ / IP.
+- Ngoài `--reset`, script chỉ đọc DB.
+
+**Sửa kèm (phát hiện khi chạy):** lượt chấm rỗng (cron 15 phút không có dấu, hoặc lượt chạy thêm sau khi đã hết việc) không ghi đè tóm tắt lượt gần nhất nữa. Trước đó thẻ Admin hiện "lượt gần nhất 0 người" chỉ vài phút sau một lượt có chấm.
+- Chỉ lưu khi có người được chấm hoặc giữ lại, hoặc có tin được chấm / hoãn / lỗi. Log info dùng cùng điều kiện.
+- Test: lượt rỗng không lưu; lưu lỗi vẫn chỉ warn (tách thành test riêng có dấu); test "BUSY rồi chạy thêm" thêm một dấu cho lượt thêm.
+
+Kiểm (gateway 8080, server `tsx watch`):
+- `--candidates 20 --jobs 2`: 20/20 ứng viên trong 32 giây, request p50 431 ms / p95 1,4 s; hết người chờ chấm 36 giây sau đợt.
+  - Lần này hai tin báo lỗi vì script đọc sai dạng phản hồi của `submit` (`{ jobPost, autoPublished }`), dù tin đã đăng. Đã sửa.
+- `--waves 2 --every 30 --candidates 10 --jobs 1 --wait`:
+  - mỗi đợt 10/10 ứng viên, 1/1 tin (17–20 giây), request p50 341–425 ms / p95 2,6–2,8 s;
+  - sau đợt 2 có 20 người chờ chấm, hết 16 giây sau đợt cuối;
+  - lượt gần nhất: 20 người trong 3,8 giây.
+- `--reset --dry-run` đếm 40 tài khoản và 4 tin; `--reset` xoá hết; đếm lại ra 0.
+- Toàn bộ 652 / 652 unit test qua; `tsc` của server qua; script kiểm kiểu riêng (thư mục `scripts` không nằm trong `tsconfig`).
+
+**Hạn chế:**
+- Tin mô phỏng vừa đăng thì job alert gửi cho ứng viên demo đang có (đường chấm theo tin sẵn có). Thông báo gộp "N tin mới phù hợp" hôm đó của họ vẫn còn sau `--reset`. Dòng `job_alerts` bị xoá theo tin, nên email gộp 8h không nhắc tin đã xoá.
+- p95 vài giây chủ yếu do bcrypt lúc đăng ký / xác thực OTP chạy trong process server. Bước 10 đo kỹ, có so với lúc rảnh.
+
+### Bước 10 — Kiểm thử và đo tải (2026-11-14)
+
+**Mục 1–2:** unit test của các bước 3–9 (652 / 652 qua) và kiểm đầu cuối bước 3–8 (mục ở trên) đã phủ. Lần đo dưới đây kiểm thêm phần còn thiếu: sự kiện realtime `match-scores:updated`.
+
+**Cách đo:** chạy với server dev thật (`tsx watch`, có worker embedding của bước 2b), gọi qua gateway 8080 bằng script tạm ở thư mục làm việc (không commit). Bốn vòng gọi liên tục suốt các pha:
+- `GET /api/__probe-404` mỗi 50 ms. Express trả 404 ngay, không chạm DB hay Redis, nên độ trễ của request này thay cho event loop. Server thật không có `monitorEventLoopDelay`, và em không thêm vào chỉ để đo.
+- `/api/health` (một câu `SELECT 1` tới Neon) mỗi 100 ms, `/api/job-posts?page=1&limit=20` mỗi 200 ms.
+- `GET /employer/dashboard/hiring-progress` của Mây Xanh mỗi 500 ms, kèm socket của nhà tuyển dụng đó để đếm `match-scores:updated`.
+
+**Lần đo 1: 200 ứng viên một đợt, rồi lượt đêm.** Pha nền 40 giây xen giữa. `simulate-inflow --candidates 200 --jobs 0 --wait`, độ trễ tính bằng ms:
+
+| Pha | 404 (event loop) p50 / p95 / p99 / max | `/health` p50 / p95 | `/job-posts` p50 / p95 | `hiring-progress` p50 / p95 |
+|---|---|---|---|---|
+| Nền | 5,7 / 8,9 / 10,7 / 22 | 56 / 61 | 563 / 616 | 100 / 109 |
+| 200 ứng viên (160 s) | 5,5 / 186 / 281 / 1.194 | 56 / 201 | 585 / 963 | 107 / 285 |
+| Nền | 5,7 / 9,1 / 10,9 / 14 | 56 / 61 | 569 / 618 | 101 / 108 |
+| Lượt đêm (333 s) | 5,4 / 8,7 / 10,2 / 13 | 55 / 63 | 564 / 626 | 101 / 145 |
+| Nền | 5,2 / 9,0 / 10,6 / 14 | 55 / 63 | 562 / 590 | 100 / 113 |
+
+- 200/200 ứng viên trong 151 giây, request của script p50 403 ms / p95 932 ms. Hết người chờ chấm 157 giây sau lúc bắt đầu, tức 5 giây sau request cuối. Không lỗi request nào.
+- **Realtime:** socket Mây Xanh nhận 7 sự kiện `match-scores:updated`, cách nhau đúng ~15 giây (giới hạn một sự kiện / công ty / 15 giây của Q5).
+- **Lượt đêm (mục 4):** `rescore-match-scores` chấm 314/314 tin, không lỗi, 150.712 dòng, 0 dòng rule-only, nạp 1.724 hồ sơ, 330 giây. Mốc AD-24: 312 tin, 132.073 dòng, 291,5 giây. Thời gian tăng gần đúng theo số dòng (+14% dòng, +13% thời gian). Độ trễ web như lúc nền, `hiring-progress` p95 chậm hơn khoảng 1,3 lần. **Đạt.**
+
+Pha 200 ứng viên vượt ngưỡng event loop (p99 281 ms > 100 ms). Lần đo 2 tách nguyên nhân.
+
+**Lần đo 2: tách chấm lại khỏi băm mật khẩu.** Dùng 200 ứng viên mô phỏng của lần 1, đo độ trễ lúc:
+1. 200 người đăng nhập (8 song song): chỉ có `bcrypt.compare`.
+2. 200 người sửa tiêu đề hồ sơ, sau đó chờ lượt chấm lại. Đổi tiêu đề làm đổi văn bản hồ sơ, nên mỗi người cần một vector mới.
+
+| Pha | 404 (event loop) p50 / p95 / p99 / max | `/health` p50 / p95 | `/job-posts` p50 / p95 | `hiring-progress` p50 / p95 |
+|---|---|---|---|---|
+| Nền (ba pha gộp) | 5 / 9 / 10 / 18 | 54 / 60 | 539 / 594 | 99 / 112 |
+| 200 người đăng nhập (49 s) | **842 / 1.101 / 1.182 / 1.182** | 656 / 1.504 | 1.733 / 1.837 | 1.449 / 1.751 |
+| Lượt chấm 200 người (16,6 s) | 6 / 8 / 11 / 49 | 54 / 58 | 534 / 582 | 101 / 107 |
+
+- **Lượt chấm theo ứng viên:** 200 người, 200 vector mới, một lượt 16,6 giây, không hết giờ. Event loop p99 11 ms, API như lúc nền. **Đạt ngưỡng, D5 (chung process) giữ nguyên.** Plan ước ~10 giây; chậm hơn vì có 200 vector mới.
+- **Phần chậm là băm mật khẩu.** Server dùng `bcryptjs` (JS thuần) với cost 12. Bản async chỉ chia nhỏ việc băm, mỗi khúc vẫn chặn luồng chính. Khi 8 người đăng nhập cùng lúc, mọi request phải chờ gần 1 giây. Đăng ký (`hash`) cũng vậy, nên pha 200 ứng viên ở lần 1 có các đỉnh tới 1,2 giây.
+- Phần này có từ trước 0.6 và không thuộc phạm vi plan này. Chỉ lộ ra khi nhiều người đăng ký hoặc đăng nhập cùng lúc: 8 song song là tải rất nặng so với demo.
+- **Chờ chủ dự án quyết:**
+  - (a) giữ nguyên, ghi là hạn chế đã biết;
+  - (b) chạy băm trong worker (đã có mẫu worker embedding);
+  - (c) đổi sang thư viện băm native, phải thêm dependency.
+  - Đề xuất (a) cho demo; (b) nếu muốn đóng hẳn.
+
+**Giới hạn của số đo:**
+- Client đo chạy cùng máy với server, và timer của Windows khoảng 15 ms.
+- `/job-posts` dao động lớn ngay cả lúc nền (có lần p95 1.023 ms), do độ trễ tới Neon.
+- Sự kiện realtime chỉ đếm số lần nhận, không đối chiếu từng id tin.
+
+**Dữ liệu và dọn:**
+- Lượt đêm ghi lại bảng điểm thật trên Neon, giống job 03:30.
+- Mô phỏng sinh 787 job alert, tất cả cho ứng viên mô phỏng (`--jobs 0`, không có tin mô phỏng).
+- Hai lần `--reset` xoá 200 + 200 tài khoản, đếm lại ra 0. Lần chạy đầu bị bỏ vì script đo ghi file kết quả sai đường dẫn, nên đã đo lại từ đầu.
 
 ### Câu hỏi mới sau bước 0 (đã chốt 2026-11-14: Q7 = b, Q8 = b; xem "Câu hỏi đã chốt" và AD-27 mục 5, 11)
 

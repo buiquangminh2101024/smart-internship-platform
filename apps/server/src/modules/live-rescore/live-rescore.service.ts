@@ -162,8 +162,13 @@ export class LiveRescoreService {
       this.running = false;
     }
 
-    if (summary) {
-      if (summary.candidates > 0 || summary.kept > 0 || (summary.jobs?.rescored ?? 0) > 0) this.logger.info("Live rescore run", { ...summary });
+    // Lượt rỗng (cron 15 phút không có dấu, lượt chạy thêm sau khi đã hết việc) không log và
+    // không ghi đè tóm tắt: thẻ Admin cần lượt gần nhất có chấm (0.6 bước 9, kiểm qua 8080).
+    const jobs = summary?.jobs;
+    const didWork = summary !== null
+      && (summary.candidates > 0 || summary.kept > 0 || (jobs ? jobs.rescored + jobs.deferred + jobs.failed > 0 : false));
+    if (summary && didWork) {
+      this.logger.info("Live rescore run", { ...summary });
       try {
         await this.runStore.saveLastRun(summary);
       } catch (error) {

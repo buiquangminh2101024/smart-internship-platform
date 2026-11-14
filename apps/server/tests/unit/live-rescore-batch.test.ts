@@ -568,12 +568,14 @@ test("drain: ứng viên không còn (đã xoá) thì bỏ qua", async (t) => {
 test("drain: đang có lượt ⇒ BUSY, xong lượt đó thì chạy thêm một lượt", async (t) => {
   let open!: () => void;
   const gate = new Promise<void>((resolve) => (open = resolve));
-  const live = buildLive({ marks: ["a"], pools: { a: ["j1"] }, batchGate: gate });
+  const live = buildLive({ marks: ["a"], pools: { a: ["j1"], b: ["j1"] }, batchGate: gate });
   t.after(() => live.service.stop());
   const first = live.service.drain();
   assert.deepEqual(await live.service.drain(), { status: "BUSY" });
   open();
   await first;
+  // Lượt thêm chỉ lưu tóm tắt khi có việc: thêm một người có dấu trước khi lượt đó chạy.
+  live.marks.set("b", live.clock.now);
   await sleep(40);
   assert.equal(live.saved.length, 2, "lượt thêm đã chạy");
 });
@@ -595,13 +597,21 @@ test("drain: hết giờ mà còn dấu ⇒ dừng trước lô kế tiếp và 
   assert.ok(live.saved.length >= 2, "lượt tiếp đã chạy");
 });
 
-test("drain: không có dấu ⇒ không ghi, không log info; lưu tóm tắt lỗi chỉ ghi warn", async (t) => {
-  const live = buildLive({ marks: [], failSaveRun: true });
+test("drain: không có dấu ⇒ không ghi, không log info, không ghi đè tóm tắt lượt gần nhất", async (t) => {
+  const live = buildLive({ marks: [] });
   t.after(() => live.service.stop());
   const result = await live.service.drain("cron");
   assert.equal(result.status === "DONE" && result.batches, 0);
   assert.equal(live.writes.length, 0);
   assert.deepEqual(live.infos, []);
+  assert.equal(live.saved.length, 0);
+});
+
+test("drain: lưu tóm tắt lỗi chỉ ghi warn, lượt vẫn DONE", async (t) => {
+  const live = buildLive({ marks: ["a"], pools: { a: ["j1"] }, failSaveRun: true });
+  t.after(() => live.service.stop());
+  const result = await live.service.drain("cron");
+  assert.equal(result.status, "DONE");
   assert.equal(live.warns.length, 1);
 });
 
