@@ -277,7 +277,7 @@ interface JobApplicationAutomationSettings {
 
 - Tự từ chối dưới mọi hình thức; câu hỏi sàng lọc (backlog mục 3).
 - Lý do từ chối, mẫu email từ chối hàng loạt (backlog mục 4).
-- Chấm lại theo ứng viên ngay khi nộp đơn (0.6): ứng viên mới chưa có điểm thì chờ lượt đêm.
+- Chấm lại theo ứng viên ngay khi nộp đơn (0.6): ứng viên mới chưa có điểm thì chờ lượt đêm. *Đã làm ở 0.6 (2026-11-14), xem "Sau 0.6" ở cuối "Ghi chú triển khai".*
 - Cho công ty chỉnh số ngày nhắc hoặc số ngày tự đóng.
 - Thay đổi ở trang tổng quan của nhà tuyển dụng.
 - Chuyển `GET …/application-matches` (trang hồ sơ theo tin) sang đọc bảng điểm.
@@ -596,6 +596,13 @@ Cách đo giống mục (e) bước 8 của 0.3 (`.claude-workspace/scratch/load
   - Lần thêm đầu kéo lệch nhiều hơn (top 3 còn 72/94). Câu "Đơn bị đóng có nộp lại được không?" kéo câu "muốn rút đơn lại" về mục mới; câu "Bao lâu thì hồ sơ bị tự đóng?" gần với một câu hỏi về gói. Đã bỏ hoặc đổi các câu hỏi mẫu đó và đo lại.
   - Câu q083 ("Hệ thống có dùng AI không") có mục mới trong top 3 thay cho `employer-onboarding`; mục đúng của câu này vẫn không nằm trong top 3, như trước.
 - `API_CONVENTIONS.md`: không đổi. Trang "Ứng viên" vẫn phân trang đánh số như đã ghi; API cài đặt theo tin theo cùng mẫu với cài đặt tự mời.
+
+### Sau 0.6 (2026-11-14)
+
+**Ứng viên mới không còn chờ lượt đêm.** Đơn nộp với hồ sơ chưa có điểm (hoặc chưa đạt ngưỡng) được xét tự chuyển ngay sau lượt chấm theo ứng viên, khoảng 45 giây sau lần sửa hồ sơ cuối, chậm nhất ~15 phút (AD-27, `docs/06-backend/live-rescore/PLAN.md` bước 4):
+- `autoReviewTrigger` nhận theo lô `{ candidateIds }`, chạy một lần cuối mỗi lượt.
+- Kiểm đầu cuối 2026-11-14 qua gateway 8080: ứng viên nộp đơn với hồ sơ trống, sau đó điền hồ sơ, được 98 điểm, đơn tự chuyển `PENDING → REVIEWING` (`actorId` null).
+- Cron tự xử lý của plan này giữ nguyên, làm lưới an toàn.
 
 ## Phần 4 — Ghi chú của chủ dự án
 

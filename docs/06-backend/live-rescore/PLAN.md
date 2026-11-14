@@ -1,10 +1,10 @@
 # Chấm lại theo ứng viên gần thời gian thực (0.6) — Backend
 
-> **Trạng thái: ĐÃ LẬP KẾ HOẠCH (2026-11-14). CHƯA TRIỂN KHAI.** Hướng đã chốt ở AD-27 trong buổi trao đổi với chủ dự án ngày 2026-11-14. Q1–Q6 đã chốt cùng ngày. **Bước 0 (đo, chỉ đọc) đã làm cùng ngày**, kết quả ở "Ghi chú triển khai". Hai câu hỏi bước 0 nêu ra cũng đã chốt cùng ngày (AD-27 mục 5 và mục 11):
+> **Trạng thái: XONG BACKEND, BƯỚC 0–11 (2026-11-14).** Frontend (`docs/05-frontend/phases/live-rescore/PLAN.md`, 7a–7d, 7g, 7h) chưa làm. Kế hoạch lập ngày 2026-11-14. Hướng đã chốt ở AD-27 trong buổi trao đổi với chủ dự án ngày 2026-11-14. Q1–Q6 đã chốt cùng ngày. **Bước 0 (đo, chỉ đọc) đã làm cùng ngày**, kết quả ở "Ghi chú triển khai". Hai câu hỏi bước 0 nêu ra cũng đã chốt cùng ngày (AD-27 mục 5 và mục 11):
 > - **Q7:** model embedding chạy trong một `worker_threads`;
 > - **Q8:** chấm theo lô.
 >
-> **Bước 1 (schema, migration) đã làm và áp lên Neon 2026-11-14. Bước 2 (đánh dấu, hẹn giờ), bước 2b (model embedding trong worker), bước 3 (chấm theo lô, ghi bảng, cron 15 phút, Q2), bước 4 (việc kéo theo: tự mời, tự chuyển, job alert lần đầu, realtime) bước 5 (danh mục đổi: chấm lại theo tin, Q1), bước 6 (tự mời đọc bảng điểm), bước 7 (trang tìm ứng viên đọc bảng điểm) và bước 8 (thẻ tự mời khi tỉ lệ 0%, API số liệu cho Admin) bước 9 (script `simulate-inflow`) và bước 10 (kiểm thử, đo tải) đã làm cùng ngày**. Bước 3–8 đã kiểm đầu cuối qua gateway 8080 cùng ngày, đều đạt (xem "Kiểm đầu cuối bước 3–8"). Bước 10 đạt ngưỡng; riêng băm mật khẩu lúc đăng ký / đăng nhập (`bcryptjs`, có từ trước 0.6) làm web chậm khi nhiều người đăng ký cùng lúc, chờ chủ dự án quyết (xem "Bước 10"). Việc tiếp theo: bước 11 (tài liệu).
+> **Bước 1 (schema, migration) đã làm và áp lên Neon 2026-11-14. Bước 2 (đánh dấu, hẹn giờ), bước 2b (model embedding trong worker), bước 3 (chấm theo lô, ghi bảng, cron 15 phút, Q2), bước 4 (việc kéo theo: tự mời, tự chuyển, job alert lần đầu, realtime) bước 5 (danh mục đổi: chấm lại theo tin, Q1), bước 6 (tự mời đọc bảng điểm), bước 7 (trang tìm ứng viên đọc bảng điểm) và bước 8 (thẻ tự mời khi tỉ lệ 0%, API số liệu cho Admin) bước 9 (script `simulate-inflow`) và bước 10 (kiểm thử, đo tải) đã làm cùng ngày**. Bước 3–8 đã kiểm đầu cuối qua gateway 8080 cùng ngày, đều đạt (xem "Kiểm đầu cuối bước 3–8"). Bước 10 đạt ngưỡng. Riêng băm mật khẩu lúc đăng ký / đăng nhập (`bcryptjs`, có từ trước 0.6) làm web chậm khi nhiều người đăng ký cùng lúc; đã ghi vào backlog mục 6, chờ chủ dự án quyết (xem "Bước 10"). Bước 11 (tài liệu) làm cùng ngày. Việc tiếp theo: frontend.
 
 Mục 0.6 của `docs/01-project/FEATURE_BACKLOG.md`. Quyết định kiến trúc: AD-27 (sửa một phần AD-23, AD-24). Frontend: `docs/05-frontend/phases/live-rescore/PLAN.md`. Nền:
 - AD-24 và `docs/06-backend/hiring-progress/PLAN.md` (bảng điểm, `scoreProfiles`, lượt đêm, cache hồ sơ một lượt);
@@ -796,6 +796,19 @@ Pha 200 ứng viên vượt ngưỡng event loop (p99 281 ms > 100 ms). Lần đ
 - Lượt đêm ghi lại bảng điểm thật trên Neon, giống job 03:30.
 - Mô phỏng sinh 787 job alert, tất cả cho ứng viên mô phỏng (`--jobs 0`, không có tin mô phỏng).
 - Hai lần `--reset` xoá 200 + 200 tài khoản, đếm lại ra 0. Lần chạy đầu bị bỏ vì script đo ghi file kết quả sai đường dẫn, nên đã đo lại từ đầu.
+
+### Bước 11 — Tài liệu (2026-11-14)
+
+- `FEATURE_BACKLOG.md`:
+  - dòng 0.6: backend xong, tóm tắt hành vi và số đo, frontend chưa làm;
+  - thêm dòng "Băm mật khẩu không chặn luồng chính" ở mục 6 (phát hiện ở bước 10, chủ dự án chưa quyết).
+- AD-27: trạng thái thành "ĐÃ TRIỂN KHAI BACKEND".
+- `docs/06-backend/job-discovery/PLAN.md`: ghi chú điểm trên `/jobs` không còn chỉ cập nhật hằng đêm.
+- `docs/06-backend/application-automation/PLAN.md`: ghi chú ứng viên mới không còn chờ lượt đêm mới có điểm.
+- Không đổi:
+  - `API_CONVENTIONS.md`: `GET /admin/automation-status` theo mẫu đã có.
+  - FAQ chatbot (`03-tim-viec-ung-tuyen.md` còn ghi "điểm … cập nhật mỗi đêm"): sửa và sinh lại `faq-index` ở F6 của plan frontend.
+  - Chuỗi "cập nhật hằng đêm" ở `apps/web/src/app/jobs/page.tsx` thuộc F1 của plan frontend.
 
 ### Câu hỏi mới sau bước 0 (đã chốt 2026-11-14: Q7 = b, Q8 = b; xem "Câu hỏi đã chốt" và AD-27 mục 5, 11)
 

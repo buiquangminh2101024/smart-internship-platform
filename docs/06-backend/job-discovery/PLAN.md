@@ -554,5 +554,13 @@ Tất cả thuộc phần `@large-demo.local`, nên `seed-large-demo --reset` xo
   - mục "Ngoài phạm vi" ghi phân trang đã làm.
 - FAQ chatbot hỗ trợ: backend chưa sửa file FAQ nào, nên không cần sinh lại `faq-index`. Câu hỏi về job alert, "Việc làm phù hợp" và độ hoàn thiện (kể cả sửa `02-ung-vien-ho-so-cv.md`, nơi vẫn nói độ hoàn thiện nằm trong "Phân tích hồ sơ") làm ở F6, rồi sinh lại `faq-index` và chạy eval như 0.4.
 
+### Sau 0.6 (2026-11-14)
+
+Điểm trên thẻ `/jobs` và "Việc làm phù hợp" **không còn chỉ cập nhật hằng đêm**. Ứng viên sửa hồ sơ thì được chấm lại vào bảng điểm khoảng 45 giây sau lần sửa cuối, chậm nhất ~15 phút (AD-27, `docs/06-backend/live-rescore/PLAN.md`). Hệ quả với plan này:
+- Rủi ro "điểm trên thẻ `/jobs` lệch điểm vừa chấm" giờ chỉ kéo dài vài phút.
+- Chuỗi "điểm cập nhật hằng đêm" ở `/jobs` đổi ở F1 của `docs/05-frontend/phases/live-rescore/PLAN.md`.
+- D7 vẫn đúng với tin mới (job alert sau lối (a)). 0.6 thêm job alert **lần đầu** cho ứng viên mới, sau lượt chấm theo ứng viên; sửa hồ sơ về sau không sinh job alert.
+- Lượt đêm giờ chỉ báo job alert lần đầu cho người mà lúc chấm theo ứng viên model bị lỗi (D+ của plan 0.6).
+
 ## Phần 4 — Ghi chú của chủ dự án
 
