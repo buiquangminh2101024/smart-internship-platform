@@ -419,6 +419,15 @@ model Candidate {
   jobAlertSameCityOnly Boolean    @default(false)
   jobAlerts            JobAlert[]
 
+  // AD-27 — dấu "cần chấm lại theo ứng viên": đặt khi dữ liệu bộ chấm đọc đổi,
+  // xoá sau khi chấm nếu dấu ≤ lúc bắt đầu chấm. Null = không chờ chấm.
+  matchRescoreRequestedAt DateTime?
+  // AD-27 (Q2) — lần cuối hồ sơ đổi theo nghĩa bộ chấm; đặt cùng dấu, không bao
+  // giờ xoá. Lượt chấm theo tin dùng để đánh dấu lại người vừa sửa trong lúc chấm.
+  matchProfileChangedAt   DateTime?
+
+  // Lượt chấm lấy người có dấu, dấu cũ nhất trước.
+  @@index([matchRescoreRequestedAt])
   @@map("candidates")
 }
 

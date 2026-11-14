@@ -4,7 +4,7 @@
 > - **Q7:** model embedding chạy trong một `worker_threads`;
 > - **Q8:** chấm theo lô.
 >
-> Việc tiếp theo: bước 1.
+> **Bước 1 (schema, migration) đã làm và áp lên Neon 2026-11-14.** Việc tiếp theo: bước 2.
 
 Mục 0.6 của `docs/01-project/FEATURE_BACKLOG.md`. Quyết định kiến trúc: AD-27 (sửa một phần AD-23, AD-24). Frontend: `docs/05-frontend/phases/live-rescore/PLAN.md`. Nền:
 - AD-24 và `docs/06-backend/hiring-progress/PLAN.md` (bảng điểm, `scoreProfiles`, lượt đêm, cache hồ sơ một lượt);
@@ -140,7 +140,7 @@ Script đo đặt ở `apps/server/scripts/` (tên `perf-live-rescore-*.ts`), kh
 
 ### Bước 1 — Schema và migration
 
-- `Candidate.matchRescoreRequestedAt DateTime?` kèm index một phần `WHERE "matchRescoreRequestedAt" IS NOT NULL` (cron chỉ đọc người có dấu).
+- `Candidate.matchRescoreRequestedAt DateTime?` kèm index (cron chỉ đọc người có dấu). Dùng index thường thay cho index một phần `WHERE … IS NOT NULL`: Prisma 6.19 không khai báo được index một phần trong schema, tạo bằng SQL thì `migrate diff` các phase sau đòi xoá. Câu `IS NOT NULL ORDER BY … LIMIT` vẫn dùng được index thường.
 - `Candidate.matchProfileChangedAt DateTime?` (Q2).
 - ~~Index `job_post_skills("skillId")`~~: bước 0 mục 2 cho thấy không cần (mọi câu < 2 ms).
 - Migration viết tay; kiểm `migrate diff` ra "empty migration" trước khi sửa schema; chủ dự án xác nhận trước khi áp lên Neon (`npm run db:deploy`).
@@ -374,6 +374,14 @@ Script: `apps/server/scripts/perf-live-rescore-measure.ts` (mục 1, 2, 4–7) v
 - mọi ứng viên: p50 3, p90 11, max 43.
 
 Mỗi người chỉ nhận một thông báo gộp ("N tin…"), nên tải là 1 câu ghi `job_alerts` cộng 1 `upsertDaily` mỗi ứng viên mới. Không đáng kể.
+
+### Bước 1 — Schema và migration (2026-11-14)
+
+- Trước khi sửa: `prisma migrate status` báo Neon đã áp đủ 37 migration; `migrate diff --from-schema-datasource --to-schema-datamodel` (chỉ đọc cấu trúc Neon, không dùng shadow DB) ra "empty migration".
+- Schema: `Candidate.matchRescoreRequestedAt DateTime?`, `Candidate.matchProfileChangedAt DateTime?`, `@@index([matchRescoreRequestedAt])`. Thêm thành khối riêng, không chạy `prisma format` (lệnh này căn lề lại ~50 dòng không liên quan).
+- Migration `20261114120000_add_live_rescore`: SQL sinh bằng `migrate diff` như trên. Gồm 1 câu `ALTER TABLE candidates ADD COLUMN` × 2 (cho phép null) và 1 `CREATE INDEX`. Không ghi dữ liệu; ứng viên cũ có dấu null (bảng điểm hiện có đã đúng nhờ lượt đêm).
+- `prisma generate` và `tsc --noEmit` của `apps/server` qua.
+- Chủ dự án áp bằng `npm run db:deploy` ngày 2026-11-14. Kiểm sau khi áp: `prisma migrate status` báo đủ 38 migration, `migrate diff` ra "empty migration"; 1.524 ứng viên đều có hai cột null, index `candidates_matchRescoreRequestedAt_idx` có trên Neon.
 
 ### Câu hỏi mới sau bước 0 (đã chốt 2026-11-14: Q7 = b, Q8 = b; xem "Câu hỏi đã chốt" và AD-27 mục 5, 11)
 
