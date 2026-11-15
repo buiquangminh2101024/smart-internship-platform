@@ -270,7 +270,7 @@ Chủ dự án đồng ý cả bốn khuyến nghị.
 
 ## Admin bản D2 — bỏ bàn duyệt (lập 2026-11-15)
 
-**Trạng thái: ĐỢT 1 VÀ ĐỢT 2 XONG (2026-11-15), CHỜ LỆNH ĐỢT 3 (tài liệu).** Q1–Q3 đã chốt. Thay mục "Admin — bản D" trong `docs/05-frontend/phases/dashboard-employer-admin/PLAN.md` ở phần bàn duyệt và cách bấm thẻ hàng chờ. Các khối khác của bản D giữ nguyên quy tắc hình thức (không khối tối, số `tabular-nums` font thường, `AdminPanel`, marigold chỉ cho thời gian chờ).
+**Trạng thái: XONG ĐỢT 1–3 (2026-11-15).** Q1–Q3 đã chốt. Đợt 3 đã ghi ở plan FE và BE `dashboard-employer-admin` (ghi chú đầu file), AD-16 (đoạn cập nhật 2026-11-15), `sip-ui` (mục "Admin — bản D2", bảng component) và plan `live-rescore` (mục "Còn mở" đã sửa). `FEATURE_BACKLOG.md` thêm dòng "Rút gọn dashboard Admin" ở mục 2 (chủ dự án đồng ý 2026-11-15). Thay mục "Admin — bản D" trong `docs/05-frontend/phases/dashboard-employer-admin/PLAN.md` ở phần bàn duyệt và cách bấm thẻ hàng chờ. Các khối khác của bản D giữ nguyên quy tắc hình thức (không khối tối, số `tabular-nums` font thường, `AdminPanel`, marigold chỉ cho thời gian chờ).
 
 ### Lý do
 

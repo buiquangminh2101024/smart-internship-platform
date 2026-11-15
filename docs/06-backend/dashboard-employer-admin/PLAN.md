@@ -13,6 +13,14 @@ Các lựa chọn đã được chủ dự án đồng ý (2026-09-29): `docs/te
 >
 > Bảng `application_status_history` vẫn ghi như cũ; trang lịch phỏng vấn còn đọc nó (`interviews.repository.ts`, mốc chờ đặt lịch). Chỉ là không còn API phễu nào đọc.
 
+> **Phần Admin đổi một phần (2026-11-15)** theo Admin bản D2 (`docs/05-frontend/phases/dashboard-v2/PLAN.md`, đợt 2): dashboard Admin bỏ bàn duyệt. Đã bỏ:
+>
+> - `GET /admin/dashboard/tasks` (cả `AdminDashboardTasks`, `AdminDashboardService.tasks`, `DashboardController.adminTasks`) và repository `listPendingJobPosts`, `listPendingCompanies`, `listPendingCatalogEntries` (kèm `PendingCatalogEntryRow`). `AdminDashboardService` không còn nhận `userRepository`.
+> - Ở bước 6 (D14), "người đề xuất danh mục" giờ chỉ còn dùng cho thông báo danh mục (`UserRepository.findCatalogSuggesters`, `CatalogSuggester`).
+> - Mục "Thao tác tại chỗ — API sẵn có được tái dùng" không còn áp dụng cho dashboard: duyệt và từ chối chỉ làm ở trang quản lý (vẫn các API đó).
+>
+> Giữ nguyên `GET /admin/dashboard/overview` (`queues` có `oldestSince`, nhóm thời gian chờ, tách loại danh mục): thẻ hàng chờ và số chờ trên menu còn dùng.
+
 ## Mục tiêu
 
 Cung cấp dữ liệu cho hai dashboard (`/employer/dashboard`, `/admin/dashboard`): số liệu, danh sách "việc cần làm" thao tác tại chỗ, biểu đồ, và trung tâm thông báo phân nhóm. Thao tác (đổi trạng thái hồ sơ, duyệt/từ chối tin, xác minh công ty, duyệt danh mục) **dùng lại API hiện có**, không viết API riêng cho thao tác.

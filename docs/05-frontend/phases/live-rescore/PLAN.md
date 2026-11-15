@@ -1,6 +1,6 @@
 # Chấm lại theo ứng viên gần thời gian thực (0.6) — Frontend
 
-> **Trạng thái: ĐANG TRIỂN KHAI. Đợt 2 (F3 + F4), đợt 3 (F5) và đợt 1 (F1, F2, câu chữ FAQ của F6) xong 2026-11-15; kiểm tổng trên trình duyệt cùng ngày, đạt (xem cuối F6). Còn mở: khoảng trống ở cột trái dashboard Admin, lượt đêm chưa ghi nhận.** Lập kế hoạch 2026-11-14, các câu hỏi của plan backend đã chốt. Thứ tự đợt: 2 (F3 + F4) → 3 (F5) → 1 (F1 + F2 + câu chữ FAQ của F6) → kiểm tổng. Làm sau khi backend xong bước tương ứng (ghi ở từng bước dưới đây).
+> **Trạng thái: ĐANG TRIỂN KHAI. Đợt 2 (F3 + F4), đợt 3 (F5) và đợt 1 (F1, F2, câu chữ FAQ của F6) xong 2026-11-15; kiểm tổng trên trình duyệt cùng ngày, đạt (xem cuối F6). Còn mở: lượt đêm chưa ghi nhận. Khoảng trống ở cột trái dashboard Admin đã sửa 2026-11-15 (Admin bản D2).** Lập kế hoạch 2026-11-14, các câu hỏi của plan backend đã chốt. Thứ tự đợt: 2 (F3 + F4) → 3 (F5) → 1 (F1 + F2 + câu chữ FAQ của F6) → kiểm tổng. Làm sau khi backend xong bước tương ứng (ghi ở từng bước dưới đây).
 
 Mục 0.6 của `docs/01-project/FEATURE_BACKLOG.md`. Quyết định kiến trúc: AD-27. Backend: `docs/06-backend/live-rescore/PLAN.md` (D1–D12, Q1–Q6). Phạm vi do chủ dự án chọn ngày 2026-11-14: **7a–7d, 7g, 7h**. 7e (trạng thái "Đang cập nhật việc làm phù hợp…" ở `/profile`) và 7f ("Xem thêm" ở trang tìm ứng viên) để sau.
 
@@ -106,7 +106,7 @@ FAQ chatbot                    apps/server/content/support-faq/*.md + faq-index.
   - **F2:** chuông của ứng viên 0001: "1 tin mới phù hợp với bạn", link `/recommended-jobs`. Đọc DB (chỉ đọc): 22/30 ứng viên mô phỏng có `JOB_ALERT`; người có ≥ 2 tin ghi "Phù hợp nhất: …"; 0008 và 0012 ghi "Mới nhất: [Mô phỏng] UI/UX Design Intern…" vì tin đợt 2 đăng sau đã sửa thông báo, đúng thiết kế.
   - **F3:** tạm hạ tỉ lệ Mây Xanh về 0% rồi bật tự mời cho tin "[Kiểm 0.5 #2] Thực tập sinh Backend Node.js": thẻ hiện câu mới và link "Chỉnh tỉ lệ ở trang Lời mời" (tài khoản là quản trị viên công ty). Đã tắt tự mời của tin và trả tỉ lệ về 80% (68/86). Thẻ tự mời của tin mô phỏng không hiện với tài khoản này vì tin do employer khác của Mây Xanh đăng (đúng quyền).
   - **Còn mở:**
-    - Desktop: thêm thẻ vào cột phải làm cột phải dài hơn bàn duyệt, cột trái có khoảng trống lớn trước hàng biểu đồ. Hướng sửa: bỏ bàn duyệt (Admin bản D2), plan ở `docs/05-frontend/phases/dashboard-v2/PLAN.md`, chờ duyệt.
+    - Desktop: thêm thẻ vào cột phải làm cột phải dài hơn bàn duyệt, cột trái có khoảng trống lớn trước hàng biểu đồ. **Đã sửa 2026-11-15:** bỏ bàn duyệt, "Nền tảng" và "Hệ thống tự động" mỗi khối một hàng (Admin bản D2, `docs/05-frontend/phases/dashboard-v2/PLAN.md`).
     - "Chấm đêm gần nhất" ghi "Chưa ghi nhận lượt nào trong 7 ngày qua": chưa có lượt 03:30 nào chạy khi server bật kể từ bước 8. Cần kiểm lại sau một đêm server chạy.
     - Dữ liệu mô phỏng (30 tài khoản `@inflow-demo.local`, 2 tin `[Mô phỏng] `) còn trên Neon; xoá bằng `simulate-inflow --reset` khi chủ dự án đồng ý.
 

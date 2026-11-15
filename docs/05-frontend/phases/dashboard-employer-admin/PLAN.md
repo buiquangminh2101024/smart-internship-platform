@@ -11,6 +11,11 @@ Bản mock tham chiếu (cục bộ, không commit vì `docs/temp` bị gitignor
 > - Component đã xoá: `SummaryBanner`/`BannerNumber`, `EmployerKpiGrid`, `EmployerTaskBoard`, `EmployerAnalytics`, `InterviewGroups`, `DayColumns`, `CompareBars`, `BarList`, hook `useEmployerDashboardTasks`.
 > - API và trường đã bỏ: xem plan backend `docs/06-backend/dashboard-employer-admin/PLAN.md` (ghi chú đầu file).
 
+> **Phần Admin (bản D) đổi một phần (2026-11-15)** theo mục "Admin bản D2 — bỏ bàn duyệt" trong `docs/05-frontend/phases/dashboard-v2/PLAN.md`: bỏ bàn duyệt và nút "Bắt đầu duyệt"; ba thẻ hàng chờ dẫn sang trang quản lý (thẻ Danh mục có hai link: kỹ năng, trường và ngành); "Nền tảng" và "Hệ thống tự động" mỗi khối một hàng, các mục xếp theo cột. Quy tắc hình thức của bản D (không khối tối, `AdminPanel`, số `tabular-nums` font thường, marigold chỉ cho thời gian chờ) vẫn đúng. Các mục về bàn duyệt bên dưới (tab, ô lý do từ chối, nhãn giữ chỗ) chỉ còn để tra lịch sử.
+>
+> - Component và hook đã xoá: `ModerationDesk`, `useAdminDashboardTasks`, `useModerate` (kèm `ModerationInput`, `ModerationDecision`).
+> - API đã bỏ: `GET /admin/dashboard/tasks`, xem plan backend (ghi chú đầu file).
+
 ## Phần 1 — Công nghệ và quy ước
 
 - Không thêm dependency. Dùng sẵn: Next.js (đọc `node_modules/next/dist/docs/` trước khi viết route, theo `apps/web/AGENTS.md`), Tailwind v4, `@tanstack/react-query`, `lucide-react`, Socket.IO client (`hooks/useSocket.ts`).
