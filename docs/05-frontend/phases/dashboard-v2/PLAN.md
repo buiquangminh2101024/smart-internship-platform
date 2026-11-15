@@ -270,7 +270,7 @@ Chủ dự án đồng ý cả bốn khuyến nghị.
 
 ## Admin bản D2 — bỏ bàn duyệt (lập 2026-11-15)
 
-**Trạng thái: Q1–Q3 ĐÃ CHỐT (2026-11-15), CHỜ LỆNH BẮT ĐẦU ĐỢT 1. Chưa sửa code.** Thay mục "Admin — bản D" trong `docs/05-frontend/phases/dashboard-employer-admin/PLAN.md` ở phần bàn duyệt và cách bấm thẻ hàng chờ. Các khối khác của bản D giữ nguyên quy tắc hình thức (không khối tối, số `tabular-nums` font thường, `AdminPanel`, marigold chỉ cho thời gian chờ).
+**Trạng thái: ĐỢT 1 VÀ ĐỢT 2 XONG (2026-11-15), CHỜ LỆNH ĐỢT 3 (tài liệu).** Q1–Q3 đã chốt. Thay mục "Admin — bản D" trong `docs/05-frontend/phases/dashboard-employer-admin/PLAN.md` ở phần bàn duyệt và cách bấm thẻ hàng chờ. Các khối khác của bản D giữ nguyên quy tắc hình thức (không khối tối, số `tabular-nums` font thường, `AdminPanel`, marigold chỉ cho thời gian chờ).
 
 ### Lý do
 
@@ -342,6 +342,13 @@ Chủ dự án đồng ý cả bốn khuyến nghị.
 - `tsc`, eslint cho các file sửa.
 - Trình duyệt qua 8080 (tài khoản Admin), 1536px, iframe ~800px (bước 2 cột) và iframe 375px: không khoảng trống, không cuộn ngang, số cột đúng ở từng mốc; bấm từng thẻ và hai link của thẻ Danh mục ra đúng trang ở bộ lọc "Chờ duyệt"; số trên thẻ bằng số dòng chờ của trang đó; Tab / Enter; trạng thái đang tải và lỗi của từng khối; số chờ trên menu vẫn đúng.
 
+**Kết quả đợt 1 (2026-11-15):**
+- Sửa `AdminQueues.tsx` (thẻ Tin, Công ty là `Link`; thẻ Danh mục là `<section>` có hai link), `dashboard/page.tsx` (bỏ bàn duyệt, "Bắt đầu duyệt", `useAdminDashboardTasks`, cuộn và focus), `PlatformMetrics.tsx` và `AutomationStatusPanel.tsx` (lưới `gap-px` trên nền `border-subtle`, `overflow-hidden rounded-b-[13px]` để ô dưới không đè góc bo).
+- `MODERATION_DESK_ID` vẫn export ở `AdminQueues.tsx` vì `ModerationDesk.tsx` (chưa xoá) còn import; xoá cùng ở đợt 2.
+- `tsc` web và eslint bốn file: qua.
+- Trình duyệt qua 8080 (tài khoản Admin): 1536px Nền tảng 3 cột, Hệ thống tự động 4 cột, hết khoảng trống; iframe 800px: 1 cột và 2 cột; iframe 375px: 1 cột cả hai. Không cuộn ngang ở cả hai bề rộng. Mốc 4 cột `@4xl` đủ chỗ, không cần nâng lên `@5xl`.
+- Thẻ Tin dẫn `/admin/jobs`, bộ lọc "Chờ duyệt" có 18 tin, khớp số trên thẻ; thẻ Công ty dẫn `/admin/companies`; hai link Danh mục dẫn `/admin/skills` và `/admin/education-catalog`. Tab đi qua bốn link theo thứ tự, vòng focus `brand-500` hiện rõ. Không còn bàn duyệt và nút "Bắt đầu duyệt" trên trang.
+
 ### Đợt 2 — Xoá phần không còn dùng (sau khi chủ dự án xác nhận)
 
 Trước khi xoá, grep lại từng tên (kể cả `apps/server/tests`, `scripts`, `support-chat`, `packages/shared-types`).
@@ -353,6 +360,12 @@ Trước khi xoá, grep lại từng tên (kể cả `apps/server/tests`, `scrip
 | Shared types | `AdminDashboardTasks`; `CatalogSuggester` nếu không còn chỗ dùng. Build lại `dist` | Các kiểu của `overview` |
 
 **Kiểm:** build shared types; `tsc` server và web; eslint web; unit test server; `GET /admin/dashboard/tasks` trả 404; xem lại trang trên trình duyệt.
+
+**Kết quả đợt 2 (2026-11-15):**
+- Đã xoá: `ModerationDesk.tsx`; trong `useAdminDashboard.ts`: `useAdminDashboardTasks`, `useModerate`, `ModerationInput`, `ModerationDecision`, `CATALOG_PATH`, `moderationPath`, `managementKeys`; `MODERATION_DESK_ID`; server: route `GET /admin/dashboard/tasks`, `DashboardController.adminTasks`, `AdminDashboardService.tasks` và `TASK_LIMIT` (service không còn nhận `userRepository`), `listPendingJobPosts`, `listPendingCompanies`, `listPendingCatalogEntries`, `PendingCatalogEntryRow`; test "tasks:"; shared type `AdminDashboardTasks`.
+- **Giữ** `UserRepository.findCatalogSuggesters` và `CatalogSuggester`: `catalog-suggestion-notifier.service.ts` còn dùng. Giữ tên `ModerationQueue` (không đổi tên để tránh sửa thêm file).
+- Build `shared-types`; `tsc` server và web; eslint web: qua. Unit test server 651/651 (bớt đúng test "tasks:"). Một lần chạy khác có `live-rescore-marker.test.ts` ("sửa liên tiếp cùng một ứng viên…") lỗi do canh giờ, không liên quan đợt này.
+- Qua 8080: `GET /api/admin/dashboard/tasks` trả 404 (cùng lúc `overview` không kèm token trả 401, tức route đã gỡ chứ không phải bị chặn); trang không còn gọi `tasks`, các khối hiện đủ, số chờ trên menu vẫn 18.
 
 ### Đợt 3 — Tài liệu
 

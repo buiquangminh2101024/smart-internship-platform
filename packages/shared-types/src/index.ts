@@ -2099,29 +2099,6 @@ export interface MatchScoresUpdatedPayload {
   jobPostIds: string[];
 }
 
-/** GET /admin/dashboard/tasks — mỗi hàng chờ tối đa 5 mục (chờ lâu nhất trước) kèm tổng. */
-export interface AdminDashboardTasks {
-  jobPosts: {
-    total: number;
-    items: Array<{ jobPostId: string; title: string; companyName: string; submittedAt: string }>;
-  };
-  companies: {
-    total: number;
-    items: Array<{
-      companyId: string;
-      name: string;
-      taxCode: string | null;
-      businessLicenseUrl: string | null;
-      submittedAt: string;
-    }>;
-  };
-  catalog: {
-    total: number;
-    /** `suggestedBy` null khi mục không có người tạo (vd. dữ liệu seed). */
-    items: Array<{ id: string; kind: CatalogEntryKind; name: string; createdAt: string; suggestedBy: CatalogSuggester | null }>;
-  };
-}
-
 /** GET /admin/dashboard/analytics?range= */
 export interface AdminDashboardAnalytics {
   range: DashboardRange;

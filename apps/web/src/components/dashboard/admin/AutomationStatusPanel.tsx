@@ -36,7 +36,7 @@ function formatSeconds(ms: number): string {
 
 function Section({ icon, label, children }: { icon: string; label: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-2 border-t border-border-subtle px-4 pt-3.5 pb-4 first:border-t-0 @xl:px-5">
+    <div className="flex flex-col gap-2 bg-surface-card px-4 pt-3.5 pb-4 @xl:px-5">
       <p className="flex items-center gap-2 text-[13px] font-bold text-text-muted">
         <Icon name={icon} size={16} className="text-brand-600" />
         {label}
@@ -55,7 +55,8 @@ function AutomationStatusBody({ data, now }: { data: AdminAutomationStatus; now:
   const lastRun = rescore.lastRun;
 
   return (
-    <div className="flex flex-col">
+    // Bản D2 (Q3): 1 cột, từ @xl 2 cột, từ @4xl 4 cột. Đường ngăn là khe 1px của lưới trên nền viền.
+    <div className="grid grid-cols-1 gap-px overflow-hidden rounded-b-[13px] bg-border-subtle @xl:grid-cols-2 @4xl:grid-cols-4">
       <Section icon="hourglass" label="Đang chờ chấm lại">
         {rescore.pending > 0 ? (
           <div className="flex flex-wrap items-baseline gap-2">

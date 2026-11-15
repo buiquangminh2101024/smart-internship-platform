@@ -60,7 +60,7 @@ function Compare({ rows }: { rows: Array<{ label: string; value: number; display
 
 function Metric({ icon, label, children }: { icon: string; label: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-2.5 border-t border-border-subtle px-4 pt-3.5 pb-4 first:border-t-0 @xl:px-5">
+    <div className="flex flex-col gap-2.5 bg-surface-card px-4 pt-3.5 pb-4 @xl:px-5">
       <p className="flex items-center gap-2 text-[13px] font-bold text-text-muted">
         <Icon name={icon} size={16} className="text-brand-600" />
         {label}
@@ -93,7 +93,8 @@ export function PlatformMetrics({ overview, updatedAt }: { overview: AdminDashbo
   return (
     <AdminPanel labelledBy="admin-platform-title">
       <AdminPanelHead id="admin-platform-title" title="Nền tảng" subtitle="Kỳ cố định ghi trong từng mục." />
-      <div className="flex flex-col">
+      {/* Bản D2 (Q3): 1 cột, từ @4xl 3 cột. Đường ngăn là khe 1px của lưới trên nền viền. */}
+      <div className="grid grid-cols-1 gap-px overflow-hidden rounded-b-[13px] bg-border-subtle @4xl:grid-cols-3">
         <Metric icon="users" label="Người dùng mới trong 7 ngày">
           <Value value={formatNumber(users.newLast7Days.current)} unit="người dùng">
             <Delta

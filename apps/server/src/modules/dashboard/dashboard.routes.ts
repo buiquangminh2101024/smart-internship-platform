@@ -51,10 +51,6 @@ export function dashboardRouter(container: AwilixContainer): Router {
     void resolveController().adminOverview(req, res, next);
   });
 
-  router.get("/admin/dashboard/tasks", ...adminGuard, (req, res, next) => {
-    void resolveController().adminTasks(req, res, next);
-  });
-
   router.get("/admin/dashboard/analytics", ...adminGuard, validate(dashboardAnalyticsQuerySchema, "query"), (req, res, next) => {
     void resolveController().adminAnalytics(req, res, next);
   });

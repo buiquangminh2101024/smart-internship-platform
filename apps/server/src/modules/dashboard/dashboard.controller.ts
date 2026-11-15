@@ -2,7 +2,6 @@ import type { NextFunction, Request, Response } from "express";
 import type {
   AdminDashboardAnalytics,
   AdminDashboardOverview,
-  AdminDashboardTasks,
   ApiResponse,
   EmployerDashboardAnalytics,
   EmployerDashboardOverview,
@@ -66,16 +65,6 @@ export class DashboardController {
     try {
       const result = await this.adminDashboardService.overview();
       const body: ApiResponse<AdminDashboardOverview> = { success: true, data: result };
-      res.json(body);
-    } catch (error) {
-      next(error);
-    }
-  };
-
-  adminTasks = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const result = await this.adminDashboardService.tasks();
-      const body: ApiResponse<AdminDashboardTasks> = { success: true, data: result };
       res.json(body);
     } catch (error) {
       next(error);
