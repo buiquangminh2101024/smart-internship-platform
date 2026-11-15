@@ -3,7 +3,6 @@ import type { SupportChatToolbox } from "../../../shared/ports/SupportChatRespon
 import type { ApplicationsService } from "../../applications/applications.service";
 import type { CandidateInsightsRepository } from "../../candidate-insights/candidate-insights.repository";
 import type { InterviewsService } from "../../interviews/interviews.service";
-import type { CandidateMatchProfileLoader } from "../../job-matching/candidate-match-profile.loader";
 import type { JobPostsService } from "../../job-posts/job-posts.service";
 import type { SubscriptionsService } from "../../subscriptions/subscriptions.service";
 import type { FaqViewer } from "../faq-knowledge-base";
@@ -30,7 +29,6 @@ export class SupportChatToolRegistry {
     applicationsService,
     interviewsService,
     candidateInsightsRepository,
-    candidateMatchProfileLoader,
     jobPostsService,
     subscriptionsService,
     logger,
@@ -38,7 +36,6 @@ export class SupportChatToolRegistry {
     applicationsService: ApplicationsService;
     interviewsService: InterviewsService;
     candidateInsightsRepository: CandidateInsightsRepository;
-    candidateMatchProfileLoader: CandidateMatchProfileLoader;
     jobPostsService: JobPostsService;
     subscriptionsService: SubscriptionsService;
     logger: Logger;
@@ -50,7 +47,6 @@ export class SupportChatToolRegistry {
           applicationsService,
           interviewsService,
           candidateInsightsRepository,
-          candidateMatchProfileLoader,
         }),
       ),
       employer: byName(employerSupportChatTools({ jobPostsService, applicationsService, subscriptionsService })),

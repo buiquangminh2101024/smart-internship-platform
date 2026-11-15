@@ -1,7 +1,12 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import type { DashboardRange, EmployerDashboardAnalytics, EmployerDashboardOverview } from "@sip/shared-types";
+import type {
+  DashboardRange,
+  EmployerDashboardAnalytics,
+  EmployerDashboardOverview,
+  EmployerHiringProgress,
+} from "@sip/shared-types";
 import { apiFetch } from "@/lib/api-client";
 
 /**
@@ -30,5 +35,19 @@ export function useEmployerDashboardAnalytics(range: DashboardRange) {
     staleTime: STALE_MS,
     // Đổi 7/30/90 thì giữ biểu đồ cũ tới khi có số mới, không nháy về khung xám.
     placeholderData: (previous) => previous,
+  });
+}
+
+/**
+ * Tiến độ tuyển theo tin (0.3, AD-24). Nằm dưới `EMPLOYER_DASHBOARD_KEY`, nên mọi thông báo
+ * realtime (kể cả AUTO_OUTREACH_SENT và ứng viên trả lời lời mời) đã làm mới khối này.
+ */
+export const HIRING_PROGRESS_KEY = [...EMPLOYER_DASHBOARD_KEY, "hiring-progress"] as const;
+
+export function useEmployerHiringProgress() {
+  return useQuery({
+    queryKey: HIRING_PROGRESS_KEY,
+    queryFn: () => apiFetch<EmployerHiringProgress>("employer", "/employer/dashboard/hiring-progress"),
+    staleTime: STALE_MS,
   });
 }

@@ -18,16 +18,25 @@ import type {
   UpdateJobPostRequest,
 } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
+import { parseOffsetCursor } from "../../shared/utils/offset-cursor";
 import type { AuditLogService } from "../audit-log/audit-log.service";
+import type { AutoOutreachTrigger } from "../candidate-outreach/auto-outreach.service";
 import type { CompanyRepository } from "../companies/company.repository";
 import type { EmployerRepository } from "../employers/employer.repository";
 import type { EmployerIdentity, EmployerIdentityCache } from "../employers/employer-identity-cache";
+import type { MatchScoreRepository } from "../match-scores/match-score.repository";
+import type { MatchScoreTrigger } from "../match-scores/match-score.service";
 import type { NotificationPayloadMap } from "../notifications/notification.types";
 import type { NotificationsService } from "../notifications/notifications.service";
 import type { SubscriptionsService } from "../subscriptions/subscriptions.service";
 import type { UserRepository } from "../users/user.repository";
 import { toJobPostDto } from "./job-post.mapper";
-import type { JobPostRepository, JobPostWithRelations, JobPostWriteData } from "./job-post.repository";
+import {
+  JOB_POST_PAGE_SIZE,
+  type JobPostRepository,
+  type JobPostWithRelations,
+  type JobPostWriteData,
+} from "./job-post.repository";
 
 // Employer tự chọn ngày hết hạn nhưng không quá 90 ngày kể từ lúc đặt —
 // quyết định chốt khi lên kế hoạch Phase 6 (xem
@@ -47,6 +56,9 @@ export class JobPostsService {
   private readonly notificationsService: NotificationsService;
   private readonly userRepository: UserRepository;
   private readonly auditLogService: AuditLogService;
+  private readonly autoOutreachTrigger: AutoOutreachTrigger;
+  private readonly matchScoreTrigger: MatchScoreTrigger;
+  private readonly matchScoreRepository: MatchScoreRepository;
 
   constructor({
     prisma,
@@ -58,6 +70,9 @@ export class JobPostsService {
     notificationsService,
     userRepository,
     auditLogService,
+    autoOutreachTrigger,
+    matchScoreTrigger,
+    matchScoreRepository,
   }: {
     prisma: PrismaClient;
     jobPostRepository: JobPostRepository;
@@ -68,6 +83,9 @@ export class JobPostsService {
     notificationsService: NotificationsService;
     userRepository: UserRepository;
     auditLogService: AuditLogService;
+    autoOutreachTrigger: AutoOutreachTrigger;
+    matchScoreTrigger: MatchScoreTrigger;
+    matchScoreRepository: MatchScoreRepository;
   }) {
     this.prisma = prisma;
     this.jobPostRepository = jobPostRepository;
@@ -78,14 +96,105 @@ export class JobPostsService {
     this.notificationsService = notificationsService;
     this.userRepository = userRepository;
     this.auditLogService = auditLogService;
+    this.autoOutreachTrigger = autoOutreachTrigger;
+    this.matchScoreTrigger = matchScoreTrigger;
+    this.matchScoreRepository = matchScoreRepository;
   }
 
   // ─── Public (Guest) ──────────────────────────────────────────────────────
 
-  async search(query: JobPostSearchQuery): Promise<PaginatedResponse<JobPostDto>> {
-    const { cursor, ...filter } = query;
-    const page = await this.jobPostRepository.findPublishedForSearch(filter, cursor);
-    return this.toPage(page, { publicOnly: true });
+  /**
+   * Tìm kiếm công khai. `viewerUserId` chỉ truyền khi người xem đăng nhập vai trò ứng viên
+   * (AD-26 D5): mỗi tin có thêm `viewer`, và được dùng `sort=match` / `minMatch`. Khách
+   * (và vai trò khác) đi đúng đường cũ, chỉ thêm `total` và các bộ lọc mới.
+   */
+  async search(query: JobPostSearchQuery, viewerUserId?: string): Promise<PaginatedResponse<JobPostDto>> {
+    const { cursor, sort, minMatch, ...filter } = query;
+    const candidateIdPromise = viewerUserId ? this.findCandidateId(viewerUserId) : Promise.resolve(null);
+
+    if (viewerUserId && (sort === "match" || minMatch !== undefined)) {
+      const [candidateId, ids] = await Promise.all([
+        candidateIdPromise,
+        this.jobPostRepository.findPublishedIdsForSearch(filter),
+      ]);
+      if (candidateId) return this.searchByMatch(candidateId, ids, { sort, minMatch, cursor });
+    }
+
+    const [candidateId, page] = await Promise.all([
+      candidateIdPromise,
+      this.jobPostRepository.findPublishedForSearch(filter, cursor),
+    ]);
+    const result = { ...this.toPage(page, { publicOnly: true }), total: page.total };
+    if (!candidateId) return result;
+    return { ...result, items: await this.attachViewer(candidateId, result.items) };
+  }
+
+  /**
+   * Đường theo điểm (AD-26 D5): ghép điểm lưu của ứng viên vào mọi id qua bộ lọc, lọc
+   * `minMatch`, sắp điểm cao trước (tin chưa có điểm xếp cuối, hoà thì giữ thứ tự mới đăng),
+   * rồi phân trang offset. Cursor của đường này là offset, khác cursor theo id của đường cũ.
+   */
+  private async searchByMatch(
+    candidateId: string,
+    ids: string[],
+    options: {
+      sort: JobPostSearchQuery["sort"] | undefined;
+      minMatch: JobPostSearchQuery["minMatch"] | undefined;
+      cursor: string | undefined;
+    },
+  ): Promise<PaginatedResponse<JobPostDto>> {
+    const offset = parseOffsetCursor(options.cursor);
+    const scores = await this.matchScoreRepository.scoresForCandidate(candidateId, ids);
+    const minMatch = options.minMatch;
+    const passing = minMatch === undefined ? ids : ids.filter((id) => (scores.get(id) ?? -1) >= minMatch);
+    // Array.prototype.sort ổn định ⇒ hoà điểm giữ thứ tự mới đăng của `ids`.
+    const ordered =
+      options.sort === "match"
+        ? [...passing].sort((left, right) => (scores.get(right) ?? -1) - (scores.get(left) ?? -1))
+        : passing;
+
+    const pageIds = ordered.slice(offset, offset + JOB_POST_PAGE_SIZE);
+    const [rows, state] = await Promise.all([
+      this.jobPostRepository.findManyWithRelationsByIds(pageIds),
+      this.jobPostRepository.findViewerState(candidateId, pageIds),
+    ]);
+    const nextOffset = offset + pageIds.length;
+    const hasMore = nextOffset < ordered.length;
+    return {
+      items: rows.map((row) => ({
+        ...toJobPostDto(row, { publicOnly: true }),
+        viewer: {
+          matchScore: scores.get(row.id) ?? null,
+          saved: state.saved.has(row.id),
+          applied: state.applied.has(row.id),
+        },
+      })),
+      hasMore,
+      ...(hasMore ? { nextCursor: String(nextOffset) } : {}),
+      total: ordered.length,
+    };
+  }
+
+  /** Điểm lưu / đã lưu / đã ứng tuyển cho các tin của trang — ba câu đọc chạy song song. */
+  private async attachViewer(candidateId: string, items: JobPostDto[]): Promise<JobPostDto[]> {
+    const ids = items.map((item) => item.id);
+    const [scores, state] = await Promise.all([
+      this.matchScoreRepository.scoresForCandidate(candidateId, ids),
+      this.jobPostRepository.findViewerState(candidateId, ids),
+    ]);
+    return items.map((item) => ({
+      ...item,
+      viewer: {
+        matchScore: scores.get(item.id) ?? null,
+        saved: state.saved.has(item.id),
+        applied: state.applied.has(item.id),
+      },
+    }));
+  }
+
+  private async findCandidateId(userId: string): Promise<string | null> {
+    const candidate = await this.prisma.candidate.findUnique({ where: { userId }, select: { id: true } });
+    return candidate?.id ?? null;
   }
 
   /** Chi tiết công khai — chỉ tin PUBLISHED, mỗi lượt xem tăng viewCount. */
@@ -101,14 +210,29 @@ export class JobPostsService {
   // ─── Employer ────────────────────────────────────────────────────────────
 
   async listOwn(userId: string, query: EmployerJobPostListQuery): Promise<PaginatedResponse<JobPostDto>> {
-    const { companyId } = await this.requireEmployer(userId);
+    const { companyId, employerId } = await this.requireEmployer(userId);
     const { cursor, attention, ...filter } = query;
     const page = await this.jobPostRepository.findOwnedByCompany(
       companyId,
       { ...filter, attention: attention === "1" },
       cursor,
     );
-    return this.toPage(page);
+    // Danh sách gồm tin của cả công ty; `isOwner` cho frontend biết tin nào người xem tìm / mời được.
+    const ownerOf = new Map(page.items.map((item) => [item.id, item.employerId === employerId]));
+    const paged = this.toPage(page);
+    const result = { ...paged, items: paged.items.map((item) => ({ ...item, isOwner: ownerOf.get(item.id) === true })) };
+    // Số Phù hợp (0.3 bước 6): một câu gộp cho các tin PUBLISHED trong trang. Tin đã quá
+    // hạn nhưng chưa đóng không có trong Map nên cũng không có trường này.
+    const publishedIds = page.items.filter((item) => item.status === "PUBLISHED").map((item) => item.id);
+    if (publishedIds.length === 0) return result;
+    const matched = await this.matchScoreRepository.matchedCounts(publishedIds);
+    return {
+      ...result,
+      items: result.items.map((item) => {
+        const count = matched.get(item.id);
+        return count === undefined ? item : { ...item, matchedCount: count };
+      }),
+    };
   }
 
   async ownStats(userId: string): Promise<JobPostStats> {
@@ -123,27 +247,36 @@ export class JobPostsService {
   }
 
   async getOwn(userId: string, id: string): Promise<JobPostDto> {
-    const { companyId } = await this.requireEmployer(userId);
+    const { companyId, employerId } = await this.requireEmployer(userId);
     const jobPost = await this.requireOwnedJobPost(companyId, id);
-    return toJobPostDto(jobPost);
+    return { ...toJobPostDto(jobPost), isOwner: jobPost.employerId === employerId };
   }
 
   async createDraft(userId: string, dto: CreateJobPostRequest): Promise<JobPostDto> {
     const { company, employer } = await this.requireVerifiedCompany(userId);
     await this.requireCreateQuota(company);
+    await this.assertRelationIdsExist(dto);
 
-    const created = await this.jobPostRepository.create({
-      companyId: company.id,
-      employerId: employer.employerId,
-      status: "DRAFT",
-      ...this.toWriteData(dto),
-      title: dto.title,
-      description: dto.description,
-      jobType: dto.jobType,
+    // Tạo tin và ghi kỹ năng/ngành cùng một transaction: lỗi giữa chừng thì
+    // không để lại tin nháp mồ côi (tin nháp tính vào quota tạo tin).
+    const created = await this.prisma.$transaction(async (tx) => {
+      const row = await this.jobPostRepository.create(
+        {
+          companyId: company.id,
+          employerId: employer.employerId,
+          status: "DRAFT",
+          ...this.toWriteData(dto),
+          title: dto.title,
+          description: dto.description,
+          jobType: dto.jobType,
+        },
+        tx,
+      );
+      await this.writeRelations(row.id, dto, tx);
+      return row;
     });
 
     if (dto.skillIds || dto.majors) {
-      await this.writeRelations(created.id, dto);
       return toJobPostDto(await this.requireJobPost(created.id));
     }
     return toJobPostDto(created);
@@ -157,38 +290,56 @@ export class JobPostsService {
       throw new AppError(409, "Only a draft job post can be edited");
     }
 
-    const updated = await this.jobPostRepository.update(id, this.toWriteData(dto));
+    await this.assertRelationIdsExist(dto);
+
     // skillIds nằm ở bảng nối nên phải ghi riêng, không đi qua JobPostWriteData.
     // undefined = form không đụng tới kỹ năng; mảng rỗng = cố ý xoá hết.
     // preferredSkillIds chỉ được ghi cùng skillIds (một khối) — client cũ chỉ
     // gửi skillIds sẽ xoá kỹ năng ưu tiên đã có (PLAN Job Matcher GĐ1 #6).
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const row = await this.jobPostRepository.update(id, this.toWriteData(dto), tx);
+      await this.writeRelations(id, dto, tx);
+      return row;
+    });
+
     if (dto.skillIds || dto.majors) {
-      await this.writeRelations(id, dto);
       return toJobPostDto(await this.requireJobPost(id));
     }
     return toJobPostDto(updated);
   }
 
-  /** Kỹ năng (kèm số năm) và ngành nằm ở bảng nối — ghi riêng, cùng một transaction. */
-  private async writeRelations(jobPostId: string, dto: UpdateJobPostRequest): Promise<void> {
-    if (dto.majors?.length) {
-      const existing = await this.jobPostRepository.findExistingMajorIds(dto.majors.map((major) => major.majorId));
-      if (existing.size !== dto.majors.length) {
-        throw new AppError(400, "One or more majors do not exist");
-      }
+  /**
+   * Kiểm id kỹ năng/ngành TRƯỚC khi ghi tin: sai thì 400 và chưa ghi gì.
+   * Kỹ năng: mọi trạng thái trong catalog; ngành: chỉ APPROVED
+   * (docs/06-backend/major-merge-fix/PLAN.md, M3).
+   */
+  private async assertRelationIdsExist(dto: UpdateJobPostRequest): Promise<void> {
+    const skillIds = dto.skillIds ? [...new Set([...dto.skillIds, ...(dto.preferredSkillIds ?? [])])] : [];
+    const majorIds = dto.majors?.map((major) => major.majorId) ?? [];
+    const [existingSkills, existingMajors] = await Promise.all([
+      this.jobPostRepository.findExistingSkillIds(skillIds),
+      this.jobPostRepository.findExistingMajorIds(majorIds),
+    ]);
+    if (existingSkills.size !== skillIds.length) {
+      throw new AppError(400, "One or more skills do not exist");
     }
-    await this.prisma.$transaction(async (tx) => {
-      if (dto.skillIds) {
-        await this.jobPostRepository.setSkills(
-          jobPostId,
-          this.toSkillRows(dto.skillIds, dto.preferredSkillIds, dto.skillMinYears),
-          tx,
-        );
-      }
-      if (dto.majors) {
-        await this.jobPostRepository.setMajors(jobPostId, dto.majors, tx);
-      }
-    });
+    if (existingMajors.size !== majorIds.length) {
+      throw new AppError(400, "One or more majors do not exist");
+    }
+  }
+
+  /** Kỹ năng (kèm số năm) và ngành nằm ở bảng nối — ghi riêng, trong transaction của nơi gọi. */
+  private async writeRelations(jobPostId: string, dto: UpdateJobPostRequest, tx: Prisma.TransactionClient): Promise<void> {
+    if (dto.skillIds) {
+      await this.jobPostRepository.setSkills(
+        jobPostId,
+        this.toSkillRows(dto.skillIds, dto.preferredSkillIds, dto.skillMinYears),
+        tx,
+      );
+    }
+    if (dto.majors) {
+      await this.jobPostRepository.setMajors(jobPostId, dto.majors, tx);
+    }
   }
 
   /** Hard delete, chỉ cho DRAFT — tin nháp chưa từng công khai nên không có hồ sơ ứng tuyển/hội thoại. */
@@ -262,6 +413,10 @@ export class JobPostsService {
       return this.jobPostRepository.update(id, { status: "PUBLISHED", publishedAt: new Date() }, tx);
     });
 
+    // AD-23 — tin vừa hiển thị và đã bật tự mời (đặt lúc tạo tin) ⇒ mời ngay, không chờ.
+    if (autoPublished && updated.autoOutreachEnabled) this.autoOutreachTrigger(updated.companyId);
+    // AD-24 — mọi tin vừa hiển thị: chấm bảng điểm lưu sẵn ngay, không chờ job đêm.
+    if (autoPublished) this.matchScoreTrigger(updated.id);
     return { jobPost: toJobPostDto(updated), autoPublished };
   }
 
@@ -318,6 +473,9 @@ export class JobPostsService {
       );
       return result;
     });
+    // AD-23 — như submitForApproval khi tự đăng: chạy sau khi transaction đã commit.
+    if (updated.autoOutreachEnabled) this.autoOutreachTrigger(updated.companyId);
+    this.matchScoreTrigger(updated.id);
     return toJobPostDto(updated);
   }
 

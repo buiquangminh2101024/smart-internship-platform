@@ -1,6 +1,5 @@
 import { Prisma, type PrismaClient, type Role } from "@prisma/client";
 import type {
-  CatalogEntryKind,
   DailyPoint,
   DashboardRange,
   JobPostWaitBuckets,
@@ -87,14 +86,6 @@ export interface CatalogQueueRow extends QueueSummaryRow {
   skills: number;
   universities: number;
   majors: number;
-}
-
-export interface PendingCatalogEntryRow {
-  id: string;
-  kind: CatalogEntryKind;
-  name: string;
-  createdAt: Date;
-  createdByUserId: string | null;
 }
 
 export class DashboardRepository {
@@ -247,39 +238,6 @@ export class DashboardRepository {
       wait: toWaitBuckets(row),
       oldestSince: row?.oldestSince ?? null,
     };
-  }
-
-  listPendingJobPosts(
-    limit: number,
-  ): Promise<Array<{ jobPostId: string; title: string; companyName: string; submittedAt: Date }>> {
-    return this.prisma.$queryRaw(Prisma.sql`
-      SELECT j."id" AS "jobPostId", j."title", c."name" AS "companyName", ${JOB_POST_SUBMITTED_AT} AS "submittedAt"
-      FROM job_posts j
-      JOIN companies c ON c."id" = j."companyId"
-      WHERE j."status" = 'PENDING'
-      ORDER BY "submittedAt" ASC, j."id"
-      LIMIT ${limit}
-    `);
-  }
-
-  listPendingCompanies(limit: number): Promise<
-    Array<{ companyId: string; name: string; taxCode: string | null; businessLicenseUrl: string | null; submittedAt: Date }>
-  > {
-    return this.prisma.$queryRaw(Prisma.sql`
-      SELECT c."id" AS "companyId", c."name", c."taxCode", c."businessLicenseUrl", ${COMPANY_SUBMITTED_AT} AS "submittedAt"
-      FROM companies c
-      WHERE c."verificationStatus" = 'PENDING'
-      ORDER BY "submittedAt" ASC, c."id"
-      LIMIT ${limit}
-    `);
-  }
-
-  listPendingCatalogEntries(limit: number): Promise<PendingCatalogEntryRow[]> {
-    return this.prisma.$queryRaw(Prisma.sql`
-      SELECT "id", "kind", "name", "createdAt", "createdByUserId" FROM (${this.pendingCatalogEntries()}) queue
-      ORDER BY "createdAt" ASC, "id"
-      LIMIT ${limit}
-    `);
   }
 
   /** Tài khoản Ứng viên + Nhà tuyển dụng mới: 7 ngày so với 7 ngày trước đó. */

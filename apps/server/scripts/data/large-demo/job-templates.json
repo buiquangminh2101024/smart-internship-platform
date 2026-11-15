@@ -1,0 +1,931 @@
+{
+  "audiences": {
+    "student": [
+      "Sinh viên năm 3, năm 4 hoặc vừa tốt nghiệp ngành liên quan, đi làm được tối thiểu 4 buổi mỗi tuần.",
+      "Sinh viên năm cuối các ngành liên quan, có thể làm toàn thời gian trong kỳ thực tập.",
+      "Sinh viên từ năm 3 trở lên, sắp xếp được lịch làm việc ổn định ít nhất 3 tháng.",
+      "Ưu tiên sinh viên năm cuối đang tìm nơi thực tập tốt nghiệp, chưa có kinh nghiệm đi làm vẫn được cân nhắc."
+    ],
+    "graduate": [
+      "Đã tốt nghiệp đại học hoặc cao đẳng ngành liên quan; từng làm ở vị trí tương đương là lợi thế.",
+      "Tốt nghiệp đại học ngành liên quan; ứng viên mới ra trường có đồ án tốt vẫn được cân nhắc.",
+      "Đã tốt nghiệp, từng đi làm hoặc thực tập ở vị trí tương tự.",
+      "Có bằng đại học ngành liên quan, làm việc toàn thời gian từ thứ Hai đến thứ Sáu."
+    ]
+  },
+  "benefits": {
+    "student": [
+      "Phụ cấp thực tập hằng tháng, xét tăng theo kết quả công việc.",
+      "Có người hướng dẫn kèm cặp riêng trong suốt kỳ thực tập.",
+      "Hỗ trợ xác nhận thực tập và nhận xét báo cáo tốt nghiệp.",
+      "Thời gian linh hoạt, được nghỉ khi có lịch thi.",
+      "Cơ hội trở thành nhân viên chính thức sau kỳ thực tập.",
+      "Tham gia các buổi chia sẻ chuyên môn nội bộ hằng tuần.",
+      "Được cấp máy tính và tài khoản các công cụ làm việc.",
+      "Hỗ trợ tiền gửi xe và ăn trưa tại công ty."
+    ],
+    "graduate": [
+      "Lương tháng 13 và thưởng theo kết quả làm việc.",
+      "Đóng bảo hiểm đầy đủ theo Luật Lao động.",
+      "Xét tăng lương hai lần mỗi năm.",
+      "Khám sức khỏe định kỳ và bảo hiểm sức khỏe cho nhân viên.",
+      "Ngân sách đào tạo và thi chứng chỉ chuyên môn.",
+      "12 ngày phép năm, du lịch công ty hằng năm.",
+      "Làm việc từ xa một ngày mỗi tuần.",
+      "Môi trường trẻ, quy trình rõ ràng, có lộ trình thăng tiến."
+    ]
+  },
+  "templates": [
+    {
+      "position": "backend-nodejs",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Backend Node.js", "Intern Backend Developer (Node.js)", "Thực tập sinh Lập trình Backend"],
+        "PART_TIME": ["Lập trình viên Backend Node.js (bán thời gian)"],
+        "FULL_TIME": ["Lập trình viên Backend Node.js", "Backend Developer (Node.js)", "Fresher Backend Node.js"],
+        "CONTRACT": ["Lập trình viên Backend Node.js (hợp đồng dự án)"]
+      },
+      "benefits": ["Được cấp máy tính cấu hình cao và màn hình phụ."],
+      "variants": [
+        {
+          "description": "Xây dựng và bảo trì các API cho ứng dụng đặt hàng trực tuyến: xử lý đơn hàng, thanh toán và thông báo. Phối hợp với đội frontend và tester trong các sprint hai tuần, tham gia review code cùng anh chị trong nhóm.",
+          "requirements": "Nắm vững JavaScript và Node.js, đã dùng Express để viết REST API. Biết thiết kế bảng và viết truy vấn PostgreSQL. Đã dùng Git trong đồ án nhóm.",
+          "skills": { "required": ["Node.js", "Express", "JavaScript", "PostgreSQL"], "preferred": ["REST API", "Git"] }
+        },
+        {
+          "description": "Tham gia phát triển hệ thống quản lý kho cho khách hàng bán lẻ: viết API, xử lý hàng đợi tác vụ nền và tối ưu truy vấn. Dự án dùng TypeScript, chạy trên Docker và có quy trình review code rõ ràng.",
+          "requirements": "Biết lập trình Node.js với TypeScript hoặc JavaScript, hiểu cách hoạt động của REST API. Đã làm việc với một cơ sở dữ liệu quan hệ. Biết Docker hoặc RabbitMQ là lợi thế.",
+          "skills": { "required": ["Node.js", "REST API", "TypeScript"], "preferred": ["JavaScript", "Docker", "RabbitMQ"] }
+        },
+        {
+          "description": "Phát triển dịch vụ backend cho ứng dụng học trực tuyến: quản lý người dùng, khoá học, thanh toán. Hệ thống dùng MongoDB cho dữ liệu nội dung và Redis để cache, triển khai trên máy chủ Linux.",
+          "requirements": "Có kiến thức tốt về Node.js và Express, biết thiết kế API theo chuẩn REST. Đã dùng MongoDB hoặc PostgreSQL trong đồ án. Có tư duy giải quyết vấn đề, chủ động đọc tài liệu.",
+          "skills": { "required": ["Node.js", "Express", "MongoDB"], "preferred": ["PostgreSQL", "Redis", "Linux", "Giải quyết vấn đề"] }
+        }
+      ]
+    },
+    {
+      "position": "backend-java",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Java Backend", "Thực tập sinh Lập trình Java Spring Boot"],
+        "PART_TIME": ["Lập trình viên Java (part-time)"],
+        "FULL_TIME": ["Lập trình viên Java Spring Boot", "Fresher Java Developer", "Backend Developer (Java)"],
+        "CONTRACT": ["Lập trình viên Java (hợp đồng 6 tháng)"]
+      },
+      "benefits": ["Được cấp máy tính cấu hình cao và màn hình phụ."],
+      "variants": [
+        {
+          "description": "Tham gia phát triển hệ thống ngân hàng lõi cho khối khách hàng cá nhân: mở tài khoản, chuyển khoản nội bộ, báo cáo giao dịch. Làm việc theo quy trình Scrum, có trưởng nhóm kèm và review code hằng ngày.",
+          "requirements": "Nắm chắc Java và lập trình hướng đối tượng, đã làm đồ án với Spring Boot. Viết được câu lệnh SQL có JOIN, GROUP BY. Hiểu cơ bản về REST API và mô hình MVC.",
+          "skills": { "required": ["Java", "Spring Boot", "SQL"], "preferred": ["REST API", "Git"] }
+        },
+        {
+          "description": "Phát triển các microservice cho nền tảng thương mại điện tử: giỏ hàng, khuyến mãi, tồn kho. Các service trao đổi dữ liệu qua Kafka, được đóng gói bằng Docker và triển khai tự động lên môi trường kiểm thử.",
+          "requirements": "Thành thạo Java, đã dùng Spring Boot xây dựng REST API. Biết Hibernate/JPA và viết SQL tối ưu. Từng tìm hiểu Kafka, Docker là điểm cộng.",
+          "skills": { "required": ["Java", "Spring Boot", "REST API", "SQL"], "preferred": ["Hibernate", "Kafka", "Docker"] }
+        },
+        {
+          "description": "Bảo trì và mở rộng hệ thống quản lý bảo hiểm đang chạy cho nhiều chi nhánh: thêm nghiệp vụ mới, sửa lỗi, tối ưu các báo cáo chạy trên Oracle. Phù hợp với bạn thích làm sản phẩm lớn, quy trình chặt chẽ.",
+          "requirements": "Có nền tảng Java tốt, hiểu Spring Boot và cách tổ chức một dự án nhiều tầng. Viết SQL thành thạo, biết đọc kế hoạch thực thi truy vấn là lợi thế. Cẩn thận, chịu khó đọc mã nguồn có sẵn.",
+          "skills": { "required": ["Java", "Spring Boot", "SQL"], "preferred": ["Oracle", "Git"] }
+        }
+      ]
+    },
+    {
+      "position": "backend-dotnet",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Lập trình .NET", "Thực tập sinh C# .NET"],
+        "PART_TIME": ["Lập trình viên .NET (bán thời gian)"],
+        "FULL_TIME": ["Lập trình viên .NET", "Fresher C# .NET Developer"],
+        "CONTRACT": ["Lập trình viên .NET (hợp đồng dự án)"]
+      },
+      "benefits": [],
+      "variants": [
+        {
+          "description": "Phát triển phần mềm quản lý sản xuất cho nhà máy: theo dõi lệnh sản xuất, tồn kho nguyên liệu, báo cáo năng suất theo ca. Bạn làm cả API lẫn màn hình quản trị cùng đội ngũ đã nhiều năm làm dự án cho khối sản xuất.",
+          "requirements": "Nắm vững C# và lập trình hướng đối tượng, đã làm đồ án với ASP.NET Core trên nền .NET. Biết viết truy vấn trên MS SQL Server, dùng Entity Framework là lợi thế.",
+          "skills": { "required": ["C#", "ASP.NET Core", "MS SQL Server"], "preferred": [".NET", "Entity Framework", "Git"] }
+        },
+        {
+          "description": "Tham gia đội phát triển cổng thanh toán nội bộ cho khối ngân hàng bán lẻ, xây dựng API bằng .NET và giao diện quản trị bằng Angular. Hệ thống chạy trên Azure, có Redis để giảm tải cho cơ sở dữ liệu.",
+          "requirements": "Thành thạo C#, hiểu .NET và cách xây dựng REST API. Đã dùng MS SQL Server; biết Angular hoặc một framework frontend khác là điểm cộng.",
+          "skills": { "required": ["C#", ".NET", "MS SQL Server"], "preferred": ["REST API", "Angular", "Azure", "Redis"] }
+        },
+        {
+          "description": "Bảo trì và nâng cấp hệ thống quản lý nhân sự viết bằng .NET đang phục vụ hàng nghìn nhân viên: chuyển dần các module cũ sang ASP.NET Core, viết thêm báo cáo và sửa lỗi theo yêu cầu người dùng.",
+          "requirements": "Có kiến thức C# và .NET, hiểu mô hình MVC. Viết được truy vấn trên MS SQL Server, biết dùng Git để quản lý mã nguồn. Cẩn thận, chịu khó đọc mã có sẵn.",
+          "skills": { "required": ["C#", ".NET", "ASP.NET Core", "MS SQL Server"], "preferred": ["Git", "Entity Framework"] }
+        }
+      ]
+    },
+    {
+      "position": "frontend-react",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Frontend React", "Intern Frontend Developer (React)"],
+        "PART_TIME": ["Lập trình viên Frontend React (part-time)"],
+        "FULL_TIME": ["Lập trình viên Frontend React", "Frontend Developer (React)", "Fresher Frontend React"],
+        "CONTRACT": ["Lập trình viên React (hợp đồng 6 tháng)"]
+      },
+      "benefits": ["Được cấp máy tính cấu hình cao và màn hình phụ."],
+      "variants": [
+        {
+          "description": "Dựng giao diện cho trang quản trị bán hàng: bảng đơn hàng, biểu đồ doanh thu, màn hình cấu hình khuyến mãi. Bạn làm theo bản thiết kế Figma của đội thiết kế và tích hợp API do đội backend cung cấp.",
+          "requirements": "Nắm vững HTML, CSS và JavaScript, đã làm ít nhất một dự án với React. Biết gọi REST API và xử lý trạng thái trên giao diện. Đọc hiểu được bản thiết kế trên Figma.",
+          "skills": { "required": ["React", "JavaScript", "HTML", "CSS"], "preferred": ["REST API", "Figma", "Git"] }
+        },
+        {
+          "description": "Phát triển website thương mại điện tử dùng Next.js và TypeScript, tập trung vào tốc độ tải trang, SEO và trải nghiệm trên điện thoại. Giao diện viết bằng Tailwind CSS, có bộ component dùng chung cho cả nhóm.",
+          "requirements": "Thành thạo React và JavaScript, đã dùng TypeScript. Hiểu cách Next.js render phía máy chủ là lợi thế. Viết CSS gọn gàng, biết làm giao diện co giãn theo màn hình.",
+          "skills": { "required": ["React", "JavaScript", "TypeScript", "CSS"], "preferred": ["Next.js", "Tailwind CSS"] }
+        },
+        {
+          "description": "Tham gia xây dựng ứng dụng web học trực tuyến cho học sinh phổ thông: trang bài giảng, làm bài kiểm tra, bảng xếp hạng. Ứng dụng dùng React và Redux, mã nguồn có kiểm thử tự động bằng Jest.",
+          "requirements": "Biết React và JavaScript ở mức tự làm được màn hình hoàn chỉnh. Hiểu HTML ngữ nghĩa và CSS cơ bản. Đã dùng Redux hoặc một thư viện quản lý trạng thái; biết viết test là điểm cộng.",
+          "skills": { "required": ["React", "JavaScript", "HTML"], "preferred": ["CSS", "Redux", "Jest", "Git"] }
+        }
+      ]
+    },
+    {
+      "position": "frontend-vue",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Frontend Vue.js", "Intern Frontend Developer (Vue.js)"],
+        "PART_TIME": ["Lập trình viên Frontend Vue.js (part-time)"],
+        "FULL_TIME": ["Lập trình viên Frontend Vue.js", "Fresher Frontend Vue.js"],
+        "CONTRACT": ["Lập trình viên Vue.js (hợp đồng dự án)"]
+      },
+      "benefits": [],
+      "variants": [
+        {
+          "description": "Phát triển giao diện cho hệ thống quản lý khách hàng của một chuỗi cửa hàng: danh sách khách, lịch sử mua, chương trình tích điểm. Ứng dụng viết bằng Vue.js, dùng chung bộ component nội bộ.",
+          "requirements": "Nắm vững JavaScript, HTML, CSS; đã làm dự án với Vue.js. Biết gọi REST API và xử lý lỗi trên giao diện. Có óc thẩm mỹ, làm giao diện đúng thiết kế.",
+          "skills": { "required": ["Vue.js", "JavaScript", "HTML", "CSS"], "preferred": ["REST API", "Git"] }
+        },
+        {
+          "description": "Xây dựng cổng thông tin khách hàng cho công ty chứng khoán: bảng giá theo thời gian thực, sổ lệnh, báo cáo tài sản. Dự án dùng Vue.js với TypeScript, chú trọng hiệu năng khi dữ liệu cập nhật liên tục.",
+          "requirements": "Thành thạo JavaScript và Vue.js, đã dùng TypeScript. Hiểu cách trình duyệt vẽ lại giao diện để tối ưu hiệu năng. Biết Angular là lợi thế vì một số màn hình cũ vẫn dùng Angular.",
+          "skills": { "required": ["Vue.js", "JavaScript", "TypeScript"], "preferred": ["Angular", "CSS", "Git"] }
+        },
+        {
+          "description": "Làm giao diện cho nền tảng đặt phòng và tour du lịch: trang tìm kiếm, chi tiết phòng, thanh toán. Giao diện viết bằng Vue.js và Tailwind CSS, bám sát thiết kế trên Figma.",
+          "requirements": "Biết Vue.js, JavaScript và HTML ở mức tự dựng được trang hoàn chỉnh. Viết CSS co giãn tốt trên điện thoại. Đã viết test giao diện với Jest là điểm cộng.",
+          "skills": { "required": ["Vue.js", "JavaScript", "HTML", "CSS"], "preferred": ["Tailwind CSS", "Figma", "Jest"] }
+        }
+      ]
+    },
+    {
+      "position": "fullstack-js",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Fullstack JavaScript", "Thực tập sinh Fullstack (React, Node.js)"],
+        "PART_TIME": ["Lập trình viên Fullstack JavaScript (part-time)"],
+        "FULL_TIME": ["Lập trình viên Fullstack JavaScript", "Fullstack Developer (React/Node.js)", "Fresher Fullstack"],
+        "CONTRACT": ["Lập trình viên Fullstack (hợp đồng dự án)"]
+      },
+      "benefits": ["Được cấp máy tính cấu hình cao và màn hình phụ."],
+      "variants": [
+        {
+          "description": "Phát triển trọn tính năng cho phần mềm quản lý trung tâm đào tạo: từ API, cơ sở dữ liệu tới màn hình cho giáo viên và học viên. Nhóm nhỏ nên bạn được giao việc cả hai phía và học cách đưa tính năng lên môi trường thật.",
+          "requirements": "Biết JavaScript ở cả hai phía: React cho giao diện, Node.js với Express cho API. Viết được SQL cơ bản, đã dùng PostgreSQL hoặc MySQL. Đã dùng Git.",
+          "skills": { "required": ["JavaScript", "React", "Node.js"], "preferred": ["Express", "SQL", "PostgreSQL", "Git"] }
+        },
+        {
+          "description": "Xây dựng nền tảng đặt lịch dịch vụ làm đẹp dùng Next.js và TypeScript, API Node.js và cơ sở dữ liệu MongoDB. Bạn tham gia từ lúc bàn giải pháp, viết mã tới khi đưa lên môi trường chạy thật bằng Docker.",
+          "requirements": "Thành thạo JavaScript và TypeScript, đã làm dự án với React hoặc Next.js và Node.js. Biết thiết kế API và cấu trúc dữ liệu cho MongoDB.",
+          "skills": { "required": ["JavaScript", "React", "Node.js", "TypeScript"], "preferred": ["Next.js", "MongoDB", "Docker"] }
+        },
+        {
+          "description": "Phát triển các công cụ nội bộ cho đội vận hành: trang tra cứu đơn hàng, màn hình đối soát, báo cáo xuất Excel. Ứng dụng React gọi API Node.js, dữ liệu lưu trên PostgreSQL.",
+          "requirements": "Biết React và Node.js, viết SQL tốt vì phần lớn việc là truy vấn và tổng hợp dữ liệu. Cẩn thận, chủ động hỏi khi yêu cầu chưa rõ, biết giải quyết vấn đề theo từng bước.",
+          "skills": { "required": ["React", "Node.js", "SQL"], "preferred": ["JavaScript", "PostgreSQL", "Giải quyết vấn đề"] }
+        }
+      ]
+    },
+    {
+      "position": "mobile-app",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Lập trình Mobile", "Thực tập sinh Flutter"],
+        "PART_TIME": ["Lập trình viên Mobile (part-time)"],
+        "FULL_TIME": ["Lập trình viên Mobile Flutter", "Mobile Developer (Flutter)", "Fresher Mobile Developer"],
+        "CONTRACT": ["Lập trình viên Flutter (hợp đồng dự án)"]
+      },
+      "benefits": ["Được cấp điện thoại thử nghiệm Android và iOS."],
+      "variants": [
+        {
+          "description": "Phát triển ứng dụng ví điện tử trên cả Android và iOS bằng Flutter: đăng nhập sinh trắc học, chuyển tiền, lịch sử giao dịch. Đội có quy trình review code, kiểm thử tự động và phát hành hai tuần một lần.",
+          "requirements": "Nắm vững Dart và Flutter, đã đưa ít nhất một ứng dụng lên chạy trên điện thoại thật. Biết gọi REST API, quản lý trạng thái với Provider hoặc Bloc. Đã dùng Git.",
+          "skills": { "required": ["Flutter", "Dart", "REST API"], "preferred": ["Git"] }
+        },
+        {
+          "description": "Làm ứng dụng giao đồ ăn cho khách hàng và tài xế: bản đồ, theo dõi đơn theo thời gian thực, thông báo đẩy qua Firebase. Ứng dụng chính viết bằng Flutter, một số màn hình cũ vẫn dùng React Native.",
+          "requirements": "Đã làm dự án Flutter, hiểu vòng đời ứng dụng di động. Đã dùng Firebase cho đăng nhập hoặc thông báo. Biết React Native hoặc JavaScript là lợi thế.",
+          "skills": { "required": ["Flutter", "Dart", "Firebase"], "preferred": ["React Native", "JavaScript", "REST API"] }
+        },
+        {
+          "description": "Phát triển ứng dụng học tiếng Anh cho trẻ em với nhiều hiệu ứng và trò chơi nhỏ. Bạn làm việc sát với designer để giao diện đúng bản Figma, đồng thời tối ưu để ứng dụng chạy mượt trên máy cấu hình thấp.",
+          "requirements": "Biết Flutter và Dart, tự dựng được giao diện phức tạp từ bản thiết kế Figma. Hiểu cơ bản về Kotlin hoặc Swift để xử lý phần native là điểm cộng.",
+          "skills": { "required": ["Flutter", "Dart", "REST API"], "preferred": ["Figma", "Kotlin", "Swift"] }
+        }
+      ]
+    },
+    {
+      "position": "tester",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Kiểm thử phần mềm", "Thực tập sinh Tester"],
+        "PART_TIME": ["Tester (bán thời gian)"],
+        "FULL_TIME": ["Nhân viên Kiểm thử phần mềm", "QA/Tester", "Fresher Tester"],
+        "CONTRACT": ["Tester (hợp đồng dự án)"]
+      },
+      "benefits": ["Được đào tạo kiểm thử tự động từ đầu."],
+      "variants": [
+        {
+          "description": "Kiểm thử ứng dụng ngân hàng số trên web và di động trước mỗi đợt phát hành: đọc yêu cầu, viết kịch bản kiểm thử, báo lỗi và kiểm tra lại sau khi sửa. Làm việc sát với BA và lập trình viên theo sprint.",
+          "requirements": "Hiểu quy trình kiểm thử phần mềm, biết viết test case rõ ràng từ tài liệu yêu cầu. Viết được câu lệnh SQL để kiểm tra dữ liệu. Đã dùng Jira hoặc công cụ quản lý lỗi tương tự.",
+          "skills": { "required": ["Manual Testing", "Viết test case", "SQL"], "preferred": ["Jira", "Agile/Scrum"] }
+        },
+        {
+          "description": "Kiểm thử API và các luồng nghiệp vụ của nền tảng thương mại điện tử: đặt hàng, thanh toán, hoàn tiền. Đội đang chuyển dần một phần kiểm thử hồi quy sang tự động hoá bằng Cypress.",
+          "requirements": "Biết dùng Postman để kiểm thử API, hiểu mã trạng thái HTTP và dữ liệu JSON. Có kiến thức SQL cơ bản. Biết JavaScript hoặc đã thử Cypress, Selenium là lợi thế.",
+          "skills": { "required": ["Postman", "SQL", "Viết test case"], "preferred": ["JavaScript", "Cypress", "Selenium"] }
+        },
+        {
+          "description": "Tham gia kiểm thử phần mềm quản lý bệnh viện: tiếp đón, khám bệnh, thanh toán viện phí. Bạn thực hiện kiểm thử thủ công theo kịch bản, ghi nhận lỗi chi tiết và hỗ trợ người dùng chạy thử.",
+          "requirements": "Cẩn thận, tỉ mỉ, thích tìm lỗi. Có kiến thức cơ bản về kiểm thử thủ công và cách viết test case. Biết SQL để tra dữ liệu; giao tiếp tốt với người dùng nghiệp vụ.",
+          "skills": { "required": ["Manual Testing", "Viết test case", "SQL"], "preferred": ["Giao tiếp", "Jira"] }
+        }
+      ]
+    },
+    {
+      "position": "devops",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh DevOps", "Thực tập sinh Cloud / DevOps"],
+        "PART_TIME": ["Kỹ sư DevOps (part-time)"],
+        "FULL_TIME": ["Kỹ sư DevOps", "Fresher DevOps Engineer", "Kỹ sư Cloud / DevOps"],
+        "CONTRACT": ["Kỹ sư DevOps (hợp đồng dự án)"]
+      },
+      "benefits": ["Được cấp tài khoản cloud riêng để thực hành và thử nghiệm."],
+      "variants": [
+        {
+          "description": "Vận hành hạ tầng cho các sản phẩm web của công ty: máy chủ Linux, đóng gói ứng dụng bằng Docker, cấu hình Nginx làm cổng vào. Bạn sẽ cùng trưởng nhóm xây quy trình CI/CD cho các dự án mới.",
+          "requirements": "Sử dụng thành thạo Linux và dòng lệnh, viết được script Bash đơn giản. Hiểu Docker và đã đóng gói ít nhất một ứng dụng. Biết Git và quy trình làm việc theo nhánh.",
+          "skills": { "required": ["Linux", "Docker", "Git", "CI/CD"], "preferred": ["Nginx", "Bash", "DevOps"] }
+        },
+        {
+          "description": "Tham gia dự án chuyển hệ thống lên AWS: dựng hạ tầng bằng Terraform, triển khai ứng dụng trên Kubernetes, thiết lập giám sát và cảnh báo. Có ngân sách để bạn học và thi chứng chỉ cloud.",
+          "requirements": "Hiểu Docker và mạng cơ bản, đã dùng Linux hằng ngày. Biết một trong các nền tảng cloud, ưu tiên AWS. Đã thử Kubernetes hoặc Terraform là điểm cộng lớn.",
+          "skills": { "required": ["Linux", "Docker", "AWS"], "preferred": ["Kubernetes", "Terraform", "DevOps", "CI/CD"] }
+        },
+        {
+          "description": "Hỗ trợ đội phát triển tự động hoá việc build, kiểm thử và triển khai: viết pipeline CI/CD, quản lý môi trường kiểm thử, viết công cụ nhỏ bằng Python hoặc Go để giảm việc làm tay.",
+          "requirements": "Biết Git, hiểu quy trình CI/CD và đã dùng thử GitHub Actions hoặc GitLab CI. Lập trình được Python hoặc Go ở mức viết script. Chịu khó đọc log và tìm nguyên nhân lỗi.",
+          "skills": { "required": ["Git", "CI/CD", "Docker"], "preferred": ["Python", "Go", "DevOps", "Linux"] }
+        }
+      ]
+    },
+    {
+      "position": "data-analyst",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Phân tích dữ liệu", "Data Analyst Intern"],
+        "PART_TIME": ["Chuyên viên Phân tích dữ liệu (part-time)"],
+        "FULL_TIME": ["Chuyên viên Phân tích dữ liệu", "Data Analyst", "Fresher Data Analyst"],
+        "CONTRACT": ["Chuyên viên Phân tích dữ liệu (hợp đồng 6 tháng)"]
+      },
+      "benefits": ["Được làm việc với dữ liệu thật của doanh nghiệp."],
+      "variants": [
+        {
+          "description": "Tổng hợp và phân tích số liệu bán hàng của hơn trăm cửa hàng: doanh thu theo ngày, mặt hàng bán chạy, hiệu quả khuyến mãi. Bạn làm dashboard Power BI cho ban điều hành và trả lời các câu hỏi số liệu hằng tuần.",
+          "requirements": "Viết SQL thành thạo, dùng Excel tốt (PivotTable, hàm tra cứu). Đã làm ít nhất một báo cáo trên Power BI. Có tư duy con số, trình bày kết quả rõ ràng.",
+          "skills": { "required": ["SQL", "Excel", "Power BI"], "preferred": ["Python", "Thống kê"] }
+        },
+        {
+          "description": "Phân tích hành vi người dùng trên website và ứng dụng thương mại điện tử: phễu chuyển đổi, tỉ lệ quay lại, hiệu quả từng kênh quảng cáo. Dữ liệu lấy từ Google Analytics và kho dữ liệu nội bộ.",
+          "requirements": "Biết SQL và Python (Pandas) để làm sạch, tổng hợp dữ liệu. Hiểu các chỉ số thống kê cơ bản. Đã dùng Google Analytics hoặc Looker Studio là lợi thế.",
+          "skills": { "required": ["SQL", "Python", "Pandas"], "preferred": ["Thống kê", "Google Analytics", "Looker Studio"] }
+        },
+        {
+          "description": "Hỗ trợ phòng tài chính xây dựng báo cáo quản trị định kỳ: chi phí theo phòng ban, công nợ, dòng tiền. Bạn tự động hoá các file Excel đang làm tay và chuyển dần sang dashboard trên Tableau.",
+          "requirements": "Thành thạo Excel, viết được SQL để lấy dữ liệu. Biết Python để tự động hoá là điểm cộng. Cẩn thận với số liệu, chịu khó đối chiếu và kiểm tra chéo.",
+          "skills": { "required": ["Excel", "SQL"], "preferred": ["Python", "Tableau"] }
+        }
+      ]
+    },
+    {
+      "position": "ai-ml",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh AI / Machine Learning", "AI Engineer Intern"],
+        "PART_TIME": ["Kỹ sư AI (part-time)"],
+        "FULL_TIME": ["Kỹ sư AI / Machine Learning", "Fresher AI Engineer", "Machine Learning Engineer"],
+        "CONTRACT": ["Kỹ sư Machine Learning (hợp đồng dự án)"]
+      },
+      "benefits": ["Được dùng máy chủ GPU của công ty để huấn luyện mô hình."],
+      "variants": [
+        {
+          "description": "Xây dựng mô hình dự đoán khả năng khách hàng rời bỏ dịch vụ từ dữ liệu giao dịch: làm sạch dữ liệu, chọn đặc trưng, huấn luyện và đánh giá mô hình, rồi trình bày kết quả cho bộ phận kinh doanh.",
+          "requirements": "Thành thạo Python, dùng Pandas và Scikit-learn để xử lý dữ liệu và huấn luyện mô hình. Hiểu các phương pháp Machine Learning cơ bản và kiến thức thống kê nền tảng.",
+          "skills": { "required": ["Python", "Machine Learning", "Pandas"], "preferred": ["Scikit-learn", "Thống kê", "SQL"] }
+        },
+        {
+          "description": "Phát triển chatbot trả lời câu hỏi khách hàng bằng tiếng Việt: thu thập dữ liệu hội thoại, tinh chỉnh mô hình ngôn ngữ, đánh giá chất lượng câu trả lời và đưa mô hình lên chạy thử.",
+          "requirements": "Biết Python và PyTorch, hiểu Machine Learning và Deep Learning cơ bản. Đã làm đồ án về xử lý ngôn ngữ tự nhiên là lợi thế lớn. Đọc hiểu bài báo khoa học tiếng Anh.",
+          "skills": { "required": ["Python", "Machine Learning", "Deep Learning"], "preferred": ["PyTorch", "Xử lý ngôn ngữ tự nhiên", "Git"] }
+        },
+        {
+          "description": "Tham gia dự án nhận diện lỗi sản phẩm trên dây chuyền qua ảnh chụp: gán nhãn dữ liệu, huấn luyện mô hình thị giác máy tính và đóng gói bằng Docker để chạy tại nhà máy.",
+          "requirements": "Biết Python, có kiến thức Machine Learning và thống kê. Đã dùng TensorFlow hoặc PyTorch cho bài toán ảnh. Biết Docker là điểm cộng.",
+          "skills": { "required": ["Python", "Machine Learning", "Thống kê"], "preferred": ["TensorFlow", "PyTorch", "Docker"] }
+        }
+      ]
+    },
+    {
+      "position": "business-analyst",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Phân tích nghiệp vụ (BA)", "Thực tập sinh Business Analyst"],
+        "PART_TIME": ["Business Analyst (part-time)"],
+        "FULL_TIME": ["Chuyên viên Phân tích nghiệp vụ (BA)", "Business Analyst", "Fresher BA"],
+        "CONTRACT": ["Business Analyst (hợp đồng dự án)"]
+      },
+      "benefits": ["Được tham gia trực tiếp các buổi làm việc với khách hàng."],
+      "variants": [
+        {
+          "description": "Làm cầu nối giữa khách hàng ngân hàng và đội phát triển: lấy yêu cầu, mô tả quy trình nghiệp vụ, viết tài liệu đặc tả và kiểm tra sản phẩm có đúng yêu cầu trước khi bàn giao.",
+          "requirements": "Có tư duy logic, kỹ năng phân tích nghiệp vụ và giao tiếp tốt. Biết vẽ sơ đồ quy trình, sơ đồ UML cơ bản. Viết SQL đơn giản để kiểm tra dữ liệu là lợi thế.",
+          "skills": { "required": ["Phân tích nghiệp vụ", "Viết tài liệu đặc tả", "Giao tiếp"], "preferred": ["UML", "SQL"] }
+        },
+        {
+          "description": "Tham gia đội sản phẩm của nền tảng thương mại điện tử: phân tích yêu cầu tính năng mới, vẽ wireframe trên Figma, viết user story và theo dõi tiến độ trên Jira theo mô hình Agile/Scrum.",
+          "requirements": "Hiểu quy trình phát triển phần mềm, biết phân tích nghiệp vụ và viết user story. Đã dùng Figma hoặc công cụ vẽ wireframe tương tự. Thuyết trình tốt, đọc hiểu tài liệu tiếng Anh.",
+          "skills": { "required": ["Phân tích nghiệp vụ", "Viết tài liệu đặc tả"], "preferred": ["Figma", "Jira", "Agile/Scrum", "Thuyết trình"] }
+        },
+        {
+          "description": "Phân tích quy trình vận hành kho và giao hàng để số hoá: khảo sát người dùng tại kho, đề xuất cải tiến, lập báo cáo số liệu bằng Excel và Power BI cho ban quản lý.",
+          "requirements": "Có khả năng phân tích nghiệp vụ, giao tiếp tốt với nhiều bộ phận. Biết SQL và Excel để tổng hợp số liệu. Tiếng Anh giao tiếp khá là lợi thế.",
+          "skills": { "required": ["Phân tích nghiệp vụ", "Giao tiếp", "SQL"], "preferred": ["Excel", "Power BI", "Tiếng Anh giao tiếp"] }
+        }
+      ]
+    },
+    {
+      "position": "it-support",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh IT Helpdesk", "Thực tập sinh Quản trị mạng"],
+        "PART_TIME": ["Nhân viên IT Helpdesk (part-time)"],
+        "FULL_TIME": ["Nhân viên IT Helpdesk", "Kỹ thuật viên Quản trị mạng", "Nhân viên IT Support"],
+        "CONTRACT": ["Kỹ thuật viên IT (hợp đồng 6 tháng)"]
+      },
+      "benefits": ["Phụ cấp làm ngoài giờ khi xử lý sự cố."],
+      "variants": [
+        {
+          "description": "Hỗ trợ kỹ thuật cho hơn hai trăm nhân viên văn phòng: cài đặt máy tính, xử lý sự cố phần mềm, máy in, email. Tiếp nhận yêu cầu qua hệ thống ticket và hướng dẫn người dùng tự xử lý các lỗi đơn giản.",
+          "requirements": "Có kiến thức phần cứng, cài đặt Windows và phần mềm văn phòng. Hiểu mạng máy tính cơ bản (IP, DNS, DHCP). Thân thiện, giao tiếp rõ ràng với người không rành công nghệ.",
+          "skills": { "required": ["IT Helpdesk", "Mạng máy tính", "Windows Server"], "preferred": ["Tin học văn phòng", "Giao tiếp"] }
+        },
+        {
+          "description": "Quản trị hệ thống mạng và máy chủ cho nhà máy và văn phòng: theo dõi thiết bị mạng, phân quyền người dùng trên Active Directory, sao lưu dữ liệu định kỳ, phối hợp xử lý sự cố ngoài giờ khi cần.",
+          "requirements": "Hiểu mạng máy tính, biết cấu hình switch, router cơ bản. Đã thực hành Windows Server và Active Directory. Biết Linux là lợi thế.",
+          "skills": { "required": ["Mạng máy tính", "Windows Server", "IT Helpdesk"], "preferred": ["Active Directory", "Linux"] }
+        },
+        {
+          "description": "Vận hành máy chủ Linux và mạng nội bộ cho các cơ sở đào tạo: giám sát, vá lỗi bảo mật, quản lý tài khoản, hỗ trợ giáo viên khi lớp học trực tuyến gặp sự cố.",
+          "requirements": "Sử dụng Linux bằng dòng lệnh, viết được script Bash đơn giản. Có kiến thức bảo mật mạng cơ bản. Chủ động, chịu khó tự tìm hiểu tài liệu kỹ thuật.",
+          "skills": { "required": ["Linux", "Mạng máy tính", "IT Helpdesk"], "preferred": ["Bash", "Bảo mật mạng"] }
+        }
+      ]
+    },
+    {
+      "position": "ui-ux",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh UI/UX Designer", "UI/UX Design Intern"],
+        "PART_TIME": ["UI/UX Designer (part-time)"],
+        "FULL_TIME": ["UI/UX Designer", "Product Designer", "Fresher UI/UX Designer"],
+        "CONTRACT": ["UI/UX Designer (hợp đồng dự án)"]
+      },
+      "benefits": ["Được dùng bản trả phí của các công cụ thiết kế và nghiên cứu người dùng."],
+      "variants": [
+        {
+          "description": "Thiết kế giao diện cho ứng dụng ngân hàng số trên điện thoại: luồng mở tài khoản, chuyển tiền, quản lý thẻ. Bạn vẽ wireframe, làm bản mẫu tương tác trên Figma và trao đổi trực tiếp với lập trình viên khi bàn giao.",
+          "requirements": "Thành thạo Figma, nắm các nguyên tắc UI/UX Design cơ bản như bố cục, màu sắc, khả năng tiếp cận. Có portfolio từ hai sản phẩm trở lên. Biết prototyping để thử luồng thao tác là lợi thế.",
+          "skills": { "required": ["Figma", "UI/UX Design", "Wireframe"], "preferred": ["Prototyping"] }
+        },
+        {
+          "description": "Tham gia đội sản phẩm của sàn thương mại điện tử: phỏng vấn người mua, phân tích hành vi trên trang, đề xuất cải tiến luồng thanh toán và kiểm chứng bằng thử nghiệm A/B.",
+          "requirements": "Hiểu quy trình User Research: lập kịch bản phỏng vấn, tổng hợp kết quả thành insight. Dùng Figma để vẽ phương án giao diện. Trình bày ý tưởng mạch lạc, biết bảo vệ quyết định thiết kế bằng dữ liệu.",
+          "skills": { "required": ["User Research", "Figma", "UI/UX Design"], "preferred": ["Wireframe", "Thuyết trình"] }
+        },
+        {
+          "description": "Xây dựng và duy trì Design System cho bộ phần mềm quản lý doanh nghiệp: thư viện component, quy chuẩn màu, typography, khoảng cách. Phối hợp với đội frontend để giao diện trên web khớp bản thiết kế.",
+          "requirements": "Dùng Figma thành thạo, hiểu component và auto layout. Có mắt thẩm mỹ tốt về typography và lưới. Biết HTML, CSS cơ bản để trao đổi với lập trình viên là điểm cộng.",
+          "skills": { "required": ["Figma", "UI/UX Design", "Design System"], "preferred": ["Typography", "HTML", "CSS"] }
+        }
+      ]
+    },
+    {
+      "position": "graphic-design",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Thiết kế đồ hoạ", "Graphic Design Intern"],
+        "PART_TIME": ["Designer đồ hoạ (part-time)"],
+        "FULL_TIME": ["Nhân viên Thiết kế đồ hoạ", "Graphic Designer", "Fresher Graphic Designer"],
+        "CONTRACT": ["Graphic Designer (hợp đồng dự án)"]
+      },
+      "benefits": ["Được cấp máy tính đồ hoạ và màn hình chuẩn màu."],
+      "variants": [
+        {
+          "description": "Thiết kế ấn phẩm cho các chiến dịch của khách hàng: banner mạng xã hội, poster, standee, bao bì. Làm cùng đội content để lên ý tưởng hình ảnh cho từng chiến dịch và chỉnh sửa theo phản hồi của khách.",
+          "requirements": "Sử dụng thành thạo Photoshop và Illustrator. Có cảm nhận tốt về màu sắc, bố cục, typography. Gửi kèm portfolio khi ứng tuyển; biết làm ảnh động là điểm cộng.",
+          "skills": { "required": ["Photoshop", "Illustrator", "Typography"], "preferred": ["Canva", "After Effects"] }
+        },
+        {
+          "description": "Tham gia các dự án thiết kế nhận diện thương hiệu cho doanh nghiệp vừa và nhỏ: logo, bảng màu, bộ ấn phẩm văn phòng, cẩm nang thương hiệu. Bạn đi cùng dự án từ buổi gặp khách hàng tới khi bàn giao file in.",
+          "requirements": "Thành thạo Illustrator, biết InDesign để dàn trang cẩm nang. Hiểu nguyên tắc thiết kế nhận diện thương hiệu và typography. Biết CorelDRAW để làm việc với nhà in là lợi thế.",
+          "skills": { "required": ["Illustrator", "Thiết kế nhận diện thương hiệu", "Typography"], "preferred": ["InDesign", "CorelDRAW", "Photoshop"] }
+        },
+        {
+          "description": "Sản xuất hình ảnh và video ngắn cho kênh bán hàng trực tuyến của một chuỗi mỹ phẩm: ảnh sản phẩm, banner khuyến mãi, video giới thiệu dưới một phút.",
+          "requirements": "Biết Photoshop để chỉnh ảnh sản phẩm, dựng video với Premiere Pro, làm chuyển động đơn giản bằng After Effects. Làm nhanh, chịu được nhiều đầu việc nhỏ mỗi ngày.",
+          "skills": { "required": ["Photoshop", "Illustrator"], "preferred": ["Premiere Pro", "After Effects", "Canva"] }
+        }
+      ]
+    },
+    {
+      "position": "digital-ads",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Digital Marketing", "Thực tập sinh Chạy quảng cáo"],
+        "PART_TIME": ["Nhân viên Digital Marketing (part-time)"],
+        "FULL_TIME": ["Chuyên viên Digital Marketing", "Performance Marketing Executive", "Nhân viên Quảng cáo trực tuyến"],
+        "CONTRACT": ["Chuyên viên Digital Marketing (hợp đồng 6 tháng)"]
+      },
+      "benefits": ["Được cấp ngân sách thử nghiệm quảng cáo để học tập."],
+      "variants": [
+        {
+          "description": "Lên và tối ưu chiến dịch quảng cáo cho các thương hiệu thời trang, mỹ phẩm trên Facebook Ads và TikTok Ads: chọn tệp khách hàng, thử nhiều mẫu nội dung, theo dõi chi phí trên mỗi đơn hàng hằng ngày.",
+          "requirements": "Đã tự chạy hoặc hỗ trợ chạy Facebook Ads, hiểu các chỉ số CPM, CTR, CPA. Dùng Excel để theo dõi ngân sách. Nhạy với xu hướng, biết viết nội dung quảng cáo ngắn gọn là lợi thế.",
+          "skills": { "required": ["Facebook Ads", "Excel"], "preferred": ["TikTok Ads", "Copywriting"] }
+        },
+        {
+          "description": "Quản lý quảng cáo tìm kiếm cho các khoá học trực tuyến: nghiên cứu nhu cầu, viết mẫu quảng cáo, điều chỉnh giá thầu trên Google Ads và đo hiệu quả bằng Google Analytics.",
+          "requirements": "Hiểu cách Google Ads tính giá thầu và điểm chất lượng. Biết cài đặt mục tiêu chuyển đổi trên Google Analytics. Thành thạo Excel; làm báo cáo trên Looker Studio là điểm cộng.",
+          "skills": { "required": ["Google Ads", "Google Analytics", "Excel"], "preferred": ["Looker Studio", "Copywriting"] }
+        },
+        {
+          "description": "Phụ trách quảng cáo đa kênh cho một chuỗi nhà hàng: mạng xã hội, công cụ tìm kiếm, email gửi khách thân thiết. Lập kế hoạch ngân sách theo tháng và báo cáo hiệu quả từng kênh cho quản lý.",
+          "requirements": "Đã dùng Facebook Ads và Google Ads ở mức cơ bản. Biết làm Email Marketing, thiết kế ảnh nhanh bằng Canva. Dùng Excel tốt để tổng hợp số liệu.",
+          "skills": { "required": ["Facebook Ads", "Google Ads", "Excel"], "preferred": ["Email Marketing", "Canva"] }
+        }
+      ]
+    },
+    {
+      "position": "content-marketing",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Content Marketing", "Thực tập sinh Sáng tạo nội dung"],
+        "PART_TIME": ["Cộng tác viên Viết nội dung (part-time)"],
+        "FULL_TIME": ["Chuyên viên Content Marketing", "Content Creator", "Nhân viên Sáng tạo nội dung"],
+        "CONTRACT": ["Content Marketing (hợp đồng dự án)"]
+      },
+      "benefits": ["Được tham gia các buổi chụp ảnh, quay video cùng ê-kíp sản xuất."],
+      "variants": [
+        {
+          "description": "Lên nội dung cho fanpage và kênh video ngắn của một thương hiệu đồ uống: ý tưởng bài đăng, kịch bản video, lịch đăng hằng tuần. Theo dõi phản hồi của người xem để điều chỉnh nội dung.",
+          "requirements": "Viết tốt, có giọng văn riêng, biết copywriting cho bài quảng cáo ngắn. Đã quản lý mạng xã hội cho câu lạc bộ hoặc trang cá nhân. Biết dựng video bằng CapCut và thiết kế nhanh bằng Canva.",
+          "skills": { "required": ["Content Marketing", "Copywriting", "Quản lý mạng xã hội"], "preferred": ["CapCut", "Canva"] }
+        },
+        {
+          "description": "Viết bài blog, cẩm nang và nội dung email cho nền tảng phần mềm kế toán dành cho hộ kinh doanh. Mục tiêu là đưa người đọc từ trang kết quả tìm kiếm tới đăng ký dùng thử sản phẩm.",
+          "requirements": "Viết mạch lạc, chính xác, biết biến nội dung khó thành dễ hiểu. Hiểu SEO cơ bản và đã đăng bài trên WordPress. Viết được Email Marketing là lợi thế.",
+          "skills": { "required": ["Content Marketing", "Copywriting"], "preferred": ["SEO", "WordPress", "Email Marketing"] }
+        },
+        {
+          "description": "Sản xuất nội dung song ngữ cho trang tuyển sinh của một trung tâm du học: bài viết, bài đăng mạng xã hội, câu chuyện học viên. Phối hợp với đội tư vấn để nội dung trả lời đúng câu hỏi phụ huynh hay hỏi.",
+          "requirements": "Viết tốt tiếng Việt, đọc và viết tiếng Anh khá. Đã làm Content Marketing qua đồ án hoặc câu lạc bộ. Biết Canva và Photoshop để tự làm hình minh hoạ.",
+          "skills": { "required": ["Content Marketing", "Canva", "Copywriting"], "preferred": ["Photoshop", "Tiếng Anh giao tiếp", "Quản lý mạng xã hội"] }
+        }
+      ]
+    },
+    {
+      "position": "seo",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh SEO", "SEO Intern"],
+        "PART_TIME": ["Cộng tác viên SEO (part-time)"],
+        "FULL_TIME": ["Chuyên viên SEO", "Nhân viên SEO Onpage", "SEO Executive"],
+        "CONTRACT": ["Chuyên viên SEO (hợp đồng dự án)"]
+      },
+      "benefits": ["Được cấp tài khoản các công cụ SEO trả phí."],
+      "variants": [
+        {
+          "description": "Tối ưu website bán đồ gia dụng có hàng nghìn trang sản phẩm: rà lỗi kỹ thuật, cải thiện tốc độ, viết lại tiêu đề và mô tả trang. Theo dõi thứ hạng và lượng truy cập tự nhiên mỗi tuần.",
+          "requirements": "Hiểu SEO onpage và kỹ thuật cơ bản, đã dùng Google Search Console. Đọc được HTML để kiểm tra thẻ tiêu đề, thẻ heading. Dùng Excel để xử lý danh sách URL lớn.",
+          "skills": { "required": ["SEO", "Google Search Console"], "preferred": ["HTML", "Excel"] }
+        },
+        {
+          "description": "Xây dựng cụm nội dung cho blog về tài chính cá nhân: nghiên cứu từ khoá, lên dàn ý, phối hợp với cộng tác viên viết bài và tối ưu bài trên WordPress trước khi đăng.",
+          "requirements": "Biết nghiên cứu từ khoá bằng Ahrefs hoặc công cụ tương tự, hiểu ý định tìm kiếm của người dùng. Viết và biên tập tốt. Đã làm SEO cho một trang cá nhân là lợi thế.",
+          "skills": { "required": ["SEO", "Nghiên cứu từ khoá", "WordPress"], "preferred": ["Ahrefs", "Content Marketing"] }
+        },
+        {
+          "description": "Đo lường và báo cáo hiệu quả SEO cho nhóm website của một công ty du lịch: thứ hạng, lượt truy cập, chuyển đổi. Đề xuất các trang cần ưu tiên tối ưu dựa trên số liệu.",
+          "requirements": "Thành thạo Google Analytics và Google Search Console. Dùng Excel tốt, làm dashboard trên Looker Studio là điểm cộng. Có tư duy phân tích, cẩn thận với số liệu.",
+          "skills": { "required": ["SEO", "Google Search Console"], "preferred": ["Google Analytics", "Excel", "Looker Studio"] }
+        }
+      ]
+    },
+    {
+      "position": "pr-events",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh PR & Sự kiện", "Thực tập sinh Truyền thông"],
+        "PART_TIME": ["Cộng tác viên Sự kiện (part-time)"],
+        "FULL_TIME": ["Chuyên viên PR & Truyền thông", "Event Executive", "Nhân viên Truyền thông"],
+        "CONTRACT": ["Chuyên viên Sự kiện (hợp đồng dự án)"]
+      },
+      "benefits": ["Được tham gia trực tiếp các sự kiện lớn của khách hàng."],
+      "variants": [
+        {
+          "description": "Hỗ trợ tổ chức hội thảo, ra mắt sản phẩm và sự kiện khách hàng của công ty: lên kịch bản, làm việc với nhà cung cấp, điều phối hậu cần trong ngày diễn ra. Làm thêm giờ vào một số cuối tuần có sự kiện.",
+          "requirements": "Đã tham gia tổ chức sự kiện ở trường hoặc câu lạc bộ. Giao tiếp tốt, nhanh nhẹn, xử lý được tình huống phát sinh. Biết đàm phán với nhà cung cấp là lợi thế.",
+          "skills": { "required": ["Tổ chức sự kiện", "Lập kế hoạch truyền thông", "Giao tiếp"], "preferred": ["Đàm phán"] }
+        },
+        {
+          "description": "Phụ trách quan hệ báo chí cho một thương hiệu công nghệ: viết thông cáo báo chí, chuẩn bị tài liệu cho phóng viên, theo dõi và tổng hợp bài viết về công ty sau mỗi đợt truyền thông.",
+          "requirements": "Viết tiếng Việt chuẩn mực, nắm cấu trúc một bản thông cáo. Hiểu cách làm việc với phóng viên, biên tập viên. Đọc hiểu tiếng Anh tốt để dịch tài liệu từ công ty mẹ.",
+          "skills": { "required": ["Quan hệ báo chí", "Viết thông cáo báo chí"], "preferred": ["Copywriting", "Tiếng Anh giao tiếp"] }
+        },
+        {
+          "description": "Lập kế hoạch truyền thông cho chiến dịch tuyển sinh của một trường đào tạo nghề: thông điệp, kênh, lịch triển khai, ngân sách. Theo dõi tiến độ cùng các bên và báo cáo kết quả sau chiến dịch.",
+          "requirements": "Có tư duy lập kế hoạch, biết chia nhỏ mục tiêu thành đầu việc. Viết và thuyết trình tốt. Đã quản lý mạng xã hội cho một tổ chức là điểm cộng.",
+          "skills": { "required": ["Lập kế hoạch truyền thông", "Tổ chức sự kiện"], "preferred": ["Thuyết trình", "Quản lý mạng xã hội"] }
+        }
+      ]
+    },
+    {
+      "position": "accountant",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Kế toán", "Thực tập sinh Kế toán doanh nghiệp"],
+        "PART_TIME": ["Nhân viên Kế toán (part-time)"],
+        "FULL_TIME": ["Nhân viên Kế toán", "Kế toán viên", "Nhân viên Kế toán nội bộ"],
+        "CONTRACT": ["Nhân viên Kế toán (hợp đồng 6 tháng)"]
+      },
+      "benefits": ["Được kế toán trưởng hướng dẫn trọn quy trình khoá sổ cuối tháng."],
+      "variants": [
+        {
+          "description": "Hỗ trợ kế toán trưởng ghi chép chứng từ thu chi, đối chiếu sổ sách và lập tờ khai thuế hằng tháng cho một công ty thương mại. Được hướng dẫn quy trình kế toán đầy đủ từ chứng từ tới báo cáo.",
+          "requirements": "Nắm chắc nguyên lý kế toán, hiểu cách hạch toán các nghiệp vụ phổ biến. Đã thực hành trên MISA. Dùng Excel thành thạo (VLOOKUP, SUMIFS). Trung thực, cẩn thận.",
+          "skills": { "required": ["Kế toán tổng hợp", "MISA", "Excel"], "preferred": ["Kế toán thuế"] }
+        },
+        {
+          "description": "Theo dõi công nợ phải thu, phải trả với hàng trăm khách hàng và nhà cung cấp; xuất hoá đơn điện tử, đối chiếu công nợ hằng tháng và nhắc thanh toán đúng hạn.",
+          "requirements": "Hiểu nghiệp vụ kế toán công nợ, biết đọc hợp đồng mua bán. Dùng Excel tốt để đối chiếu số liệu. Đã dùng MISA hoặc Fast Accounting là lợi thế.",
+          "skills": { "required": ["Excel", "MISA", "Kế toán công nợ"], "preferred": ["Hoá đơn điện tử", "Fast Accounting"] }
+        },
+        {
+          "description": "Phụ trách kế toán thuế cho các doanh nghiệp khách hàng của một văn phòng dịch vụ kế toán: kê khai thuế giá trị gia tăng, thuế thu nhập cá nhân, quyết toán cuối năm và hoàn thiện báo cáo tài chính.",
+          "requirements": "Nắm các quy định về thuế giá trị gia tăng, thuế thu nhập doanh nghiệp. Hiểu Chuẩn mực kế toán Việt Nam (VAS). Đã dùng phần mềm kê khai thuế và MISA, Excel.",
+          "skills": { "required": ["Kế toán thuế", "MISA", "Excel"], "preferred": ["Báo cáo tài chính", "Chuẩn mực kế toán Việt Nam (VAS)"] }
+        }
+      ]
+    },
+    {
+      "position": "auditor",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Kiểm toán", "Trợ lý kiểm toán thực tập"],
+        "PART_TIME": ["Trợ lý kiểm toán (part-time mùa cao điểm)"],
+        "FULL_TIME": ["Trợ lý kiểm toán", "Kiểm toán viên", "Audit Associate"],
+        "CONTRACT": ["Trợ lý kiểm toán (hợp đồng mùa cao điểm)"]
+      },
+      "benefits": ["Hỗ trợ chi phí học và thi chứng chỉ kiểm toán quốc tế."],
+      "variants": [
+        {
+          "description": "Tham gia đoàn kiểm toán báo cáo tài chính năm cho khách hàng sản xuất và thương mại: kiểm kê hàng tồn kho, gửi thư xác nhận công nợ, kiểm tra chứng từ theo hướng dẫn của trưởng nhóm.",
+          "requirements": "Nắm vững kế toán tài chính và Chuẩn mực kế toán Việt Nam (VAS). Dùng Excel thành thạo. Sẵn sàng đi công tác ngắn ngày trong mùa kiểm toán cao điểm.",
+          "skills": { "required": ["Kiểm toán báo cáo tài chính", "Chuẩn mực kế toán Việt Nam (VAS)", "Excel"], "preferred": ["Kế toán tổng hợp"] }
+        },
+        {
+          "description": "Hỗ trợ kiểm toán khách hàng có vốn nước ngoài lập báo cáo theo IFRS: đọc hiểu báo cáo tài chính, chuyển đổi số liệu từ VAS sang IFRS, lập giấy tờ làm việc bằng tiếng Anh.",
+          "requirements": "Nắm chắc cách đọc báo cáo tài chính và các chuẩn mực kế toán chính. Đọc, viết tiếng Anh chuyên ngành tốt; đã học IFRS hoặc đang theo chương trình ACCA là lợi thế.",
+          "skills": { "required": ["Báo cáo tài chính", "Kiểm toán báo cáo tài chính", "Excel"], "preferred": ["IFRS", "Tiếng Anh giao tiếp"] }
+        },
+        {
+          "description": "Tham gia các dự án rà soát kiểm soát nội bộ cho ngân hàng và công ty bảo hiểm: tìm hiểu quy trình, kiểm tra mẫu chứng từ, ghi nhận điểm yếu và đề xuất cải thiện cùng trưởng nhóm.",
+          "requirements": "Có kiến thức kiểm toán, hiểu cách thiết kế và kiểm tra kiểm soát nội bộ. Dùng Excel tốt để chọn mẫu và tổng hợp. Làm việc nhóm hiệu quả, ghi chép cẩn thận.",
+          "skills": { "required": ["Kiểm soát nội bộ", "Excel", "Chuẩn mực kế toán Việt Nam (VAS)"], "preferred": ["Làm việc nhóm"] }
+        }
+      ]
+    },
+    {
+      "position": "financial-analyst",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Phân tích tài chính", "Financial Analyst Intern"],
+        "PART_TIME": ["Trợ lý Phân tích tài chính (part-time)"],
+        "FULL_TIME": ["Chuyên viên Phân tích tài chính", "Financial Analyst", "Chuyên viên Phân tích đầu tư"],
+        "CONTRACT": ["Chuyên viên Phân tích tài chính (hợp đồng dự án)"]
+      },
+      "benefits": ["Được tiếp cận nguồn dữ liệu và báo cáo phân tích trả phí."],
+      "variants": [
+        {
+          "description": "Hỗ trợ phòng tài chính lập ngân sách, dự báo dòng tiền và phân tích chênh lệch giữa kế hoạch và thực tế cho một chuỗi bán lẻ. Chuẩn bị số liệu và slide cho các buổi họp giao ban hằng tháng.",
+          "requirements": "Nắm vững phân tích tài chính và cách đọc báo cáo tài chính. Thành thạo Excel, dựng được mô hình tài chính đơn giản. Trình bày số liệu mạch lạc.",
+          "skills": { "required": ["Phân tích tài chính", "Báo cáo tài chính", "Excel"], "preferred": ["Mô hình tài chính", "Thuyết trình"] }
+        },
+        {
+          "description": "Tham gia nhóm phân tích đầu tư của một công ty chứng khoán: theo dõi các doanh nghiệp niêm yết, cập nhật kết quả kinh doanh hằng quý và viết báo cáo phân tích cổ phiếu cho khách hàng.",
+          "requirements": "Hiểu cách định giá doanh nghiệp bằng chiết khấu dòng tiền và so sánh. Dựng mô hình tài chính trên Excel. Đọc hiểu báo cáo tiếng Anh; đang học CFA là lợi thế.",
+          "skills": { "required": ["Phân tích tài chính", "Mô hình tài chính", "Excel"], "preferred": ["Định giá doanh nghiệp", "Tiếng Anh giao tiếp"] }
+        },
+        {
+          "description": "Xây dựng báo cáo quản trị tự động cho ban giám đốc nhà máy: chi phí sản xuất, biên lợi nhuận theo dòng sản phẩm, công nợ. Kết nối dữ liệu từ phần mềm kế toán vào dashboard Power BI.",
+          "requirements": "Hiểu báo cáo tài chính và kế toán quản trị. Thành thạo Excel, biết SQL hoặc Python để xử lý dữ liệu. Biết Power BI là điểm cộng lớn.",
+          "skills": { "required": ["Phân tích tài chính", "Báo cáo tài chính", "Excel"], "preferred": ["Power BI", "SQL", "Python"] }
+        }
+      ]
+    },
+    {
+      "position": "bank-credit",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Tín dụng", "Thực tập sinh Quan hệ khách hàng cá nhân"],
+        "PART_TIME": ["Cộng tác viên Tư vấn tài chính (part-time)"],
+        "FULL_TIME": ["Chuyên viên Quan hệ khách hàng", "Chuyên viên Tín dụng", "Chuyên viên Tư vấn tài chính cá nhân"],
+        "CONTRACT": ["Chuyên viên Tín dụng (hợp đồng 6 tháng)"]
+      },
+      "benefits": ["Lãi suất vay ưu đãi dành cho nhân viên chính thức."],
+      "variants": [
+        {
+          "description": "Tiếp nhận hồ sơ vay tiêu dùng và vay mua nhà của khách hàng cá nhân, hướng dẫn khách bổ sung giấy tờ, thẩm định tín dụng sơ bộ và trình hồ sơ lên cấp phê duyệt.",
+          "requirements": "Nắm kiến thức cơ bản về tín dụng ngân hàng, biết đọc bảng lương, sao kê. Giao tiếp lịch sự, tạo được thiện cảm. Dùng Excel và tin học văn phòng thành thạo.",
+          "skills": { "required": ["Thẩm định tín dụng", "Giao tiếp", "Excel"], "preferred": ["Tin học văn phòng"] }
+        },
+        {
+          "description": "Tư vấn sản phẩm tài chính cho khách hàng tại quầy và qua điện thoại: tài khoản thanh toán, thẻ tín dụng, tiết kiệm, bảo hiểm. Chăm sóc danh sách khách được giao và giới thiệu sản phẩm phù hợp.",
+          "requirements": "Giao tiếp tốt, chủ động, thích làm việc với con người. Hiểu các sản phẩm ngân hàng cơ bản. Biết dùng CRM để ghi nhận thông tin khách là lợi thế.",
+          "skills": { "required": ["Tư vấn sản phẩm tài chính", "Giao tiếp"], "preferred": ["CRM", "Chăm sóc khách hàng"] }
+        },
+        {
+          "description": "Hỗ trợ chuyên viên quan hệ khách hàng doanh nghiệp: thu thập số liệu tài chính, đánh giá khả năng trả nợ, viết tờ trình cấp hạn mức tín dụng cho doanh nghiệp vừa và nhỏ.",
+          "requirements": "Có kiến thức phân tích tài chính doanh nghiệp, đọc được bảng cân đối kế toán. Thành thạo Excel. Biết đàm phán và thuyết trình là điểm cộng.",
+          "skills": { "required": ["Thẩm định tín dụng", "Excel", "Phân tích tài chính"], "preferred": ["Đàm phán", "Thuyết trình"] }
+        }
+      ]
+    },
+    {
+      "position": "recruiter",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Tuyển dụng", "Thực tập sinh Nhân sự tuyển dụng"],
+        "PART_TIME": ["Cộng tác viên Tuyển dụng (part-time)"],
+        "FULL_TIME": ["Chuyên viên Tuyển dụng", "Recruiter", "Nhân viên Tuyển dụng"],
+        "CONTRACT": ["Chuyên viên Tuyển dụng (hợp đồng dự án)"]
+      },
+      "benefits": ["Thưởng theo số vị trí tuyển thành công."],
+      "variants": [
+        {
+          "description": "Tuyển nhân viên bán hàng và quản lý cửa hàng cho một chuỗi bán lẻ đang mở rộng: đăng tin tuyển dụng, sàng lọc hồ sơ, gọi điện hẹn lịch và tổ chức các buổi phỏng vấn nhóm tại cửa hàng.",
+          "requirements": "Thích làm việc với con người, giao tiếp qua điện thoại tự tin. Biết sắp xếp nhiều việc cùng lúc, quản lý thời gian tốt. Dùng tin học văn phòng thành thạo.",
+          "skills": { "required": ["Tuyển dụng", "Sàng lọc hồ sơ", "Giao tiếp"], "preferred": ["Quản lý thời gian", "Tin học văn phòng"] }
+        },
+        {
+          "description": "Tìm kiếm và tiếp cận ứng viên lập trình viên, kiểm thử cho các dự án phần mềm: tìm hồ sơ trên mạng nghề nghiệp, trao đổi sơ bộ, phối hợp với trưởng nhóm kỹ thuật để phỏng vấn ứng viên.",
+          "requirements": "Hiểu cơ bản các vị trí trong ngành phần mềm hoặc sẵn sàng học nhanh. Đọc, viết tiếng Anh tốt để trao đổi với ứng viên. Kiên trì, chủ động, biết đàm phán mức lương.",
+          "skills": { "required": ["Tuyển dụng", "Phỏng vấn ứng viên", "Giao tiếp"], "preferred": ["Tiếng Anh giao tiếp", "Đàm phán"] }
+        },
+        {
+          "description": "Tham gia xây dựng thương hiệu nhà tuyển dụng cho một công ty sản xuất: tổ chức ngày hội việc làm ở các trường, viết nội dung tuyển dụng, đồng hành cùng người mới trong tháng đầu đi làm.",
+          "requirements": "Có ý tưởng sáng tạo, viết nội dung tốt. Hiểu Employer Branding và quy trình onboarding nhân viên mới là lợi thế. Giao tiếp tự tin trước đám đông.",
+          "skills": { "required": ["Tuyển dụng", "Giao tiếp", "Sàng lọc hồ sơ"], "preferred": ["Employer Branding", "Onboarding nhân viên"] }
+        }
+      ]
+    },
+    {
+      "position": "hr-admin",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Hành chính nhân sự", "Thực tập sinh C&B"],
+        "PART_TIME": ["Nhân viên Hành chính nhân sự (part-time)"],
+        "FULL_TIME": ["Nhân viên Hành chính nhân sự", "Chuyên viên C&B", "Nhân viên Tiền lương và Bảo hiểm"],
+        "CONTRACT": ["Nhân viên Hành chính nhân sự (hợp đồng 6 tháng)"]
+      },
+      "benefits": ["Được đào tạo nghiệp vụ tiền lương, bảo hiểm bài bản."],
+      "variants": [
+        {
+          "description": "Tính lương, thưởng và phụ cấp hằng tháng cho khoảng ba trăm công nhân viên nhà máy: tổng hợp chấm công, tính tăng ca, đối chiếu với các phòng ban trước khi chuyển kế toán chi trả.",
+          "requirements": "Thành thạo Excel (hàm điều kiện, PivotTable). Hiểu cách tính thuế thu nhập cá nhân và các khoản trích theo lương. Cẩn thận, bảo mật thông tin, nắm Luật lao động cơ bản.",
+          "skills": { "required": ["Tính lương (C&B)", "Excel", "Luật lao động"], "preferred": ["Bảo hiểm xã hội"] }
+        },
+        {
+          "description": "Phụ trách thủ tục bảo hiểm xã hội, bảo hiểm y tế cho nhân viên: báo tăng giảm lao động, giải quyết chế độ thai sản, ốm đau, chốt sổ khi nghỉ việc. Hướng dẫn nhân viên mới hoàn thiện hồ sơ.",
+          "requirements": "Nắm quy định về bảo hiểm xã hội và Luật lao động. Dùng Excel và tin học văn phòng tốt. Giao tiếp nhẹ nhàng, kiên nhẫn giải thích cho người lao động.",
+          "skills": { "required": ["Bảo hiểm xã hội", "Luật lao động", "Excel"], "preferred": ["Tin học văn phòng", "Giao tiếp"] }
+        },
+        {
+          "description": "Quản lý hồ sơ nhân sự, hợp đồng lao động và các thủ tục hành chính văn phòng cho công ty đang tăng nhanh số người. Đón nhân viên mới, chuẩn bị chỗ ngồi, thiết bị và lịch onboarding nhân viên tuần đầu.",
+          "requirements": "Cẩn thận, ngăn nắp, hiểu cơ bản Luật lao động về hợp đồng. Thành thạo Excel. Biết sắp xếp công việc và quản lý thời gian khi nhiều việc đến cùng lúc.",
+          "skills": { "required": ["Luật lao động", "Excel", "Quản lý hồ sơ nhân sự"], "preferred": ["Onboarding nhân viên", "Quản lý thời gian"] }
+        }
+      ]
+    },
+    {
+      "position": "import-export",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Xuất nhập khẩu", "Thực tập sinh Logistics"],
+        "PART_TIME": ["Nhân viên Chứng từ (part-time)"],
+        "FULL_TIME": ["Nhân viên Xuất nhập khẩu", "Nhân viên Chứng từ - Hải quan", "Import-Export Executive"],
+        "CONTRACT": ["Nhân viên Xuất nhập khẩu (hợp đồng 6 tháng)"]
+      },
+      "benefits": ["Được đi thực tế tại cảng và kho ngoại quan."],
+      "variants": [
+        {
+          "description": "Chuẩn bị bộ chứng từ xuất khẩu cho các lô hàng nông sản đi châu Á: hoá đơn thương mại, phiếu đóng gói, vận đơn, chứng nhận xuất xứ. Theo dõi lịch tàu và cập nhật tình trạng lô hàng cho khách.",
+          "requirements": "Nắm quy trình và chứng từ xuất nhập khẩu, hiểu các điều kiện Incoterms thông dụng. Đọc, viết thư tiếng Anh tốt. Dùng Excel thành thạo, cẩn thận với từng con số.",
+          "skills": { "required": ["Chứng từ xuất nhập khẩu", "Incoterms", "Tiếng Anh giao tiếp"], "preferred": ["Excel"] }
+        },
+        {
+          "description": "Làm thủ tục hải quan cho linh kiện và máy móc nhập khẩu của nhà máy: khai báo trên hệ thống điện tử, chuẩn bị hồ sơ kiểm tra chuyên ngành, phối hợp với đại lý vận chuyển khi hàng về cảng.",
+          "requirements": "Hiểu quy trình khai báo hải quan và cách tra mã HS. Nắm cơ bản về thuế nhập khẩu. Đọc hiểu chứng từ tiếng Anh; biết tiếng Trung là lợi thế lớn.",
+          "skills": { "required": ["Khai báo hải quan", "Chứng từ xuất nhập khẩu", "Tiếng Anh giao tiếp"], "preferred": ["Tiếng Trung", "Tin học văn phòng"] }
+        },
+        {
+          "description": "Hỗ trợ bộ phận kinh doanh quốc tế làm việc với khách hàng nước ngoài: báo giá theo điều kiện giao hàng, theo dõi thanh toán bằng L/C hoặc chuyển khoản, xử lý chứng từ khi ngân hàng yêu cầu chỉnh sửa.",
+          "requirements": "Hiểu Incoterms và các phương thức thanh toán quốc tế. Trao đổi bằng tiếng Anh tự tin qua thư và điện thoại. Biết đàm phán giá, điều khoản là điểm cộng.",
+          "skills": { "required": ["Incoterms", "Tiếng Anh giao tiếp", "Chứng từ xuất nhập khẩu"], "preferred": ["Thanh toán quốc tế", "Đàm phán"] }
+        }
+      ]
+    },
+    {
+      "position": "supply-chain",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Mua hàng", "Thực tập sinh Chuỗi cung ứng"],
+        "PART_TIME": ["Trợ lý Mua hàng (part-time)"],
+        "FULL_TIME": ["Nhân viên Mua hàng", "Chuyên viên Chuỗi cung ứng", "Purchasing Executive"],
+        "CONTRACT": ["Nhân viên Mua hàng (hợp đồng dự án)"]
+      },
+      "benefits": ["Được tham gia các buổi đánh giá nhà cung cấp tại xưởng."],
+      "variants": [
+        {
+          "description": "Tìm và so sánh báo giá vật tư, bao bì cho nhà máy thực phẩm; lập đơn đặt hàng, theo dõi tiến độ giao hàng và chấm điểm nhà cung cấp theo chất lượng, giá, thời gian giao.",
+          "requirements": "Cẩn thận, biết so sánh và tổng hợp báo giá trên Excel. Có kỹ năng đàm phán, chủ động trao đổi với nhà cung cấp. Đã dùng phần mềm ERP là lợi thế.",
+          "skills": { "required": ["Mua hàng", "Excel", "Đàm phán"], "preferred": ["ERP", "Quản lý nhà cung cấp"] }
+        },
+        {
+          "description": "Lập kế hoạch nhập hàng cho chuỗi siêu thị mini: dự báo nhu cầu theo mùa, theo dõi tồn kho tại kho tổng và cửa hàng, cân đối để không thiếu hàng bán chạy và không tồn hàng chậm.",
+          "requirements": "Có tư duy số liệu, dùng Excel tốt, biết Power BI là điểm cộng. Hiểu cơ bản về quản lý kho và vòng quay hàng tồn. Chủ động phối hợp với nhiều bộ phận.",
+          "skills": { "required": ["Mua hàng", "Excel"], "preferred": ["Quản lý kho", "Power BI"] }
+        },
+        {
+          "description": "Quản lý danh sách nhà cung cấp linh kiện trong và ngoài nước cho một công ty điện tử: đánh giá định kỳ, đàm phán hợp đồng khung, theo dõi các lô nhập khẩu theo điều kiện Incoterms.",
+          "requirements": "Hiểu quy trình quản lý nhà cung cấp và mua hàng. Đọc, viết tiếng Anh tốt để làm việc với đối tác nước ngoài. Nắm Incoterms là lợi thế.",
+          "skills": { "required": ["Quản lý nhà cung cấp", "Mua hàng", "Đàm phán"], "preferred": ["Incoterms", "Tiếng Anh giao tiếp"] }
+        }
+      ]
+    },
+    {
+      "position": "sales-b2b",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Kinh doanh", "Thực tập sinh Phát triển khách hàng doanh nghiệp"],
+        "PART_TIME": ["Nhân viên Kinh doanh (part-time)"],
+        "FULL_TIME": ["Nhân viên Kinh doanh B2B", "Sales Executive", "Chuyên viên Phát triển kinh doanh"],
+        "CONTRACT": ["Nhân viên Kinh doanh (hợp đồng 6 tháng)"]
+      },
+      "benefits": ["Hoa hồng theo doanh số, không giới hạn mức thưởng."],
+      "variants": [
+        {
+          "description": "Tìm kiếm và chăm sóc khách hàng doanh nghiệp cho phần mềm quản lý bán hàng: gọi điện giới thiệu, đặt lịch demo, theo dõi khách trên CRM tới khi ký hợp đồng.",
+          "requirements": "Giao tiếp tự tin, không ngại gọi điện cho người lạ. Biết lắng nghe để tư vấn bán hàng đúng nhu cầu. Đã làm telesales hoặc bán hàng thời sinh viên là lợi thế.",
+          "skills": { "required": ["Giao tiếp", "Tư vấn bán hàng", "CRM"], "preferred": ["Telesales", "Chăm sóc khách hàng"] }
+        },
+        {
+          "description": "Phát triển khách hàng là nhà máy, kho hàng cho dịch vụ vận chuyển và lưu kho: khảo sát nhu cầu, lập báo giá, thuyết trình giải pháp và đàm phán hợp đồng cùng trưởng phòng.",
+          "requirements": "Có khả năng thuyết trình và đàm phán. Dùng Excel để lập báo giá, tính chi phí. Chủ động, chịu được chỉ tiêu doanh số theo quý.",
+          "skills": { "required": ["Đàm phán", "Giao tiếp", "Tư vấn bán hàng"], "preferred": ["Thuyết trình", "Excel"] }
+        },
+        {
+          "description": "Bán gói thiết bị và dịch vụ văn phòng cho doanh nghiệp nước ngoài mới đặt văn phòng: tiếp nhận yêu cầu, tư vấn bán hàng, chuẩn bị hợp đồng song ngữ và hỗ trợ khách sau bán.",
+          "requirements": "Trao đổi tiếng Anh lưu loát với khách hàng. Biết sắp xếp lịch hẹn, quản lý thời gian tốt. Đã dùng CRM để theo dõi khách hàng là điểm cộng.",
+          "skills": { "required": ["Tư vấn bán hàng", "CRM", "Giao tiếp"], "preferred": ["Tiếng Anh giao tiếp", "Quản lý thời gian"] }
+        }
+      ]
+    },
+    {
+      "position": "ecommerce-ops",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Vận hành sàn thương mại điện tử", "Thực tập sinh E-commerce"],
+        "PART_TIME": ["Nhân viên Vận hành gian hàng online (part-time)"],
+        "FULL_TIME": ["Chuyên viên Vận hành sàn thương mại điện tử", "E-commerce Executive", "Nhân viên Quản lý gian hàng online"],
+        "CONTRACT": ["Nhân viên Vận hành sàn (hợp đồng mùa sale)"]
+      },
+      "benefits": ["Thưởng theo doanh số các đợt sale lớn."],
+      "variants": [
+        {
+          "description": "Vận hành gian hàng chính hãng của một thương hiệu mỹ phẩm trên các sàn: đăng sản phẩm, cập nhật giá, tham gia chương trình khuyến mãi của sàn, theo dõi đánh giá và điểm uy tín gian hàng.",
+          "requirements": "Đã bán hàng hoặc vận hành sàn TMĐT ở mức cơ bản. Dùng Excel tốt để cập nhật giá hàng loạt. Thiết kế nhanh ảnh khuyến mãi bằng Canva.",
+          "skills": { "required": ["Vận hành sàn TMĐT", "Excel", "Canva"], "preferred": ["Chăm sóc khách hàng"] }
+        },
+        {
+          "description": "Xử lý đơn hàng từ website và các sàn cho thương hiệu đồ gia dụng: xác nhận đơn, phối hợp kho đóng gói, theo dõi giao vận, xử lý đơn hoàn và đối soát tiền với sàn mỗi tuần.",
+          "requirements": "Nhanh nhẹn, cẩn thận, biết quản lý đơn hàng số lượng lớn trong mùa sale. Thành thạo Excel để đối soát. Hiểu cơ bản về quản lý kho là lợi thế.",
+          "skills": { "required": ["Quản lý đơn hàng", "Excel", "Vận hành sàn TMĐT"], "preferred": ["Quản lý kho"] }
+        },
+        {
+          "description": "Phụ trách kênh bán hàng trên mạng xã hội video cho thương hiệu thời trang: lên lịch livestream bán hàng, chuẩn bị sản phẩm, chạy quảng cáo hỗ trợ và tổng hợp doanh số sau mỗi phiên.",
+          "requirements": "Năng động, không ngại đứng trước máy quay. Đã thử chạy TikTok Ads hoặc Facebook Ads. Dùng Canva, Excel thành thạo.",
+          "skills": { "required": ["Vận hành sàn TMĐT", "Canva", "Excel"], "preferred": ["Livestream bán hàng", "TikTok Ads", "Facebook Ads"] }
+        }
+      ]
+    },
+    {
+      "position": "customer-service",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Chăm sóc khách hàng", "Thực tập sinh Dịch vụ khách hàng"],
+        "PART_TIME": ["Nhân viên Chăm sóc khách hàng (part-time)"],
+        "FULL_TIME": ["Nhân viên Chăm sóc khách hàng", "Customer Service Executive", "Nhân viên Tổng đài"],
+        "CONTRACT": ["Nhân viên Chăm sóc khách hàng (hợp đồng 6 tháng)"]
+      },
+      "benefits": ["Phụ cấp ca tối và ngày lễ."],
+      "variants": [
+        {
+          "description": "Trả lời khách hàng qua tổng đài, chat và thư điện tử cho sàn thương mại điện tử: tra cứu đơn, hướng dẫn đổi trả, ghi nhận phản ánh và chuyển bộ phận liên quan. Làm theo ca, có ca tối và cuối tuần.",
+          "requirements": "Giọng nói rõ ràng, giao tiếp lịch sự, kiên nhẫn. Gõ máy nhanh, dùng tin học văn phòng thành thạo. Bình tĩnh khi xử lý khiếu nại của khách.",
+          "skills": { "required": ["Chăm sóc khách hàng", "Giao tiếp", "Xử lý khiếu nại"], "preferred": ["Tin học văn phòng"] }
+        },
+        {
+          "description": "Chăm sóc khách hàng đang dùng phần mềm quản lý của công ty: hướng dẫn sử dụng qua điện thoại, ghi nhận lỗi gửi đội kỹ thuật, gọi lại kiểm tra mức độ hài lòng sau khi xử lý.",
+          "requirements": "Giao tiếp tốt, thích tìm hiểu công nghệ. Biết dùng CRM hoặc hệ thống ticket là lợi thế. Phối hợp làm việc nhóm với đội kỹ thuật.",
+          "skills": { "required": ["Chăm sóc khách hàng", "Giao tiếp", "Tin học văn phòng"], "preferred": ["CRM", "Làm việc nhóm"] }
+        },
+        {
+          "description": "Hỗ trợ học viên và phụ huynh của hệ thống trung tâm ngoại ngữ: tư vấn lịch học, nhắc học phí, giải đáp thắc mắc, gọi điện giới thiệu khoá học mới cho học viên cũ.",
+          "requirements": "Giao tiếp thân thiện, biết tư vấn bán hàng nhẹ nhàng. Biết tiếng Anh giao tiếp là lợi thế. Sắp xếp công việc, quản lý thời gian tốt.",
+          "skills": { "required": ["Chăm sóc khách hàng", "Giao tiếp", "Tin học văn phòng"], "preferred": ["Tư vấn bán hàng", "Tiếng Anh giao tiếp", "Quản lý thời gian"] }
+        }
+      ]
+    },
+    {
+      "position": "hospitality",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Khách sạn", "Thực tập sinh Du lịch - Khách sạn"],
+        "PART_TIME": ["Nhân viên Lễ tân (part-time)"],
+        "FULL_TIME": ["Nhân viên Lễ tân", "Nhân viên Quan hệ khách hàng khách sạn", "Guest Service Agent"],
+        "CONTRACT": ["Nhân viên Khách sạn (hợp đồng mùa cao điểm)"]
+      },
+      "benefits": ["Ăn ca miễn phí và đồng phục do khách sạn cấp."],
+      "variants": [
+        {
+          "description": "Đón tiếp, làm thủ tục nhận phòng và trả phòng cho khách trong nước và quốc tế tại khu nghỉ dưỡng ven biển. Giới thiệu dịch vụ, xử lý yêu cầu của khách trong suốt thời gian lưu trú. Làm theo ca xoay.",
+          "requirements": "Tiếng Anh giao tiếp tốt, tác phong chuyên nghiệp, thái độ niềm nở. Đã học nghiệp vụ lễ tân khách sạn. Biết dùng Opera PMS hoặc phần mềm quản lý khách sạn tương tự là lợi thế.",
+          "skills": { "required": ["Lễ tân khách sạn", "Tiếng Anh giao tiếp", "Opera PMS"], "preferred": ["Chăm sóc khách hàng"] }
+        },
+        {
+          "description": "Phụ trách quan hệ khách hàng tại một khách sạn bốn sao: chào đón khách thân thiết, ghi nhận góp ý, xử lý khiếu nại và phối hợp các bộ phận để khắc phục nhanh.",
+          "requirements": "Giao tiếp khéo léo, bình tĩnh trước tình huống khó. Nói được tiếng Anh; biết tiếng Hàn hoặc tiếng Nhật là lợi thế lớn vì khách đoàn chiếm phần đông.",
+          "skills": { "required": ["Chăm sóc khách hàng", "Tiếng Anh giao tiếp", "Lễ tân khách sạn"], "preferred": ["Xử lý khiếu nại", "Giao tiếp", "Tiếng Hàn", "Tiếng Nhật"] }
+        },
+        {
+          "description": "Làm việc tại quầy dịch vụ du lịch của khách sạn: tư vấn tour trong ngày, đặt vé tham quan, xe đưa đón, phối hợp với đối tác điều hành tour để chuyến đi của khách diễn ra suôn sẻ.",
+          "requirements": "Hiểu biết về các điểm tham quan, có khả năng kể chuyện cuốn hút. Tiếng Anh giao tiếp tốt, biết tiếng Trung là lợi thế. Dùng tin học văn phòng thành thạo.",
+          "skills": { "required": ["Tiếng Anh giao tiếp", "Chăm sóc khách hàng", "Lễ tân khách sạn"], "preferred": ["Điều hành tour", "Tiếng Trung", "Tin học văn phòng"] }
+        }
+      ]
+    },
+    {
+      "position": "english-ta",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Trợ giảng tiếng Anh", "Thực tập sinh Giáo viên tiếng Anh"],
+        "PART_TIME": ["Trợ giảng tiếng Anh (part-time)"],
+        "FULL_TIME": ["Giáo viên tiếng Anh", "Trợ giảng tiếng Anh toàn thời gian", "English Teaching Assistant"],
+        "CONTRACT": ["Giáo viên tiếng Anh (hợp đồng theo khoá)"]
+      },
+      "benefits": ["Được dự giờ và nhận góp ý từ giáo viên nhiều kinh nghiệm."],
+      "variants": [
+        {
+          "description": "Trợ giảng cho các lớp IELTS buổi tối: chấm bài viết, chữa phát âm, kèm riêng học viên yếu và theo dõi tiến độ từng bạn. Phối hợp với giáo viên chính để điều chỉnh bài tập theo lớp.",
+          "requirements": "Có chứng chỉ IELTS từ 6.5 trở lên. Phát âm chuẩn, giải thích ngữ pháp dễ hiểu. Kiên nhẫn, có trách nhiệm với tiến bộ của học viên.",
+          "skills": { "required": ["IELTS", "Giảng dạy tiếng Anh", "Quản lý lớp học"], "preferred": ["Giao tiếp"] }
+        },
+        {
+          "description": "Dạy tiếng Anh cho trẻ từ sáu đến mười tuổi theo giáo trình của trung tâm: tổ chức trò chơi, bài hát, hoạt động nhóm, nhận xét học viên cuối buổi cho phụ huynh.",
+          "requirements": "Yêu trẻ, năng động, đã giảng dạy tiếng Anh qua gia sư hoặc câu lạc bộ. Biết quản lý lớp học đông. Thiết kế học liệu bằng Canva là lợi thế.",
+          "skills": { "required": ["Giảng dạy tiếng Anh", "Quản lý lớp học", "Soạn giáo án"], "preferred": ["Canva", "Giao tiếp"] }
+        },
+        {
+          "description": "Soạn giáo án và học liệu cho khoá luyện thi TOEIC dành cho sinh viên và người đi làm: đề luyện tập, bài giảng điện tử, ngân hàng câu hỏi theo chủ điểm.",
+          "requirements": "Có điểm TOEIC hoặc IELTS cao, nắm chắc ngữ pháp và từ vựng thi. Thành thạo tin học văn phòng, biết soạn bài giảng điện tử. Thuyết trình rõ ràng, tự tin.",
+          "skills": { "required": ["Soạn giáo án", "IELTS", "Giảng dạy tiếng Anh"], "preferred": ["TOEIC", "Tin học văn phòng", "Thuyết trình"] }
+        }
+      ]
+    },
+    {
+      "position": "automation-engineer",
+      "titles": {
+        "INTERNSHIP": ["Thực tập sinh Kỹ thuật tự động hoá", "Thực tập sinh Bảo trì điện"],
+        "PART_TIME": ["Kỹ thuật viên Điện - Tự động hoá (part-time)"],
+        "FULL_TIME": ["Kỹ sư Tự động hoá", "Kỹ sư Điện - Tự động hoá", "Kỹ sư Bảo trì nhà máy"],
+        "CONTRACT": ["Kỹ sư Tự động hoá (hợp đồng dự án)"]
+      },
+      "benefits": ["Xe đưa đón tới nhà máy, phụ cấp ca đêm."],
+      "variants": [
+        {
+          "description": "Lập trình và chỉnh sửa PLC cho dây chuyền đóng gói, kiểm tra tín hiệu cảm biến, hỗ trợ chạy thử khi lắp máy mới. Làm việc cùng tổ bảo trì để xử lý sự cố dừng máy.",
+          "requirements": "Nắm nguyên lý PLC, đã lập trình trên phần mềm của ít nhất một hãng. Đọc được sơ đồ mạch điện, hiểu điện công nghiệp cơ bản. Sẵn sàng làm theo ca.",
+          "skills": { "required": ["PLC", "Điện công nghiệp"], "preferred": ["Đọc bản vẽ kỹ thuật", "SCADA"] }
+        },
+        {
+          "description": "Thiết kế tủ điện và bản vẽ lắp đặt cho các dự án cải tạo nhà xưởng: bố trí thiết bị, đi dây, lập danh mục vật tư. Phối hợp với đội thi công và giám sát tại công trình.",
+          "requirements": "Thành thạo AutoCAD, biết đọc bản vẽ kỹ thuật điện và cơ khí. Hiểu tiêu chuẩn an toàn điện công nghiệp. Dùng Excel để lập dự toán vật tư.",
+          "skills": { "required": ["AutoCAD", "Đọc bản vẽ kỹ thuật", "Điện công nghiệp"], "preferred": ["Excel"] }
+        },
+        {
+          "description": "Theo dõi hiệu suất thiết bị trên hệ thống SCADA của nhà máy, lập kế hoạch bảo trì phòng ngừa và tham gia các dự án cải tiến theo tinh thần Lean, 5S để giảm thời gian dừng máy.",
+          "requirements": "Hiểu nguyên lý PLC và SCADA, có kiến thức bảo trì thiết bị. Đọc tài liệu kỹ thuật tiếng Anh. Có tư duy cải tiến, cẩn thận, tuân thủ an toàn lao động.",
+          "skills": { "required": ["PLC", "Điện công nghiệp", "SCADA"], "preferred": ["Bảo trì thiết bị", "Lean / 5S", "Tiếng Anh giao tiếp"] }
+        }
+      ]
+    }
+  ]
+}

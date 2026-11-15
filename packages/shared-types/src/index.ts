@@ -21,7 +21,9 @@ export type ApplicationStatus =
   | "INTERVIEWING"
   | "ACCEPTED"
   | "REJECTED"
-  | "CANCELLED";
+  | "CANCELLED"
+  // AD-25 — hệ thống đóng vì tin đã ngừng tuyển (trạng thái cuối, chỉ hệ thống chuyển)
+  | "JOB_CLOSED";
 
 export type NotificationType =
   | "APPLICATION_STATUS_CHANGED"
@@ -49,7 +51,14 @@ export type NotificationType =
   | "SUPPORT_CONTACT_RECEIVED"
   // AD-18 — Admin kích hoạt thủ công, gửi hướng dẫn đặt lại mật khẩu
   | "ACCOUNT_ACTIVATED"
-  | "PASSWORD_RESET_SUGGESTED";
+  | "PASSWORD_RESET_SUGGESTED"
+  // AD-23 — hệ thống đã tự gửi lời mời cho tin (gộp tối đa 1 thông báo/tin/ngày)
+  | "AUTO_OUTREACH_SENT"
+  // AD-25 — nhắc hằng tuần công ty về hồ sơ tồn (gộp 1 thông báo/employer/tuần)
+  | "APPLICATIONS_NEED_ATTENTION"
+  // AD-26 — tin mới phù hợp (gộp 1 thông báo/ứng viên/ngày); nhắc một lần thêm kỹ năng
+  | "JOB_ALERT"
+  | "PROFILE_SKILLS_REMINDER";
 
 /** Loại vấn đề của form /support (AD-17). */
 export type SupportCategory = "ACCOUNT_SUSPENDED" | "OTHER";
@@ -75,6 +84,8 @@ export interface PaginatedResponse<T> {
   items: T[];
   nextCursor?: string;
   hasMore: boolean;
+  /** Tổng số kết quả cùng điều kiện lọc — chỉ endpoint nào ghi rõ mới có (vd. GET /job-posts, AD-26). */
+  total?: number;
 }
 
 // ─── Health check (Phase 1) ──────────────────────────────────────────────
@@ -751,6 +762,33 @@ export interface JobPost {
   latestModerationAction: JobPostModerationActionDto | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * Số ứng viên phù hợp (0.3), cùng định nghĩa với `HiringProgressItem.matched`. Chỉ có ở
+   * GET /employer/job-posts và chỉ với tin đang hiển thị (PUBLISHED, chưa quá hạn); tin
+   * khác trạng thái thì không có trường này.
+   */
+  matchedCount?: number;
+  /**
+   * Người xem là người đăng tin ⇒ được tìm và mời ứng viên cho tin (B3: API tìm / mời trả 404
+   * cho người khác cùng công ty). Chỉ có ở GET /employer/job-posts và GET /employer/job-posts/:id.
+   */
+  isOwner?: boolean;
+  /**
+   * AD-26 (D5) — chỉ có ở GET /job-posts khi người xem đăng nhập vai trò ứng viên.
+   * Khách và vai trò khác không có trường này.
+   */
+  viewer?: JobPostViewerInfo;
+}
+
+export interface JobPostViewerInfo {
+  /**
+   * Điểm phù hợp lưu trong bảng điểm (AD-24: chấm khi tin được đăng và mỗi đêm), không
+   * chấm lại theo hồ sơ vừa sửa. null = chưa có điểm (không chung kỹ năng nào với tin).
+   */
+  matchScore: number | null;
+  saved: boolean;
+  /** Có đơn vào tin ở mọi trạng thái trừ CANCELLED (Q1, cùng quy tắc D3). */
+  applied: boolean;
 }
 
 export interface CreateJobPostRequest {
@@ -942,10 +980,23 @@ export interface JobRecommendation {
  */
 export type JobRecommendationStatus = "OK" | "INSUFFICIENT_PROFILE";
 
+/**
+ * AD-26 — TABLE: đọc bảng điểm lưu sẵn, có "Xem thêm". LIVE: ứng viên chưa có dòng
+ * nào trong bảng điểm (vd. vừa tạo hồ sơ), chấm trực tiếp, chỉ một trang.
+ */
+export type JobRecommendationSource = "TABLE" | "LIVE";
+
 export interface JobRecommendationList {
   status: JobRecommendationStatus;
-  /** Tối đa 10, giảm dần theo điểm; có thể ít hơn — không phải lỗi. */
+  source: JobRecommendationSource;
+  /** Một trang (tối đa 10), giảm dần theo điểm vừa chấm; có thể ít hơn — không phải lỗi. */
   items: JobRecommendation[];
+  /** Tổng số tin phù hợp (mọi trang). LIVE: bằng số tin của trang. */
+  total: number;
+  /** Gửi lại qua `?cursor=` để lấy trang sau; null = hết. */
+  nextCursor: string | null;
+  /** SKILL_GAP / INDUSTRY_MISMATCH tính bằng code từ trang đầu; trang sau luôn rỗng. */
+  suggestions: ProfileInsightSuggestion[];
 }
 
 // ─── Việc làm tương tự (trang chi tiết tin) ──────────────────────────────
@@ -983,6 +1034,11 @@ export interface CandidateSearchResultDto extends OutreachCandidateCardDto {
   match: MatchResult;
   /** Từng có lời mời cho tin này nhưng đã hết hạn — được mời lại. */
   previouslyInvitedExpired: boolean;
+  /**
+   * AD-23 — ứng viên đã nhận đủ lời mời trong hôm nay (mọi công ty). Vẫn hiện trong
+   * danh sách nhưng mời sẽ bị 409; mời lại được từ 0h UTC (7h sáng giờ Việt Nam).
+   */
+  cappedToday: boolean;
 }
 
 /** Danh sách "Đã mời" (D6) — không chấm lại điểm. */
@@ -996,6 +1052,107 @@ export interface SentOutreachInvitationDto extends OutreachCandidateCardDto {
   matchScore: number | null;
   matchWeightsVersion: string | null;
   canViewProfile: boolean;
+  /** AD-23 mục 9 — MANUAL: mời tay hoặc "Mời tất cả gợi ý"; AUTO: hệ thống tự mời. */
+  source: OutreachInvitationSource;
+}
+
+export type OutreachInvitationSource = "MANUAL" | "AUTO";
+
+/**
+ * AD-23 — lý do một ứng viên không được mời: không còn hồ sơ, tắt cho phép mời, đã ứng
+ * tuyển, đã có lời mời cho tin (Q4), đã nhận đủ lời mời hôm nay, công ty hết hạn mức.
+ */
+export type OutreachInviteSkipReason = "NOT_FOUND" | "NOT_OPEN" | "APPLIED" | "BLOCKED" | "CANDIDATE_CAP" | "QUOTA";
+
+/** POST /employer/job-posts/:jobId/invitations/bulk — "Mời tất cả gợi ý" (AD-23 mục 1a). */
+export interface BulkInviteRequest {
+  /** Danh sách đang hiện ở tab "Gợi ý", tối đa 10 id, thứ tự = thứ tự mời. */
+  candidateIds: string[];
+}
+
+export interface BulkInviteResponse {
+  /** Lời mời đã tạo, theo thứ tự gửi lên. */
+  invited: SentOutreachInvitationDto[];
+  /** Người không được mời. Hết hạn mức giữa chừng thì người đó và mọi người sau đều là QUOTA. */
+  skipped: { candidateId: string; reason: OutreachInviteSkipReason }[];
+  /** Hạn mức sau khi mời. */
+  quota: OutreachDailyQuotaStatus;
+}
+
+// ─── Tự động mời theo tin (AD-23) — docs/06-backend/auto-outreach/PLAN.md ──
+
+/** Cài đặt tự động mời của một tin, lưu trên JobPost. */
+export interface AutoOutreachSettings {
+  enabled: boolean;
+  /** Ngưỡng điểm phù hợp 0–100, mặc định 80. */
+  minScore: number;
+  /** Số người cần tuyển 1–100, mặc định 1. Ngừng tự mời khi số đơn ACCEPTED ≥ số này. */
+  hiringTarget: number;
+}
+
+/** PATCH /employer/job-posts/:jobId/auto-outreach — gửi ít nhất một trường. */
+export type UpdateAutoOutreachSettingsRequest = Partial<AutoOutreachSettings>;
+
+/**
+ * Trạng thái hiển thị của thẻ "Tự động mời ứng viên", xét theo thứ tự:
+ * - `PLAN_NOT_ALLOWED`: công ty dùng thử hoặc không có gói còn hiệu lực;
+ * - `OFF`: chưa bật;
+ * - `TARGET_MET`: số đơn ACCEPTED ≥ hiringTarget, hệ thống ngừng mời;
+ * - `NOT_PUBLISHED`: tin không ở trạng thái PUBLISHED;
+ * - `PAUSED_BY_COMPANY_SHARE`: tỉ lệ tự động của công ty cho phần tự động 0 lời mời/ngày
+ *   (tỉ lệ 0%, hoặc quá nhỏ so với hạn mức nên làm tròn xuống 0), hệ thống không tự mời (0.6 bước 8);
+ * - `NO_MATCH` / `CANDIDATES_CAPPED`: tạm dừng vì hết ứng viên, tới `nextCheckAt` thì kiểm lại;
+ * - `RUNNING`: đang giữ đủ lời mời và tự mời bù.
+ */
+export type AutoOutreachState =
+  | "OFF"
+  | "RUNNING"
+  | "TARGET_MET"
+  | "NO_MATCH"
+  | "CANDIDATES_CAPPED"
+  | "NOT_PUBLISHED"
+  | "PAUSED_BY_COMPANY_SHARE"
+  | "PLAN_NOT_ALLOWED";
+
+/** Số liệu của tin. Lời mời tay và tự động đều được tính. */
+export interface AutoOutreachStatus {
+  /** Số lời mời đang hoạt động cần giữ = hiringTarget × hệ số mời của gói; null khi gói không có tự động mời. */
+  target: number | null;
+  /** Lời mời đang hoạt động = pending + acceptedInvitations. */
+  active: number;
+  /** Lời mời PENDING chưa quá hạn. */
+  pending: number;
+  /** Lời mời ứng viên đã nhận lời. */
+  acceptedInvitations: number;
+  /** Số đơn ứng tuyển của tin ở trạng thái ACCEPTED. */
+  hiredCount: number;
+  /** Lời mời tự động của tin gửi từ 0h UTC (7h sáng giờ Việt Nam) hôm nay. */
+  autoSentToday: number;
+  /** Chỉ có khi state là NO_MATCH hoặc CANDIDATES_CAPPED (ISO). */
+  nextCheckAt: string | null;
+  /**
+   * Số ứng viên phù hợp, đọc từ bảng điểm lưu sẵn (0.3), cùng định nghĩa với
+   * `HiringProgressItem.matched`. Tin không hiển thị thì không có điểm, nên là 0.
+   */
+  matched: number;
+  /** Phần của `matched` đã có đơn đang xét hoặc đã tuyển. */
+  matchedApplied: number;
+  /** Số đơn của tin ở trạng thái INTERVIEWING. */
+  interviewing: number;
+  /** Lần chấm gần nhất của tin (ISO); null ⇒ chưa chấm hoặc tin không hiển thị. */
+  matchScoresAt: string | null;
+}
+
+/** GET/PATCH /employer/job-posts/:jobId/auto-outreach — chỉ người đăng tin. */
+export interface JobAutoOutreachDto extends AutoOutreachSettings {
+  state: AutoOutreachState;
+  status: AutoOutreachStatus;
+}
+
+/** GET/PATCH /employer/outreach/settings — chỉ quản trị viên công ty được sửa. */
+export interface CompanyOutreachSettings {
+  /** Phần trăm hạn mức/ngày tự động mời được dùng, 0–100, mặc định 80. */
+  autoSharePercent: number;
 }
 
 /** Hộp lời mời của Candidate. */
@@ -1025,6 +1182,22 @@ export interface RespondOutreachInvitationResponse {
 export interface OutreachSettings {
   isOpenToOutreach: boolean;
 }
+
+// ─── Job alert (AD-26 D7–D9, docs/06-backend/job-discovery/PLAN.md bước 5) ──
+/** GET/PATCH /candidate/job-alert-settings. Bật sẵn `enabled`, `emailEnabled`. */
+export interface JobAlertSettings {
+  /** Báo khi có tin mới phù hợp (điểm ≥ max(ngưỡng tự mời của tin, 70)). */
+  enabled: boolean;
+  /** Email tổng hợp mỗi ngày 8h; chỉ có tác dụng khi `enabled`. */
+  emailEnabled: boolean;
+  /** Chỉ tin cùng thành phố với hồ sơ. Bật khi hồ sơ chưa có thành phố ⇒ 400 `JOB_ALERT_CITY_REQUIRED`. */
+  sameCityOnly: boolean;
+  /** Thành phố trên hồ sơ (chỉ đọc); null ⇒ chưa điền, `sameCityOnly` không báo tin nào. */
+  cityName: string | null;
+}
+
+/** PATCH: gửi ít nhất một công tắc. */
+export type UpdateJobAlertSettingsRequest = Partial<Pick<JobAlertSettings, "enabled" | "emailEnabled" | "sameCityOnly">>;
 
 // ─── Trang "Lời mời" của Employer (docs/06-backend/outreach-hub/PLAN.md) ──
 // Cấp công ty (Q1). Trạng thái luôn là trạng thái hiển thị (PENDING quá hạn hoặc
@@ -1077,6 +1250,46 @@ export interface CompanyOutreachInvitationQuery {
   limit?: number;
 }
 
+// ─── Độ hoàn thiện hồ sơ (AD-26 mục 8) ──────────────────────────────────
+// docs/06-backend/job-discovery/PLAN.md bước 3. Tính bằng code mỗi lần gọi, không LLM,
+// chỉ để hiển thị (không ảnh hưởng điểm phù hợp hay độ tin cậy). Nhãn, lợi ích và
+// link của từng mục do frontend giữ theo `key`.
+
+export type ProfileCompletenessKey =
+  | "skills"
+  | "cv"
+  | "outreach"
+  | "experience"
+  | "projects"
+  | "headlineOrBio"
+  | "educationMajor"
+  | "city";
+
+/** GATE = thiếu là mất hẳn một tính năng; MATCH = ảnh hưởng điểm phù hợp; FILTER = chỉ để lọc. */
+export type ProfileCompletenessGroup = "GATE" | "MATCH" | "FILTER";
+
+export interface ProfileCompletenessItem {
+  key: ProfileCompletenessKey;
+  done: boolean;
+  weight: number;
+  group: ProfileCompletenessGroup;
+}
+
+export interface ProfileCompletenessNextStep {
+  key: ProfileCompletenessKey;
+  /** `jobCount`/`ofJobs` tin hợp nhất cần mục này mà hồ sơ chưa có; null = chọn theo trọng số. */
+  evidence: { jobCount: number; ofJobs: number } | null;
+}
+
+export interface ProfileCompleteness {
+  /** 0..100 — tổng trọng số các mục đã có. */
+  score: number;
+  /** Đủ tám mục, theo thứ tự cố định (nhóm GATE → MATCH → FILTER). */
+  items: ProfileCompletenessItem[];
+  /** "Nên làm trước"; null khi đủ cả tám mục. */
+  nextStep: ProfileCompletenessNextStep | null;
+}
+
 // ─── Phân tích hồ sơ (A1 + A4, AD-14) ───────────────────────────────────
 // docs/06-backend/candidate-insights/PLAN.md. Lưu persistent, chỉ tính lại khi
 // Candidate bấm "Phân tích hồ sơ".
@@ -1094,7 +1307,7 @@ export interface ProfileInsightSuggestion {
 }
 
 export interface ProfileInsight {
-  /** 0..100 — kỹ năng 40, kinh nghiệm 25, học vấn 25, headline/bio 10. */
+  /** 0..100 — cùng công thức `ProfileCompleteness.score` (AD-26 mục 8) lúc phân tích. */
   completenessScore: number;
   strengths: string[];
   suggestions: ProfileInsightSuggestion[];
@@ -1110,10 +1323,29 @@ export interface JobPostSearchQuery {
   industryId?: string;
   jobType?: JobPostType;
   salaryMin?: number;
-  /** Lọc theo kỹ năng — tin phải có ĐỦ tất cả skill được chọn. */
+  /** Lọc theo kỹ năng; cách kết hợp theo `skillMode`. */
   skillIds?: string[];
+  /** `any` (mặc định, Q4) = tin có ít nhất một kỹ năng đã chọn; `all` = có đủ tất cả. */
+  skillMode?: JobPostSkillMode;
+  /** Kinh nghiệm tin yêu cầu (Q3): không yêu cầu / dưới 1 năm / 1–2 năm / trên 2 năm. */
+  experience?: JobPostExperienceFilter;
+  /** `disclosed` = có ghi mức lương; `negotiable` = thoả thuận. */
+  salaryKind?: JobPostSalaryKind;
+  /** `match` chỉ có tác dụng khi đăng nhập vai trò ứng viên; khách luôn `newest`. */
+  sort?: JobPostSort;
+  /** "Chỉ tin phù hợp với tôi" — chỉ nhận 70, chỉ có tác dụng khi đăng nhập vai trò ứng viên. */
+  minMatch?: 70;
+  /**
+   * `sort=newest` (không `minMatch`): id của tin cuối trang trước. `sort=match` hoặc có
+   * `minMatch`: offset do trang trước trả về. Đổi cách sắp / bộ lọc thì bỏ cursor.
+   */
   cursor?: string;
 }
+
+export type JobPostSkillMode = "any" | "all";
+export type JobPostExperienceFilter = "none" | "lt1" | "1to2" | "gt2";
+export type JobPostSalaryKind = "disclosed" | "negotiable";
+export type JobPostSort = "newest" | "match";
 
 export interface EmployerJobPostListQuery {
   status?: JobPostStatus;
@@ -1364,16 +1596,31 @@ export interface EmployerApplicationView extends EmployerApplicationDetail {
   interviews: ApplicationInterview[];
 }
 
-/** `oldest`/`newest` theo ngày nộp; `skills`: khớp kỹ năng nhiều nhất (D10). */
-export type EmployerApplicationsSort = "oldest" | "newest" | "skills";
+/**
+ * `oldest`/`newest` theo ngày nộp; `skills`: khớp kỹ năng nhiều nhất (D10);
+ * `match`: điểm phù hợp lưu sẵn cao nhất trước, hồ sơ chưa có điểm xếp cuối (AD-25).
+ */
+export type EmployerApplicationsSort = "oldest" | "newest" | "skills" | "match";
 
-/** GET /employer/applications — query. `sort` mặc định `oldest` khi `status=PENDING`, còn lại `newest`. */
+/**
+ * Nhóm gợi ý của trang "Ứng viên" (AD-25), không dùng chung với `status`:
+ * - `reject`: hồ sơ Chờ duyệt của tin đang hiển thị có điểm dưới ngưỡng đề xuất từ chối Y;
+ * - `result`: hồ sơ `needsResult`.
+ */
+export type EmployerApplicationsFocus = "reject" | "result";
+
+/**
+ * GET /employer/applications — query. `sort` mặc định `match` khi `status` là `PENDING` hoặc
+ * `REVIEWING`, `oldest` khi có `focus`, còn lại `newest`.
+ */
 export interface EmployerApplicationsQuery {
   status?: ApplicationStatus;
   jobPostId?: string;
   /** 2–100 ký tự, tìm trong tên hoặc email ứng viên. */
   q?: string;
   sort?: EmployerApplicationsSort;
+  /** Không gửi cùng `status` (400). */
+  focus?: EmployerApplicationsFocus;
   page?: number;
   /** 1–50, mặc định 20. */
   pageSize?: number;
@@ -1400,8 +1647,27 @@ export interface EmployerApplicationListItem {
   awaitingSchedule: boolean;
   /** Lịch SCHEDULED gần nhất còn ở tương lai, nếu có. */
   nextInterviewAt: string | null;
+  /** Buổi phỏng vấn (SCHEDULED) gần nhất đã diễn ra, nếu có — cho "phỏng vấn N ngày trước". */
+  lastInterviewAt: string | null;
   skillMatch: ApplicationSkillMatch;
+  /** Điểm phù hợp lưu sẵn (AD-24). null ⇒ chưa có điểm. */
+  matchScore: number | null;
+  /** Dải theo ngưỡng của tin (AD-25). null khi không có điểm. */
+  matchBand: ApplicationMatchBand | null;
+  /** Lần đổi trạng thái gần nhất do hệ thống làm (không phải dòng khởi tạo). */
+  changedBySystem: boolean;
+  /**
+   * Đã có buổi phỏng vấn diễn ra, không có lịch sắp tới, chưa có kết quả
+   * (Rút gọn hoặc Mời phỏng vấn).
+   */
+  needsResult: boolean;
 }
+
+/**
+ * Dải điểm theo ngưỡng của tin (AD-25): `ABOVE` ≥ X (ngưỡng phù hợp); `BELOW` < Y (ngưỡng
+ * đề xuất từ chối); `MIDDLE` ở giữa.
+ */
+export type ApplicationMatchBand = "ABOVE" | "MIDDLE" | "BELOW";
 
 /** Một tin có ít nhất một hồ sơ (theo `q`, không theo `status`), cho ô lọc theo tin. */
 export interface EmployerApplicationJobCount {
@@ -1426,6 +1692,8 @@ export interface EmployerApplicationsPage {
   statusCounts: Record<ApplicationStatus, number>;
   /** Xếp theo tên tin. */
   jobCounts: EmployerApplicationJobCount[];
+  /** Số hồ sơ của từng nhóm gợi ý (AD-25), theo `jobPostId` và `q`, không theo `status`. */
+  focusCounts: Record<EmployerApplicationsFocus, number>;
 }
 
 /** Trạng thái đích được phép đổi hàng loạt (D4). "Được nhận" chỉ làm từng hồ sơ. */
@@ -1450,7 +1718,27 @@ export interface BulkUpdateApplicationStatusResult {
   skipped: Array<{ applicationId: string; reason: BulkStatusSkipReason }>;
 }
 
-// --- Messaging (Phase 9) -------------------------------------------------
+/**
+ * GET/PATCH /employer/job-posts/:jobId/application-automation — cài đặt tự xử lý hồ sơ của tin
+ * (0.4, AD-25). Chỉ người đăng tin; đọc và sửa được ở mọi trạng thái của tin.
+ */
+export interface JobApplicationAutomationSettings {
+  /** Tự chuyển hồ sơ Chờ duyệt có điểm ≥ X sang "Đang xem xét". Mặc định bật. */
+  autoReviewEnabled: boolean;
+  /** X (`autoOutreachMinScore`), chỉ đọc ở đây: sửa ở cài đặt tự mời. */
+  matchThreshold: number;
+  /** Y: hồ sơ Chờ duyệt có điểm < Y vào nhóm đề xuất từ chối. 0 ≤ Y < X, mặc định 50. */
+  rejectSuggestBelowScore: number;
+  /** Tự đóng hồ sơ đã phỏng vấn chưa có kết quả, 30 ngày sau khi tin đóng. Mặc định tắt. */
+  autoCloseInterviewedEnabled: boolean;
+}
+
+/** Gửi ít nhất một trường. Y ≥ X ⇒ 400. */
+export type UpdateJobApplicationAutomationRequest = Partial<
+  Pick<JobApplicationAutomationSettings, "autoReviewEnabled" | "rejectSuggestBelowScore" | "autoCloseInterviewedEnabled">
+>;
+
+// --- Messaging (Phase 9)-------------------------------------------------
 
 export interface Message {
   id: string;
@@ -1616,10 +1904,22 @@ export interface JobPostWaitBuckets {
 /**
  * Hạn mức lời mời ứng viên hôm nay của công ty (AD-15). BLOCKED = không có gói
  * còn hiệu lực. Bộ đếm làm mới lúc 7h sáng giờ Việt Nam.
+ *
+ * AD-23 mục 5 — mời tay và tự động dùng chung `dailyQuota`; tự động chỉ được dùng
+ * `autoLimitToday` lượt (= dailyQuota × tỉ lệ của công ty, làm tròn xuống).
+ * `usedToday` đã gồm `autoUsedToday`. Dùng thử: `autoAllowed = false`, `autoLimitToday = 0`.
  */
 export type OutreachDailyQuotaStatus =
   | { mode: "BLOCKED" }
-  | { mode: "TRIAL" | "SUBSCRIBED"; dailyQuota: number; usedToday: number; remainingToday: number };
+  | {
+      mode: "TRIAL" | "SUBSCRIBED";
+      dailyQuota: number;
+      usedToday: number;
+      remainingToday: number;
+      autoAllowed: boolean;
+      autoLimitToday: number;
+      autoUsedToday: number;
+    };
 
 /** GET /employer/dashboard/overview — số liệu của cả công ty, trừ `messages` (của riêng employer). */
 export interface EmployerDashboardOverview {
@@ -1667,6 +1967,54 @@ export interface EmployerDashboardAnalytics {
   viewsDaily: DailyPoint[];
 }
 
+/**
+ * Tiến độ tuyển của một tin đang hiển thị (0.3, AD-24). Số "Phù hợp" đọc từ bảng điểm
+ * lưu sẵn, so với ngưỡng tự mời của tin lúc đọc (`autoOutreachMinScore`, mặc định 80):
+ * - người bật cho liên hệ và chưa có đơn nào vào tin;
+ * - người có đơn đang xét hoặc đã tuyển (không phải CANCELLED / REJECTED) — `matchedApplied`.
+ */
+export interface HiringProgressItem {
+  jobPostId: string;
+  title: string;
+  /** ISO, null = không có hạn nộp. */
+  expiresAt: string | null;
+  /** Đã gồm `matchedApplied`. */
+  matched: number;
+  matchedApplied: number;
+  /** Mọi lời mời của tin: cả tay lẫn tự động, mọi trạng thái. */
+  invited: number;
+  acceptedInvitations: number;
+  /** Đơn INTERVIEWING. */
+  interviewing: number;
+  /** Đơn ACCEPTED. */
+  hired: number;
+  hiringTarget: number;
+  autoOutreachEnabled: boolean;
+  /** Người xem là người đăng tin ⇒ frontend được hiện link "Bật tự mời". */
+  ownedByViewer: boolean;
+  /** ISO. null ⇒ tin chưa được chấm lần nào (vừa đăng, đang chấm). */
+  matchScoresAt: string | null;
+}
+
+/** GET /employer/dashboard/hiring-progress — số liệu của cả công ty. */
+export interface EmployerHiringProgress {
+  /** Tổng trên mọi tin đang hiển thị của công ty, không chỉ các tin ở `items`. */
+  totals: {
+    publishedJobs: number;
+    /** Cộng theo tin: một ứng viên hợp nhiều tin được đếm ở từng tin. */
+    matched: number;
+    hired: number;
+    hiringTarget: number;
+  };
+  /**
+   * Tối đa 5 tin, "cần chú ý" trước: chưa đạt chỉ tiêu → còn ≤ 7 ngày tới hạn →
+   * tỉ lệ đã tuyển / chỉ tiêu thấp → hạn nộp gần.
+   */
+  items: HiringProgressItem[];
+  /** Lần chấm cũ nhất trong các tin ở `items` đã được chấm (ISO), null khi chưa tin nào được chấm. */
+  scoredAt: string | null;
+}
+
 /** GET /admin/dashboard/overview — `oldestSince`: mốc bắt đầu chờ của mục chờ lâu nhất (ISO), null nếu hàng chờ trống. */
 export interface AdminDashboardOverview {
   queues: {
@@ -1703,27 +2051,52 @@ export interface CatalogSuggester {
   role: Role;
 }
 
-/** GET /admin/dashboard/tasks — mỗi hàng chờ tối đa 5 mục (chờ lâu nhất trước) kèm tổng. */
-export interface AdminDashboardTasks {
-  jobPosts: {
-    total: number;
-    items: Array<{ jobPostId: string; title: string; companyName: string; submittedAt: string }>;
+/**
+ * GET /admin/automation-status — thẻ "Hệ thống tự động" của Admin (0.6 bước 8, AD-27 mục 10).
+ * Thời điểm là ISO. "Hôm nay" tính từ 0h giờ Việt Nam.
+ */
+export interface AdminAutomationStatus {
+  /** Chấm lại theo ứng viên (0.6). */
+  rescore: {
+    /** Số ứng viên đang chờ chấm lại (có dấu). */
+    pending: number;
+    /** Dấu cũ nhất; null khi không ai chờ. Cũ hơn ~15 phút mà lượt gần nhất đã lâu ⇒ cron có thể đã dừng. */
+    oldestRequestedAt: string | null;
+    /** Lượt gần nhất (lưu ở Redis); null khi chưa có lượt nào trong 7 ngày hoặc đọc Redis lỗi. */
+    lastRun: {
+      at: string;
+      /** Số ứng viên đã chấm trong lượt. */
+      candidates: number;
+      durationMs: number;
+      /** Số ứng viên còn dấu khi lượt kết thúc. */
+      remaining: number;
+      /** Lượt dừng vì hết thời gian (phần còn lại chạy tiếp). */
+      timedOut: boolean;
+    } | null;
   };
-  companies: {
-    total: number;
-    items: Array<{
-      companyId: string;
-      name: string;
-      taxCode: string | null;
-      businessLicenseUrl: string | null;
-      submittedAt: string;
-    }>;
+  today: {
+    /** Lời mời tự động đã gửi. */
+    autoInvitations: number;
+    /** Cặp (ứng viên, tin) được báo trong job alert. */
+    jobAlerts: number;
+    /** Hồ sơ hệ thống tự chuyển từ "Chờ duyệt" sang "Đang xem xét". */
+    autoReviewed: number;
   };
-  catalog: {
-    total: number;
-    /** `suggestedBy` null khi mục không có người tạo (vd. dữ liệu seed). */
-    items: Array<{ id: string; kind: CatalogEntryKind; name: string; createdAt: string; suggestedBy: CatalogSuggester | null }>;
-  };
+  /** Lượt chấm lại hằng đêm của bảng điểm (03:30); null khi chưa ghi nhận lượt nào trong 7 ngày. */
+  nightly: {
+    lastRunAt: string;
+    jobsScored: number;
+    /** Tin chưa kịp chấm vì hết thời gian, đêm sau chấm trước. */
+    jobsDeferred: number;
+  } | null;
+}
+
+/**
+ * Payload của sự kiện Socket.IO `match-scores:updated` (0.6, AD-27 mục 6): số "Phù hợp" của
+ * các tin này vừa đổi; giao diện nhà tuyển dụng làm mới các query đang hiển thị.
+ */
+export interface MatchScoresUpdatedPayload {
+  jobPostIds: string[];
 }
 
 /** GET /admin/dashboard/analytics?range= */

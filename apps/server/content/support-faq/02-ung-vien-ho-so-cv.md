@@ -74,22 +74,41 @@ Có. Ở **Quản lý CV** (/cv), bấm **Phân tích CV** trên CV đã tải l
 - Mỗi tài khoản được phân tích tối đa **5 lần mỗi tuần** và **15 lần mỗi tháng**.
 - CV dạng ảnh chụp mờ hoặc nghiêng có thể đọc không chính xác; nên dùng file PDF hoặc DOCX.
 
+## profile-completeness
+audience: candidate
+title: Độ hoàn thiện hồ sơ
+questions:
+- Làm sao biết hồ sơ của tôi còn thiếu gì?
+- Hồ sơ của tôi hoàn thiện bao nhiêu phần trăm?
+- Độ hoàn thiện hồ sơ tính thế nào?
+- Điền đủ hồ sơ có làm điểm phù hợp cao hơn không?
+
+Thẻ **Độ hoàn thiện hồ sơ** luôn nằm ở đầu trang **Hồ sơ ứng viên** (/profile), không cần bấm phân tích. Thẻ có phần trăm, dòng **Nên làm trước** và tám mục chia ba nhóm:
+
+- **Cần có để dùng các tính năng**: kỹ năng (để được gợi ý việc, báo tin mới và để nhà tuyển dụng tìm thấy bạn), CV (để ứng tuyển), bật cho phép nhà tuyển dụng tìm thấy (để nhận lời mời).
+- **Giúp điểm phù hợp chính xác hơn**: kinh nghiệm làm việc, dự án, tiêu đề hoặc giới thiệu bản thân, học vấn có chọn ngành trong danh sách (không chọn ngành thì vẫn tính là thiếu).
+- **Giúp lọc việc**: thành phố.
+
+**Nên làm trước** là mục còn thiếu đáng làm nhất với bạn, chọn từ các tin hợp với bạn nhất, ví dụ "thêm kinh nghiệm — 4/10 tin phù hợp với bạn yêu cầu kinh nghiệm". Mỗi mục có nút dẫn tới đúng chỗ cần sửa.
+
+Điền thêm giúp điểm **chính xác hơn**, không chắc làm điểm cao hơn: nếu ngành hoặc số năm kinh nghiệm không khớp yêu cầu của tin thì điểm có thể giảm. Độ hoàn thiện chỉ để bạn tham khảo, không cộng vào mức độ phù hợp.
+
 ## profile-insight
 audience: candidate
-title: Phân tích hồ sơ bằng AI
+title: Nhận xét cách viết hồ sơ bằng AI
 questions:
 - Phân tích hồ sơ là gì?
-- Làm sao biết hồ sơ của tôi còn thiếu gì?
 - Gợi ý cải thiện hồ sơ ở đâu?
-- Hồ sơ của tôi hoàn thiện bao nhiêu phần trăm?
 - Hồ sơ của tôi có điểm mạnh gì?
-- Nên học thêm kỹ năng gì để dễ xin việc?
+- Nhờ AI nhận xét hồ sơ
+- Phần giới thiệu bản thân viết thế nào cho tốt?
 
-Ở trang **Hồ sơ ứng viên** (/profile), mục **Phân tích hồ sơ**, bấm **Phân tích hồ sơ** để nhận:
+Ở trang **Hồ sơ ứng viên** (/profile), thẻ **Nhận xét cách viết hồ sơ (AI)**, bấm **Phân tích hồ sơ** để nhận:
 
-- **Độ hoàn thiện hồ sơ** và các mục còn thiếu.
 - **Điểm mạnh** của hồ sơ.
-- **Gợi ý cải thiện cách viết**, **Kỹ năng nên bổ sung** (dựa trên các tin phù hợp gần đây).
+- **Gợi ý cải thiện cách viết** hồ sơ.
+
+Phần trăm hoàn thiện và các mục còn thiếu nằm ở thẻ **Độ hoàn thiện hồ sơ** ngay trên cùng trang. Kỹ năng nên bổ sung nằm ở trang **Việc làm phù hợp** (/recommended-jobs).
 
 Số lượt phân tích mỗi ngày có giới hạn. Gợi ý chỉ mang tính tham khảo, không phải lời khuyên nghề nghiệp.
 
@@ -102,10 +121,17 @@ questions:
 - Tại sao không có việc làm phù hợp nào?
 - Hệ thống gợi ý việc dựa trên gì?
 - Danh sách việc gợi ý không đúng ngành của tôi
+- Việc làm phù hợp xếp theo thứ tự nào?
+- Sao tin tôi đã ứng tuyển không còn trong danh sách gợi ý?
+- Nên học thêm kỹ năng gì để dễ xin việc?
 
-Trang **Việc làm phù hợp** (/recommended-jobs) gợi ý các tin đang tuyển hợp với hồ sơ của bạn, dựa trên kỹ năng, học vấn và kinh nghiệm.
+Trang **Việc làm phù hợp** (/recommended-jobs) liệt kê các tin đang hiển thị hợp với hồ sơ của bạn, **xếp theo mức độ phù hợp từ cao xuống thấp**, bấm **Xem thêm** để xem tiếp.
 
-Nếu danh sách trống hoặc chưa sát, hãy bổ sung kỹ năng và học vấn ở **Hồ sơ ứng viên** (/profile). Danh sách chỉ gồm các tin đang hiển thị.
+- Mỗi tin có lý do theo từng tiêu chí: kỹ năng bắt buộc và ưu tiên đã có (ví dụ 3/4), kinh nghiệm, ngành học, mức tương đồng giữa hồ sơ và mô tả công việc, và các kỹ năng còn thiếu.
+- Khối **Kỹ năng nên bổ sung** liệt kê kỹ năng nhiều tin phù hợp cần mà bạn chưa có, kèm số tin.
+- Không hiện tin bạn đã ứng tuyển hoặc đã được nhà tuyển dụng mời.
+
+Danh sách trống thường vì hồ sơ chưa có kỹ năng: hãy thêm kỹ năng và chọn ngành học ở **Hồ sơ ứng viên** (/profile). Nếu bạn vừa thêm kỹ năng đầu tiên, trang hiện trước một số tin, danh sách đầy đủ có sau vài phút. Khi bạn sửa kỹ năng, ngành học hay kinh nghiệm, danh sách cũng cập nhật trong vài phút.
 
 ## outreach-optin
 audience: candidate

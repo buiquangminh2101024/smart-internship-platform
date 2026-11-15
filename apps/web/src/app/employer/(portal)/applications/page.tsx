@@ -8,6 +8,7 @@ import type {
   BulkApplicationTargetStatus,
   BulkUpdateApplicationStatusResult,
   EmployerApplicationListItem,
+  EmployerApplicationsFocus,
   EmployerInterview,
 } from "@sip/shared-types";
 import { ApiError } from "@/lib/api-client";
@@ -61,6 +62,31 @@ const TABS: { value: TabValue; label: string }[] = [
 
 const tabId = (tab: TabValue) => `applications-tab-${tab ?? "all"}`;
 const PANEL_ID = "applications-panel";
+const FOCUS_HEADING_ID = "applications-focus-heading";
+
+/** Nhóm gợi ý (AD-25): dòng trên dải gợi ý, tiêu đề và câu giải thích khi đang xem nhóm. */
+const FOCUS_META: Record<
+  EmployerApplicationsFocus,
+  { strip: (count: string) => string; title: string; text: string; empty: string }
+> = {
+  reject: {
+    strip: (count) => `${count} hồ sơ dưới ngưỡng, hệ thống đề xuất từ chối`,
+    title: "Đề xuất từ chối",
+    text: "Hồ sơ Chờ duyệt có điểm dưới ngưỡng đề xuất từ chối của tin. Hệ thống không tự từ chối: bạn xem lại rồi xác nhận.",
+    empty: "Không còn hồ sơ nào được đề xuất từ chối.",
+  },
+  result: {
+    strip: (count) => `${count} ứng viên đã phỏng vấn, chưa có kết quả`,
+    title: "Cần kết quả phỏng vấn",
+    text: "Ứng viên đã phỏng vấn, không còn lịch sắp tới và chưa có kết quả.",
+    empty: "Không có ứng viên nào đang chờ kết quả phỏng vấn.",
+  },
+};
+
+const FOCUS_ORDER: EmployerApplicationsFocus[] = ["reject", "result"];
+
+/** Thanh thao tác ở nhóm đề xuất từ chối: chỉ từ chối, hoặc giữ lại để xem thêm. */
+const REJECT_FOCUS_ACTIONS: BulkAction[] = ["REJECTED", "REVIEWING"];
 
 type SingleTarget = "REVIEWING" | "SHORTLISTED" | "ACCEPTED" | "REJECTED";
 
@@ -142,10 +168,12 @@ interface ViewState {
   frozen: EmployerApplicationListItem[] | null;
   handled: Record<string, Handled>;
   selected: ReadonlySet<string>;
+  /** Nhóm đề xuất từ chối: đã chọn sẵn mọi hồ sơ của trang chưa (một lần mỗi tổ hợp). */
+  seeded: boolean;
 }
 
 function emptyView(key: string): ViewState {
-  return { key, frozen: null, handled: {}, selected: new Set() };
+  return { key, frozen: null, handled: {}, selected: new Set(), seeded: false };
 }
 
 function handledFor(item: EmployerApplicationListItem, to: SingleTarget): Handled {
@@ -210,6 +238,20 @@ function ApplicationsPageContent() {
     }
   }, [returnedPage, query.page, update]);
 
+  // Hàng tab cuộn ngang: mở trang ở tab cuối (vd. "Tin đã đóng") thì tab đang chọn bị khuất bên
+  // phải. Chỉ cuộn hàng tab, không cuộn trang.
+  const tabsReady = data !== undefined;
+  useEffect(() => {
+    if (!tabsReady || query.focus !== null) return;
+    const tab = tabRefs.current.get(tabId(query.status));
+    const tablist = tab?.parentElement;
+    if (!tab || !tablist) return;
+    const tabBox = tab.getBoundingClientRect();
+    const listBox = tablist.getBoundingClientRect();
+    if (tabBox.right > listBox.right) tablist.scrollLeft += tabBox.right - listBox.right;
+    else if (tabBox.left < listBox.left) tablist.scrollLeft -= listBox.left - tabBox.left;
+  }, [tabsReady, query.status, query.focus]);
+
   // `job` trên URL không phải tin của công ty (404): bỏ qua như giá trị lạ.
   const jobNotFound = list.error instanceof ApiError && list.error.status === 404 && query.jobPostId !== null;
   useEffect(() => {
@@ -225,6 +267,9 @@ function ApplicationsPageContent() {
           status: handled.status,
           awaitingSchedule: handled.awaitingSchedule,
           nextInterviewAt: handled.nextInterviewAt,
+          // Người dùng vừa đổi: không còn là lần đổi của hệ thống, cũng không còn chờ kết quả.
+          changedBySystem: false,
+          needsResult: false,
         }
       : item;
   });
@@ -232,6 +277,17 @@ function ApplicationsPageContent() {
   const selectable = rows.filter((row) => !isFinalApplicationStatus(row.status));
   const selectedRows = selectable.filter((row) => view.selected.has(row.applicationId));
   const awaitingSelected = selectedRows.filter((row) => row.awaitingSchedule);
+  // Nhóm đề xuất từ chối: mọi hồ sơ trên trang được chọn sẵn, bỏ chọn từng dòng được (F2).
+  // Đặt state ngay trong lúc render (không qua effect), một lần mỗi tổ hợp.
+  if (query.focus === "reject" && data && !list.isPlaceholderData && !view.frozen && !view.seeded) {
+    setViewState({
+      ...view,
+      seeded: true,
+      selected: new Set(
+        data.items.filter((item) => !isFinalApplicationStatus(item.status)).map((item) => item.applicationId),
+      ),
+    });
+  }
   const bulkCounts: BulkCounts = {
     REVIEWING: selectedRows.filter((row) => row.status === "PENDING").length,
     SHORTLISTED: selectedRows.filter((row) => row.status === "REVIEWING").length,
@@ -354,6 +410,17 @@ function ApplicationsPageContent() {
     update({ status: tab, page: null }, "push");
   }
 
+  /** Đổi nhóm gợi ý: về trang 1, sắp xếp về mặc định; khoá tổ hợp đổi nên bỏ chọn. */
+  function selectFocus(focus: EmployerApplicationsFocus | null) {
+    update({ focus, status: null, sort: null, page: null }, "push");
+  }
+
+  /** Nhóm đề xuất từ chối: xử lý xong trang đang giữ ⇒ tải lại từ trang 1 và chọn sẵn lại. */
+  function nextSuggested() {
+    setViewState(emptyView(viewKey));
+    if (query.page !== 1) update({ page: null }, "push");
+  }
+
   function handleTabKey(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
     event.preventDefault();
@@ -422,12 +489,13 @@ function ApplicationsPageContent() {
     selected: view.selected.has(item.applicationId),
     locked,
     busy: busy?.id === item.applicationId ? busy.action : null,
+    focus: query.focus,
     onToggle: (checked) => toggle([item], checked),
     onAction: (action) => rowAction(item, action),
     onReject: () => setRejecting({ kind: "single", item }),
   });
 
-  let empty: { title: string; text?: string; action?: "new-job" | "clear" } | null = null;
+  let empty: { title: string; text?: string; action?: "new-job" | "clear" | "exit-focus" } | null = null;
   if (data.total === 0) {
     if (query.q && allCount === 0) {
       empty = {
@@ -439,10 +507,22 @@ function ApplicationsPageContent() {
       empty = { title: "Tin này chưa có hồ sơ nào.", text: "Hồ sơ mới sẽ hiện ở đây khi ứng viên nộp." };
     } else if (allCount === 0) {
       empty = { title: "Chưa có hồ sơ nào.", text: "Hồ sơ mới sẽ hiện ở đây khi ứng viên nộp.", action: "new-job" };
+    } else if (query.focus) {
+      empty = { title: FOCUS_META[query.focus].empty, action: "exit-focus" };
     } else {
       empty = { title: `Không có hồ sơ ${query.status ? APPLICATION_STATUS_LABEL[query.status].label : ""}.` };
     }
   }
+
+  // Nhóm đề xuất từ chối, sau khi đã xử lý ít nhất một hồ sơ và danh sách đã tải lại:
+  // số hồ sơ còn được đề xuất mà không nằm trên trang đang giữ.
+  const handledCount = Object.keys(view.handled).length;
+  const unhandledSuggested = rows.filter(
+    (row) => row.status === "PENDING" && view.handled[row.applicationId] === undefined,
+  ).length;
+  const suggestedLeft =
+    query.focus === "reject" && handledCount > 0 && !list.isFetching ? Math.max(0, data.total - unhandledSuggested) : 0;
+  const strip = query.focus === null ? FOCUS_ORDER.filter((focus) => data.focusCounts[focus] > 0) : [];
 
   const rejectCount = rejecting?.kind === "bulk" ? rejecting.items.length : 1;
 
@@ -450,55 +530,92 @@ function ApplicationsPageContent() {
     <div className={shell}>
       {header(`${formatNumber(allCount)} hồ sơ của ${formatNumber(data.jobCounts.length)} tin`)}
 
-      {/* Bóng dưới thay cho border: vùng cuộn ngang cắt mất phần `-mb-px` của tab. */}
-      <div
-        role="tablist"
-        aria-label="Trạng thái hồ sơ"
-        onKeyDown={handleTabKey}
-        className="flex gap-1 overflow-x-auto shadow-[inset_0_-1px_0_var(--color-border-subtle)]"
-      >
-        {TABS.map((tab) => {
-          const isSelected = tab.value === query.status;
-          const count = tab.value === null ? allCount : data.statusCounts[tab.value];
-          const attention = tab.value === "PENDING" && count > 0;
-          return (
-            <button
-              key={tab.value ?? "all"}
-              ref={(element) => {
-                if (element) tabRefs.current.set(tabId(tab.value), element);
-                else tabRefs.current.delete(tabId(tab.value));
-              }}
-              type="button"
-              role="tab"
-              id={tabId(tab.value)}
-              aria-selected={isSelected}
-              aria-controls={PANEL_ID}
-              tabIndex={isSelected ? 0 : -1}
-              onClick={() => selectTab(tab.value)}
-              className={`relative inline-flex h-11 shrink-0 cursor-pointer items-center gap-2 border-b-2 px-3 text-sm font-bold whitespace-nowrap transition-colors duration-150 focus-visible:rounded-md focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-500 motion-reduce:transition-none ${
-                isSelected ? "border-brand-600 text-brand-700" : "border-transparent text-text-muted hover:text-text-strong"
-              }`}
+      {strip.length > 0 ? (
+        // Dải gợi ý (AD-25): dòng chữ có nút, không phải thẻ số. Chỉ hiện nhóm có hồ sơ.
+        <ul aria-label="Gợi ý xử lý hồ sơ" className="flex flex-col gap-2 lg:flex-row">
+          {strip.map((focus) => (
+            <li
+              key={focus}
+              className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-lg border border-l-[3px] border-border-subtle border-l-marigold-500 bg-surface-card py-2 pr-2 pl-3 lg:flex-[1_1_0]"
             >
-              {tab.label}
-              <span
-                className={`inline-grid h-[22px] min-w-[26px] place-items-center rounded-full px-2 font-num text-[13px] font-bold tabular-nums ${
-                  attention
-                    ? "bg-marigold-100 text-marigold-800"
-                    : isSelected
-                      ? "bg-brand-100 text-brand-700"
-                      : "bg-surface-hover text-text-muted"
+              <span className="text-text-strong">{FOCUS_META[focus].strip(formatNumber(data.focusCounts[focus]))}</span>
+              <DashButton variant="secondary" size="sm" iconAfter="arrow-right" onClick={() => selectFocus(focus)}>
+                Xem
+              </DashButton>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {query.focus ? (
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border-subtle pb-3">
+          <div className="min-w-0 flex-[1_1_320px]">
+            <h2 id={FOCUS_HEADING_ID} className="text-base font-bold text-text-strong">
+              {FOCUS_META[query.focus].title}{" "}
+              <span className="font-num tabular-nums text-text-muted">({formatNumber(data.total)})</span>
+            </h2>
+            <p className="mt-1 text-text-muted">{FOCUS_META[query.focus].text}</p>
+          </div>
+          <DashButton variant="secondary" size="sm" icon="x" onClick={() => selectFocus(null)}>
+            Thoát
+          </DashButton>
+        </div>
+      ) : (
+        /* Bóng dưới thay cho border: vùng cuộn ngang cắt mất phần `-mb-px` của tab. */
+        <div
+          role="tablist"
+          aria-label="Trạng thái hồ sơ"
+          onKeyDown={handleTabKey}
+          className="flex gap-1 overflow-x-auto shadow-[inset_0_-1px_0_var(--color-border-subtle)]"
+        >
+          {TABS.map((tab) => {
+            const isSelected = tab.value === query.status;
+            const count = tab.value === null ? allCount : data.statusCounts[tab.value];
+            const attention = tab.value === "PENDING" && count > 0;
+            return (
+              <button
+                key={tab.value ?? "all"}
+                ref={(element) => {
+                  if (element) tabRefs.current.set(tabId(tab.value), element);
+                  else tabRefs.current.delete(tabId(tab.value));
+                }}
+                type="button"
+                role="tab"
+                id={tabId(tab.value)}
+                aria-selected={isSelected}
+                aria-controls={PANEL_ID}
+                tabIndex={isSelected ? 0 : -1}
+                onClick={() => selectTab(tab.value)}
+                className={`relative inline-flex h-11 shrink-0 cursor-pointer items-center gap-2 border-b-2 px-3 text-sm font-bold whitespace-nowrap transition-colors duration-150 focus-visible:rounded-md focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-500 motion-reduce:transition-none ${
+                  isSelected ? "border-brand-600 text-brand-700" : "border-transparent text-text-muted hover:text-text-strong"
                 }`}
               >
-                <span className="sr-only">: </span>
-                {formatNumber(count)}
-                <span className="sr-only"> hồ sơ</span>
-              </span>
-            </button>
-          );
-        })}
-      </div>
+                {tab.label}
+                <span
+                  className={`inline-grid h-[22px] min-w-[26px] place-items-center rounded-full px-2 font-num text-[13px] font-bold tabular-nums ${
+                    attention
+                      ? "bg-marigold-100 text-marigold-800"
+                      : isSelected
+                        ? "bg-brand-100 text-brand-700"
+                        : "bg-surface-hover text-text-muted"
+                  }`}
+                >
+                  <span className="sr-only">: </span>
+                  {formatNumber(count)}
+                  <span className="sr-only"> hồ sơ</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-      <div role="tabpanel" id={PANEL_ID} aria-labelledby={tabId(query.status)} className="flex flex-col gap-4">
+      <div
+        role={query.focus ? "region" : "tabpanel"}
+        id={PANEL_ID}
+        aria-labelledby={query.focus ? FOCUS_HEADING_ID : tabId(query.status)}
+        className="flex flex-col gap-4"
+      >
         <ApplicationsToolbar
           q={query.q}
           jobPostId={query.jobPostId}
@@ -507,7 +624,9 @@ function ApplicationsPageContent() {
           fallbackJobTitle={jobTitle}
           onSearch={(q) => update({ q: q || null, page: null }, "replace")}
           onJob={(jobPostId) => update({ job: jobPostId, page: null }, "replace")}
-          onSort={(sort) => update({ sort: sort === defaultSortFor(query.status) ? null : sort, page: null }, "replace")}
+          onSort={(sort) =>
+            update({ sort: sort === defaultSortFor(query.status, query.focus) ? null : sort, page: null }, "replace")
+          }
         />
 
         <section
@@ -522,6 +641,12 @@ function ApplicationsPageContent() {
                 <div className="mt-4 flex justify-center">
                   <DashButton href="/employer/jobs/new" icon="plus">
                     Đăng tin mới
+                  </DashButton>
+                </div>
+              ) : empty.action === "exit-focus" ? (
+                <div className="mt-4 flex justify-center">
+                  <DashButton variant="secondary" icon="arrow-left" onClick={() => selectFocus(null)}>
+                    Về danh sách hồ sơ
                   </DashButton>
                 </div>
               ) : empty.action === "clear" ? (
@@ -582,6 +707,9 @@ function ApplicationsPageContent() {
                         <th scope="col" className="py-2 pr-3 font-semibold">
                           Ngày nộp
                         </th>
+                        <th scope="col" className="py-2 pr-3 font-semibold whitespace-nowrap">
+                          Phù hợp
+                        </th>
                         <th scope="col" className="py-2 pr-3 font-semibold">
                           Khớp kỹ năng
                         </th>
@@ -604,6 +732,18 @@ function ApplicationsPageContent() {
                 </ul>
               </div>
 
+              {suggestedLeft > 0 ? (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-surface-hover px-3 py-2">
+                  <span className="text-text-strong">
+                    Còn <span className="font-num font-bold tabular-nums">{formatNumber(suggestedLeft)}</span> hồ sơ
+                    được đề xuất
+                  </span>
+                  <DashButton variant="secondary" size="sm" iconAfter="arrow-right" onClick={nextSuggested}>
+                    Xem tiếp
+                  </DashButton>
+                </div>
+              ) : null}
+
               <Pagination page={data.page} pageCount={pageCount} onChange={goToPage} label="Phân trang hồ sơ" className="mt-2" />
             </>
           )}
@@ -615,7 +755,14 @@ function ApplicationsPageContent() {
             count={selectedRows.length}
             unit="hồ sơ"
             onClear={() => patchView(viewKey, (current) => ({ ...current, selected: new Set() }))}
-            actions={<ApplicationBulkActions counts={bulkCounts} busy={bulkBusy} onAction={bulkAction} />}
+            actions={
+              <ApplicationBulkActions
+                counts={bulkCounts}
+                busy={bulkBusy}
+                onAction={bulkAction}
+                only={query.focus === "reject" ? REJECT_FOCUS_ACTIONS : undefined}
+              />
+            }
           />
         </section>
       </div>

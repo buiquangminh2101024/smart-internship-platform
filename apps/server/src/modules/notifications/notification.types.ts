@@ -27,6 +27,8 @@ export interface NotificationPayloadMap {
     companyName: string;
     oldStatus: string;
     newStatus: string;
+    /** AD-25 — chỉ có khi hệ thống đóng hồ sơ (`newStatus = JOB_CLOSED`); chọn lời thông báo. */
+    closeReason?: "JOB_ENDED" | "NO_RESULT";
   };
   JOB_POST_APPROVED: { jobPostId: string; jobPostTitle: string };
   JOB_POST_REJECTED: { jobPostId: string; jobPostTitle: string; reason?: string };
@@ -50,12 +52,33 @@ export interface NotificationPayloadMap {
     candidateName: string | null;
     accepted: boolean;
   };
+  // AD-23 — tự động mời theo tin. Gửi bằng notifyOnce, khoá auto-outreach:<tin>:<ngày>,
+  // nên sentCount là số lời mời của lượt chạy đầu tiên trong ngày.
+  AUTO_OUTREACH_SENT: { jobPostId: string; jobPostTitle: string; sentCount: number };
   // AD-16 — dashboard Employer & Admin, docs/06-backend/dashboard-employer-admin/PLAN.md
   APPLICATION_RECEIVED: {
     applicationId: string;
     jobPostId: string;
     jobPostTitle: string;
     candidateName: string | null;
+  };
+  // AD-25 — nhắc tuần, gộp một thông báo cho mỗi employer của công ty. Gửi bằng notifyOnce,
+  // khoá APPLICATIONS_NEED_ATTENTION:<công ty>:<người nhận>:<thứ Hai của tuần>.
+  APPLICATIONS_NEED_ATTENTION: {
+    companyId: string;
+    companyName: string;
+    /** Chờ duyệt quá 7 ngày, tin đang hiển thị. */
+    pendingStale: number;
+    /** Đang xem xét đứng yên quá 7 ngày, tin đang hiển thị. */
+    reviewingStale: number;
+    /** Chờ đặt lịch quá 7 ngày, tin đang hiển thị. */
+    awaitingSchedule: number;
+    /** Đã phỏng vấn quá 7 ngày, chưa có kết quả, mọi tin. */
+    needsResult: number;
+    /** Sẽ tự đóng (G2, G4) trong 7 ngày tới. */
+    closingSoon: number;
+    /** Lượt hằng ngày sẽ đóng hồ sơ sớm nhất trong `closingSoon`; null khi `closingSoon = 0`. */
+    closingOn: Date | null;
   };
   JOB_POST_EXPIRING: { jobPostId: string; jobPostTitle: string; expiresAt: Date };
   SUBSCRIPTION_EXPIRING: { subscriptionId: string; planName: string; endDate: Date };
@@ -89,6 +112,25 @@ export interface NotificationPayloadMap {
     /** Trạng thái tài khoản trùng email người gửi; null = email chưa có tài khoản. */
     accountStatus: UserStatus | null;
   };
+  // AD-26 D8 — một thông báo mỗi ứng viên mỗi ngày (upsertDaily, khoá
+  // job-alert:<ứng viên>:<ngày giờ VN>); tin sau trong ngày cập nhật lại thông báo đó.
+  JOB_ALERT: {
+    /** Tin mới nhất vừa được báo (lần chấm đầu: tin điểm cao nhất, xem `firstScored`). */
+    jobPostId: string;
+    jobPostTitle: string;
+    companyName: string;
+    /** Điểm phù hợp của ứng viên với tin này lúc báo. */
+    score: number;
+    /** Số tin đã báo cho ứng viên trong ngày (giờ VN), tính cả tin này — đếm từ `job_alerts`. */
+    todayCount: number;
+    /**
+     * 0.6 (AD-27 mục 6, Q3): báo lần đầu cho ứng viên mới, cả loạt tin cùng lúc nên tin kèm theo là
+     * tin điểm cao nhất, không phải tin mới nhất. Không có = báo theo tin mới được chấm.
+     */
+    firstScored?: boolean;
+  };
+  // AD-26 D10 — nhắc một lần (notifyOnce, khoá profile-skills-reminder:<ứng viên>). Nội dung cố định.
+  PROFILE_SKILLS_REMINDER: Record<string, never>;
 }
 
 // Khoá của map phải trùng khít enum Prisma: thêm giá trị vào enum mà quên khai

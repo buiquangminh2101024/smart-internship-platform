@@ -5,7 +5,12 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { OutreachInvitationStatus } from "@sip/shared-types";
 import { type CompanyInvitationFilter, useOutreachSummary } from "@/hooks/useCandidateOutreach";
 import { BlockError, BlockSkeleton } from "@/components/dashboard/BlockState";
-import { CompanyInvitationsPanel, OutreachJobsPanel, OutreachStats } from "@/components/employer/OutreachHubBlocks";
+import {
+  AutoShareSettingsPanel,
+  CompanyInvitationsPanel,
+  OutreachJobsPanel,
+  OutreachStats,
+} from "@/components/employer/OutreachHubBlocks";
 
 // Trang "Lời mời" cấp công ty — docs/05-frontend/phases/outreach-hub/PLAN.md.
 // Bộ lọc nằm trên URL (?status=&job=&mine=1) để quay lại vẫn giữ.
@@ -82,6 +87,9 @@ function OutreachPageContent() {
       ) : (
         <>
           <OutreachStats summary={summary.data} />
+          {summary.data.quota.mode !== "BLOCKED" && summary.data.quota.autoAllowed ? (
+            <AutoShareSettingsPanel dailyQuota={summary.data.quota.dailyQuota} />
+          ) : null}
           <OutreachJobsPanel jobs={summary.data.jobs} />
         </>
       )}

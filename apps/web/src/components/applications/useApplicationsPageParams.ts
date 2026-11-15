@@ -1,22 +1,30 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { ApplicationStatus, EmployerApplicationsSort } from "@sip/shared-types";
+import type { ApplicationStatus, EmployerApplicationsFocus, EmployerApplicationsSort } from "@sip/shared-types";
 import { APPLICATION_STATUSES } from "@/lib/application-status";
 import type { CompanyApplicationsQuery } from "@/hooks/useApplications";
 
 /** Tên tham số trên URL của `/employer/applications` (PLAN FE "URL giữ bộ lọc"). */
-type ParamName = "status" | "job" | "q" | "sort" | "page";
+type ParamName = "status" | "focus" | "job" | "q" | "sort" | "page";
 
 /** Từ khoá ngắn hơn thì không tìm; dài hơn thì cắt (giới hạn của API). */
 export const SEARCH_MIN_LENGTH = 2;
 const SEARCH_MAX_LENGTH = 100;
 
-const SORTS: EmployerApplicationsSort[] = ["oldest", "newest", "skills"];
+const SORTS: EmployerApplicationsSort[] = ["oldest", "newest", "skills", "match"];
+const FOCUSES: EmployerApplicationsFocus[] = ["reject", "result"];
 
-/** Cùng mặc định với API: tab Chờ duyệt xếp hồ sơ nộp lâu nhất lên trước. */
-export function defaultSortFor(status: ApplicationStatus | null): EmployerApplicationsSort {
-  return status === "PENDING" ? "oldest" : "newest";
+/**
+ * Cùng mặc định với API (`defaultSort` của applications.service, AD-25): nhóm gợi ý ⇒ nộp
+ * lâu nhất trước; tab Chờ duyệt và Đang xem xét ⇒ phù hợp nhất trước; còn lại ⇒ mới nhất.
+ */
+export function defaultSortFor(
+  status: ApplicationStatus | null,
+  focus: EmployerApplicationsFocus | null = null,
+): EmployerApplicationsSort {
+  if (focus) return "oldest";
+  return status === "PENDING" || status === "REVIEWING" ? "match" : "newest";
 }
 
 /** Từ khoá gửi API: cắt khoảng trắng, dưới 2 ký tự ⇒ rỗng. */
@@ -42,14 +50,18 @@ export function useApplicationsPageParams() {
   const router = useRouter();
   const pathname = usePathname();
 
+  // `focus` (nhóm gợi ý, AD-25) không đi cùng `status` (API trả 400): có `focus` thì bỏ qua `status`.
+  const rawFocus = searchParams.get("focus");
+  const focus = FOCUSES.find((value) => value === rawFocus) ?? null;
   const rawStatus = searchParams.get("status");
-  const status = APPLICATION_STATUSES.find((value) => value === rawStatus) ?? null;
+  const status = focus ? null : (APPLICATION_STATUSES.find((value) => value === rawStatus) ?? null);
   const rawSort = searchParams.get("sort");
   const query: CompanyApplicationsQuery = {
     status,
+    focus,
     jobPostId: searchParams.get("job") || null,
     q: normalizeSearch(searchParams.get("q") ?? ""),
-    sort: SORTS.find((value) => value === rawSort) ?? defaultSortFor(status),
+    sort: SORTS.find((value) => value === rawSort) ?? defaultSortFor(status, focus),
     page: parsePage(searchParams.get("page")),
   };
 

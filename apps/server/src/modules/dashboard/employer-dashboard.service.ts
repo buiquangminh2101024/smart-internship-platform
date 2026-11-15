@@ -1,12 +1,19 @@
-import type { DashboardRange, EmployerDashboardAnalytics, EmployerDashboardOverview } from "@sip/shared-types";
+import type {
+  DashboardRange,
+  EmployerDashboardAnalytics,
+  EmployerDashboardOverview,
+  EmployerHiringProgress,
+} from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
 import type { CandidateOutreachService } from "../candidate-outreach/candidate-outreach.service";
 import type { CompanyRepository } from "../companies/company.repository";
 import type { EmployerIdentityCache } from "../employers/employer-identity-cache";
 import type { InterviewsService } from "../interviews/interviews.service";
 import type { JobPostsService } from "../job-posts/job-posts.service";
+import type { MatchScoreRepository } from "../match-scores/match-score.repository";
 import type { MessagingService } from "../messaging/messaging.service";
 import type { DashboardRepository } from "./dashboard.repository";
+import { buildHiringProgress } from "./hiring-progress.policy";
 
 const RECENT_CONVERSATION_LIMIT = 3;
 
@@ -22,6 +29,7 @@ export class EmployerDashboardService {
   private readonly candidateOutreachService: CandidateOutreachService;
   private readonly messagingService: MessagingService;
   private readonly interviewsService: InterviewsService;
+  private readonly matchScoreRepository: MatchScoreRepository;
 
   constructor({
     dashboardRepository,
@@ -31,6 +39,7 @@ export class EmployerDashboardService {
     candidateOutreachService,
     messagingService,
     interviewsService,
+    matchScoreRepository,
   }: {
     dashboardRepository: DashboardRepository;
     employerIdentityCache: EmployerIdentityCache;
@@ -39,6 +48,7 @@ export class EmployerDashboardService {
     candidateOutreachService: CandidateOutreachService;
     messagingService: MessagingService;
     interviewsService: InterviewsService;
+    matchScoreRepository: MatchScoreRepository;
   }) {
     this.dashboardRepository = dashboardRepository;
     this.employerIdentityCache = employerIdentityCache;
@@ -47,6 +57,7 @@ export class EmployerDashboardService {
     this.candidateOutreachService = candidateOutreachService;
     this.messagingService = messagingService;
     this.interviewsService = interviewsService;
+    this.matchScoreRepository = matchScoreRepository;
   }
 
   async overview(userId: string): Promise<EmployerDashboardOverview> {
@@ -125,7 +136,17 @@ export class EmployerDashboardService {
     return { range, applicationsDaily, viewsDaily };
   }
 
-  // AD-19: analytics chỉ cần companyId ⇒ không hỏi DB.
+  /**
+   * Khối "Tiến độ tuyển" (0.3): mọi tin đang hiển thị của công ty, đọc từ bảng điểm lưu
+   * sẵn, không chấm. Một câu SQL gộp; xếp "cần chú ý" và cắt 5 tin trong bộ nhớ.
+   */
+  async hiringProgress(userId: string, now: Date = new Date()): Promise<EmployerHiringProgress> {
+    const { employerId, companyId } = await this.requireEmployer(userId);
+    const rows = await this.matchScoreRepository.progressForCompany(companyId);
+    return buildHiringProgress(rows, employerId, now);
+  }
+
+  // AD-19: analytics và tiến độ tuyển chỉ cần id ⇒ không hỏi DB.
   private requireEmployer(userId: string) {
     return this.employerIdentityCache.require(userId);
   }

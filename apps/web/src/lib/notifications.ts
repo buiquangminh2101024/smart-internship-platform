@@ -51,6 +51,7 @@ export function markAllNotificationsRead(area: AuthArea): Promise<{ updated: num
 export const NOTIFICATION_GROUP_BY_TYPE: Record<NotificationType, NotificationGroup> = {
   APPLICATION_STATUS_CHANGED: "APPLICATIONS",
   APPLICATION_RECEIVED: "APPLICATIONS",
+  APPLICATIONS_NEED_ATTENTION: "APPLICATIONS",
   JOB_POST_APPROVED: "JOB_POSTS",
   JOB_POST_REJECTED: "JOB_POSTS",
   JOB_POST_TAKEN_DOWN: "JOB_POSTS",
@@ -61,6 +62,8 @@ export const NOTIFICATION_GROUP_BY_TYPE: Record<NotificationType, NotificationGr
   COMPANY_LINK_REQUESTED: "COMPANY",
   CANDIDATE_OUTREACH_INVITATION_RECEIVED: "INVITATIONS",
   CANDIDATE_OUTREACH_INVITATION_RESPONDED: "INVITATIONS",
+  AUTO_OUTREACH_SENT: "INVITATIONS",
+  JOB_ALERT: "INVITATIONS",
   SUBSCRIPTION_EXPIRING: "SUBSCRIPTION",
   CATALOG_ENTRY_SUGGESTED: "CATALOG",
   PAYMENT_COMPLETED: "PAYMENTS",
@@ -73,6 +76,7 @@ export const NOTIFICATION_GROUP_BY_TYPE: Record<NotificationType, NotificationGr
   ACCOUNT_ACTIVATED: "ACCOUNT",
   PASSWORD_RESET_SUGGESTED: "ACCOUNT",
   SUPPORT_CONTACT_RECEIVED: "ACCOUNT",
+  PROFILE_SKILLS_REMINDER: "ACCOUNT",
 };
 
 export const NOTIFICATION_GROUP_META: Record<NotificationGroup, { label: string; icon: string }> = {
@@ -88,12 +92,27 @@ export const NOTIFICATION_GROUP_META: Record<NotificationGroup, { label: string;
 };
 
 /**
+ * Icon riêng cho loại mà icon nhóm không tả đúng (AD-26: báo tin việc làm nằm nhóm "Lời mời",
+ * nhắc thêm kỹ năng nằm nhóm "Tài khoản"). Loại không có ở đây dùng icon nhóm.
+ */
+const NOTIFICATION_TYPE_ICON: Partial<Record<NotificationType, string>> = {
+  JOB_ALERT: "briefcase",
+  PROFILE_SKILLS_REMINDER: "user-round-pen",
+};
+
+export function notificationIcon(type: NotificationType): string {
+  return NOTIFICATION_TYPE_ICON[type] ?? NOTIFICATION_GROUP_META[NOTIFICATION_GROUP_BY_TYPE[type]].icon;
+}
+
+/**
  * Nhãn nút hành động theo loại (API không trả nhãn). Nút dẫn tới `link` server
  * đã render, nên nhãn phải khớp nơi link trỏ tới.
  */
 export const NOTIFICATION_ACTION_LABEL: Record<NotificationType, string> = {
   APPLICATION_STATUS_CHANGED: "Xem hồ sơ ứng tuyển",
   APPLICATION_RECEIVED: "Xem hồ sơ",
+  // Nhắc hằng tuần (AD-25): link do server dựng theo ý đầu tiên khác 0.
+  APPLICATIONS_NEED_ATTENTION: "Xem hồ sơ",
   JOB_POST_APPROVED: "Xem tin",
   JOB_POST_REJECTED: "Sửa tin",
   JOB_POST_TAKEN_DOWN: "Xem chi tiết",
@@ -104,6 +123,9 @@ export const NOTIFICATION_ACTION_LABEL: Record<NotificationType, string> = {
   COMPANY_LINK_REQUESTED: "Xác minh",
   CANDIDATE_OUTREACH_INVITATION_RECEIVED: "Xem lời mời",
   CANDIDATE_OUTREACH_INVITATION_RESPONDED: "Xem ứng viên",
+  AUTO_OUTREACH_SENT: "Xem lời mời",
+  // AD-26 — link trỏ về /recommended-jobs.
+  JOB_ALERT: "Xem việc làm phù hợp",
   SUBSCRIPTION_EXPIRING: "Xem gói dịch vụ",
   CATALOG_ENTRY_SUGGESTED: "Duyệt",
   // Chưa có trang giao dịch — link trỏ về trang công ty đã thanh toán (D14).
@@ -118,10 +140,16 @@ export const NOTIFICATION_ACTION_LABEL: Record<NotificationType, string> = {
   ACCOUNT_ACTIVATED: "Đăng nhập",
   PASSWORD_RESET_SUGGESTED: "Đặt lại mật khẩu",
   SUPPORT_CONTACT_RECEIVED: "Xem người dùng",
+  // AD-26 — link trỏ về /profile.
+  PROFILE_SKILLS_REMINDER: "Cập nhật hồ sơ",
 };
 
-/** Loại cảnh báo (bị từ chối, bị gỡ, sắp hết hạn): tô marigold thay màu khu vực. */
+/**
+ * Loại cảnh báo (bị từ chối, bị gỡ, sắp hết hạn, hồ sơ tồn chờ xử lý): tô marigold thay màu
+ * khu vực.
+ */
 export const WARNING_NOTIFICATION_TYPES: ReadonlySet<NotificationType> = new Set<NotificationType>([
+  "APPLICATIONS_NEED_ATTENTION",
   "JOB_POST_REJECTED",
   "JOB_POST_TAKEN_DOWN",
   "JOB_POST_EXPIRING",

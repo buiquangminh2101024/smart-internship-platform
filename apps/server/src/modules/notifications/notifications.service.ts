@@ -163,6 +163,47 @@ export class NotificationsService {
     }
   }
 
+  /**
+   * Thông báo gộp (AD-26 D8): chưa có `dedupeKey` thì tạo như `notifyOnce` (kèm email nếu
+   * template có); có rồi thì thay nội dung, đặt lại chưa đọc, đưa lên đầu danh sách và đẩy
+   * realtime với cùng `id` — không gửi lại email. Hai lượt cùng tạo một khoá: bên chậm
+   * hơn đi sang nhánh cập nhật. Khoá thuộc người khác (không xảy ra nếu khoá chứa id người
+   * nhận) ⇒ bỏ qua, ghi log.
+   */
+  async upsertDaily<T extends NotificationType>(
+    type: T,
+    recipientUserId: string,
+    data: NotificationPayloadMap[T],
+    dedupeKey: string,
+  ): Promise<"CREATED" | "UPDATED" | "SKIPPED"> {
+    let existing = await this.notificationsRepository.findOwnerByDedupeKey(dedupeKey);
+    if (!existing) {
+      if (await this.notifyOnce(type, recipientUserId, data, dedupeKey)) return "CREATED";
+      existing = await this.notificationsRepository.findOwnerByDedupeKey(dedupeKey);
+      if (!existing) return "SKIPPED";
+    }
+    if (existing.userId !== recipientUserId) {
+      this.logger.warn("Bỏ qua thông báo gộp: dedupeKey thuộc người khác", { dedupeKey, recipientUserId, type });
+      return "SKIPPED";
+    }
+
+    const rendered = renderNotification(type, data, { webBaseUrl: this.webBaseUrl });
+    const notification = await this.notificationsRepository.refresh(
+      existing.id,
+      { title: rendered.title, body: rendered.body, link: rendered.link },
+      new Date(),
+    );
+    await this.realtimeNotifier.pushToUser(recipientUserId, {
+      id: notification.id,
+      type: notification.type,
+      title: notification.title,
+      body: notification.body,
+      link: notification.link,
+      createdAt: notification.createdAt,
+    });
+    return "UPDATED";
+  }
+
   // ─── Đọc (API cho mọi actor) ─────────────────────────────────────────────
 
   async list(

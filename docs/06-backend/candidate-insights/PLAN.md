@@ -6,6 +6,13 @@ Song song: `docs/05-frontend/phases/candidate-insights/PLAN.md`.
 
 **Trạng thái (2026-09-28): backend bước 1–5 XONG (migration đã áp Neon; `getTopMatches` + `GET /candidate/job-recommendations` và `GET`/`POST /candidate/profile/insights` đã test HTTP trên server thật; `tsc --noEmit` sạch cho `apps/server` và `packages/shared-types`).**
 
+> **Ghi chú 2026-11-13 — một phần plan này đã được AD-26 (mục 0.5, `docs/06-backend/job-discovery/PLAN.md`) thay:**
+>
+> - **D8 (top 10 cố định, không phân trang) không còn đúng.** "Việc làm phù hợp" đọc bảng điểm lưu sẵn (AD-24), có "Xem thêm" (10 tin mỗi trang, `?cursor=`), và loại tin đã ứng tuyển / đã được mời. Ứng viên chưa có dòng trong bảng điểm thì chấm trực tiếp, chỉ một trang.
+> - **Bỏ giới hạn 30 ngày:** đã xoá `RECOMMENDATION_RECENT_DAYS`, xét mọi tin đang hiển thị.
+> - **D10 (bốn cờ, trọng số 40/25/25/10) đã thay** bằng độ hoàn thiện tám mục: kỹ năng 30, CV 15, cho phép liên hệ 10, kinh nghiệm 15, dự án 10, headline/bio 5, ngành học 10, thành phố 5. API là `GET /candidate/profile-completeness`, kèm "Nên làm trước". `completenessScore` của "Phân tích hồ sơ" dùng cùng công thức. Độ tin cậy của Job Matcher (bốn cờ của loader) không đổi.
+> - "Phân tích hồ sơ" vẫn lấy `topJobPostIds` từ `getTopMatches`, nên trùng trang đầu "Việc làm phù hợp" (đã kiểm ở bước 8.3 của 0.5).
+
 ## Hai tính năng độc lập, không ràng buộc thứ tự
 
 Bản đầu gộp cả A1+A4+B2 vào một nút "Phân tích hồ sơ". Sau khi rà kỹ, tách thành 2 tính năng khác hẳn nhau về bản chất kỹ thuật:
@@ -31,14 +38,14 @@ Hai tính năng **không phụ thuộc thứ tự nhau** — Candidate mở "Vi�
 | D5 | Module `candidate-insights` chỉ giữ phần LLM/lưu trữ/rate-limit. |
 | D6 | Ngưỡng tối thiểu để tính là "phù hợp": `MIN_RECOMMENDATION_SCORE = 20` (%), lọc theo **từng tin**, không phải tất cả-hoặc-không. |
 | D7 | "Việc làm phù hợp" **tách độc lập** khỏi "Phân tích hồ sơ" — không LLM, không hạn mức, tính live. |
-| D8 | Top 10 cố định, **không phân trang** (khác trang thật của TopCV — giữ đúng quy mô hạ tầng đã có, không mở rộng thành duyệt toàn thị trường). |
+| D8 | Top 10 cố định, **không phân trang** (khác trang thật của TopCV — giữ đúng quy mô hạ tầng đã có, không mở rộng thành duyệt toàn thị trường). *Đã thay bởi AD-26 (2026-11-13): có phân trang "Xem thêm".* |
 
 ### Chốt thêm trước bước 3 (2026-09-28)
 
 | # | Quyết định |
 |---|---|
 | D9 | Gọi LLM theo **đúng khuôn `RequirementExtractor`** (không có "chuỗi fallback" dùng chung sẵn): port `shared/ports/ProfileInsightGenerator.ts` + `infrastructure/gemini-profile-insight-generator.ts` + `infrastructure/openrouter-profile-insight-generator.ts` + `infrastructure/fallback-profile-insight-generator.ts`; prompt đặt ở `infrastructure/profile-insight-prompt.ts` (cùng chỗ `requirement-extraction-prompt.ts`), không đặt trong module. |
-| D10 | `completenessScore` = tổng trọng số theo 4 cờ `completeness` của loader: **kỹ năng 40, kinh nghiệm 25, học vấn 25, headline/bio 10** (tổng 100). Chỉ để hiển thị — không ảnh hưởng điểm/độ tin cậy Job Matcher. |
+| D10 | `completenessScore` = tổng trọng số theo 4 cờ `completeness` của loader: **kỹ năng 40, kinh nghiệm 25, học vấn 25, headline/bio 10** (tổng 100). Chỉ để hiển thị — không ảnh hưởng điểm/độ tin cậy Job Matcher. *Đã thay bởi AD-26 mục 8 (2026-11-13): tám mục, xem ghi chú đầu file.* |
 | D11 | **LLM chỉ viết `strengths[]` + `suggestions[]` loại `WRITING`.** `SKILL_GAP`/`INDUSTRY_MISMATCH` do **code** tạo từ kết quả `getTopMatches` (xem "Gợi ý do code tạo") — `evidence` luôn là dữ liệu thật, LLM không thể bịa. |
 | D12 | Hạn mức áp **cả per-user và global**: dùng lại giá trị `REQUIREMENT_EXTRACTION_DAILY_LIMIT_PER_USER` (20) và `REQUIREMENT_EXTRACTION_DAILY_LIMIT_GLOBAL` (200), đếm ở key Redis riêng `candidate-insight-quota:*`. |
 | D13 | Dữ liệu gửi LLM **chỉ gồm**: headline, bio, tên + mô tả dự án, chức danh + mô tả kinh nghiệm, tên kỹ năng. **Không** gửi ngành học (việc lệch ngành do code làm), tên công ty, URL, ngày tháng, và **không bao giờ** gửi họ tên/SĐT/email/ngày sinh. |
@@ -185,7 +192,7 @@ Không sửa `candidates`, `cv`, `job-posts`, `applications`.
 
 - **Lọc thô không theo ngành/loại việc:** `Candidate` không có trường ngành/loại việc mong muốn ⇒ điều kiện thu hẹp là "tin yêu cầu ≥ 1 kỹ năng APPROVED mà hồ sơ có"; nới lỏng thì bỏ điều kiện này. Luôn kèm `PUBLISHED`, chưa hết hạn (`expiresAt`), đăng trong 30 ngày.
 - **Kiểu trả về:** `JobRecommendationList = { status: "OK" | "INSUFFICIENT_PROFILE", items: JobRecommendation[] }`; `JobRecommendation.jobPost` là `JobPost` công khai đầy đủ (dùng lại `jobPostInclude`/`toJobPostDto` của `job-posts`, không sửa module đó) để FE tái dùng `JobCard`.
-- Hằng số ở `job-matching.config.ts`: `RECOMMENDATION_LIMIT=10`, `MIN_RECOMMENDATION_SCORE=20`, `RECOMMENDATION_RECENT_DAYS=30`, `RECOMMENDATION_POOL_SIZE=50`, `RECOMMENDATION_RERANK_SIZE=20`.
+- Hằng số ở `job-matching.config.ts`: `RECOMMENDATION_LIMIT=10`, `MIN_RECOMMENDATION_SCORE=20`, `RECOMMENDATION_RECENT_DAYS=30`, `RECOMMENDATION_POOL_SIZE=50`, `RECOMMENDATION_RERANK_SIZE=20`. *(2026-11-13, AD-26: đã xoá `RECOMMENDATION_RECENT_DAYS`, không còn giới hạn 30 ngày.)*
 - Test trên dữ liệu thật (17 tin PUBLISHED, 22 hồ sơ): nới lỏng chạy khi pool thu hẹp = 9 (→ 17); ngưỡng 20% trả 5–6 tin cho hồ sơ ít kỹ năng (không độn); `minScore: 90` chỉ còn tin ≥ 90; hồ sơ trắng ⇒ `INSUFFICIENT_PROFILE`; không tin nào đạt ngưỡng ⇒ `OK` + rỗng; user không có hồ sơ ⇒ 404. Thời gian ~2 s (lần đầu ~5,6 s do nạp model/tính vector).
 - **Sự cố:** khi kiểm migration ở bước 1 đã lỡ dùng `DATABASE_URL` làm `--shadow-database-url` ⇒ Prisma reset toàn bộ DB Neon (2026-09-28 03:13 UTC); đã khôi phục bằng Neon point-in-time restore. **Không bao giờ dùng DB thật làm shadow DB** — kiểm migration bằng `--from-migrations` cần một Neon branch riêng.
 
@@ -208,7 +215,7 @@ Không sửa `candidates`, `cv`, `job-posts`, `applications`.
 
 ## Ngoài phạm vi
 
-- Phân trang "Việc làm phù hợp" (D8 — chỉ top 10 cố định).
+- ~~Phân trang "Việc làm phù hợp" (D8 — chỉ top 10 cố định).~~ Đã làm ở 0.5 (AD-26, 2026-11-13).
 - Tự động tính lại "Phân tích hồ sơ" khi hồ sơ đổi (chỉ tính khi Candidate bấm nút).
 - Sửa hồ sơ Candidate tự động theo gợi ý LLM.
 

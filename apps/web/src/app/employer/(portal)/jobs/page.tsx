@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import type { JobPost, JobPostStatus } from "@sip/shared-types";
 import { apiFetch, ApiError } from "@/lib/api-client";
+import { formatDecimal } from "@/lib/dashboard-format";
 import { useEmployerJobPostStats, useEmployerJobPosts } from "@/hooks/useJobPosts";
 import { JOB_STATUS_LABEL, JOB_TYPE_LABEL, formatDate, formatDeadline, formatSalary } from "@/lib/job-post-display";
 import { Badge } from "@/components/ui/Badge";
@@ -14,6 +15,7 @@ import { Icon } from "@/components/ui/Icon";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { StatCard } from "@/components/ui/StatCard";
+import { MatchedCount } from "@/components/employer/MatchedCount";
 
 /** Giá trị ô lọc: một trạng thái, tất cả, hoặc "tin cần chú ý" (`?attention=1`, không đi cùng `status`). */
 type JobFilter = JobPostStatus | "ALL" | "ATTENTION";
@@ -28,7 +30,7 @@ const STATUS_OPTIONS: { value: JobFilter; label: string }[] = [
 
 /**
  * Bộ lọc của trang nằm trên URL để dashboard trỏ thẳng vào được
- * (`/employer/jobs?attention=1`, docs/05-frontend/phases/employer-dashboard-v2/PLAN.md F1).
+ * (`/employer/jobs?attention=1`, docs/05-frontend/phases/dashboard-v2/PLAN.md F1).
  * Giá trị lạ bị bỏ qua; có `attention=1` thì bỏ qua `status`.
  */
 function useJobFilterParam() {
@@ -53,7 +55,11 @@ function useJobFilterParam() {
   return { filter, setFilter };
 }
 
-/** Dòng tóm tắt dưới tiêu đề tin — lượt xem, ứng viên, hạn nộp. */
+/**
+ * Dòng tóm tắt dưới tiêu đề tin — lượt xem, ứng viên, tỉ lệ nộp, số phù hợp, hạn nộp. Tỉ lệ nộp
+ * và số phù hợp chuyển từ khối cũ ở trang tổng quan sang (0.3 F4,
+ * docs/05-frontend/phases/hiring-progress/PLAN.md).
+ */
 function JobMeta({ job }: { job: JobPost }) {
   return (
     <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-text-muted">
@@ -65,6 +71,19 @@ function JobMeta({ job }: { job: JobPost }) {
         <Icon name="users" size={14} />
         {job.applicationCount} ứng viên
       </span>
+      {job.viewCount > 0 ? (
+        <span className="inline-flex items-center gap-1">
+          <Icon name="percent" size={14} />
+          Tỉ lệ nộp {formatDecimal((job.applicationCount / job.viewCount) * 100)}%
+        </span>
+      ) : null}
+      {job.matchedCount !== undefined ? (
+        <span className="inline-flex items-center gap-1">
+          <Icon name="user-check" size={14} />
+          {/* Danh sách gồm tin của cả công ty; trang tìm ứng viên chỉ người đăng tin mở được. */}
+          <MatchedCount jobId={job.id} matched={job.matchedCount} label="Phù hợp" linked={job.isOwner === true} />
+        </span>
+      ) : null}
       {job.status === "PUBLISHED" ? (
         <span className="inline-flex items-center gap-1">
           <Icon name="calendar-clock" size={14} />

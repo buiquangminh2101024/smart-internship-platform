@@ -1,7 +1,5 @@
 import type { JobRecommendation, ProfileInsightSuggestion } from "@sip/shared-types";
-import type { CandidateMatchProfile } from "../../shared/ports/JobMatcher";
 import {
-  COMPLETENESS_WEIGHTS,
   INDUSTRY_MISMATCH_MIN_JOBS,
   INDUSTRY_MISMATCH_MIN_RATIO,
   SKILL_GAP_MAX_SUGGESTIONS,
@@ -10,14 +8,7 @@ import {
 
 // Hàm thuần — test được không cần DB/LLM. Gợi ý ở đây do CODE tạo từ kết quả
 // getTopMatches (D11): evidence luôn là dữ liệu thật, LLM không tham gia.
-
-/** D10 — chỉ để hiển thị, không ảnh hưởng điểm/độ tin cậy Job Matcher. */
-export function computeCompletenessScore(completeness: CandidateMatchProfile["completeness"]): number {
-  return (Object.keys(COMPLETENESS_WEIGHTS) as Array<keyof typeof COMPLETENESS_WEIGHTS>).reduce(
-    (sum, key) => sum + (completeness[key] ? COMPLETENESS_WEIGHTS[key] : 0),
-    0,
-  );
-}
+// Độ hoàn thiện hồ sơ (D10 cũ) đã chuyển sang profile-completeness.util.ts (AD-26 mục 8).
 
 export function buildCodeSuggestions(items: JobRecommendation[]): ProfileInsightSuggestion[] {
   if (items.length === 0) return [];

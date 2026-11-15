@@ -7,8 +7,6 @@ import {
   ADMIN_DASHBOARD_KEY,
   useAdminDashboardAnalytics,
   useAdminDashboardOverview,
-  useAdminDashboardTasks,
-  type ModerationQueue,
 } from "@/hooks/useAdminDashboard";
 import { formatNumber, formatVnDate, formatVnTime } from "@/lib/dashboard-format";
 import { ToastViewport, type ToastData } from "@/components/ui/Toast";
@@ -17,8 +15,8 @@ import { DashButton } from "@/components/dashboard/DashButton";
 import { NotificationCenter } from "@/components/dashboard/NotificationCenter";
 import { ActivityTimeline } from "@/components/dashboard/admin/ActivityTimeline";
 import { AdminTrendAndRevenue, UsersByRolePanel } from "@/components/dashboard/admin/AdminAnalytics";
-import { AdminQueues, MODERATION_DESK_ID } from "@/components/dashboard/admin/AdminQueues";
-import { ModerationDesk } from "@/components/dashboard/admin/ModerationDesk";
+import { AdminQueues } from "@/components/dashboard/admin/AdminQueues";
+import { AutomationStatusPanel } from "@/components/dashboard/admin/AutomationStatusPanel";
 import { PlatformMetrics } from "@/components/dashboard/admin/PlatformMetrics";
 
 let toastIdCounter = 0;
@@ -35,50 +33,23 @@ function useToast() {
   return { toasts, push, dismiss };
 }
 
-function prefersReducedMotion(): boolean {
-  return typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
 /**
- * Tổng quan của Admin — bản D "bàn duyệt" (AD-16, D14): hàng chờ → bàn duyệt +
- * nền tảng → người dùng mới + doanh thu → thông báo + hoạt động + vai trò.
+ * Tổng quan của Admin — bản D2 (docs/05-frontend/phases/dashboard-v2/PLAN.md): hàng chờ (thẻ dẫn
+ * sang trang quản lý, không duyệt tại chỗ) → nền tảng → hệ thống tự động (0.6 F5), mỗi khối một
+ * hàng → người dùng mới + doanh thu → thông báo + hoạt động + vai trò.
  * Mỗi khối tải và báo lỗi độc lập. Số dùng font chữ thường kèm `tabular-nums`
  * (khác Employer bản C dùng mono), nên trang đè `--font-num` về font sans.
  */
 export default function AdminDashboardPage() {
   const queryClient = useQueryClient();
   const overview = useAdminDashboardOverview();
-  const tasks = useAdminDashboardTasks();
   const [range, setRange] = useState<DashboardRange>(30);
   const analytics = useAdminDashboardAnalytics(range);
-  const [selected, setSelected] = useState<ModerationQueue>("jobPosts");
   const [refreshing, setRefreshing] = useState(false);
   const { toasts, push, dismiss } = useToast();
 
   const queues = overview.data?.queues;
   const pendingTotal = queues ? queues.jobPosts.total + queues.companies.total + queues.catalog.total : 0;
-
-  function scrollToDesk() {
-    document
-      .getElementById(MODERATION_DESK_ID)
-      ?.scrollIntoView({ behavior: prefersReducedMotion() ? "auto" : "smooth", block: "start" });
-  }
-
-  function selectQueue(queue: ModerationQueue) {
-    setSelected(queue);
-    scrollToDesk();
-  }
-
-  function startReviewing() {
-    setSelected("jobPosts");
-    scrollToDesk();
-    // Đợi tab mới hiện rồi focus nút duyệt của hàng đầu tiên còn chờ (hàng đã xử lý không còn nút).
-    window.setTimeout(() => {
-      document
-        .querySelector<HTMLButtonElement>(`#${MODERATION_DESK_ID} [role="tabpanel"] li button:not([disabled])`)
-        ?.focus({ preventScroll: true });
-    }, 300);
-  }
 
   async function refreshAll() {
     setRefreshing(true);
@@ -109,14 +80,9 @@ export default function AdminDashboardPage() {
             )}
           </p>
         </div>
-        <div className="flex gap-2">
-          <DashButton variant="secondary" icon="refresh-cw" loading={refreshing} onClick={() => void refreshAll()}>
-            {refreshing ? "Đang làm mới" : "Làm mới"}
-          </DashButton>
-          <DashButton iconAfter="arrow-right" onClick={startReviewing}>
-            Bắt đầu duyệt
-          </DashButton>
-        </div>
+        <DashButton variant="secondary" icon="refresh-cw" loading={refreshing} onClick={() => void refreshAll()}>
+          {refreshing ? "Đang làm mới" : "Làm mới"}
+        </DashButton>
       </header>
 
       {overview.isPending ? (
@@ -128,44 +94,23 @@ export default function AdminDashboardPage() {
       ) : overview.isError ? (
         <BlockError what="hàng chờ" onRetry={() => void overview.refetch()} retrying={overview.isFetching} minHeight={120} />
       ) : (
-        <AdminQueues queues={overview.data.queues} selected={selected} onSelect={selectQueue} />
+        <AdminQueues queues={overview.data.queues} />
       )}
 
-      <div className="grid grid-cols-1 items-start gap-4 @[900px]:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        {tasks.isPending ? (
-          <BlockSkeleton height={420} />
-        ) : tasks.isError ? (
-          <BlockError what="bàn duyệt" onRetry={() => void tasks.refetch()} retrying={tasks.isFetching} minHeight={120} />
-        ) : (
-          <ModerationDesk
-            tasks={tasks.data}
-            totals={
-              queues
-                ? { jobPosts: queues.jobPosts.total, companies: queues.companies.total, catalog: queues.catalog.total }
-                : undefined
-            }
-            catalogSplit={
-              queues ? { skills: queues.catalog.skills, education: queues.catalog.universities + queues.catalog.majors } : undefined
-            }
-            selected={selected}
-            onSelect={setSelected}
-            notify={push}
-          />
-        )}
+      {overview.isPending ? (
+        <BlockSkeleton height={220} />
+      ) : overview.isError ? (
+        <BlockError
+          what="số liệu nền tảng"
+          onRetry={() => void overview.refetch()}
+          retrying={overview.isFetching}
+          minHeight={120}
+        />
+      ) : (
+        <PlatformMetrics overview={overview.data} updatedAt={overview.dataUpdatedAt} />
+      )}
 
-        {overview.isPending ? (
-          <BlockSkeleton height={420} />
-        ) : overview.isError ? (
-          <BlockError
-            what="số liệu nền tảng"
-            onRetry={() => void overview.refetch()}
-            retrying={overview.isFetching}
-            minHeight={120}
-          />
-        ) : (
-          <PlatformMetrics overview={overview.data} updatedAt={overview.dataUpdatedAt} />
-        )}
-      </div>
+      <AutomationStatusPanel />
 
       <AdminTrendAndRevenue analytics={analytics} range={range} onRangeChange={setRange} />
 

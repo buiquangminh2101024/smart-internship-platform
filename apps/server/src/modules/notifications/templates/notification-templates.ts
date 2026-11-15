@@ -1,6 +1,7 @@
 import type { InterviewMode, NotificationType, UserStatus } from "@prisma/client";
 import type { SupportCategory } from "@sip/shared-types";
-import type { NotificationPayloadMap, RenderedNotification } from "../notification.types";
+import { STALE_AFTER_DAYS } from "../../application-automation/application-automation.config";
+import type { NotificationPayloadMap, RenderedEmail, RenderedNotification } from "../notification.types";
 
 type Renderer<T extends NotificationType> = (
   data: NotificationPayloadMap[T],
@@ -20,6 +21,7 @@ const APPLICATION_STATUS_LABEL: Record<string, string> = {
   ACCEPTED: "Được nhận",
   REJECTED: "Bị từ chối",
   CANCELLED: "Đã huỷ",
+  JOB_CLOSED: "Tin đã đóng",
 };
 
 function statusLabel(status: string): string {
@@ -86,6 +88,48 @@ function formatDateTime(date: Date): string {
   return `${formatDate(date)} ${time} (giờ Việt Nam)`;
 }
 
+/**
+ * "dd/mm" theo giờ Việt Nam — ngày tự đóng trong nhắc tuần. Ghép từ từng phần vì ICU ghi
+ * ngày/tháng của `vi-VN` là "18-11".
+ */
+function formatDayMonth(date: Date): string {
+  const parts = new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit" }).formatToParts(date);
+  const part = (type: "day" | "month") => parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("day")}/${part("month")}`;
+}
+
+type NeedAttentionData = NotificationPayloadMap["APPLICATIONS_NEED_ATTENTION"];
+
+/**
+ * Các ý của nhắc tuần, theo thứ tự cần kết quả, sắp tự đóng, chờ duyệt, đang xem xét, chờ
+ * đặt lịch (plan bước 5). Nhóm bằng 0 thì bỏ.
+ */
+function applicationsNeedAttentionParts(data: NeedAttentionData): string[] {
+  const days = STALE_AFTER_DAYS;
+  const parts: string[] = [];
+  if (data.needsResult > 0) parts.push(`${data.needsResult} ứng viên đã phỏng vấn quá 7 ngày chưa có kết quả`);
+  if (data.closingSoon > 0) {
+    parts.push(
+      data.closingOn
+        ? `${data.closingSoon} hồ sơ sẽ tự đóng từ ngày ${formatDayMonth(data.closingOn)}`
+        : `${data.closingSoon} hồ sơ sắp tự đóng`,
+    );
+  }
+  if (data.pendingStale > 0) parts.push(`${data.pendingStale} hồ sơ chờ duyệt quá ${days} ngày`);
+  if (data.reviewingStale > 0) parts.push(`${data.reviewingStale} hồ sơ đang xem xét quá ${days} ngày`);
+  if (data.awaitingSchedule > 0) parts.push(`${data.awaitingSchedule} ứng viên chờ đặt lịch phỏng vấn quá ${days} ngày`);
+  return parts;
+}
+
+/** Mở đúng chỗ của ý đầu tiên có thể lọc được trên trang "Ứng viên". */
+function applicationsNeedAttentionLink(data: NeedAttentionData): string {
+  if (data.needsResult > 0) return "/employer/applications?focus=result";
+  if (data.pendingStale > 0) return "/employer/applications?status=PENDING";
+  if (data.reviewingStale > 0) return "/employer/applications?status=REVIEWING";
+  if (data.awaitingSchedule > 0) return "/employer/applications?status=SHORTLISTED";
+  return "/employer/applications";
+}
+
 interface InterviewLines {
   scheduledAt: Date;
   durationMinutes: number;
@@ -114,8 +158,14 @@ function interviewLines(data: InterviewLines): string[] {
  */
 const templates: { [T in NotificationType]: Renderer<T> } = {
   APPLICATION_STATUS_CHANGED: (data, ctx) => {
-    const title = "Cập nhật trạng thái hồ sơ ứng tuyển";
-    const body = `Hồ sơ ứng tuyển vị trí "${data.jobPostTitle}" tại ${data.companyName} đã chuyển từ "${statusLabel(data.oldStatus)}" sang "${statusLabel(data.newStatus)}".`;
+    // AD-25 — hệ thống đóng hồ sơ vì tin đã ngừng tuyển: lời riêng theo lý do.
+    const closed = data.newStatus === "JOB_CLOSED";
+    const title = closed ? "Hồ sơ ứng tuyển đã được đóng" : "Cập nhật trạng thái hồ sơ ứng tuyển";
+    const body = !closed
+      ? `Hồ sơ ứng tuyển vị trí "${data.jobPostTitle}" tại ${data.companyName} đã chuyển từ "${statusLabel(data.oldStatus)}" sang "${statusLabel(data.newStatus)}".`
+      : data.closeReason === "NO_RESULT"
+        ? `Tin "${data.jobPostTitle}" tại ${data.companyName} đã ngừng tuyển và nhà tuyển dụng chưa cập nhật kết quả. Hồ sơ của bạn đã được đóng.`
+        : `Tin "${data.jobPostTitle}" tại ${data.companyName} đã ngừng nhận hồ sơ. Hồ sơ của bạn đã được đóng.`;
     const link = "/applications";
     return {
       title,
@@ -264,6 +314,15 @@ const templates: { [T in NotificationType]: Renderer<T> } = {
     };
   },
 
+  // AD-23. Cố ý không gửi email; tối đa 1 thông báo/tin/ngày (notifyOnce). Trang
+  // tìm ứng viên đọc ?tab=invited từ bước frontend F1.
+  AUTO_OUTREACH_SENT: (data) => ({
+    title: `Hệ thống đang tự mời ứng viên cho tin "${data.jobPostTitle}"`,
+    body: `Hôm nay hệ thống đã gửi lời mời cho ${data.sentCount} ứng viên phù hợp. Các lời mời gửi thêm trong ngày cũng hiện ở tab "Đã mời".`,
+    link: `/employer/jobs/${data.jobPostId}/candidate-search?tab=invited`,
+    email: null,
+  }),
+
   // AD-16 — dashboard. Cố ý không gửi email: chỉ hiển thị trong app, nhóm "Hồ sơ" có đánh dấu đã đọc hàng loạt.
   APPLICATION_RECEIVED: (data) => ({
     title: "Có hồ sơ ứng tuyển mới",
@@ -273,6 +332,33 @@ const templates: { [T in NotificationType]: Renderer<T> } = {
   }),
 
   // Do cron hằng ngày tạo (dedupeKey = JOB_POST_EXPIRING:{jobPostId}:{userId}); chỉ trong app.
+  // AD-25 — nhắc tuần (thứ Hai 8h). Có email: người quên xử lý thường là người không mở app.
+  APPLICATIONS_NEED_ATTENTION: (data, ctx) => {
+    const title = "Có hồ sơ ứng viên cần xử lý";
+    const parts = applicationsNeedAttentionParts(data);
+    const body = parts.join(" · ");
+    const link = applicationsNeedAttentionLink(data);
+    return {
+      title,
+      body,
+      link,
+      email: {
+        subject: `[${data.companyName}] Hồ sơ ứng viên cần xử lý tuần này`,
+        html: emailHtml(
+          title,
+          [
+            `Tình hình hồ sơ ứng viên của ${data.companyName}:`,
+            ...parts.map((part) => `• ${part}`),
+            ...(data.closingSoon > 0
+              ? ["Hồ sơ ở tin đã ngừng tuyển mà không được xử lý sẽ được hệ thống chuyển sang \"Tin đã đóng\" và báo cho ứng viên."]
+              : []),
+          ],
+          { label: "Xem hồ sơ", url: absolute(ctx, link) },
+        ),
+      },
+    };
+  },
+
   JOB_POST_EXPIRING: (data) => ({
     title: "Tin tuyển dụng sắp hết hạn",
     body: `Tin "${data.jobPostTitle}" sẽ hết hạn vào ${formatDate(data.expiresAt)}.`,
@@ -510,9 +596,83 @@ const templates: { [T in NotificationType]: Renderer<T> } = {
     };
   },
 
+  // AD-26 D8 — chỉ trong app; email gộp mỗi ngày đi riêng qua JobAlertService (bước 6).
+  // Thông báo được cập nhật tại chỗ khi có tin mới trong ngày, nên tiêu đề luôn là tổng trong ngày.
+  // Báo lần đầu cho ứng viên mới (0.6) nêu tin điểm cao nhất thay cho tin mới nhất.
+  JOB_ALERT: (data) => {
+    const latest = `"${data.jobPostTitle}" của ${data.companyName}, phù hợp ${data.score}%`;
+    const lead = data.firstScored ? "Phù hợp nhất" : "Mới nhất";
+    return {
+      title: `${data.todayCount} tin mới phù hợp với bạn`,
+      body: data.todayCount > 1 ? `${lead}: ${latest}.` : `${latest}.`,
+      link: "/recommended-jobs",
+      email: null,
+    };
+  },
+
+  // AD-26 D10 — nhắc một lần cho tài khoản ≥ 24 giờ chưa có kỹ năng. Có email: người chưa
+  // điền kỹ năng thường cũng ít mở app.
+  PROFILE_SKILLS_REMINDER: (_data, ctx) => {
+    const title = "Thêm kỹ năng để nhận việc làm phù hợp";
+    const body =
+      "Hồ sơ của bạn chưa có kỹ năng nào. Hệ thống dựa vào kỹ năng để gợi ý việc làm, báo khi có tin mới phù hợp và giúp nhà tuyển dụng tìm thấy bạn.";
+    const link = "/profile";
+    return {
+      title,
+      body,
+      link,
+      email: {
+        subject: "Thêm kỹ năng vào hồ sơ để nhận việc làm phù hợp",
+        html: emailHtml(title, [body, "Chỉ mất vài phút: mở hồ sơ và thêm những kỹ năng bạn đang có."], {
+          label: "Cập nhật hồ sơ",
+          url: absolute(ctx, link),
+        }),
+      },
+    };
+  },
+
   // Tin nhắn cố ý không có loại notification: không ghi DB mỗi tin, chỉ push
   // realtime qua RealtimeNotifier.pushMessageToUser (Phase 9 bổ sung).
 };
+
+/** Một tin trong email gộp job alert. */
+export interface JobAlertDigestJob {
+  jobPostId: string;
+  title: string;
+  companyName: string;
+  score: number;
+}
+
+/**
+ * AD-26 D8 — email gộp job alert lúc 8h, không gắn với thông báo trong ứng dụng nào (thông báo
+ * `JOB_ALERT` đã gửi lúc báo). `jobs` đã sắp và cắt sẵn; `total` là số tin còn đáng gửi.
+ */
+export function renderJobAlertDigestEmail(
+  data: { jobs: JobAlertDigestJob[]; total: number },
+  ctx: TemplateContext,
+): RenderedEmail {
+  const heading = `${data.total} tin mới phù hợp với bạn`;
+  const items = data.jobs
+    .map(
+      (job) =>
+        `<li style="margin:0 0 10px"><a href="${escapeHtml(absolute(ctx, `/jobs/${job.jobPostId}`))}" style="color:#2563eb;font-weight:600;text-decoration:none">${escapeHtml(job.title)}</a>` +
+        `<br><span style="color:#4b5563">${escapeHtml(job.companyName)} · phù hợp ${job.score}%</span></li>`,
+    )
+    .join("");
+  const more = data.total - data.jobs.length;
+  const html = [
+    `<div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;max-width:560px;margin:0 auto;color:#111827">`,
+    `<h2 style="margin:0 0 16px;font-size:18px">${escapeHtml(heading)}</h2>`,
+    `<p style="margin:0 0 12px">Từ lần email trước, hệ thống tìm thấy các tin sau phù hợp từ 70% trở lên với hồ sơ của bạn:</p>`,
+    `<ul style="margin:0 0 12px;padding-left:20px">${items}</ul>`,
+    more > 0 ? `<p style="margin:0 0 12px">và ${more} tin khác.</p>` : "",
+    `<p style="margin:24px 0 0"><a href="${escapeHtml(absolute(ctx, "/recommended-jobs"))}" style="background:#2563eb;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none;display:inline-block">Xem việc làm phù hợp</a></p>`,
+    `<p style="margin:24px 0 0;font-size:12px;color:#6b7280">Bạn nhận email này vì đang bật email tổng hợp job alert. Tắt trong <a href="${escapeHtml(absolute(ctx, "/settings"))}" style="color:#6b7280">Cài đặt</a>.</p>`,
+    `<p style="margin:8px 0 0;font-size:12px;color:#6b7280">Email tự động từ Smart Internship Platform, vui lòng không trả lời.</p>`,
+    `</div>`,
+  ].join("");
+  return { subject: heading, html };
+}
 
 export function renderNotification<T extends NotificationType>(
   type: T,

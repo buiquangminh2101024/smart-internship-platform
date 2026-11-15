@@ -1,0 +1,1463 @@
+{
+  "asOf": "2026-11",
+  "employers": [
+    { "key": "tuyendung-mayxanh", "company": "may-xanh-tech", "title": "Trưởng phòng Nhân sự" },
+    { "key": "tuyendung-chinhtruc", "company": "chinh-truc-audit", "title": "Quản lý Tuyển dụng" },
+    { "key": "tuyendung-hatgiong", "company": "hat-giong-media", "title": "HR Business Partner" },
+    { "key": "tuyendung-conthoi", "company": "con-thoi-logistics", "title": "Chuyên viên Tuyển dụng" }
+  ],
+  "jobs": [
+    {
+      "key": "mx-backend-intern", "employer": "tuyendung-mayxanh", "position": "backend-nodejs", "jobType": "INTERNSHIP",
+      "title": "Thực tập sinh Backend Node.js", "variant": 0,
+      "majors": { "primary": ["Công nghệ thông tin", "Kỹ thuật phần mềm"], "related": ["Toán tin", "Kỹ thuật máy tính"] },
+      "minExperienceYears": null, "salary": [4000000, 6000000], "publishedDaysAgo": 2, "expiresInDays": 45
+    },
+    {
+      "key": "mx-frontend-intern", "employer": "tuyendung-mayxanh", "position": "frontend-react", "jobType": "INTERNSHIP",
+      "title": "Thực tập sinh Frontend React", "variant": 0,
+      "majors": { "primary": ["Công nghệ thông tin", "Kỹ thuật phần mềm"], "related": ["Hệ thống thông tin", "Công nghệ đa phương tiện"] },
+      "minExperienceYears": null, "salary": [3500000, 5500000], "publishedDaysAgo": 4, "expiresInDays": 40
+    },
+    {
+      "key": "mx-fullstack", "employer": "tuyendung-mayxanh", "position": "fullstack-js", "jobType": "FULL_TIME",
+      "title": "Lập trình viên Fullstack JavaScript", "variant": 0,
+      "majors": { "primary": ["Công nghệ thông tin", "Khoa học máy tính"], "related": ["Hệ thống thông tin", "Toán tin"] },
+      "minExperienceYears": 1, "skillMinYears": { "React": 1, "Node.js": 1 },
+      "salary": [12000000, 18000000], "publishedDaysAgo": 6, "expiresInDays": 50
+    },
+    {
+      "key": "mx-tester-intern", "employer": "tuyendung-mayxanh", "position": "tester", "jobType": "INTERNSHIP",
+      "title": "Thực tập sinh Kiểm thử phần mềm", "variant": 1,
+      "majors": { "primary": ["Công nghệ thông tin", "Hệ thống thông tin"], "related": ["Toán tin", "Hệ thống thông tin quản lý"] },
+      "minExperienceYears": null, "salary": [3000000, 5000000], "publishedDaysAgo": 8, "expiresInDays": 35
+    },
+    {
+      "key": "mx-data-intern", "employer": "tuyendung-mayxanh", "position": "data-analyst", "jobType": "INTERNSHIP",
+      "title": "Data Analyst Intern", "variant": 0,
+      "majors": { "primary": ["Khoa học dữ liệu", "Hệ thống thông tin quản lý"], "related": ["Công nghệ thông tin", "Kinh tế", "Toán Kinh tế"] },
+      "minExperienceYears": null, "salary": [4000000, 6000000], "publishedDaysAgo": 3, "expiresInDays": 45
+    },
+    {
+      "key": "mx-uiux-intern", "employer": "tuyendung-mayxanh", "position": "ui-ux", "jobType": "INTERNSHIP",
+      "title": "Thực tập sinh UI/UX Designer", "variant": 0,
+      "majors": { "primary": ["Thiết kế đồ họa", "Công nghệ đa phương tiện"], "related": ["Công nghệ thông tin", "Truyền thông đa phương tiện"] },
+      "minExperienceYears": null, "salary": null, "publishedDaysAgo": 10, "expiresInDays": 30
+    },
+    {
+      "key": "ct-audit-intern", "employer": "tuyendung-chinhtruc", "position": "auditor", "jobType": "INTERNSHIP",
+      "title": "Thực tập sinh Kiểm toán", "variant": 0,
+      "majors": { "primary": ["Kiểm toán", "Kế toán"], "related": ["Tài chính - Ngân hàng", "Kinh tế"] },
+      "minExperienceYears": null, "salary": [3000000, 4000000], "publishedDaysAgo": 5, "expiresInDays": 60
+    },
+    {
+      "key": "hg-ads-intern", "employer": "tuyendung-hatgiong", "position": "digital-ads", "jobType": "INTERNSHIP",
+      "title": "Thực tập sinh Digital Marketing", "variant": 2,
+      "majors": { "primary": ["Marketing", "Digital Marketing"], "related": ["Quản trị kinh doanh", "Thương mại điện tử"] },
+      "minExperienceYears": null, "salary": [3000000, 4000000], "publishedDaysAgo": 7, "expiresInDays": 40
+    },
+    {
+      "key": "hg-content-parttime", "employer": "tuyendung-hatgiong", "position": "content-marketing", "jobType": "PART_TIME",
+      "title": "Cộng tác viên Viết nội dung (part-time)", "variant": 0,
+      "majors": { "primary": ["Marketing", "Báo chí"], "related": ["Ngôn ngữ Anh", "Truyền thông đại chúng"] },
+      "minExperienceYears": null, "salary": [3500000, 5000000], "publishedDaysAgo": 9, "expiresInDays": 30
+    },
+    {
+      "key": "ctl-xnk-intern", "employer": "tuyendung-conthoi", "position": "import-export", "jobType": "INTERNSHIP",
+      "title": "Thực tập sinh Xuất nhập khẩu", "variant": 1,
+      "majors": { "primary": ["Logistics và quản lý chuỗi cung ứng", "Kinh tế ngoại thương"], "related": ["Ngôn ngữ Anh", "Quản trị kinh doanh"] },
+      "minExperienceYears": null, "salary": [2500000, 4000000], "publishedDaysAgo": 4, "expiresInDays": 45
+    }
+  ],
+  "candidates": [
+    {
+      "key": "uv-backend-1", "job": "mx-backend-intern", "tier": "rat-hop", "level": "nam-cuoi", "demoLogin": true,
+      "fullName": "Nguyễn Minh Khoa", "gender": "MALE", "birthYear": 2004, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Công Nghệ Thông Tin", "major": "Kỹ thuật phần mềm", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên Kỹ thuật phần mềm | Backend Node.js, PostgreSQL",
+      "bio": "Mình thích phần việc phía server: thiết kế bảng dữ liệu, viết API và đo xem truy vấn nào chậm. Đã thực tập ở một công ty làm phần mềm bán lẻ, quen quy trình review code và làm theo Sprint. Đang tìm chỗ thực tập để làm sản phẩm có người dùng thật.",
+      "skills": [
+        { "name": "Node.js", "years": 1 }, { "name": "Express", "years": 1 }, { "name": "JavaScript", "years": 1.5 },
+        { "name": "PostgreSQL", "years": 1 }, { "name": "REST API", "years": 1 }, { "name": "Git", "years": 1 },
+        { "name": "TypeScript", "years": 0.5 }, { "name": "Docker", "years": 0.5 }, { "name": "Làm việc nhóm", "years": 1 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Phần mềm Lá Chanh", "position": "Thực tập sinh Backend", "start": "2026-03", "end": "2026-08",
+          "description": "Viết API quản lý tồn kho cho chuỗi cửa hàng bằng Express và PostgreSQL, thêm phân trang và chỉ mục cho các bảng đơn hàng lớn." }
+      ],
+      "projects": [
+        { "name": "Hệ thống đặt bàn nhà hàng", "description": "API Node.js cho đặt bàn, giữ chỗ theo khung giờ và gửi email xác nhận; triển khai bằng Docker trên máy chủ thuê của nhóm." },
+        { "name": "Bot nhắc lịch học cho lớp", "description": "Bot viết bằng TypeScript, đọc thời khoá biểu từ file và nhắc trước giờ học; hơn trăm bạn trong khoa đang dùng." }
+      ],
+      "certificates": [{ "name": "AWS Certified Cloud Practitioner", "issuer": "Amazon Web Services", "year": 2026 }]
+    },
+    {
+      "key": "uv-backend-2", "job": "mx-backend-intern", "tier": "rat-hop", "level": "nam-3",
+      "fullName": "Trần Ngọc Hân", "gender": "FEMALE", "birthYear": 2005, "city": "Hà Nội",
+      "educations": [{ "university": "Học Viện Công Nghệ Bưu Chính Viễn Thông", "major": "Công nghệ thông tin", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên năm 3 CNTT | Backend Node.js",
+      "bio": "Mình bắt đầu với JavaScript từ câu lạc bộ lập trình của khoa, sau đó chuyển hẳn sang backend. Đã tự làm vài API có đăng nhập, phân quyền và lưu dữ liệu vào PostgreSQL. Muốn thực tập để học cách một đội làm sản phẩm thật vận hành và kiểm tra code.",
+      "skills": [
+        { "name": "Node.js", "years": 1 }, { "name": "Express", "years": 0.5 }, { "name": "JavaScript", "years": 1.5 },
+        { "name": "PostgreSQL", "years": 0.5 }, { "name": "Git", "years": 1 }, { "name": "REST API", "years": 0.5 }, { "name": "MongoDB", "years": 0.5 }
+      ],
+      "experiences": [],
+      "projects": [
+        { "name": "Ứng dụng quản lý câu lạc bộ sinh viên", "description": "API Express quản lý thành viên, sự kiện và điểm danh bằng mã QR; phân quyền ban chủ nhiệm và thành viên." },
+        { "name": "Trang hỏi đáp môn học", "description": "Backend Node.js với MongoDB lưu câu hỏi, câu trả lời và lượt bình chọn; có tìm kiếm theo tên môn." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-backend-3", "job": "mx-backend-intern", "tier": "hop-mot-phan", "level": "nam-cuoi",
+      "fullName": "Lê Quốc Huy", "gender": "MALE", "birthYear": 2003, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Sư Phạm Kỹ Thuật TPHCM", "major": "Công nghệ thông tin", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên CNTT | Node.js, MongoDB",
+      "bio": "Mình làm backend chủ yếu với Node.js và MongoDB, thích những bài toán dữ liệu không có cấu trúc cố định. Đã làm thêm ở một startup giao đồ ăn, phụ trách các API theo dõi đơn. Đang học thêm cơ sở dữ liệu quan hệ để làm được nhiều loại hệ thống hơn.",
+      "skills": [
+        { "name": "Node.js", "years": 1 }, { "name": "JavaScript", "years": 1.5 }, { "name": "MongoDB", "years": 1 },
+        { "name": "REST API", "years": 1 }, { "name": "Git", "years": 1 }, { "name": "Redis", "years": 0.5 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Ứng dụng Cầu Vồng", "position": "Lập trình viên Backend bán thời gian", "start": "2026-01", "end": "2026-09",
+          "description": "Viết API theo dõi trạng thái đơn giao đồ ăn, lưu vị trí tài xế tạm thời trong Redis và đẩy cập nhật cho ứng dụng của khách." }
+      ],
+      "projects": [
+        { "name": "Công cụ theo dõi giá sản phẩm", "description": "Script Node.js đọc giá từ các trang bán hàng mỗi ngày, lưu vào MongoDB và gửi cảnh báo khi giá giảm." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-backend-4", "job": "mx-backend-intern", "tier": "hop-mot-phan", "level": "nam-3",
+      "fullName": "Phạm Thu Trang", "gender": "FEMALE", "birthYear": 2004, "city": "Đà Nẵng",
+      "educations": [{ "university": "Trường Đại Học Bách Khoa Đà Nẵng", "major": "Công nghệ thông tin", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên năm 3 | Backend Express, MySQL",
+      "bio": "Mình học backend qua các đồ án môn học dùng Express và MySQL, quen viết truy vấn nối nhiều bảng và kiểm tra dữ liệu đầu vào. Thích đọc tài liệu và ghi chép lại những lỗi đã gặp. Mong được thực tập trong đội có người hướng dẫn review code.",
+      "skills": [
+        { "name": "Node.js", "years": 0.5 }, { "name": "Express", "years": 0.5 }, { "name": "JavaScript", "years": 1 },
+        { "name": "Mysql", "years": 1 }, { "name": "Git", "years": 0.5 }, { "name": "Quản lý thời gian", "years": 1 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Dịch vụ CNTT Hạt Cát", "position": "Cộng tác viên lập trình", "start": "2026-06", "end": "2026-08",
+          "description": "Sửa lỗi và thêm vài API nhỏ cho trang quản lý khoá học của trung tâm tin học, viết lại các truy vấn báo cáo học viên." }
+      ],
+      "projects": [
+        { "name": "Website bán sách cũ", "description": "Backend Express kết nối MySQL: giỏ hàng, đơn hàng, tìm sách theo thể loại; nhóm bốn người, mình phụ trách API và cơ sở dữ liệu." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-backend-5", "job": "mx-backend-intern", "tier": "nganh-gan", "level": "nam-cuoi",
+      "fullName": "Hoàng Đức Anh", "gender": "MALE", "birthYear": 2004, "city": "Hà Nội",
+      "educations": [{ "university": "Trường Đại Học Khoa Học Tự Nhiên Hà Nội", "major": "Toán tin", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên Toán tin | Backend Node.js",
+      "bio": "Học Toán tin nên mình quen tư duy thuật toán, sau đó tự học thêm Node.js để làm web. Đã thực tập ở một công ty fintech nhỏ, viết API tính lãi và đối soát giao dịch với PostgreSQL. Thích các bài toán cần tính đúng tới từng con số.",
+      "skills": [
+        { "name": "Node.js", "years": 1 }, { "name": "Express", "years": 0.5 }, { "name": "JavaScript", "years": 1 },
+        { "name": "PostgreSQL", "years": 1 }, { "name": "REST API", "years": 0.5 }, { "name": "Python", "years": 1 }, { "name": "Git", "years": 0.5 }
+      ],
+      "experiences": [
+        { "company": "Công ty Cổ phần Công nghệ Sóng Bạc", "position": "Thực tập sinh Backend", "start": "2026-02", "end": "2026-07",
+          "description": "Viết API tính lãi khoản vay theo nhiều kỳ hạn và tác vụ đối soát giao dịch cuối ngày; viết test cho các hàm tính toán." }
+      ],
+      "projects": [
+        { "name": "Mô phỏng hàng đợi quầy giao dịch", "description": "Chương trình Python mô phỏng số quầy cần mở theo lượng khách đến, làm bài tập lớn môn xác suất." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-backend-6", "job": "mx-backend-intern", "tier": "doi-nganh", "level": "moi-tot-nghiep",
+      "fullName": "Võ Thanh Tùng", "gender": "MALE", "birthYear": 2002, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Bách Khoa HCM", "major": "Kỹ thuật cơ khí", "startYear": 2020, "endYear": 2024, "isCurrent": false }],
+      "headline": "Kỹ sư cơ khí chuyển sang Backend Node.js",
+      "bio": "Mình học cơ khí và từng làm kỹ sư thiết kế khuôn, nơi phần việc mình thích nhất lại là viết công cụ tự động hoá bảng tính. Từ đó mình học bài bản JavaScript, Node.js và PostgreSQL qua một khoá học buổi tối, đã làm xong hai dự án cá nhân.",
+      "skills": [
+        { "name": "Node.js", "years": 0.5 }, { "name": "Express", "years": 0.5 }, { "name": "JavaScript", "years": 1 },
+        { "name": "PostgreSQL", "years": 0.5 }, { "name": "Git", "years": 0.5 }, { "name": "Excel", "years": 2 }, { "name": "Giải quyết vấn đề", "years": 1 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Cơ khí Tân Tiến", "position": "Kỹ sư thiết kế khuôn", "start": "2024-08", "end": "2026-06",
+          "description": "Thiết kế khuôn dập cho linh kiện xe máy, lập bảng định mức vật tư và viết macro tự động xuất báo cáo tiến độ cho xưởng." }
+      ],
+      "projects": [
+        { "name": "Ứng dụng quản lý lịch bảo dưỡng máy", "description": "API Node.js + PostgreSQL ghi lịch bảo dưỡng, cảnh báo máy quá hạn kiểm tra; ý tưởng từ chính công việc ở xưởng." },
+        { "name": "Trang tra cứu bản vẽ", "description": "Backend Express cho phép tìm bản vẽ theo mã chi tiết và xem trước file PDF; lưu lịch sử sửa đổi từng bản." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-backend-7", "job": "mx-backend-intern", "tier": "so-sai", "level": "nam-3",
+      "fullName": "Đỗ Gia Bảo", "gender": "MALE", "birthYear": 2005, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Công Nghiệp TPHCM", "major": "Công nghệ thông tin", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên CNTT tìm việc thực tập",
+      "skills": [{ "name": "JavaScript", "years": 0 }, { "name": "Node.js", "years": 0 }],
+      "experiences": [], "projects": [], "certificates": []
+    },
+    {
+      "key": "uv-backend-8", "job": "mx-backend-intern", "tier": "ca-kho", "hardCase": "nhoi-tu-khoa", "level": "nam-cuoi",
+      "fullName": "Bùi Hoàng Long", "gender": "MALE", "birthYear": 2003, "city": "Hà Nội",
+      "educations": [{ "university": "Trường Đại Học Công Nghiệp Hà Nội", "major": "Công nghệ thông tin", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Fullstack | Node.js | Java | Python | React | DevOps | Machine Learning",
+      "bio": "Mình biết nhiều công nghệ và học rất nhanh, sẵn sàng làm mọi vị trí trong đội phát triển. Mục tiêu là trở thành kỹ sư giỏi trong thời gian ngắn nhất.",
+      "skills": [
+        { "name": "Node.js", "years": 2 }, { "name": "Express", "years": 2 }, { "name": "JavaScript", "years": 3 },
+        { "name": "PostgreSQL", "years": 2 }, { "name": "Java", "years": 2 }, { "name": "Python", "years": 2 },
+        { "name": "React", "years": 2 }, { "name": "DevOps", "years": 1 }, { "name": "Docker", "years": 2 },
+        { "name": "Kubernetes", "years": 1 }, { "name": "MongoDB", "years": 2 }, { "name": "Machine Learning", "years": 1 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Giải pháp Số Bình Minh", "position": "Thực tập sinh IT", "start": "2026-06", "end": "2026-08",
+          "description": "Cài đặt phần mềm, sửa máy in và hỗ trợ nhân viên văn phòng khi máy tính gặp sự cố." }
+      ],
+      "projects": [{ "name": "Website cá nhân", "description": "Trang giới thiệu bản thân làm theo video hướng dẫn." }],
+      "certificates": []
+    },
+
+    {
+      "key": "uv-frontend-1", "job": "mx-frontend-intern", "tier": "rat-hop", "level": "nam-cuoi",
+      "fullName": "Ngô Phương Linh", "gender": "FEMALE", "birthYear": 2004, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Khoa Học Tự Nhiên TPHCM", "major": "Công nghệ thông tin", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên CNTT | Frontend React, chú trọng trải nghiệm người dùng",
+      "bio": "Mình thích biến bản thiết kế thành giao diện chạy mượt trên cả điện thoại lẫn máy tính. Đã thực tập ở một công ty làm website thương hiệu, quen đọc file Figma, chia component React và tối ưu tốc độ tải trang. Muốn tiếp tục làm sản phẩm có nhiều người dùng.",
+      "skills": [
+        { "name": "React", "years": 1 }, { "name": "JavaScript", "years": 1.5 }, { "name": "HTML", "years": 2 },
+        { "name": "CSS", "years": 2 }, { "name": "TypeScript", "years": 0.5 }, { "name": "Figma", "years": 1 },
+        { "name": "Git", "years": 1 }, { "name": "REST API", "years": 0.5 }, { "name": "Tailwind CSS", "years": 0.5 }
+      ],
+      "experiences": [
+        { "company": "Công ty Cổ phần Phần mềm Đồi Thông", "position": "Thực tập sinh Frontend", "start": "2026-02", "end": "2026-08",
+          "description": "Dựng giao diện landing page và trang sản phẩm cho các thương hiệu mỹ phẩm, chuyển bố cục từ Figma sang React và sửa lỗi hiển thị trên trình duyệt cũ." }
+      ],
+      "projects": [
+        { "name": "Ứng dụng ghi chép chi tiêu", "description": "Giao diện React có biểu đồ chi tiêu theo danh mục, lưu dữ liệu tạm trên trình duyệt, dựng bằng Tailwind CSS." },
+        { "name": "Trang thông tin câu lạc bộ nhiếp ảnh", "description": "Website giới thiệu và album ảnh, tải ảnh lười để trang mở nhanh trên mạng di động." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-frontend-2", "job": "mx-frontend-intern", "tier": "rat-hop", "level": "nam-3",
+      "fullName": "Đặng Minh Quân", "gender": "MALE", "birthYear": 2005, "city": "Hà Nội",
+      "educations": [{ "university": "Đại Học Bách Khoa Hà Nội", "major": "Kỹ thuật phần mềm", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên năm 3 | Frontend React",
+      "bio": "Mình tự học HTML, CSS từ hồi làm trang cho lớp, rồi chuyển sang React khi làm đồ án. Thích những chi tiết nhỏ như hiệu ứng chuyển trang hay trạng thái tải dữ liệu. Đang tìm kỳ thực tập đầu tiên để làm việc với API thật và quy trình review code.",
+      "skills": [
+        { "name": "React", "years": 0.5 }, { "name": "JavaScript", "years": 1 }, { "name": "HTML", "years": 1.5 },
+        { "name": "CSS", "years": 1.5 }, { "name": "Git", "years": 0.5 }, { "name": "Redux", "years": 0.5 }
+      ],
+      "experiences": [],
+      "projects": [
+        { "name": "Trang đặt lịch cắt tóc", "description": "Giao diện React chọn thợ, chọn giờ trống và xem lại lịch đã đặt; quản lý trạng thái bằng Redux." },
+        { "name": "Bản dựng lại giao diện trang tin tức", "description": "Tập dựng bố cục nhiều cột bằng CSS Grid, hiển thị tốt trên màn hình nhỏ." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-frontend-3", "job": "mx-frontend-intern", "tier": "hop-mot-phan", "level": "nam-cuoi", "demoLogin": true,
+      "fullName": "Huỳnh Mỹ Duyên", "gender": "FEMALE", "birthYear": 2004, "city": "Đà Nẵng",
+      "educations": [{ "university": "Đại Học Duy Tân", "major": "Công nghệ thông tin", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên CNTT | Frontend Vue.js",
+      "bio": "Mình làm frontend chủ yếu với Vue.js qua kỳ thực tập ở một công ty làm phần mềm cho trường học. Quen dựng form nhiều bước, bảng dữ liệu có lọc và phân trang. Đang tự học thêm các thư viện giao diện phổ biến khác để mở rộng lựa chọn công việc.",
+      "skills": [
+        { "name": "Vue.js", "years": 1 }, { "name": "JavaScript", "years": 1.5 }, { "name": "HTML", "years": 1.5 },
+        { "name": "CSS", "years": 1.5 }, { "name": "TypeScript", "years": 0.5 }, { "name": "Git", "years": 1 }, { "name": "REST API", "years": 0.5 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Giải pháp Số Bình Minh", "position": "Thực tập sinh Frontend", "start": "2026-01", "end": "2026-06",
+          "description": "Dựng màn hình nhập điểm và tra cứu thời khoá biểu bằng Vue.js, gọi API của đội backend và viết thông báo lỗi dễ hiểu cho giáo viên." }
+      ],
+      "projects": [
+        { "name": "Trang quản lý thư viện ảnh", "description": "Giao diện Vue.js kéo thả để sắp xếp ảnh, tải nhiều ảnh cùng lúc và xem trước khi lưu." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-frontend-4", "job": "mx-frontend-intern", "tier": "hop-mot-phan", "level": "nam-3",
+      "fullName": "Lý Hoàng Nam", "gender": "MALE", "birthYear": 2004, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học FPT", "major": "Kỹ thuật phần mềm", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên năm 3 | React, Next.js",
+      "bio": "Mình thích phần logic của giao diện: quản lý trạng thái, gọi dữ liệu và xử lý lỗi mạng. Đã làm hai đồ án bằng Next.js với TypeScript, có đăng nhập và phân trang phía server. Muốn thực tập để học thêm về hiệu năng và kiểm thử giao diện.",
+      "skills": [
+        { "name": "React", "years": 1 }, { "name": "JavaScript", "years": 1 }, { "name": "TypeScript", "years": 0.5 },
+        { "name": "Next.js", "years": 0.5 }, { "name": "Git", "years": 0.5 }, { "name": "Jest", "years": 0 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Phần mềm Lá Chanh", "position": "Cộng tác viên Frontend", "start": "2026-07", "end": "2026-09",
+          "description": "Sửa lỗi giao diện và thêm trang tổng hợp số liệu đơn giản cho công cụ quản lý nội bộ dùng React." }
+      ],
+      "projects": [
+        { "name": "Diễn đàn hỏi đáp cho sinh viên", "description": "Next.js + TypeScript, có bình chọn câu trả lời, đánh dấu câu hỏi đã có lời giải và tìm kiếm." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-frontend-5", "job": "mx-frontend-intern", "tier": "nganh-gan", "level": "nam-cuoi",
+      "fullName": "Trương Khánh Vy", "gender": "FEMALE", "birthYear": 2003, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Học Viện Công Nghệ Bưu Chính Viễn Thông (Cơ sở TP.HCM)", "major": "Công nghệ đa phương tiện", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên Đa phương tiện | Frontend React, mạnh về giao diện",
+      "bio": "Ngành đa phương tiện cho mình nền về bố cục, màu sắc và chuyển động, nên mình chọn frontend để vừa thiết kế vừa code. Đã thực tập dựng website cho một studio, quen Figma, React và hiệu ứng CSS. Thích làm giao diện có cảm xúc nhưng vẫn dễ dùng.",
+      "skills": [
+        { "name": "React", "years": 0.5 }, { "name": "JavaScript", "years": 1 }, { "name": "HTML", "years": 1.5 },
+        { "name": "CSS", "years": 2 }, { "name": "Figma", "years": 1.5 }, { "name": "Photoshop", "years": 1 }, { "name": "Git", "years": 0.5 }
+      ],
+      "experiences": [
+        { "company": "Studio Thiết kế Mực Tím", "position": "Thực tập sinh Frontend", "start": "2026-03", "end": "2026-08",
+          "description": "Dựng website giới thiệu dự án cho khách hàng nội thất, làm hiệu ứng cuộn trang và tối ưu ảnh để trang tải nhanh." }
+      ],
+      "projects": [
+        { "name": "Website triển lãm ảnh trực tuyến", "description": "React và CSS animation, mỗi phòng triển lãm là một trang cuộn ngang, có chế độ xem toàn màn hình." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-frontend-6", "job": "mx-frontend-intern", "tier": "doi-nganh", "level": "moi-tot-nghiep",
+      "fullName": "Mai Thu Hà", "gender": "FEMALE", "birthYear": 2002, "city": "Hà Nội",
+      "educations": [{ "university": "Trường Đại Học Ngoại Ngữ Hà Nội", "major": "Ngôn ngữ Nhật", "startYear": 2020, "endYear": 2024, "isCurrent": false }],
+      "headline": "Phiên dịch tiếng Nhật chuyển sang Frontend React",
+      "bio": "Mình làm phiên dịch cho đội phần mềm làm dự án Nhật, ngày nào cũng dịch tài liệu giao diện nên dần mê việc dựng giao diện. Mình học React, JavaScript qua khoá học buổi tối và đã tự làm vài trang hoàn chỉnh. Lợi thế là đọc tốt tài liệu tiếng Nhật.",
+      "skills": [
+        { "name": "React", "years": 0.5 }, { "name": "JavaScript", "years": 0.5 }, { "name": "HTML", "years": 1 },
+        { "name": "CSS", "years": 1 }, { "name": "Tiếng Nhật", "years": 3 }, { "name": "Giao tiếp", "years": 2 }
+      ],
+      "experiences": [
+        { "company": "Công ty Cổ phần Công nghệ Sóng Bạc", "position": "Phiên dịch viên tiếng Nhật (Comtor)", "start": "2024-09", "end": "2026-08",
+          "description": "Dịch đặc tả, biên bản họp và phản hồi của khách hàng Nhật cho đội phát triển; theo dõi danh sách lỗi giao diện khách gửi về." }
+      ],
+      "projects": [
+        { "name": "Trang học từ vựng tiếng Nhật", "description": "Ứng dụng React lật thẻ từ vựng theo cấp độ, nhắc ôn lại theo lịch, dữ liệu lưu trên trình duyệt." }
+      ],
+      "certificates": [{ "name": "JLPT N2", "issuer": "Japan Foundation", "year": 2023 }]
+    },
+    {
+      "key": "uv-frontend-7", "job": "mx-frontend-intern", "tier": "so-sai", "level": "nam-cuoi",
+      "fullName": "Tạ Quang Vinh", "gender": "MALE", "birthYear": 2003, "city": "Hà Nội",
+      "educations": [{ "university": "Trường Đại Học Công Nghiệp Hà Nội", "major": "Công nghệ thông tin", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên CNTT",
+      "skills": [{ "name": "HTML", "years": 1 }, { "name": "CSS", "years": 1 }],
+      "experiences": [], "projects": [], "certificates": []
+    },
+    {
+      "key": "uv-frontend-8", "job": "mx-frontend-intern", "tier": "ca-kho", "hardCase": "kinh-nghiem-khong-lien-quan", "level": "moi-tot-nghiep",
+      "fullName": "Cao Thanh Tú", "gender": "MALE", "birthYear": 2001, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Mở TPHCM", "major": "Công nghệ thông tin", "startYear": 2019, "endYear": 2023, "isCurrent": false }],
+      "headline": "Nhân viên kinh doanh điện máy, muốn làm Frontend",
+      "bio": "Ra trường mình đi bán hàng điện máy để có thu nhập ổn định, nay muốn quay lại với lập trình. Vẫn nhớ kiến thức nền về web từ hồi đi học và đang ôn lại để tìm việc.",
+      "skills": [
+        { "name": "React", "years": 0 }, { "name": "JavaScript", "years": 1 }, { "name": "HTML", "years": 1 },
+        { "name": "CSS", "years": 1 }, { "name": "Tư vấn bán hàng", "years": 2 }
+      ],
+      "experiences": [
+        { "company": "Cửa hàng Điện máy Ngôi Nhà Xanh", "position": "Nhân viên tư vấn bán hàng", "start": "2023-09", "end": "2026-02",
+          "description": "Tư vấn tivi, máy lạnh cho khách tại cửa hàng, chốt đơn trả góp và hỗ trợ khách sau khi mua." }
+      ],
+      "projects": [],
+      "certificates": []
+    },
+
+    {
+      "key": "uv-fullstack-1", "job": "mx-fullstack", "tier": "rat-hop", "level": "moi-tot-nghiep", "demoLogin": true,
+      "fullName": "Nguyễn Hoàng Phúc", "gender": "MALE", "birthYear": 2002, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Công Nghệ Thông Tin", "major": "Khoa học máy tính", "startYear": 2020, "endYear": 2024, "isCurrent": false }],
+      "headline": "Fullstack Developer | React, Node.js, PostgreSQL",
+      "bio": "Mình làm fullstack ở một công ty phần mềm cho chuỗi phòng khám: từ thiết kế bảng dữ liệu, viết API Express tới dựng màn hình React cho quầy tiếp đón và bác sĩ. Quen nhận yêu cầu trực tiếp từ người dùng, chia nhỏ việc và tự kiểm tra kỹ trước khi bàn giao.",
+      "skills": [
+        { "name": "JavaScript", "years": 2 }, { "name": "React", "years": 1.5 }, { "name": "Node.js", "years": 1.5 },
+        { "name": "Express", "years": 1.5 }, { "name": "PostgreSQL", "years": 1.5 }, { "name": "SQL", "years": 1.5 },
+        { "name": "Git", "years": 2 }, { "name": "TypeScript", "years": 1 }, { "name": "Docker", "years": 0.5 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Giải pháp Số Bình Minh", "position": "Lập trình viên Fullstack", "start": "2024-08", "end": null,
+          "description": "Phát triển phần mềm quản lý phòng khám: đặt lịch, hồ sơ bệnh án, thu ngân. Viết API Node.js, màn hình React, tối ưu các truy vấn báo cáo doanh thu theo chi nhánh." }
+      ],
+      "projects": [
+        { "name": "Hệ thống nhắc lịch tái khám", "description": "Tác vụ Node.js gửi email nhắc lịch theo ngày hẹn, giao diện React để nhân viên xem danh sách khách cần gọi lại." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-fullstack-2", "job": "mx-fullstack", "tier": "rat-hop", "level": "moi-tot-nghiep",
+      "fullName": "Phan Kim Ngân", "gender": "FEMALE", "birthYear": 2001, "city": "Hà Nội",
+      "educations": [{ "university": "Đại Học Bách Khoa Hà Nội", "major": "Công nghệ thông tin", "startYear": 2019, "endYear": 2024, "isCurrent": false }],
+      "headline": "Lập trình viên Fullstack JavaScript | Next.js, Node.js",
+      "bio": "Mình làm cho một startup giáo dục, phụ trách trọn tính năng từ cơ sở dữ liệu tới giao diện: thi thử trực tuyến, chấm điểm tự động, bảng xếp hạng. Thích làm việc gần đội sản phẩm, đọc số liệu sử dụng để quyết định nên sửa gì trước.",
+      "skills": [
+        { "name": "JavaScript", "years": 2 }, { "name": "TypeScript", "years": 1.5 }, { "name": "React", "years": 1.5 },
+        { "name": "Next.js", "years": 1 }, { "name": "Node.js", "years": 1.5 }, { "name": "Express", "years": 1 },
+        { "name": "MongoDB", "years": 1 }, { "name": "SQL", "years": 1 }, { "name": "Git", "years": 2 }
+      ],
+      "experiences": [
+        { "company": "Công ty Cổ phần Giáo dục Số Cánh Diều", "position": "Lập trình viên Fullstack", "start": "2024-07", "end": null,
+          "description": "Xây dựng hệ thống thi thử trực tuyến bằng Next.js và Node.js: đề ngẫu nhiên, chấm điểm tự động, bảng xếp hạng theo lớp; xử lý lúc hàng nghìn học sinh vào thi cùng giờ." }
+      ],
+      "projects": [
+        { "name": "Tiện ích đọc truyện song ngữ", "description": "Tiện ích trình duyệt viết bằng TypeScript, tra nghĩa từ khi rê chuột và lưu sổ từ vựng." }
+      ],
+      "certificates": [{ "name": "Meta Front-End Developer Professional Certificate", "issuer": "Meta", "year": 2024 }]
+    },
+    {
+      "key": "uv-fullstack-3", "job": "mx-fullstack", "tier": "hop-mot-phan", "level": "nam-cuoi",
+      "fullName": "Hà Minh Trí", "gender": "MALE", "birthYear": 2003, "city": "Đà Nẵng",
+      "educations": [{ "university": "Trường Đại Học Bách Khoa Đà Nẵng", "major": "Công nghệ thông tin", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên CNTT | Fullstack React, Node.js",
+      "bio": "Mình đã thực tập fullstack ở một công ty du lịch, làm cả màn hình React lẫn API Node.js cho phần đặt tour. Học nhanh, thích tự dựng một tính năng trọn vẹn. Đang tìm việc toàn thời gian, có thể bắt đầu ngay khi xong các học phần còn lại.",
+      "skills": [
+        { "name": "JavaScript", "years": 1 }, { "name": "React", "years": 0.5 }, { "name": "Node.js", "years": 0.5 },
+        { "name": "Express", "years": 0.5 }, { "name": "PostgreSQL", "years": 0.5 }, { "name": "Git", "years": 1 }
+      ],
+      "experiences": [
+        { "company": "Công ty Du lịch Ba Lô", "position": "Thực tập sinh Fullstack", "start": "2026-01", "end": "2026-08",
+          "description": "Làm trang đặt tour và quản lý lịch khởi hành: API Express lưu PostgreSQL, giao diện React cho nhân viên điều phối." }
+      ],
+      "projects": [
+        { "name": "Ứng dụng chia tiền nhóm", "description": "Web React + Node.js ghi khoản chi của nhóm bạn và tính ai cần trả ai bao nhiêu." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-fullstack-4", "job": "mx-fullstack", "tier": "hop-mot-phan", "level": "moi-tot-nghiep",
+      "fullName": "Vũ Đình Khang", "gender": "MALE", "birthYear": 2002, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Tôn Đức Thắng", "major": "Kỹ thuật phần mềm", "startYear": 2020, "endYear": 2024, "isCurrent": false }],
+      "headline": "Lập trình viên Fullstack | Vue.js, Node.js",
+      "bio": "Mình làm fullstack với Vue.js và Node.js cho hệ thống quản lý vận tải: điều xe, theo dõi chuyến, đối soát cước. Mạnh phần backend và cơ sở dữ liệu, giao diện làm được ở mức chắc chắn. Muốn chuyển sang môi trường làm sản phẩm với quy trình rõ ràng hơn.",
+      "skills": [
+        { "name": "JavaScript", "years": 2 }, { "name": "Vue.js", "years": 1.5 }, { "name": "Node.js", "years": 2 },
+        { "name": "Express", "years": 1.5 }, { "name": "PostgreSQL", "years": 1.5 }, { "name": "SQL", "years": 1.5 },
+        { "name": "Docker", "years": 1 }, { "name": "Git", "years": 2 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Vận tải Đường Dài", "position": "Lập trình viên Fullstack", "start": "2024-09", "end": null,
+          "description": "Viết API Express và màn hình Vue.js cho điều phối xe tải, ghi nhận chuyến đi, tính cước theo tuyến; dựng môi trường chạy thử bằng Docker." }
+      ],
+      "projects": [
+        { "name": "Bản đồ chuyến xe theo thời gian thực", "description": "Node.js nhận toạ độ từ thiết bị định vị, giao diện Vue.js hiển thị vị trí xe và cảnh báo đi lệch tuyến." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-fullstack-5", "job": "mx-fullstack", "tier": "nganh-gan", "level": "moi-tot-nghiep",
+      "fullName": "Lâm Ngọc Quỳnh", "gender": "FEMALE", "birthYear": 2002, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Công Nghệ Thông Tin", "major": "Hệ thống thông tin", "startYear": 2020, "endYear": 2024, "isCurrent": false }],
+      "headline": "Fullstack Developer | React, Node.js, nghiệp vụ doanh nghiệp",
+      "bio": "Học hệ thống thông tin nên mình thích hiểu rõ quy trình nghiệp vụ trước khi code. Đang làm fullstack cho phần mềm quản lý nhân sự: bảng công, bảng lương, duyệt nghỉ phép, dùng React và Node.js. Quen làm việc với người dùng văn phòng và viết tài liệu hướng dẫn.",
+      "skills": [
+        { "name": "JavaScript", "years": 1.5 }, { "name": "React", "years": 1.5 }, { "name": "Node.js", "years": 1 },
+        { "name": "Express", "years": 1 }, { "name": "SQL", "years": 1.5 }, { "name": "Git", "years": 1.5 }, { "name": "Giao tiếp", "years": 2 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Giải pháp Nhân sự Tổ Ong", "position": "Lập trình viên Fullstack", "start": "2024-10", "end": null,
+          "description": "Phát triển phân hệ bảng công và duyệt nghỉ phép: API Express, giao diện React, xuất báo cáo cho phòng nhân sự cuối kỳ." }
+      ],
+      "projects": [
+        { "name": "Cổng thông tin nội bộ", "description": "Trang tin và danh bạ nội bộ dựng bằng React, phân quyền xem theo phòng ban." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-fullstack-6", "job": "mx-fullstack", "tier": "doi-nganh", "level": "moi-tot-nghiep",
+      "fullName": "Dương Thùy Linh", "gender": "FEMALE", "birthYear": 2001, "city": "Hà Nội",
+      "educations": [{ "university": "Học Viện Tài chính", "major": "Kế toán", "startYear": 2019, "endYear": 2023, "isCurrent": false }],
+      "headline": "Kế toán chuyển sang lập trình Fullstack JavaScript",
+      "bio": "Mình làm kế toán ở công ty thương mại, thường xuyên đối chiếu số liệu giữa nhiều file nên tự học lập trình để tự động hoá. Sau đó mình học hẳn JavaScript, React và Node.js, đã làm phần mềm theo dõi công nợ nhỏ cho chính phòng mình.",
+      "skills": [
+        { "name": "JavaScript", "years": 1 }, { "name": "React", "years": 0.5 }, { "name": "Node.js", "years": 0.5 },
+        { "name": "SQL", "years": 1 }, { "name": "Excel", "years": 3 }, { "name": "Kế toán tổng hợp", "years": 2 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Thương mại Phú Gia", "position": "Nhân viên kế toán", "start": "2023-08", "end": "2025-12",
+          "description": "Hạch toán chứng từ mua bán, đối chiếu công nợ khách hàng định kỳ và lập báo cáo tồn kho cho ban giám đốc." }
+      ],
+      "projects": [
+        { "name": "Phần mềm theo dõi công nợ", "description": "Web React + Node.js nhập hoá đơn, nhắc hạn thu tiền và xuất bảng đối chiếu ra Excel cho phòng kế toán." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-fullstack-7", "job": "mx-fullstack", "tier": "so-sai", "level": "moi-tot-nghiep",
+      "fullName": "Kiều Văn Đạt", "gender": "MALE", "birthYear": 2002, "city": "Hà Nội",
+      "educations": [{ "university": "Trường Đại Học Công Nghiệp Hà Nội", "major": "Công nghệ thông tin", "startYear": 2020, "endYear": 2024, "isCurrent": false }],
+      "headline": "Lập trình viên",
+      "skills": [{ "name": "JavaScript", "years": 1 }, { "name": "React", "years": 0.5 }, { "name": "Node.js", "years": 0.5 }],
+      "experiences": [], "projects": [], "certificates": []
+    },
+    {
+      "key": "uv-fullstack-8", "job": "mx-fullstack", "tier": "ca-kho", "hardCase": "kinh-nghiem-khong-lien-quan", "level": "moi-tot-nghiep",
+      "fullName": "Đinh Bảo Ngọc", "gender": "FEMALE", "birthYear": 2001, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Sài Gòn", "major": "Công nghệ thông tin", "startYear": 2019, "endYear": 2023, "isCurrent": false }],
+      "headline": "Gia sư Toán | Biết JavaScript, React, Node.js",
+      "bio": "Ra trường mình dạy kèm Toán và Tin học cho học sinh cấp hai, cấp ba. Mình vẫn giữ kiến thức lập trình web từ các môn học và muốn thử sức ở vị trí lập trình viên.",
+      "skills": [
+        { "name": "JavaScript", "years": 1 }, { "name": "React", "years": 1 }, { "name": "Node.js", "years": 1 },
+        { "name": "SQL", "years": 1 }, { "name": "Thuyết trình", "years": 2 }
+      ],
+      "experiences": [
+        { "company": "Trung tâm Gia sư Ánh Sao", "position": "Gia sư Toán - Tin", "start": "2023-08", "end": "2026-01",
+          "description": "Dạy kèm Toán và Tin học cơ bản cho học sinh cấp hai, cấp ba; soạn đề luyện tập và báo kết quả học tập cho phụ huynh." }
+      ],
+      "projects": [],
+      "certificates": []
+    },
+
+    {
+      "key": "uv-tester-1", "job": "mx-tester-intern", "tier": "rat-hop", "level": "nam-cuoi",
+      "fullName": "Trần Bảo Châu", "gender": "FEMALE", "birthYear": 2004, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Công Nghệ Thông Tin", "major": "Hệ thống thông tin", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên HTTT | Tester API, Postman, SQL",
+      "bio": "Mình thích tìm những chỗ hệ thống có thể sai: thanh toán hai lần, đơn treo, dữ liệu lệch giữa các màn hình. Đã thực tập kiểm thử cho một ví điện tử, viết test case, gọi API bằng Postman và kiểm dữ liệu bằng SQL. Ghi lỗi rõ ràng để lập trình viên tái hiện được.",
+      "skills": [
+        { "name": "Postman", "years": 1 }, { "name": "SQL", "years": 1 }, { "name": "Viết test case", "years": 1 },
+        { "name": "Manual Testing", "years": 1 }, { "name": "Jira", "years": 0.5 }, { "name": "JavaScript", "years": 0.5 }
+      ],
+      "experiences": [
+        { "company": "Công ty Cổ phần Công nghệ Sóng Bạc", "position": "Thực tập sinh Kiểm thử", "start": "2026-02", "end": "2026-08",
+          "description": "Kiểm thử luồng nạp tiền, chuyển tiền và hoàn tiền của ví điện tử; viết bộ request Postman cho các API chính và báo lỗi trên Jira." }
+      ],
+      "projects": [
+        { "name": "Bộ kiểm thử API cho web bán vé xem phim", "description": "Bộ collection Postman có biến môi trường, kiểm mã trạng thái và dữ liệu trả về; kiểm số ghế còn lại bằng truy vấn SQL." }
+      ],
+      "certificates": [{ "name": "ISTQB Foundation Level (CTFL)", "issuer": "ISTQB", "year": 2026 }]
+    },
+    {
+      "key": "uv-tester-2", "job": "mx-tester-intern", "tier": "rat-hop", "level": "nam-3",
+      "fullName": "Nguyễn Thanh Tâm", "gender": "MALE", "birthYear": 2005, "city": "Hà Nội",
+      "educations": [{ "university": "Học Viện Công Nghệ Bưu Chính Viễn Thông", "major": "Công nghệ thông tin", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên năm 3 CNTT | Kiểm thử phần mềm",
+      "bio": "Mình chọn hướng kiểm thử sau khi phụ trách kiểm tra chất lượng cho đồ án lớn của lớp. Đã học cách viết test case theo phân vùng tương đương, giá trị biên và thử API bằng Postman. Đang học thêm Cypress để tự động hoá các luồng lặp lại.",
+      "skills": [
+        { "name": "Viết test case", "years": 0.5 }, { "name": "Postman", "years": 0.5 }, { "name": "SQL", "years": 0.5 },
+        { "name": "Manual Testing", "years": 0.5 }, { "name": "Cypress", "years": 0 }, { "name": "JavaScript", "years": 0.5 }
+      ],
+      "experiences": [],
+      "projects": [
+        { "name": "Kiểm thử ứng dụng đăng ký ký túc xá", "description": "Soạn hơn trăm kịch bản cho đăng ký phòng, đổi phòng, thanh toán; kiểm dữ liệu phòng trống bằng SQL." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-tester-3", "job": "mx-tester-intern", "tier": "hop-mot-phan", "level": "nam-cuoi",
+      "fullName": "Đoàn Hồng Nhung", "gender": "FEMALE", "birthYear": 2003, "city": "Đà Nẵng",
+      "educations": [{ "university": "Đại Học Duy Tân", "major": "Công nghệ thông tin", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên CNTT | Manual Tester",
+      "bio": "Mình làm kiểm thử thủ công cho phần mềm quản lý bệnh viện ở kỳ thực tập, quen đọc tài liệu nghiệp vụ và viết test case chi tiết. Kiểm dữ liệu bằng SQL ở mức truy vấn cơ bản. Đang tìm chỗ thực tập tiếp để học kiểm thử API.",
+      "skills": [
+        { "name": "Manual Testing", "years": 1 }, { "name": "Viết test case", "years": 1 }, { "name": "SQL", "years": 0.5 },
+        { "name": "Jira", "years": 0.5 }, { "name": "Giao tiếp", "years": 1 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Dịch vụ CNTT Hạt Cát", "position": "Thực tập sinh Tester", "start": "2026-03", "end": "2026-08",
+          "description": "Kiểm thử phân hệ tiếp đón và viện phí, viết kịch bản kiểm thử theo từng loại đối tượng người bệnh, ghi lỗi trên Jira và kiểm lại sau khi sửa." }
+      ],
+      "projects": [
+        { "name": "Kịch bản kiểm thử ứng dụng mượn sách", "description": "Bộ kịch bản cho mượn, trả, gia hạn sách và phạt trễ hạn, tổ chức theo từng màn hình." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-tester-4", "job": "mx-tester-intern", "tier": "hop-mot-phan", "level": "nam-3",
+      "fullName": "Hồ Quang Minh", "gender": "MALE", "birthYear": 2004, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Sư Phạm Kỹ Thuật TPHCM", "major": "Công nghệ thông tin", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên năm 3 | Tự động hoá kiểm thử Selenium",
+      "bio": "Mình đến với kiểm thử qua lập trình: viết script Selenium bằng JavaScript để tự điền form và chụp màn hình lỗi. Đã thử gọi API bằng Postman cho đồ án của nhóm. Muốn học bài bản cách thiết kế kịch bản kiểm thử và làm việc cùng đội phát triển.",
+      "skills": [
+        { "name": "Selenium", "years": 0.5 }, { "name": "JavaScript", "years": 1 }, { "name": "Postman", "years": 0.5 }, { "name": "Git", "years": 0.5 }
+      ],
+      "experiences": [],
+      "projects": [
+        { "name": "Script kiểm tra form đăng ký", "description": "Selenium tự điền hàng loạt dữ liệu hợp lệ và không hợp lệ vào form đăng ký, chụp ảnh lại khi trang báo lỗi sai." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-tester-5", "job": "mx-tester-intern", "tier": "nganh-gan", "level": "nam-cuoi",
+      "fullName": "Châu Ngọc Ánh", "gender": "FEMALE", "birthYear": 2004, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Đại Học Kinh Tế TPHCM (KSA)", "major": "Hệ thống thông tin quản lý", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên HTTT quản lý | Tester nghiệp vụ",
+      "bio": "Ngành hệ thống thông tin quản lý giúp mình hiểu nhanh quy trình bán hàng, kho và sổ sách của doanh nghiệp. Ở kỳ thực tập kiểm thử phần mềm quản trị doanh nghiệp, mình viết test case theo nghiệp vụ, gọi API bằng Postman và kiểm số liệu bằng SQL.",
+      "skills": [
+        { "name": "Viết test case", "years": 1 }, { "name": "Postman", "years": 0.5 }, { "name": "SQL", "years": 1 },
+        { "name": "Manual Testing", "years": 1 }, { "name": "Excel", "years": 1.5 }
+      ],
+      "experiences": [
+        { "company": "Công ty Cổ phần Phần mềm Đồi Thông", "position": "Thực tập sinh Kiểm thử nghiệp vụ", "start": "2026-01", "end": "2026-07",
+          "description": "Kiểm thử phân hệ nhập hàng và tồn kho của phần mềm quản trị doanh nghiệp, đối chiếu số tồn trên màn hình với dữ liệu bằng SQL." }
+      ],
+      "projects": [
+        { "name": "Bảng theo dõi lỗi cho đồ án nhóm", "description": "Mẫu Excel tổng hợp lỗi theo mức độ và người phụ trách, tự vẽ biểu đồ số lỗi còn mở mỗi tuần." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-tester-6", "job": "mx-tester-intern", "tier": "doi-nganh", "level": "moi-tot-nghiep",
+      "fullName": "Lương Thu Hiền", "gender": "FEMALE", "birthYear": 2001, "city": "Hà Nội",
+      "educations": [{ "university": "Trường Đại Học Sư Phạm Hà Nội", "major": "Sư phạm Toán học", "startYear": 2019, "endYear": 2023, "isCurrent": false }],
+      "headline": "Giáo viên Toán chuyển sang Kiểm thử phần mềm",
+      "bio": "Mình dạy Toán ở trường tư thục, quen soạn đề và chấm bài rất kỹ, nên khi tìm hiểu nghề kiểm thử thấy khá hợp. Đã học khoá kiểm thử phần mềm, biết viết test case, dùng Postman và SQL cơ bản; đã tham gia kiểm thử tình nguyện cho một ứng dụng học trực tuyến.",
+      "skills": [
+        { "name": "Viết test case", "years": 0.5 }, { "name": "Postman", "years": 0.5 }, { "name": "SQL", "years": 0.5 },
+        { "name": "Manual Testing", "years": 0.5 }, { "name": "Thuyết trình", "years": 2 }
+      ],
+      "experiences": [
+        { "company": "Trường Tư thục Hướng Dương", "position": "Giáo viên Toán", "start": "2023-08", "end": "2025-12",
+          "description": "Dạy Toán lớp tám, lớp chín; soạn đề kiểm tra theo ma trận và phân tích kết quả để chia nhóm phụ đạo." }
+      ],
+      "projects": [
+        { "name": "Kiểm thử ứng dụng luyện đề", "description": "Viết kịch bản kiểm thử cho làm bài, nộp bài, chấm điểm; gọi API nộp bài bằng Postman để thử các trường hợp mạng chập chờn." }
+      ],
+      "certificates": [{ "name": "ISTQB Foundation Level (CTFL)", "issuer": "ISTQB", "year": 2026 }]
+    },
+    {
+      "key": "uv-tester-7", "job": "mx-tester-intern", "tier": "so-sai", "level": "nam-3",
+      "fullName": "Tô Minh Thư", "gender": "FEMALE", "birthYear": 2005, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Nguyễn Tất Thành", "major": "Công nghệ thông tin", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên CNTT muốn làm Tester",
+      "skills": [{ "name": "Manual Testing", "years": 0 }, { "name": "SQL", "years": 0 }],
+      "experiences": [], "projects": [], "certificates": []
+    },
+    {
+      "key": "uv-tester-8", "job": "mx-tester-intern", "tier": "ca-kho", "hardCase": "nhoi-tu-khoa", "level": "nam-cuoi",
+      "fullName": "Quách Đức Thịnh", "gender": "MALE", "birthYear": 2003, "city": "Hà Nội",
+      "educations": [{ "university": "Trường Đại Học Thương Mại", "major": "Hệ thống thông tin quản lý", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "QA | Tester | Automation | Performance | Security | DevOps",
+      "bio": "Mình biết hầu hết công cụ kiểm thử phổ biến và có thể kiểm thử mọi loại phần mềm. Tự tin làm việc độc lập và chịu áp lực cao.",
+      "skills": [
+        { "name": "Manual Testing", "years": 2 }, { "name": "Viết test case", "years": 2 }, { "name": "Postman", "years": 2 },
+        { "name": "SQL", "years": 2 }, { "name": "Selenium", "years": 2 }, { "name": "Cypress", "years": 2 },
+        { "name": "Jira", "years": 2 }, { "name": "JavaScript", "years": 2 }, { "name": "Python", "years": 2 },
+        { "name": "DevOps", "years": 1 }, { "name": "Docker", "years": 1 }, { "name": "Agile/Scrum", "years": 2 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Phân phối Hưng Thịnh Phát", "position": "Nhân viên nhập liệu", "start": "2026-05", "end": "2026-08",
+          "description": "Nhập đơn từ phiếu giấy vào phần mềm và kiểm lại số lượng cuối ngày." }
+      ],
+      "projects": [{ "name": "Kiểm thử website", "description": "Kiểm thử một website." }],
+      "certificates": []
+    },
+
+    {
+      "key": "uv-data-1", "job": "mx-data-intern", "tier": "rat-hop", "level": "nam-cuoi",
+      "fullName": "Nguyễn Khánh Linh", "gender": "FEMALE", "birthYear": 2004, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại học Kinh Tế Luật TPHCM", "major": "Hệ thống thông tin quản lý", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên HTTT quản lý | Data Analyst: SQL, Power BI",
+      "bio": "Mình thích trả lời câu hỏi kinh doanh bằng số liệu: vì sao doanh thu tuần này giảm, nhóm khách nào quay lại nhiều nhất. Đã thực tập ở một chuỗi bán lẻ, viết truy vấn SQL, làm dashboard Power BI cho trưởng vùng và làm sạch dữ liệu bằng Excel.",
+      "skills": [
+        { "name": "SQL", "years": 1 }, { "name": "Excel", "years": 2 }, { "name": "Power BI", "years": 1 },
+        { "name": "Python", "years": 0.5 }, { "name": "Thống kê", "years": 1 }, { "name": "Giao tiếp", "years": 1 }
+      ],
+      "experiences": [
+        { "company": "Công ty Cổ phần Bán lẻ Góc Phố", "position": "Thực tập sinh Phân tích dữ liệu", "start": "2026-02", "end": "2026-08",
+          "description": "Làm dashboard Power BI theo dõi doanh thu, tồn kho của từng cửa hàng; viết truy vấn SQL tách khách mới và khách quay lại cho đội marketing." }
+      ],
+      "projects": [
+        { "name": "Phân tích giỏ hàng siêu thị mini", "description": "Dùng Python tìm các cặp sản phẩm hay được mua cùng, đề xuất cách xếp kệ; trình bày kết quả bằng biểu đồ Power BI." }
+      ],
+      "certificates": [{ "name": "Google Data Analytics Professional Certificate", "issuer": "Google", "year": 2025 }]
+    },
+    {
+      "key": "uv-data-2", "job": "mx-data-intern", "tier": "rat-hop", "level": "nam-3",
+      "fullName": "Trịnh Gia Huy", "gender": "MALE", "birthYear": 2005, "city": "Hà Nội",
+      "educations": [{ "university": "Đại Học Kinh Tế Quốc Dân", "major": "Khoa học dữ liệu", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên năm 3 Khoa học dữ liệu | SQL, Excel, Power BI",
+      "bio": "Mình học khoa học dữ liệu và thích phần phân tích hơn phần mô hình. Đã làm báo cáo Power BI cho cuộc thi phân tích dữ liệu của trường, quen viết SQL nối nhiều bảng và dựng bảng tổng hợp trong Excel. Muốn thực tập để làm với dữ liệu thật.",
+      "skills": [
+        { "name": "SQL", "years": 0.5 }, { "name": "Excel", "years": 1 }, { "name": "Power BI", "years": 0.5 },
+        { "name": "Python", "years": 1 }, { "name": "Thống kê", "years": 1 }
+      ],
+      "experiences": [],
+      "projects": [
+        { "name": "Báo cáo tai nạn giao thông theo khung giờ", "description": "Làm sạch dữ liệu công khai bằng Python, dựng dashboard Power BI chỉ ra khung giờ và loại đường nguy hiểm nhất." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-data-3", "job": "mx-data-intern", "tier": "hop-mot-phan", "level": "nam-cuoi",
+      "fullName": "Phạm Quốc Bảo", "gender": "MALE", "birthYear": 2004, "city": "Đà Nẵng",
+      "educations": [{ "university": "Đại Học Duy Tân", "major": "Khoa học dữ liệu", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên Khoa học dữ liệu | SQL, Tableau, Python",
+      "bio": "Mình làm phân tích với SQL và Python, trực quan hoá bằng Tableau. Ở kỳ thực tập tại một công ty du lịch, mình phân tích mùa cao điểm đặt phòng và mức giá theo khu vực. Thích kể câu chuyện từ biểu đồ để người không chuyên cũng đọc hiểu.",
+      "skills": [
+        { "name": "SQL", "years": 1 }, { "name": "Python", "years": 1 }, { "name": "Tableau", "years": 0.5 },
+        { "name": "Excel", "years": 1 }, { "name": "Pandas", "years": 0.5 }, { "name": "Thống kê", "years": 0.5 }
+      ],
+      "experiences": [
+        { "company": "Công ty Du lịch Ba Lô", "position": "Thực tập sinh Phân tích dữ liệu", "start": "2026-01", "end": "2026-06",
+          "description": "Tổng hợp dữ liệu đặt phòng từ nhiều kênh bằng SQL, làm dashboard Tableau về công suất phòng và giá trung bình theo mùa." }
+      ],
+      "projects": [
+        { "name": "Dự báo lượng khách cuối tuần", "description": "Mô hình đơn giản bằng Python và Pandas dự báo lượng khách theo thời tiết và ngày lễ." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-data-4", "job": "mx-data-intern", "tier": "hop-mot-phan", "level": "nam-3",
+      "fullName": "Lê Bích Ngọc", "gender": "FEMALE", "birthYear": 2005, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Đại Học Kinh Tế TPHCM (KSA)", "major": "Hệ thống thông tin quản lý", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên năm 3 | Phân tích dữ liệu với Excel",
+      "bio": "Mình dùng Excel thành thạo: PivotTable, hàm tra cứu, biểu đồ động, và đang học thêm cách truy vấn cơ sở dữ liệu. Từng làm cộng tác viên tổng hợp phiếu khảo sát người tiêu dùng. Cẩn thận với số liệu, thích làm báo cáo gọn gàng.",
+      "skills": [
+        { "name": "Excel", "years": 2 }, { "name": "Thống kê", "years": 1 }, { "name": "Python", "years": 0.5 }, { "name": "Tin học văn phòng", "years": 2 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Quảng cáo Nhịp Cầu", "position": "Cộng tác viên xử lý số liệu", "start": "2026-06", "end": "2026-09",
+          "description": "Làm sạch và tổng hợp phiếu khảo sát người tiêu dùng trong Excel, vẽ biểu đồ cho báo cáo gửi khách hàng." }
+      ],
+      "projects": [
+        { "name": "Bảng chia tiền điện nước ký túc xá", "description": "File Excel chia tiền điện nước theo phòng, tự cảnh báo khi mức dùng vượt trung bình." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-data-5", "job": "mx-data-intern", "tier": "nganh-gan", "level": "nam-cuoi",
+      "fullName": "Hoàng Phương Mai", "gender": "FEMALE", "birthYear": 2003, "city": "Hà Nội",
+      "educations": [{ "university": "Đại Học Kinh Tế Quốc Dân", "major": "Kinh tế", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên Kinh tế | Phân tích dữ liệu kinh doanh",
+      "bio": "Học kinh tế cho mình nền về cung cầu, giá và hành vi người mua; mình bổ sung SQL, Power BI để tự kiểm chứng giả thuyết bằng dữ liệu. Đã thực tập ở phòng kinh doanh một công ty phân phối, làm báo cáo doanh số theo kênh và theo vùng.",
+      "skills": [
+        { "name": "SQL", "years": 0.5 }, { "name": "Excel", "years": 2 }, { "name": "Power BI", "years": 0.5 },
+        { "name": "Thống kê", "years": 1 }, { "name": "Thuyết trình", "years": 1 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Phân phối Hưng Thịnh Phát", "position": "Thực tập sinh Phân tích kinh doanh", "start": "2026-02", "end": "2026-07",
+          "description": "Làm báo cáo doanh số theo kênh và theo vùng bằng Power BI, theo dõi tỉ lệ đạt chỉ tiêu của từng đại diện kinh doanh." }
+      ],
+      "projects": [
+        { "name": "Phân tích giá phòng trọ quanh trường", "description": "Thu thập tin đăng, làm sạch bằng Excel, so mức giá theo diện tích và khoảng cách tới trường đại học." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-data-6", "job": "mx-data-intern", "tier": "doi-nganh", "level": "moi-tot-nghiep", "demoLogin": true,
+      "fullName": "Lê Hoài An", "gender": "FEMALE", "birthYear": 2002, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Tài Chính Marketing", "major": "Marketing", "startYear": 2020, "endYear": 2024, "isCurrent": false }],
+      "headline": "Nhân viên Marketing chuyển sang Phân tích dữ liệu",
+      "bio": "Mình làm marketing ở một thương hiệu mỹ phẩm, việc mình thích nhất là đọc số liệu chiến dịch để tìm ra kênh nào hiệu quả. Mình học thêm SQL, Power BI và Python cơ bản, đã tự dựng dashboard đo hiệu quả quảng cáo cho phòng. Muốn chuyển hẳn sang phân tích dữ liệu.",
+      "skills": [
+        { "name": "SQL", "years": 0.5 }, { "name": "Excel", "years": 2 }, { "name": "Power BI", "years": 0.5 },
+        { "name": "Python", "years": 0 }, { "name": "Google Analytics", "years": 1.5 }, { "name": "Thống kê", "years": 0.5 }
+      ],
+      "experiences": [
+        { "company": "Công ty Cổ phần Marketing Lửa Trại", "position": "Nhân viên Marketing", "start": "2024-09", "end": "2026-09",
+          "description": "Lên kế hoạch khuyến mãi theo mùa, theo dõi số liệu bán ra trên các kênh và làm dashboard Power BI so sánh chi phí trên mỗi đơn của từng kênh." }
+      ],
+      "projects": [
+        { "name": "Phân tích đánh giá sản phẩm", "description": "Dùng Python đếm cụm từ lặp lại trong đánh giá của khách để tìm lý do khách chê sản phẩm, trình bày bằng biểu đồ." }
+      ],
+      "certificates": [{ "name": "Microsoft Certified: Power BI Data Analyst Associate", "issuer": "Microsoft", "year": 2026 }]
+    },
+    {
+      "key": "uv-data-7", "job": "mx-data-intern", "tier": "so-sai", "level": "nam-3",
+      "fullName": "Mai Đức Lộc", "gender": "MALE", "birthYear": 2004, "city": "Hà Nội",
+      "educations": [{ "university": "Học Viện Ngân Hàng", "major": "Khoa học dữ liệu", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên tìm việc thực tập",
+      "skills": [{ "name": "Excel", "years": 1 }, { "name": "Tin học văn phòng", "years": 1 }],
+      "experiences": [], "projects": [], "certificates": []
+    },
+    {
+      "key": "uv-data-8", "job": "mx-data-intern", "tier": "ca-kho", "hardCase": "kinh-nghiem-khong-lien-quan", "level": "nam-cuoi",
+      "fullName": "Châu Minh Khôi", "gender": "MALE", "birthYear": 2003, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Kinh Tế Tài Chính TPHCM", "major": "Hệ thống thông tin quản lý", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên HTTT quản lý | Biết SQL, Excel, Power BI",
+      "bio": "Mình làm pha chế bán thời gian khá lâu ở một quán cà phê, quen chịu áp lực giờ cao điểm. Biết SQL, Excel, Power BI qua các môn học và muốn tìm việc thực tập văn phòng.",
+      "skills": [
+        { "name": "SQL", "years": 0.5 }, { "name": "Excel", "years": 1 }, { "name": "Power BI", "years": 0.5 }, { "name": "Giao tiếp", "years": 2 }
+      ],
+      "experiences": [
+        { "company": "Quán cà phê Góc Nhỏ", "position": "Nhân viên pha chế", "start": "2025-11", "end": "2026-10",
+          "description": "Pha chế đồ uống, đóng mở ca và kiểm kê nguyên liệu cuối ngày cho quán." }
+      ],
+      "projects": [],
+      "certificates": []
+    },
+
+    {
+      "key": "uv-uiux-1", "job": "mx-uiux-intern", "tier": "rat-hop", "level": "nam-cuoi",
+      "fullName": "Nguyễn Phương Thảo", "gender": "FEMALE", "birthYear": 2004, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Tôn Đức Thắng", "major": "Thiết kế đồ họa", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên Thiết kế đồ họa | UI/UX, Figma",
+      "bio": "Mình đi từ thiết kế ấn phẩm sang thiết kế giao diện vì thích nhìn người dùng thật thao tác trên sản phẩm. Đã thực tập ở một công ty làm ứng dụng đặt lịch khám, vẽ wireframe, làm bản mẫu trên Figma và ngồi cùng lập trình viên khi bàn giao. Muốn học thêm cách nghiên cứu người dùng bài bản.",
+      "skills": [
+        { "name": "Figma", "years": 1 }, { "name": "UI/UX Design", "years": 1 }, { "name": "Wireframe", "years": 1 },
+        { "name": "Prototyping", "years": 0.5 }, { "name": "User Research", "years": 0.5 }, { "name": "Design System", "years": 0.5 },
+        { "name": "Illustrator", "years": 1.5 }, { "name": "Photoshop", "years": 1.5 }, { "name": "Typography", "years": 1 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Phần mềm Mạch Nha", "position": "Thực tập sinh UI/UX", "start": "2026-02", "end": "2026-08",
+          "description": "Thiết kế lại luồng đặt lịch khám trên ứng dụng di động, vẽ wireframe cho các màn hình mới và cập nhật bộ thành phần giao diện dùng chung trên Figma." }
+      ],
+      "projects": [
+        { "name": "Ứng dụng đổi sách cũ trong ký túc xá", "description": "Thiết kế từ wireframe tới bản mẫu tương tác, phỏng vấn các bạn cùng phòng để chọn luồng đăng sách đơn giản nhất." },
+        { "name": "Bộ nhận diện cho quán trà sữa", "description": "Logo, bảng màu và menu vẽ bằng Illustrator, chỉnh ảnh sản phẩm bằng Photoshop." }
+      ],
+      "certificates": [{ "name": "Google UX Design Professional Certificate", "issuer": "Google", "year": 2026 }]
+    },
+    {
+      "key": "uv-uiux-2", "job": "mx-uiux-intern", "tier": "rat-hop", "level": "nam-3",
+      "fullName": "Trần Đức Hiếu", "gender": "MALE", "birthYear": 2005, "city": "Hà Nội",
+      "educations": [{ "university": "Học Viện Công Nghệ Bưu Chính Viễn Thông", "major": "Công nghệ đa phương tiện", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên năm 3 Công nghệ đa phương tiện | Thiết kế UI/UX",
+      "bio": "Mình bắt đầu bằng việc vẽ lại giao diện các ứng dụng hay dùng để hiểu vì sao chúng dễ dùng. Ở trường, mình thiết kế giao diện cho đồ án của hai nhóm lập trình, từ wireframe tới bản mẫu bấm thử được trên Figma. Mong được thực tập trong đội có designer hướng dẫn.",
+      "skills": [
+        { "name": "Figma", "years": 1 }, { "name": "UI/UX Design", "years": 0.5 }, { "name": "Wireframe", "years": 0.5 },
+        { "name": "Prototyping", "years": 0.5 }, { "name": "Photoshop", "years": 1 }, { "name": "HTML", "years": 0.5 }, { "name": "CSS", "years": 0.5 }
+      ],
+      "experiences": [],
+      "projects": [
+        { "name": "Ứng dụng tìm phòng trọ cho sinh viên", "description": "Thiết kế luồng lọc phòng theo giá và khoảng cách, làm bản mẫu tương tác để nhóm lập trình dựng lại." },
+        { "name": "Giao diện trang đăng ký học phần", "description": "Đề xuất bố cục mới cho trang đăng ký học phần, thử với các bạn trong lớp và sửa theo góp ý." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-uiux-3", "job": "mx-uiux-intern", "tier": "hop-mot-phan", "level": "nam-cuoi",
+      "fullName": "Lê Diệu Uyên", "gender": "FEMALE", "birthYear": 2003, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Mở TPHCM", "major": "Thiết kế đồ họa", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên Thiết kế đồ họa | Banner, bộ nhận diện, đang học UI",
+      "bio": "Thế mạnh của mình là thiết kế hình ảnh: banner, bao bì, bộ nhận diện cho cửa hàng nhỏ. Gần đây mình chuyển sang dựng giao diện trên Figma cho vài trang web bán hàng và thấy rất thích. Mình muốn thực tập để học quy trình thiết kế sản phẩm số từ đầu.",
+      "skills": [
+        { "name": "Figma", "years": 1 }, { "name": "UI/UX Design", "years": 0.5 }, { "name": "Photoshop", "years": 2 },
+        { "name": "Illustrator", "years": 2 }, { "name": "Canva", "years": 1 }, { "name": "Typography", "years": 1 },
+        { "name": "Thiết kế nhận diện thương hiệu", "years": 1 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Quảng cáo Nắng Mai", "position": "Thiết kế đồ họa bán thời gian", "start": "2026-01", "end": "2026-09",
+          "description": "Thiết kế banner khuyến mãi, ấn phẩm in và ảnh đăng mạng xã hội cho khách hàng bán lẻ bằng Photoshop và Illustrator." }
+      ],
+      "projects": [
+        { "name": "Giao diện website bán gốm thủ công", "description": "Dựng giao diện trang chủ và trang sản phẩm trên Figma, chọn font chữ và bảng màu theo chất liệu gốm." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-uiux-4", "job": "mx-uiux-intern", "tier": "hop-mot-phan", "level": "nam-3",
+      "fullName": "Phạm Gia Kiệt", "gender": "MALE", "birthYear": 2004, "city": "Đà Nẵng",
+      "educations": [{ "university": "Đại Học Duy Tân", "major": "Công nghệ đa phương tiện", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên năm 3 Đa phương tiện | Motion, đang tập thiết kế giao diện",
+      "bio": "Mình làm video và hiệu ứng chuyển động là chính, từ đó tò mò về các chuyển động nhỏ trong ứng dụng. Đã tự làm vài bản mẫu có hiệu ứng chuyển màn hình trên Figma. Muốn được làm cạnh designer giao diện để học cách sắp xếp bố cục và luồng người dùng.",
+      "skills": [
+        { "name": "Figma", "years": 0.5 }, { "name": "Wireframe", "years": 0.5 }, { "name": "Prototyping", "years": 0.5 },
+        { "name": "After Effects", "years": 1 }, { "name": "Premiere Pro", "years": 1 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Truyền thông Gió Nam", "position": "Cộng tác viên dựng video", "start": "2026-06", "end": "2026-08",
+          "description": "Dựng video giới thiệu sản phẩm và làm hiệu ứng chữ chạy bằng After Effects, Premiere Pro." }
+      ],
+      "projects": [
+        { "name": "Bản mẫu ứng dụng nghe podcast", "description": "Wireframe và bản mẫu có hiệu ứng chuyển trang, thử cách hiển thị trình phát nhỏ khi lướt danh sách." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-uiux-5", "job": "mx-uiux-intern", "tier": "nganh-gan", "level": "nam-cuoi",
+      "fullName": "Vũ Minh Hiển", "gender": "MALE", "birthYear": 2004, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Khoa Học Tự Nhiên TPHCM", "major": "Công nghệ thông tin", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên CNTT | Từ frontend chuyển dần sang UI/UX",
+      "bio": "Mình học CNTT và làm frontend trước, nhưng càng làm càng muốn tham gia từ khâu thiết kế thay vì chỉ dựng lại bản vẽ. Hiểu cách giao diện được lập trình giúp mình thiết kế những thứ dễ làm và dễ bảo trì. Đang tự học nguyên tắc bố cục, màu sắc và cách phỏng vấn người dùng.",
+      "skills": [
+        { "name": "Figma", "years": 0.5 }, { "name": "UI/UX Design", "years": 0.5 }, { "name": "Wireframe", "years": 0.5 },
+        { "name": "HTML", "years": 1.5 }, { "name": "CSS", "years": 1.5 }, { "name": "JavaScript", "years": 1 }, { "name": "React", "years": 0.5 }
+      ],
+      "experiences": [
+        { "company": "Công ty Cổ phần Phần mềm Cánh Cụt", "position": "Thực tập sinh Frontend", "start": "2026-03", "end": "2026-08",
+          "description": "Dựng giao diện trang quản trị bằng React theo bản thiết kế Figma, góp ý với designer những chỗ khó làm trên màn hình nhỏ." }
+      ],
+      "projects": [
+        { "name": "Thiết kế lại ứng dụng đặt xe buýt trường", "description": "Vẽ wireframe, làm bản mẫu trên Figma rồi tự dựng bằng HTML, CSS để thử với các bạn cùng khoa." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-uiux-6", "job": "mx-uiux-intern", "tier": "doi-nganh", "level": "moi-tot-nghiep",
+      "fullName": "Hồ Thanh Lam", "gender": "FEMALE", "birthYear": 2001, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Kiến Trúc TPHCM", "major": "Kiến trúc", "startYear": 2019, "endYear": 2024, "isCurrent": false }],
+      "headline": "Kiến trúc sư chuyển sang thiết kế UI/UX",
+      "bio": "Làm kiến trúc dạy mình bắt đầu từ người sử dụng không gian, và mình thấy thiết kế giao diện cũng vậy. Mình đã học một khoá thiết kế giao diện buổi tối, làm xong hai dự án từ phỏng vấn người dùng tới bản mẫu trên Figma. Đang tìm chỗ thực tập để chuyển hẳn sang nghề mới.",
+      "skills": [
+        { "name": "Figma", "years": 0.5 }, { "name": "UI/UX Design", "years": 0.5 }, { "name": "Wireframe", "years": 0.5 },
+        { "name": "User Research", "years": 0.5 }, { "name": "AutoCAD", "years": 2 }, { "name": "Photoshop", "years": 2 }, { "name": "Giải quyết vấn đề", "years": 1 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Tư vấn Kiến trúc Mái Ngói", "position": "Kiến trúc sư thiết kế", "start": "2024-08", "end": "2026-07",
+          "description": "Triển khai bản vẽ nhà ở và văn phòng nhỏ bằng AutoCAD, dựng phối cảnh và làm hồ sơ trình bày cho khách hàng." }
+      ],
+      "projects": [
+        { "name": "Ứng dụng đặt lịch xem nhà", "description": "Phỏng vấn người đi thuê nhà, vẽ wireframe và bản mẫu luồng hẹn lịch xem, tối giản số bước điền thông tin." },
+        { "name": "Bộ thành phần giao diện cho trang bất động sản", "description": "Xây bộ nút, thẻ thông tin và lưới ảnh dùng lại được trên Figma, có hướng dẫn khoảng cách và màu." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-uiux-7", "job": "mx-uiux-intern", "tier": "so-sai", "level": "nam-3",
+      "fullName": "Đinh Quang Sơn", "gender": "MALE", "birthYear": 2005, "city": "Hà Nội",
+      "educations": [{ "university": "Trường Đại Học FPT", "major": "Thiết kế đồ họa", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên thiết kế tìm việc thực tập",
+      "skills": [{ "name": "Figma", "years": 0 }, { "name": "Canva", "years": 0.5 }],
+      "experiences": [], "projects": [], "certificates": []
+    },
+    {
+      "key": "uv-uiux-8", "job": "mx-uiux-intern", "tier": "ca-kho", "hardCase": "nhoi-tu-khoa", "level": "nam-cuoi",
+      "fullName": "Dương Ngọc Trâm", "gender": "FEMALE", "birthYear": 2003, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Văn Hóa TPHCM", "major": "Thiết kế đồ họa", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "UI/UX | Graphic | 3D | Motion | Frontend | Branding",
+      "bio": "Mình làm được mọi loại thiết kế, từ giao diện, đồ họa tới video và website. Học nhanh, chịu áp lực tốt, sẵn sàng nhận mọi việc liên quan tới thiết kế.",
+      "skills": [
+        { "name": "Figma", "years": 2 }, { "name": "UI/UX Design", "years": 2 }, { "name": "Wireframe", "years": 2 },
+        { "name": "Prototyping", "years": 2 }, { "name": "User Research", "years": 1 }, { "name": "Design System", "years": 1 },
+        { "name": "Photoshop", "years": 3 }, { "name": "Illustrator", "years": 3 }, { "name": "After Effects", "years": 2 },
+        { "name": "Premiere Pro", "years": 2 }, { "name": "HTML", "years": 2 }, { "name": "CSS", "years": 2 }, { "name": "Canva", "years": 3 }
+      ],
+      "experiences": [
+        { "company": "Shop Phụ kiện Hạt Dẻ", "position": "Nhân viên bán hàng kiêm đăng bài", "start": "2026-04", "end": "2026-09",
+          "description": "Đứng quầy, chụp ảnh sản phẩm bằng điện thoại và đăng bài lên trang bán hàng của shop." }
+      ],
+      "projects": [{ "name": "Logo cho nhóm bạn", "description": "Vẽ logo theo mẫu có sẵn trên mạng." }],
+      "certificates": []
+    },
+
+    {
+      "key": "uv-audit-1", "job": "ct-audit-intern", "tier": "rat-hop", "level": "nam-cuoi",
+      "fullName": "Nguyễn Thu Hằng", "gender": "FEMALE", "birthYear": 2004, "city": "Hà Nội",
+      "educations": [{ "university": "Đại Học Kinh Tế Quốc Dân", "major": "Kiểm toán", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên Kiểm toán | Đã đi một mùa kiểm toán cuối năm",
+      "bio": "Mình đã đi một mùa kiểm toán cuối năm với vai trò thực tập sinh, quen chọn mẫu chứng từ, gửi thư xác nhận công nợ và lập giấy tờ làm việc trên Excel. Học kỹ chuẩn mực kế toán Việt Nam nên đọc sổ sách khá nhanh. Muốn quay lại nghề kiểm toán ở một hãng có quy trình rõ ràng.",
+      "skills": [
+        { "name": "Kiểm toán báo cáo tài chính", "years": 0.5 }, { "name": "Chuẩn mực kế toán Việt Nam (VAS)", "years": 1 }, { "name": "Excel", "years": 2 },
+        { "name": "Kế toán tổng hợp", "years": 1 }, { "name": "Kiểm soát nội bộ", "years": 0.5 }, { "name": "Tiếng Anh giao tiếp", "years": 1 },
+        { "name": "Làm việc nhóm", "years": 1 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Kiểm toán Ánh Dương", "position": "Trợ lý kiểm toán thực tập", "start": "2025-12", "end": "2026-05",
+          "description": "Tham gia đoàn kiểm toán báo cáo tài chính cho khách hàng sản xuất: kiểm kê hàng tồn kho, đối chiếu công nợ và kiểm tra chứng từ chi phí theo hướng dẫn của trưởng nhóm." }
+      ],
+      "projects": [
+        { "name": "Bài tập lớn kiểm toán khoản mục doanh thu", "description": "Thiết kế thủ tục kiểm tra doanh thu và phải thu cho một bộ số liệu giả định, trình bày kết quả trước lớp." }
+      ],
+      "certificates": [{ "name": "ACCA Applied Knowledge", "issuer": "ACCA", "year": 2025 }]
+    },
+    {
+      "key": "uv-audit-2", "job": "ct-audit-intern", "tier": "rat-hop", "level": "nam-3",
+      "fullName": "Trần Minh Đức", "gender": "MALE", "birthYear": 2005, "city": "Hà Nội",
+      "educations": [{ "university": "Học Viện Tài chính", "major": "Kế toán", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên năm 3 Kế toán | Định hướng kiểm toán",
+      "bio": "Mình chọn kế toán vì thích những con số phải khớp tới từng đồng, và định hướng theo nghề kiểm toán từ sớm. Đã học xong các môn kiểm toán căn bản, làm bài tập tình huống trên Excel và tham gia cuộc thi tìm hiểu nghề kiểm toán của trường. Mong có mùa kiểm toán đầu tiên.",
+      "skills": [
+        { "name": "Kiểm toán báo cáo tài chính", "years": 0.5 }, { "name": "Chuẩn mực kế toán Việt Nam (VAS)", "years": 0.5 }, { "name": "Excel", "years": 1 },
+        { "name": "Kế toán tổng hợp", "years": 0.5 }, { "name": "Làm việc nhóm", "years": 1 }
+      ],
+      "experiences": [],
+      "projects": [
+        { "name": "Cuộc thi tình huống kiểm toán cấp trường", "description": "Nhóm ba người phân tích hồ sơ một công ty giả định, tìm các khoản chi bất thường và đề xuất thủ tục kiểm tra; đạt giải ba." },
+        { "name": "Sổ kế toán mẫu cho cửa hàng tạp hoá", "description": "Lập sổ nhật ký chung và bảng cân đối phát sinh trên Excel từ số liệu bán hàng của gia đình." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-audit-3", "job": "ct-audit-intern", "tier": "hop-mot-phan", "level": "nam-cuoi",
+      "fullName": "Lê Kim Oanh", "gender": "FEMALE", "birthYear": 2003, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại học Kinh Tế Luật TPHCM", "major": "Kế toán", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên Kế toán | Kế toán thuế, hoá đơn điện tử",
+      "bio": "Mình làm kế toán thuế bán thời gian cho một văn phòng dịch vụ, quen kê khai thuế giá trị gia tăng và xử lý hoá đơn điện tử. Công việc kiểm tra chứng từ khiến mình muốn thử sức ở kiểm toán, nơi được nhìn sổ sách của nhiều doanh nghiệp.",
+      "skills": [
+        { "name": "Chuẩn mực kế toán Việt Nam (VAS)", "years": 1 }, { "name": "Excel", "years": 1.5 }, { "name": "Kế toán thuế", "years": 1 },
+        { "name": "Hoá đơn điện tử", "years": 1 }, { "name": "Kế toán tổng hợp", "years": 0.5 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Dịch vụ Kế toán Sổ Bạc", "position": "Kế toán thuế bán thời gian", "start": "2026-01", "end": "2026-10",
+          "description": "Nhập hoá đơn mua bán, lập tờ khai thuế hằng quý cho hộ kinh doanh và doanh nghiệp nhỏ, đối chiếu số liệu trước khi nộp." }
+      ],
+      "projects": [
+        { "name": "Quy trình lưu chứng từ cho văn phòng", "description": "Đề xuất cách đặt tên và lưu file chứng từ để tìm lại nhanh khi cơ quan thuế yêu cầu." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-audit-4", "job": "ct-audit-intern", "tier": "hop-mot-phan", "level": "nam-3",
+      "fullName": "Phan Văn Hưng", "gender": "MALE", "birthYear": 2004, "city": "Đà Nẵng",
+      "educations": [{ "university": "Trường Đại Học Kinh Tế – Đại Học Đà Nẵng", "major": "Kiểm toán", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên năm 3 Kiểm toán | Excel, đọc tài liệu tiếng Anh",
+      "bio": "Mình học kiểm toán và dùng Excel khá thành thạo nhờ làm trợ giảng cho câu lạc bộ tin học của khoa. Đọc tài liệu tiếng Anh tốt, thường đọc chuẩn mực quốc tế để hiểu thêm. Phần kế toán theo quy định trong nước mình còn đang học thêm cho vững.",
+      "skills": [
+        { "name": "Kiểm toán báo cáo tài chính", "years": 0.5 }, { "name": "Excel", "years": 1 }, { "name": "Kiểm soát nội bộ", "years": 0.5 },
+        { "name": "Tiếng Anh giao tiếp", "years": 1 }
+      ],
+      "experiences": [],
+      "projects": [
+        { "name": "Đánh giá kiểm soát nội bộ quy trình bán hàng", "description": "Phỏng vấn quản lý một cửa hàng điện máy, vẽ lại quy trình bán hàng và chỉ ra các điểm dễ sai sót." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-audit-5", "job": "ct-audit-intern", "tier": "nganh-gan", "level": "nam-cuoi", "demoLogin": true,
+      "fullName": "Vũ Ngọc Diệp", "gender": "FEMALE", "birthYear": 2004, "city": "Hà Nội",
+      "educations": [{ "university": "Học Viện Ngân Hàng", "major": "Tài chính - Ngân hàng", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên Tài chính - Ngân hàng | Phân tích tài chính, hướng tới kiểm toán",
+      "bio": "Mình học tài chính ngân hàng nhưng thích phần đọc và phân tích báo cáo tài chính hơn là bán sản phẩm. Kỳ thực tập ở một hãng kiểm toán nhỏ giúp mình thấy nghề này hợp với mình. Đang tự học thêm chuẩn mực kế toán để bù phần kiến thức chưa học sâu ở trường.",
+      "skills": [
+        { "name": "Kiểm toán báo cáo tài chính", "years": 0.5 }, { "name": "Chuẩn mực kế toán Việt Nam (VAS)", "years": 0.5 }, { "name": "Excel", "years": 1.5 },
+        { "name": "Phân tích tài chính", "years": 1 }, { "name": "Báo cáo tài chính", "years": 1 }, { "name": "Tiếng Anh giao tiếp", "years": 1 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Kiểm toán Đồng Tâm", "position": "Thực tập sinh kiểm toán", "start": "2026-01", "end": "2026-07",
+          "description": "Hỗ trợ đoàn kiểm toán báo cáo tài chính cho khách hàng thương mại: đối chiếu số dư ngân hàng, gửi thư xác nhận và tổng hợp chênh lệch trên Excel." }
+      ],
+      "projects": [
+        { "name": "Phân tích sức khoẻ tài chính một chuỗi bán lẻ", "description": "Tính các chỉ số thanh khoản và vòng quay hàng tồn kho từ số liệu công bố, so sánh với đối thủ cùng ngành." }
+      ],
+      "certificates": [{ "name": "TOEIC Listening & Reading", "issuer": "IIG Việt Nam", "year": 2025 }]
+    },
+    {
+      "key": "uv-audit-6", "job": "ct-audit-intern", "tier": "doi-nganh", "level": "moi-tot-nghiep",
+      "fullName": "Đặng Hải Yến", "gender": "FEMALE", "birthYear": 2002, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Luật TPHCM", "major": "Luật kinh tế", "startYear": 2020, "endYear": 2024, "isCurrent": false }],
+      "headline": "Cử nhân Luật kinh tế chuyển sang kiểm toán",
+      "bio": "Mình làm pháp chế ở một công ty phân phối, phần việc thường xuyên là rà hợp đồng và đối chiếu với chứng từ thanh toán. Từ đó mình học thêm kế toán buổi tối và nhận ra mình hợp với công việc kiểm tra, đánh giá rủi ro. Đang tìm kỳ thực tập để bắt đầu lại ở nghề kiểm toán.",
+      "skills": [
+        { "name": "Excel", "years": 1 }, { "name": "Kiểm soát nội bộ", "years": 0.5 }, { "name": "Chuẩn mực kế toán Việt Nam (VAS)", "years": 0.5 },
+        { "name": "Kế toán tổng hợp", "years": 0.5 }, { "name": "Tiếng Anh giao tiếp", "years": 1.5 }
+      ],
+      "experiences": [
+        { "company": "Công ty Cổ phần Phân phối Hải Âu", "position": "Chuyên viên pháp chế", "start": "2024-09", "end": "2026-08",
+          "description": "Rà soát hợp đồng mua bán với nhà phân phối, theo dõi thời hạn thanh toán và phối hợp với phòng kế toán khi có tranh chấp công nợ." }
+      ],
+      "projects": [
+        { "name": "Bộ câu hỏi rà soát điều khoản thanh toán", "description": "Danh sách câu hỏi giúp phòng kế toán kiểm tra điều khoản thanh toán trong hợp đồng trước khi duyệt chi." }
+      ],
+      "certificates": [{ "name": "Chứng chỉ Kế toán tổng hợp thực hành", "issuer": "Trung tâm Đào tạo Kế toán Thực Hành", "year": 2025 }]
+    },
+    {
+      "key": "uv-audit-7", "job": "ct-audit-intern", "tier": "so-sai", "level": "nam-3",
+      "fullName": "Bùi Tuấn Kiên", "gender": "MALE", "birthYear": 2005, "city": "Hà Nội",
+      "educations": [{ "university": "Trường Đại Học Thương Mại", "major": "Kế toán", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên kế toán tìm việc thực tập",
+      "skills": [{ "name": "Excel", "years": 0.5 }, { "name": "Tin học văn phòng", "years": 1 }],
+      "experiences": [], "projects": [], "certificates": []
+    },
+    {
+      "key": "uv-audit-8", "job": "ct-audit-intern", "tier": "ca-kho", "hardCase": "kinh-nghiem-khong-lien-quan", "level": "nam-cuoi",
+      "fullName": "Trương Mai Loan", "gender": "FEMALE", "birthYear": 2003, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Tài Chính Marketing", "major": "Kiểm toán", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên Kiểm toán | Có kinh nghiệm bán hàng",
+      "bio": "Mình làm tư vấn bán hàng mỹ phẩm bán thời gian ở trung tâm thương mại, quen nói chuyện với khách và chốt đơn. Muốn tìm kỳ thực tập đúng chuyên ngành để có thêm kinh nghiệm văn phòng.",
+      "skills": [
+        { "name": "Excel", "years": 1 }, { "name": "Kiểm toán báo cáo tài chính", "years": 0 }, { "name": "Tư vấn bán hàng", "years": 1 }, { "name": "Giao tiếp", "years": 1.5 }
+      ],
+      "experiences": [
+        { "company": "Cửa hàng Mỹ phẩm Hoa Mộc", "position": "Nhân viên tư vấn bán hàng", "start": "2025-12", "end": "2026-10",
+          "description": "Giới thiệu sản phẩm cho khách, sắp xếp quầy và báo doanh số cuối ca cho quản lý cửa hàng." }
+      ],
+      "projects": [],
+      "certificates": []
+    },
+
+    {
+      "key": "uv-ads-1", "job": "hg-ads-intern", "tier": "rat-hop", "level": "nam-cuoi",
+      "fullName": "Hoàng Khánh Ly", "gender": "FEMALE", "birthYear": 2004, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Đại Học Kinh Tế TPHCM (KSA)", "major": "Marketing", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên Marketing | Quảng cáo Facebook, Google",
+      "bio": "Mình chạy quảng cáo cho một chuỗi tiệm bánh trong kỳ thực tập: lên nhóm đối tượng, viết nội dung quảng cáo, theo dõi chi phí mỗi đơn và báo cáo hằng tuần. Quen đọc số liệu trên Excel và Looker Studio để quyết định tăng hay giảm ngân sách. Muốn làm sâu hơn ở mảng quảng cáo đa kênh.",
+      "skills": [
+        { "name": "Facebook Ads", "years": 1 }, { "name": "Google Ads", "years": 0.5 }, { "name": "Excel", "years": 1.5 },
+        { "name": "Google Analytics", "years": 0.5 }, { "name": "Email Marketing", "years": 0.5 }, { "name": "Canva", "years": 1 },
+        { "name": "Copywriting", "years": 0.5 }, { "name": "Looker Studio", "years": 0.5 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Giải pháp Quảng cáo Tia Sáng", "position": "Thực tập sinh quảng cáo số", "start": "2026-03", "end": "2026-09",
+          "description": "Chạy chiến dịch Facebook Ads và Google Ads cho chuỗi tiệm bánh, thử nhiều mẫu nội dung và gửi báo cáo chi phí mỗi đơn cho quản lý." }
+      ],
+      "projects": [
+        { "name": "Chuỗi email cho khách đã mua", "description": "Viết chuỗi email giới thiệu món mới, chia nhóm khách theo tần suất mua và đo tỉ lệ mở thư." }
+      ],
+      "certificates": [{ "name": "Google Ads Search Certification", "issuer": "Google", "year": 2026 }]
+    },
+    {
+      "key": "uv-ads-2", "job": "hg-ads-intern", "tier": "rat-hop", "level": "nam-3",
+      "fullName": "Đỗ Nhật Minh", "gender": "MALE", "birthYear": 2005, "city": "Hà Nội",
+      "educations": [{ "university": "Trường Đại Học FPT", "major": "Digital Marketing", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên năm 3 Marketing số | Quảng cáo trả phí",
+      "bio": "Mình đã tự chạy quảng cáo nhỏ cho shop quần áo của chị gái, từ đó thích phần thử nghiệm và đo hiệu quả. Biết làm hình quảng cáo đơn giản bằng Canva và tổng hợp số liệu bằng Excel. Muốn thực tập ở agency để được chạy ngân sách lớn hơn.",
+      "skills": [
+        { "name": "Facebook Ads", "years": 0.5 }, { "name": "Google Ads", "years": 0.5 }, { "name": "Excel", "years": 1 },
+        { "name": "Canva", "years": 1 }, { "name": "Content Marketing", "years": 0.5 }
+      ],
+      "experiences": [],
+      "projects": [
+        { "name": "Quảng cáo cho shop quần áo gia đình", "description": "Chạy Facebook Ads với ngân sách nhỏ, thử ba nhóm đối tượng và ghi lại chi phí mỗi tin nhắn." },
+        { "name": "Đồ án quảng cáo tìm kiếm", "description": "Lập cấu trúc chiến dịch Google Ads cho một trung tâm ngoại ngữ giả định, chọn từ khoá và viết mẫu quảng cáo." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-ads-3", "job": "hg-ads-intern", "tier": "hop-mot-phan", "level": "nam-cuoi",
+      "fullName": "Ngô Thùy Dung", "gender": "FEMALE", "birthYear": 2003, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Tài Chính Marketing", "major": "Marketing", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên Marketing | Quảng cáo Facebook, TikTok",
+      "bio": "Mình quen quảng cáo trên mạng xã hội, nhất là video ngắn: lên ý tưởng, dựng nhanh bằng CapCut rồi chạy thử nhiều phiên bản. Chưa làm nhiều với quảng cáo tìm kiếm nhưng đang học thêm. Muốn thực tập ở nơi chạy quảng cáo cho nhiều ngành khác nhau.",
+      "skills": [
+        { "name": "Facebook Ads", "years": 1 }, { "name": "TikTok Ads", "years": 1 }, { "name": "Excel", "years": 1 },
+        { "name": "Canva", "years": 1.5 }, { "name": "CapCut", "years": 1 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Thời trang Gạo Nếp", "position": "Nhân viên quảng cáo bán thời gian", "start": "2026-02", "end": "2026-10",
+          "description": "Chạy Facebook Ads, TikTok Ads cho các bộ sưu tập mới, dựng video sản phẩm và báo cáo số đơn theo từng mẫu video." }
+      ],
+      "projects": [
+        { "name": "Chuỗi video giới thiệu quán ăn sinh viên", "description": "Quay và dựng video ngắn cho ba quán quanh trường, chạy quảng cáo thử và so sánh lượt khách ghé quán." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-ads-4", "job": "hg-ads-intern", "tier": "hop-mot-phan", "level": "nam-3",
+      "fullName": "Lý Công Danh", "gender": "MALE", "birthYear": 2004, "city": "Hà Nội",
+      "educations": [{ "university": "Trường Đại Học Thương Mại", "major": "Marketing", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên năm 3 Marketing | Quảng cáo tìm kiếm, SEO",
+      "bio": "Mình thích phần tìm kiếm: người dùng gõ gì, trang nào hiện lên và vì sao. Đã làm SEO cho blog cá nhân và thử chạy Google Ads với ngân sách nhỏ cho đồ án. Quảng cáo trên mạng xã hội thì mình mới tìm hiểu, mong được học thêm khi thực tập.",
+      "skills": [
+        { "name": "Google Ads", "years": 0.5 }, { "name": "Excel", "years": 1 }, { "name": "SEO", "years": 0.5 },
+        { "name": "Nghiên cứu từ khoá", "years": 0.5 }, { "name": "Google Analytics", "years": 0.5 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Du học Cánh Diều", "position": "Cộng tác viên SEO", "start": "2026-06", "end": "2026-08",
+          "description": "Nghiên cứu từ khoá và viết lại tiêu đề các bài trên website, theo dõi lượt truy cập bằng Google Analytics." }
+      ],
+      "projects": [
+        { "name": "Blog review đồ dùng học tập", "description": "Tự làm blog, tối ưu bài viết theo từ khoá và theo dõi thứ hạng trên trang tìm kiếm." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-ads-5", "job": "hg-ads-intern", "tier": "nganh-gan", "level": "nam-cuoi",
+      "fullName": "Trịnh Mỹ Hạnh", "gender": "FEMALE", "birthYear": 2004, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại học Kinh Tế Luật TPHCM", "major": "Thương mại điện tử", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên Thương mại điện tử | Quảng cáo cho gian hàng online",
+      "bio": "Mình vận hành gian hàng trên sàn cho một thương hiệu đồ gia dụng, phần việc mình thích nhất là chạy quảng cáo kéo khách về gian hàng. Quen tính chi phí trên mỗi đơn và điều chỉnh theo mùa sale. Muốn chuyên sâu ở mảng quảng cáo thay vì vận hành.",
+      "skills": [
+        { "name": "Facebook Ads", "years": 1 }, { "name": "Google Ads", "years": 0.5 }, { "name": "Excel", "years": 1 },
+        { "name": "Vận hành sàn TMĐT", "years": 1 }, { "name": "Quản lý đơn hàng", "years": 0.5 }, { "name": "Canva", "years": 0.5 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Gia dụng Bếp Ấm", "position": "Nhân viên vận hành sàn", "start": "2026-01", "end": "2026-08",
+          "description": "Đăng sản phẩm, xử lý đơn và chạy Facebook Ads, Google Ads kéo khách về gian hàng trong các đợt sale lớn." }
+      ],
+      "projects": [
+        { "name": "So sánh quảng cáo trong và ngoài sàn", "description": "Tổng hợp chi phí và doanh thu của hai kênh trong mùa sale cuối năm bằng Excel, đề xuất chia lại ngân sách." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-ads-6", "job": "hg-ads-intern", "tier": "doi-nganh", "level": "moi-tot-nghiep",
+      "fullName": "Lâm Quốc Thắng", "gender": "MALE", "birthYear": 2001, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Bách Khoa HCM", "major": "Công nghệ thực phẩm", "startYear": 2019, "endYear": 2023, "isCurrent": false }],
+      "headline": "Kỹ sư thực phẩm chuyển sang quảng cáo số",
+      "bio": "Mình làm kỹ sư chất lượng ở nhà máy nước giải khát, sau đó chạy quảng cáo cho thương hiệu nước ép nhỏ của gia đình và thấy hợp hơn với công việc này. Đã học một khoá quảng cáo số bài bản, quen đọc số liệu nhờ thói quen kiểm tra mẫu ở nhà máy.",
+      "skills": [
+        { "name": "Facebook Ads", "years": 1 }, { "name": "Google Ads", "years": 0.5 }, { "name": "Excel", "years": 2 },
+        { "name": "Canva", "years": 0.5 }, { "name": "Google Analytics", "years": 0.5 }
+      ],
+      "experiences": [
+        { "company": "Công ty Cổ phần Nước giải khát Suối Mát", "position": "Kỹ sư quản lý chất lượng", "start": "2024-03", "end": "2025-05",
+          "description": "Kiểm tra mẫu nguyên liệu và thành phẩm, ghi số liệu chất lượng theo ca và lập báo cáo sai lệch cho trưởng bộ phận." },
+        { "company": "Cơ sở Nước ép Vườn Nhà", "position": "Phụ trách quảng cáo", "start": "2025-10", "end": null,
+          "description": "Chạy Facebook Ads và Google Ads cho thương hiệu nước ép của gia đình, tự làm hình quảng cáo bằng Canva." }
+      ],
+      "projects": [
+        { "name": "Báo cáo hiệu quả quảng cáo theo tuần", "description": "Bảng Excel cập nhật chi phí, số đơn và chi phí mỗi đơn từ file xuất của các nền tảng quảng cáo." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-ads-7", "job": "hg-ads-intern", "tier": "so-sai", "level": "nam-3",
+      "fullName": "Cao Thị Nhàn", "gender": "FEMALE", "birthYear": 2005, "city": "Hà Nội",
+      "educations": [{ "university": "Đại Học Kinh Tế Quốc Dân", "major": "Marketing", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên marketing tìm việc thực tập",
+      "skills": [{ "name": "Canva", "years": 0.5 }, { "name": "Facebook Ads", "years": 0 }],
+      "experiences": [], "projects": [], "certificates": []
+    },
+    {
+      "key": "uv-ads-8", "job": "hg-ads-intern", "tier": "ca-kho", "hardCase": "nhoi-tu-khoa", "level": "nam-cuoi",
+      "fullName": "Lương Văn Phát", "gender": "MALE", "birthYear": 2004, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Mở TPHCM", "major": "Quản trị kinh doanh", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Marketing online | Ads | SEO | Content | Booking KOL | Growth",
+      "bio": "Mình biết làm tất cả các mảng marketing online, chạy quảng cáo ra đơn ngay, đảm bảo tăng doanh số nhanh cho mọi sản phẩm.",
+      "skills": [
+        { "name": "Facebook Ads", "years": 2 }, { "name": "Google Ads", "years": 2 }, { "name": "TikTok Ads", "years": 2 },
+        { "name": "Excel", "years": 2 }, { "name": "SEO", "years": 2 }, { "name": "Content Marketing", "years": 2 },
+        { "name": "Email Marketing", "years": 1 }, { "name": "Google Analytics", "years": 1 }, { "name": "Canva", "years": 2 },
+        { "name": "CapCut", "years": 2 }, { "name": "Copywriting", "years": 2 }, { "name": "Quản lý mạng xã hội", "years": 2 }
+      ],
+      "experiences": [
+        { "company": "Shop Giày Bước Nhỏ", "position": "Nhân viên đóng gói đơn hàng", "start": "2026-03", "end": "2026-08",
+          "description": "Đóng gói đơn, dán nhãn vận chuyển và kiểm đếm hàng tồn cuối ngày." }
+      ],
+      "projects": [{ "name": "Fanpage bán ốp điện thoại", "description": "Lập trang bán hàng nhỏ, đăng vài bài rồi dừng." }],
+      "certificates": []
+    },
+
+    {
+      "key": "uv-content-1", "job": "hg-content-parttime", "tier": "rat-hop", "level": "nam-cuoi", "demoLogin": true,
+      "fullName": "Nguyễn Hà Chi", "gender": "FEMALE", "birthYear": 2004, "city": "Hà Nội",
+      "educations": [{ "university": "Học viện Báo chí và Tuyên truyền", "major": "Báo chí", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên Báo chí | Viết nội dung mạng xã hội, kịch bản video ngắn",
+      "bio": "Học báo chí giúp mình viết nhanh và kiểm tra thông tin kỹ, còn kỳ thực tập ở agency dạy mình viết sao cho người đọc dừng lại giữa bảng tin. Mình quen lên lịch đăng hằng tuần, viết kịch bản video ngắn và tự dựng bản nháp bằng CapCut. Muốn làm part-time lâu dài với một thương hiệu.",
+      "skills": [
+        { "name": "Content Marketing", "years": 1 }, { "name": "Copywriting", "years": 1 }, { "name": "Quản lý mạng xã hội", "years": 1 },
+        { "name": "CapCut", "years": 1 }, { "name": "Canva", "years": 1 }, { "name": "SEO", "years": 0.5 }, { "name": "Làm việc nhóm", "years": 1 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Truyền thông Bút Chì Xanh", "position": "Thực tập sinh Content", "start": "2026-02", "end": "2026-08",
+          "description": "Viết bài cho fanpage của hai thương hiệu đồ uống, lên lịch đăng theo tuần và tổng hợp phản hồi của người xem để điều chỉnh chủ đề." }
+      ],
+      "projects": [
+        { "name": "Chuyên mục ẩm thực trên trang của khoa", "description": "Phụ trách chuyên mục giới thiệu quán ăn quanh trường, viết bài và kịch bản video ngắn; lượt theo dõi tăng rõ sau một học kỳ." },
+        { "name": "Loạt bài chuẩn SEO cho blog du lịch", "description": "Viết loạt bài hướng dẫn đi du lịch tiết kiệm, tối ưu tiêu đề và đoạn mở đầu theo từ khoá." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-content-2", "job": "hg-content-parttime", "tier": "rat-hop", "level": "nam-3",
+      "fullName": "Trần Ngọc Huyền", "gender": "FEMALE", "birthYear": 2005, "city": "Hà Nội",
+      "educations": [{ "university": "Trường Đại Học Thương Mại", "major": "Marketing", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên năm 3 Marketing | Content mạng xã hội",
+      "bio": "Mình phụ trách trang của câu lạc bộ marketing ở trường, từ lên ý tưởng, viết bài tới làm hình bằng Canva. Thích viết những câu ngắn mà có duyên, và luôn xem lại bài nào được tương tác tốt để rút kinh nghiệm. Đang tìm việc part-time để viết cho thương hiệu thật.",
+      "skills": [
+        { "name": "Content Marketing", "years": 0.5 }, { "name": "Copywriting", "years": 0.5 }, { "name": "Quản lý mạng xã hội", "years": 0.5 },
+        { "name": "Canva", "years": 1 }
+      ],
+      "experiences": [],
+      "projects": [
+        { "name": "Fanpage câu lạc bộ marketing", "description": "Lên lịch đăng hằng tuần, viết bài giới thiệu hoạt động và trả lời bình luận; trang tăng gấp đôi lượt theo dõi trong học kỳ." },
+        { "name": "Chiến dịch ra mắt đồ uống giả định", "description": "Đồ án nhóm: viết thông điệp chính, bộ bài đăng và lời thoại video ngắn cho một loại trà mới." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-content-3", "job": "hg-content-parttime", "tier": "hop-mot-phan", "level": "moi-tot-nghiep",
+      "fullName": "Phạm Minh Châu", "gender": "FEMALE", "birthYear": 2002, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Tài Chính Marketing", "major": "Marketing", "startYear": 2020, "endYear": 2024, "isCurrent": false }],
+      "headline": "Copywriter | Bài viết website, SEO",
+      "bio": "Mình viết nội dung cho website doanh nghiệp: bài giới thiệu sản phẩm, bài hướng dẫn và bài chuẩn SEO đăng trên WordPress. Ít làm fanpage nên đây là phần mình muốn học thêm. Hiện tìm việc part-time để viết thêm cho thương hiệu tiêu dùng.",
+      "skills": [
+        { "name": "Copywriting", "years": 1.5 }, { "name": "Content Marketing", "years": 1 }, { "name": "SEO", "years": 1 },
+        { "name": "WordPress", "years": 1 }, { "name": "Canva", "years": 1 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Giải pháp Website Trang Mới", "position": "Nhân viên viết nội dung", "start": "2024-09", "end": "2026-09",
+          "description": "Viết bài giới thiệu sản phẩm và bài hướng dẫn cho website khách hàng, tối ưu tiêu đề theo từ khoá và đăng bài trên WordPress." }
+      ],
+      "projects": [
+        { "name": "Bộ bài hướng dẫn chăm sóc cây cảnh", "description": "Loạt bài cho một cửa hàng cây cảnh, đứng đầu trang tìm kiếm cho nhiều từ khoá về cây trong nhà." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-content-4", "job": "hg-content-parttime", "tier": "hop-mot-phan", "level": "nam-3",
+      "fullName": "Hà Anh Tuấn", "gender": "MALE", "birthYear": 2004, "city": "Hà Nội",
+      "educations": [{ "university": "Học viện Báo chí và Tuyên truyền", "major": "Báo chí", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên năm 3 Báo chí | Video ngắn, fanpage",
+      "bio": "Mình làm video ngắn cho kênh của lớp và quản lý trang tin của đoàn khoa, quen bắt xu hướng và dựng nhanh bằng CapCut. Viết bài dài cho báo là thế mạnh, còn viết câu chữ bán hàng thì mình đang tập. Muốn làm part-time để học viết cho thương hiệu.",
+      "skills": [
+        { "name": "Content Marketing", "years": 0.5 }, { "name": "Quản lý mạng xã hội", "years": 0.5 }, { "name": "CapCut", "years": 1 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Truyền thông Đèn Lồng", "position": "Cộng tác viên dựng video", "start": "2026-06", "end": "2026-08",
+          "description": "Quay và dựng video ngắn giới thiệu chương trình cho khách hàng, viết lời dẫn và chú thích đăng kèm." }
+      ],
+      "projects": [
+        { "name": "Kênh video ngắn của lớp", "description": "Lên ý tưởng và dựng video về đời sống sinh viên báo chí, có video được chia sẻ rộng trong trường." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-content-5", "job": "hg-content-parttime", "tier": "nganh-gan", "level": "nam-cuoi",
+      "fullName": "Đoàn Thanh Xuân", "gender": "FEMALE", "birthYear": 2003, "city": "Hà Nội",
+      "educations": [{ "university": "Trường Đại Học Ngoại Ngữ Hà Nội", "major": "Ngôn ngữ Anh", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên Ngôn ngữ Anh | Viết nội dung song ngữ",
+      "bio": "Mình học ngôn ngữ Anh và làm biên dịch nội dung cho một thương hiệu mỹ phẩm, dần chuyển sang tự viết bài đăng song ngữ cho fanpage. Thích chơi chữ và tìm cách nói tự nhiên ở cả hai thứ tiếng. Muốn làm part-time viết nội dung để có thêm sản phẩm trong hồ sơ.",
+      "skills": [
+        { "name": "Content Marketing", "years": 0.5 }, { "name": "Copywriting", "years": 1 }, { "name": "Quản lý mạng xã hội", "years": 0.5 },
+        { "name": "Tiếng Anh giao tiếp", "years": 2 }, { "name": "IELTS", "years": 1 }, { "name": "Canva", "years": 0.5 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Mỹ phẩm Mầm Xanh", "position": "Cộng tác viên biên dịch nội dung", "start": "2026-01", "end": "2026-09",
+          "description": "Dịch mô tả sản phẩm từ tài liệu của hãng, viết bài đăng song ngữ cho fanpage và trả lời bình luận của khách nước ngoài." }
+      ],
+      "projects": [
+        { "name": "Bản tin tiếng Anh của khoa", "description": "Biên tập bản tin định kỳ, viết các mục phỏng vấn giảng viên và sinh viên trao đổi." }
+      ],
+      "certificates": [{ "name": "IELTS Academic", "issuer": "IDP", "year": 2025 }]
+    },
+    {
+      "key": "uv-content-6", "job": "hg-content-parttime", "tier": "doi-nganh", "level": "moi-tot-nghiep",
+      "fullName": "Lê Hữu Nghĩa", "gender": "MALE", "birthYear": 2002, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Sư Phạm TPHCM", "major": "Sư phạm Ngữ văn", "startYear": 2020, "endYear": 2024, "isCurrent": false }],
+      "headline": "Giáo viên Ngữ văn chuyển sang viết nội dung",
+      "bio": "Mình dạy Ngữ văn ở một trường tư thục và phụ trách fanpage tuyển sinh của trường, từ đó nhận ra mình thích viết cho đông người đọc hơn là chấm bài. Đã học một khoá viết quảng cáo và làm thêm vài dự án viết tự do. Muốn bắt đầu bằng việc part-time để chuyển nghề dần.",
+      "skills": [
+        { "name": "Copywriting", "years": 1 }, { "name": "Content Marketing", "years": 0.5 }, { "name": "Canva", "years": 0.5 },
+        { "name": "Quản lý mạng xã hội", "years": 0.5 }
+      ],
+      "experiences": [
+        { "company": "Trường THCS Tư thục Ánh Sao", "position": "Giáo viên Ngữ văn", "start": "2024-08", "end": null,
+          "description": "Dạy Ngữ văn khối lớp bảy và tám, kiêm viết bài cho fanpage tuyển sinh và các hoạt động của trường." }
+      ],
+      "projects": [
+        { "name": "Viết tự do cho tiệm sách cũ", "description": "Viết giới thiệu sách và bài đăng gợi ý sách theo chủ đề cho fanpage của một tiệm sách cũ." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-content-7", "job": "hg-content-parttime", "tier": "so-sai", "level": "nam-3",
+      "fullName": "Kiều Thu Thảo", "gender": "FEMALE", "birthYear": 2005, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Khoa Học Xã Hội và Nhân Văn TPHCM", "major": "Báo chí", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên tìm việc part-time",
+      "skills": [{ "name": "Canva", "years": 0.5 }, { "name": "Content Marketing", "years": 0 }],
+      "experiences": [], "projects": [], "certificates": []
+    },
+    {
+      "key": "uv-content-8", "job": "hg-content-parttime", "tier": "ca-kho", "hardCase": "kinh-nghiem-khong-lien-quan", "level": "nam-cuoi",
+      "fullName": "Tạ Như Quyên", "gender": "FEMALE", "birthYear": 2004, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Tài Chính Marketing", "major": "Marketing", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên Marketing | Năng động, chăm chỉ",
+      "bio": "Mình làm phục vụ bán thời gian ở một nhà hàng lẩu, quen chịu áp lực giờ cao điểm và chăm sóc khách hàng. Thích lướt mạng xã hội và muốn thử viết nội dung.",
+      "skills": [
+        { "name": "Content Marketing", "years": 0 }, { "name": "Giao tiếp", "years": 1 }, { "name": "Chăm sóc khách hàng", "years": 1 }
+      ],
+      "experiences": [
+        { "company": "Nhà hàng Lẩu Bếp Lửa", "position": "Nhân viên phục vụ", "start": "2025-12", "end": "2026-10",
+          "description": "Đón khách, ghi món, dọn bàn và hỗ trợ thu ngân vào giờ cao điểm." }
+      ],
+      "projects": [],
+      "certificates": []
+    },
+
+    {
+      "key": "uv-xnk-1", "job": "ctl-xnk-intern", "tier": "rat-hop", "level": "nam-cuoi",
+      "fullName": "Nguyễn Văn Toàn", "gender": "MALE", "birthYear": 2004, "city": "Hà Nội",
+      "educations": [{ "university": "Trường Đại học Ngoại thương", "major": "Logistics và quản lý chuỗi cung ứng", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên Logistics | Chứng từ, khai báo hải quan",
+      "bio": "Mình thực tập ở một công ty giao nhận, làm bộ chứng từ cho hàng xuất đi châu Âu và tập khai báo trên hệ thống hải quan điện tử dưới sự kèm cặp của trưởng phòng. Quen trao đổi bằng tiếng Anh với đại lý nước ngoài qua email. Muốn tiếp tục làm thủ tục cho hàng nhập của nhà máy.",
+      "skills": [
+        { "name": "Khai báo hải quan", "years": 0.5 }, { "name": "Chứng từ xuất nhập khẩu", "years": 1 }, { "name": "Tiếng Anh giao tiếp", "years": 1.5 },
+        { "name": "Incoterms", "years": 1 }, { "name": "Tin học văn phòng", "years": 1.5 }, { "name": "Thanh toán quốc tế", "years": 0.5 }, { "name": "Excel", "years": 1 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Giao nhận Mũi Tên", "position": "Thực tập sinh chứng từ xuất nhập khẩu", "start": "2026-02", "end": "2026-08",
+          "description": "Soạn hoá đơn thương mại, phiếu đóng gói và vận đơn nháp cho hàng xuất; hỗ trợ khai báo hải quan và theo dõi lịch tàu." }
+      ],
+      "projects": [
+        { "name": "Mô phỏng hợp đồng mua bán quốc tế", "description": "Bài tập nhóm soạn hợp đồng nhập khẩu máy móc, chọn điều kiện Incoterms và phương thức thanh toán phù hợp." }
+      ],
+      "certificates": [{ "name": "TOEIC Listening & Reading", "issuer": "IIG Việt Nam", "year": 2025 }]
+    },
+    {
+      "key": "uv-xnk-2", "job": "ctl-xnk-intern", "tier": "rat-hop", "level": "nam-3",
+      "fullName": "Võ Bích Liên", "gender": "FEMALE", "birthYear": 2005, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Giao Thông Vận Tải TPHCM", "major": "Logistics và quản lý chuỗi cung ứng", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên năm 3 Logistics | Tiếng Anh, tiếng Trung",
+      "bio": "Mình học logistics và biết tiếng Trung từ nhỏ nhờ gia đình buôn bán, nên rất muốn làm mảng nhập khẩu hàng châu Á. Đã học xong môn nghiệp vụ hải quan, tự làm thử bộ chứng từ hoàn chỉnh cho một lô hàng giả định. Mong có kỳ thực tập đầu tiên ở công ty có nhà máy.",
+      "skills": [
+        { "name": "Khai báo hải quan", "years": 0.5 }, { "name": "Chứng từ xuất nhập khẩu", "years": 0.5 }, { "name": "Tiếng Anh giao tiếp", "years": 1 },
+        { "name": "Tiếng Trung", "years": 1 }, { "name": "Tin học văn phòng", "years": 1 }
+      ],
+      "experiences": [],
+      "projects": [
+        { "name": "Bộ chứng từ nhập khẩu linh kiện", "description": "Đồ án: lập hợp đồng, hoá đơn, phiếu đóng gói và tờ khai mô phỏng cho lô linh kiện điện tử nhập khẩu." },
+        { "name": "Phiên dịch cho ngày hội việc làm", "description": "Hỗ trợ phiên dịch tiếng Trung cho gian hàng của doanh nghiệp tại ngày hội việc làm của trường." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-xnk-3", "job": "ctl-xnk-intern", "tier": "hop-mot-phan", "level": "nam-cuoi",
+      "fullName": "Hồ Trung Hải", "gender": "MALE", "birthYear": 2003, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Đại Học Kinh Tế TPHCM (KSA)", "major": "Logistics và quản lý chuỗi cung ứng", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên Logistics | Kho vận, chứng từ",
+      "bio": "Mình làm ở kho của một công ty giao nhận, quen nhận hàng, kiểm đếm và đối chiếu với chứng từ đi kèm. Phần thủ tục hải quan mình mới học trên lớp nên rất muốn được làm thật. Tiếng Anh đủ để đọc chứng từ và trao đổi qua email.",
+      "skills": [
+        { "name": "Chứng từ xuất nhập khẩu", "years": 0.5 }, { "name": "Tiếng Anh giao tiếp", "years": 1 }, { "name": "Quản lý kho", "years": 1 },
+        { "name": "Excel", "years": 1 }, { "name": "Incoterms", "years": 0.5 }
+      ],
+      "experiences": [
+        { "company": "Công ty Cổ phần Kho vận Bến Xanh", "position": "Nhân viên kho bán thời gian", "start": "2026-01", "end": "2026-09",
+          "description": "Nhận và kiểm đếm hàng nhập về kho, đối chiếu phiếu đóng gói, cập nhật số tồn trên Excel và chuẩn bị hàng xuất theo lệnh." }
+      ],
+      "projects": [
+        { "name": "Sắp xếp lại vị trí hàng trong kho", "description": "Đề xuất chia khu theo tần suất xuất hàng, giảm quãng đường lấy hàng cho nhân viên ca tối." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-xnk-4", "job": "ctl-xnk-intern", "tier": "hop-mot-phan", "level": "nam-3",
+      "fullName": "Đặng Thu Nga", "gender": "FEMALE", "birthYear": 2004, "city": "Hà Nội",
+      "educations": [{ "university": "Đại Học Kinh Tế Quốc Dân", "major": "Kinh tế ngoại thương", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên năm 3 Kinh tế ngoại thương | Chứng từ, Incoterms",
+      "bio": "Mình nắm chắc lý thuyết về Incoterms, thanh toán quốc tế và bộ chứng từ thương mại nhờ các môn chuyên ngành. Khả năng nói tiếng Anh còn yếu nên mình đang học thêm buổi tối. Muốn đi thực tập để biết công việc thật khác sách vở ra sao.",
+      "skills": [
+        { "name": "Chứng từ xuất nhập khẩu", "years": 0.5 }, { "name": "Incoterms", "years": 0.5 }, { "name": "Tin học văn phòng", "years": 1 },
+        { "name": "Thanh toán quốc tế", "years": 0.5 }
+      ],
+      "experiences": [],
+      "projects": [
+        { "name": "Phân tích tranh chấp về điều kiện giao hàng", "description": "Tiểu luận phân tích một vụ tranh chấp do hiểu sai Incoterms, đề xuất cách ghi điều khoản rõ ràng hơn." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-xnk-5", "job": "ctl-xnk-intern", "tier": "nganh-gan", "level": "nam-cuoi",
+      "fullName": "Mai Hoài Giang", "gender": "FEMALE", "birthYear": 2004, "city": "Đà Nẵng",
+      "educations": [{ "university": "Trường Đại Học Ngoại Ngữ Đà Nẵng", "major": "Ngôn ngữ Anh", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "Sinh viên Ngôn ngữ Anh | Hướng tới xuất nhập khẩu",
+      "bio": "Mình học tiếng Anh thương mại và làm trợ lý ở một công ty xuất khẩu hàng thủ công, chủ yếu dịch thư từ và soạn chứng từ cơ bản. Thấy thích công việc này nên mình học thêm khoá nghiệp vụ hải quan. Muốn thực tập để làm thủ tục trọn vẹn cho một lô hàng.",
+      "skills": [
+        { "name": "Tiếng Anh giao tiếp", "years": 2 }, { "name": "Chứng từ xuất nhập khẩu", "years": 0.5 }, { "name": "Khai báo hải quan", "years": 0 },
+        { "name": "Tin học văn phòng", "years": 1 }, { "name": "TOEIC", "years": 1 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Thủ công Mỹ nghệ Cói Vàng", "position": "Trợ lý xuất khẩu", "start": "2026-02", "end": "2026-10",
+          "description": "Dịch thư từ với khách nước ngoài, soạn hoá đơn và phiếu đóng gói cho các đơn xuất khẩu đồ cói." }
+      ],
+      "projects": [],
+      "certificates": [{ "name": "TOEIC Listening & Reading", "issuer": "IIG Việt Nam", "year": 2026 }]
+    },
+    {
+      "key": "uv-xnk-6", "job": "ctl-xnk-intern", "tier": "doi-nganh", "level": "moi-tot-nghiep",
+      "fullName": "Trương Đình Tài", "gender": "MALE", "birthYear": 2001, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Kinh Tế Tài Chính TPHCM", "major": "Kế toán", "startYear": 2019, "endYear": 2023, "isCurrent": false }],
+      "headline": "Kế toán chuyển sang chứng từ xuất nhập khẩu",
+      "bio": "Mình làm kế toán công nợ ở một công ty thương mại nhập hàng nước ngoài, ngày nào cũng đối chiếu hoá đơn với tờ khai và chứng từ vận chuyển. Dần dần mình nhận thêm phần chứng từ và thấy hợp hơn công việc sổ sách. Đã học xong khoá nghiệp vụ khai báo hải quan.",
+      "skills": [
+        { "name": "Chứng từ xuất nhập khẩu", "years": 1 }, { "name": "Khai báo hải quan", "years": 0.5 }, { "name": "Excel", "years": 2 },
+        { "name": "Kế toán công nợ", "years": 1.5 }, { "name": "Tiếng Anh giao tiếp", "years": 0.5 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Thương mại Đại Dương Xanh", "position": "Kế toán công nợ", "start": "2023-09", "end": "2025-12",
+          "description": "Theo dõi công nợ nhà cung cấp nước ngoài, đối chiếu hoá đơn với tờ khai nhập khẩu và lập lịch thanh toán cho phòng tài chính." }
+      ],
+      "projects": [
+        { "name": "Bảng theo dõi lô hàng nhập", "description": "File Excel theo dõi tình trạng chứng từ, ngày hàng về và hạn thanh toán của từng lô, cả phòng dùng chung." }
+      ],
+      "certificates": []
+    },
+    {
+      "key": "uv-xnk-7", "job": "ctl-xnk-intern", "tier": "so-sai", "level": "nam-3",
+      "fullName": "Quách Văn Luân", "gender": "MALE", "birthYear": 2005, "city": "Hà Nội",
+      "educations": [{ "university": "Trường Đại học Ngoại thương", "major": "Kinh tế ngoại thương", "startYear": 2024, "endYear": 2028, "isCurrent": true }],
+      "headline": "Sinh viên tìm việc thực tập",
+      "skills": [{ "name": "Tin học văn phòng", "years": 1 }, { "name": "Tiếng Anh giao tiếp", "years": 0.5 }],
+      "experiences": [], "projects": [], "certificates": []
+    },
+    {
+      "key": "uv-xnk-8", "job": "ctl-xnk-intern", "tier": "ca-kho", "hardCase": "nhoi-tu-khoa", "level": "nam-cuoi",
+      "fullName": "Tô Hữu Trọng", "gender": "MALE", "birthYear": 2003, "city": "TP. Hồ Chí Minh",
+      "educations": [{ "university": "Trường Đại Học Mở TPHCM", "major": "Logistics và quản lý chuỗi cung ứng", "startYear": 2023, "endYear": 2027, "isCurrent": true }],
+      "headline": "XNK | Logistics | Hải quan | Sales | Kho | Ngoại ngữ",
+      "bio": "Mình rành mọi khâu trong xuất nhập khẩu và logistics, nói được nhiều ngoại ngữ, có thể làm ngay mà không cần đào tạo.",
+      "skills": [
+        { "name": "Khai báo hải quan", "years": 2 }, { "name": "Chứng từ xuất nhập khẩu", "years": 2 }, { "name": "Tiếng Anh giao tiếp", "years": 2 },
+        { "name": "Incoterms", "years": 2 }, { "name": "Thanh toán quốc tế", "years": 2 }, { "name": "Tiếng Trung", "years": 1 },
+        { "name": "Tiếng Hàn", "years": 1 }, { "name": "Tiếng Nhật", "years": 1 }, { "name": "Quản lý kho", "years": 2 },
+        { "name": "Đàm phán", "years": 2 }, { "name": "Excel", "years": 2 }, { "name": "Tin học văn phòng", "years": 3 }
+      ],
+      "experiences": [
+        { "company": "Công ty TNHH Chuyển phát Gió Lốc", "position": "Nhân viên giao hàng", "start": "2026-02", "end": "2026-08",
+          "description": "Giao bưu phẩm nội thành theo tuyến và thu tiền hộ cho khách hàng." }
+      ],
+      "projects": [],
+      "certificates": []
+    }
+  ]
+}

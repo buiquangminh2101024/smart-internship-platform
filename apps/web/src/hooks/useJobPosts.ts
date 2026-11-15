@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   ConfirmRequirementsRequest,
   EmployerJobPostListQuery,
@@ -159,6 +159,29 @@ export function usePublicJobPosts(query: OptionalQuery<JobPostSearchQuery>) {
   return useQuery({
     queryKey: ["publicJobPosts", query],
     queryFn: () => publicFetch<PaginatedResponse<JobPost>>(`/job-posts${toQueryString({ ...query })}`),
+  });
+}
+
+/**
+ * Danh sách /jobs có "Xem thêm" (AD-26, docs/05-frontend/phases/job-discovery/PLAN.md bước F2).
+ * Ứng viên đăng nhập gọi bằng token để có `viewer` (điểm, đã lưu, đã ứng tuyển) và sắp theo
+ * điểm; khách gọi không token. Khoá có `viewer` để không lẫn cache giữa khách và ứng viên.
+ * Giữ trang cũ trong lúc đổi bộ lọc (`keepPreviousData`), và cache giữ các trang đã tải nên
+ * quay lại từ trang chi tiết vẫn đúng chỗ.
+ */
+export function useJobPostSearch(query: JobPostSearchQuery, viewer: "guest" | "candidate", enabled: boolean) {
+  return useInfiniteQuery({
+    queryKey: ["publicJobPosts", "search", viewer, query],
+    queryFn: ({ pageParam }) => {
+      const path = `/job-posts${toQueryString({ ...query, cursor: pageParam ?? undefined })}`;
+      return viewer === "candidate"
+        ? apiFetch<PaginatedResponse<JobPost>>("candidate", path)
+        : publicFetch<PaginatedResponse<JobPost>>(path);
+    },
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => (lastPage.hasMore && lastPage.nextCursor ? lastPage.nextCursor : null),
+    placeholderData: keepPreviousData,
+    enabled,
   });
 }
 

@@ -11,6 +11,7 @@ import {
   NOTIFICATION_GROUP_META,
   WARNING_NOTIFICATION_TYPES,
   formatRelativeTime,
+  notificationIcon,
 } from "@/lib/notifications";
 import {
   NOTIFICATION_GROUPS_BY_AREA,
@@ -182,7 +183,7 @@ export function NotificationCenter({ area, limit = 8, notify, className = "" }: 
           >
             <span aria-hidden className={`grid shrink-0 place-items-center ${skin.icon} ${iconTone}`}>
               <Icon
-                name={warning ? warningIcon(notification.type) : NOTIFICATION_GROUP_META[group].icon}
+                name={warning ? warningIcon(notification.type) : notificationIcon(notification.type)}
                 size={skin.iconSize}
               />
             </span>
@@ -331,7 +332,9 @@ export function NotificationCenter({ area, limit = 8, notify, className = "" }: 
 }
 
 function warningIcon(type: Notification["type"]): string {
-  if (type === "JOB_POST_EXPIRING" || type === "SUBSCRIPTION_EXPIRING") return "clock";
+  if (type === "JOB_POST_EXPIRING" || type === "SUBSCRIPTION_EXPIRING" || type === "APPLICATIONS_NEED_ATTENTION") {
+    return "clock";
+  }
   if (type === "JOB_POST_TAKEN_DOWN") return "arrow-down";
   return "triangle-alert";
 }

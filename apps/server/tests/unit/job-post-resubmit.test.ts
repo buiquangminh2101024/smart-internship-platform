@@ -70,6 +70,7 @@ function buildService(options: { requiresApproval: boolean; history: ModerationA
         audits.push({ action: entry.action, metadata: entry.metadata });
       },
     },
+    matchScoreTrigger: () => {},
   } as unknown as ConstructorParameters<typeof JobPostsService>[0]);
   return { service, audits };
 }

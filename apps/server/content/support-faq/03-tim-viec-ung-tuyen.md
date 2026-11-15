@@ -16,9 +16,31 @@ questions:
 Vào trang **Việc thực tập** (/jobs):
 
 - Ô tìm kiếm nhận vị trí, kỹ năng hoặc tên công ty.
-- Lọc thêm theo **Địa điểm**, **Ngành nghề**, **Loại hình** (thực tập, bán thời gian, toàn thời gian, hợp đồng) và **Mức lương**.
+- Lọc thêm theo **Địa điểm**, **Ngành nghề**, **Loại hình** (thực tập, bán thời gian, toàn thời gian, hợp đồng), **Lương**, **Kinh nghiệm** và **Kỹ năng**.
 
 Danh sách công ty và trang giới thiệu từng công ty ở /companies. Bạn không cần đăng nhập để xem tin và công ty.
+
+## job-alert
+audience: candidate
+title: Báo tin việc làm phù hợp
+questions:
+- Tại sao tôi nhận thông báo có tin mới phù hợp?
+- Làm sao tắt báo tin việc làm mới?
+- Không muốn nhận email việc làm mỗi ngày
+- Chỉ nhận báo tin việc làm ở thành phố của tôi
+- Sao tôi không nhận được thông báo việc làm mới?
+- Báo tin việc làm phù hợp là gì?
+
+Khi một tin mới được duyệt và có mức độ phù hợp với hồ sơ của bạn **từ 70% trở lên** (hoặc cao hơn, nếu nhà tuyển dụng đặt ngưỡng cao hơn), hệ thống tự báo cho bạn. Bạn không cần lưu bộ lọc nào.
+
+- Các tin trong cùng một ngày gộp vào **một thông báo** ở chuông, ví dụ "3 tin mới phù hợp với bạn". Bấm vào để mở **Việc làm phù hợp** (/recommended-jobs).
+- **Email tổng hợp** gửi lúc 8 giờ sáng, tối đa 10 tin, chỉ gửi khi có tin mới.
+- Mỗi tin chỉ báo một lần. Không báo tin bạn đã ứng tuyển hoặc đã được mời.
+- Khi bạn vừa tạo hồ sơ và thêm kỹ năng, trong vài phút hệ thống báo **một lần** các tin đang hiển thị đạt ngưỡng, cũng gộp vào một thông báo. Sau đó chỉ báo khi có tin mới; sửa hồ sơ không báo lại.
+
+Báo tin **bật sẵn**. Để tắt, vào **Cài đặt**, thẻ **Báo tin việc làm phù hợp** (/settings#bao-tin-viec-lam), gồm ba công tắc: **Báo khi có tin mới phù hợp**, **Gửi email tổng hợp mỗi ngày** và **Chỉ tin ở thành phố của tôi** (cần chọn thành phố trong hồ sơ trước).
+
+Không nhận được báo tin thường vì hồ sơ chưa có kỹ năng (hệ thống nhắc thêm kỹ năng một lần), đã tắt báo tin, đang bật chỉ tin cùng thành phố, hoặc chưa có tin mới nào đạt 70%.
 
 ## job-save
 audience: candidate
@@ -66,17 +88,38 @@ questions:
 - Đang xem xét nghĩa là gì?
 - Đơn bị từ chối hay được nhận xem ở đâu?
 - Nhà tuyển dụng đã xem hồ sơ của tôi chưa?
+- Sao đơn của tôi chuyển sang Đang xem xét ngay sau khi nộp?
 
 Các đơn đã nộp nằm ở **Ứng tuyển của tôi** (/applications). Ý nghĩa trạng thái:
 
 - **Chờ duyệt**: đơn đã gửi, nhà tuyển dụng chưa tiếp nhận.
-- **Đang xem xét**: nhà tuyển dụng đang xem hồ sơ.
+- **Đang xem xét**: hồ sơ đã vào nhóm được xem xét. Hồ sơ có mức độ phù hợp đạt ngưỡng của tin có thể được **hệ thống tự chuyển** sang trạng thái này (ngay khi nộp hoặc trong lượt xử lý 8h30 sáng hằng ngày), nên trạng thái này chưa chắc là nhà tuyển dụng đã mở hồ sơ.
 - **Vào danh sách rút gọn**: bạn được chọn vào nhóm ứng viên tiềm năng.
 - **Mời phỏng vấn**: có lịch phỏng vấn (xem ngay trong đơn).
 - **Được nhận** hoặc **Bị từ chối**: kết quả cuối.
 - **Đã huỷ**: bạn đã tự huỷ đơn.
+- **Tin đã đóng**: tin đã ngừng tuyển và hệ thống đã đóng đơn. Đây không phải bị từ chối, vì chưa có đánh giá nào về bạn. Đơn này là kết quả cuối và không nộp lại được.
 
 Mỗi lần trạng thái thay đổi, bạn nhận thông báo ở chuông. Thời gian phản hồi do từng nhà tuyển dụng quyết định; bạn có thể nhắn tin hỏi thêm từ trang đơn ứng tuyển.
+
+## application-job-closed
+audience: candidate
+title: Đơn bị đóng vì tin đã ngừng tuyển
+questions:
+- Tại sao đơn của tôi bị đóng?
+- Hồ sơ ứng tuyển đã được đóng là sao?
+- Đơn chuyển sang Tin đã đóng nghĩa là gì?
+- Tin hết hạn thì đơn của tôi thế nào?
+- Tôi đã phỏng vấn mà đơn bị đóng
+
+Khi tin hết hạn, bị nhà tuyển dụng đóng hoặc bị gỡ, hệ thống đóng các đơn chưa có kết quả và chuyển sang **Tin đã đóng**. Bạn nhận thông báo kèm email.
+
+- Đơn **Chờ duyệt**: đóng ở lượt xử lý 8h30 sáng đầu tiên sau khi tin đóng.
+- Đơn **Đang xem xét**, hoặc đã vào danh sách rút gọn / mời phỏng vấn nhưng chưa phỏng vấn: đóng sau **14 ngày** kể từ khi tin đóng, để nhà tuyển dụng kịp xử lý.
+- Đơn **có lịch phỏng vấn sắp tới** thì không bị đóng.
+- Đơn **đã phỏng vấn nhưng chưa có kết quả** chỉ bị đóng nếu nhà tuyển dụng bật chế độ này cho tin, sau **30 ngày**. Khi đó thông báo ghi rõ nhà tuyển dụng chưa cập nhật kết quả.
+
+**Tin đã đóng** không phải bị từ chối. Đơn đã đóng không nộp lại được, vì tin đã ngừng tuyển.
 
 ## application-cancel
 audience: candidate
@@ -103,10 +146,13 @@ questions:
 - Thẻ mức độ phù hợp trên trang tin là gì?
 - Tôi còn thiếu kỹ năng gì so với yêu cầu của tin?
 - Điểm phù hợp thấp có bị loại không?
+- Sửa hồ sơ bao lâu thì điểm phù hợp cập nhật?
 
 Ở trang chi tiết tin, thẻ **Mức độ phù hợp** so sánh hồ sơ của bạn với yêu cầu của tin: kỹ năng bắt buộc và ưu tiên, số năm kinh nghiệm, ngành học, kèm mức độ gần nghĩa giữa hồ sơ và mô tả công việc, và giải thích phần nào bạn đã đáp ứng, phần nào còn thiếu.
 
-Điểm chỉ mang tính tham khảo, không quyết định việc bạn được nhận. Để điểm sát hơn, hãy cập nhật kỹ năng, học vấn và kinh nghiệm ở **Hồ sơ ứng viên** (/profile).
+Điểm chỉ mang tính tham khảo, không quyết định việc bạn được nhận. Hệ thống **không bao giờ tự từ chối** đơn vì điểm thấp; chỉ nhà tuyển dụng mới từ chối được. Đơn có điểm đạt ngưỡng của tin có thể được hệ thống tự chuyển sang **Đang xem xét**. Để điểm sát hơn, hãy cập nhật kỹ năng, học vấn và kinh nghiệm ở **Hồ sơ ứng viên** (/profile).
+
+Khi bạn đăng nhập, trang **Việc thực tập** (/jobs) hiện **Phù hợp x%** trên từng tin, có cách sắp xếp **Phù hợp nhất** và bộ lọc **Chỉ tin phù hợp với tôi (≥ 70%)**. Sau khi bạn sửa hồ sơ, điểm ở danh sách này và ở **Việc làm phù hợp** cập nhật trong vài phút. Trong vài phút đó, điểm ở danh sách có thể lệch một chút với thẻ trên trang tin.
 
 ## candidate-interviews
 audience: candidate

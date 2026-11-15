@@ -1,6 +1,8 @@
-# Rút gọn dashboard Employer (bản 2)
+# Dashboard bản 2 — Employer bản 2 và Admin bản D2
 
-Thay bố cục Employer bản C trong `docs/05-frontend/phases/dashboard-employer-admin/PLAN.md`. Phần backend nhỏ nên ghi chung trong file này, không tách plan riêng. Dashboard Admin và trang nhật ký hoạt động **không** thuộc đợt này.
+> Thư mục đổi tên từ `employer-dashboard-v2` thành `dashboard-v2` ngày 2026-11-15, khi thêm phần Admin bản D2 (mục "Admin bản D2 — bỏ bàn duyệt" ở cuối). Các mục từ "Lý do" tới "Việc riêng: dữ liệu demo" là phần Employer, đã xong 2026-11-04.
+
+Thay bố cục Employer bản C trong `docs/05-frontend/phases/dashboard-employer-admin/PLAN.md`. Phần backend nhỏ nên ghi chung trong file này, không tách plan riêng. Dashboard Admin và trang nhật ký hoạt động **không** thuộc đợt Employer (Admin có phần riêng ở cuối file).
 
 **Trạng thái: ĐÃ XONG CẢ BA ĐỢT (2026-11-04).** Còn việc riêng: dữ liệu demo (E11). Q1–Q4 đã chốt (E8–E11). Xem "Kết quả Phần 1/2/3" và "Kết quả Đợt 2".
 
@@ -265,6 +267,129 @@ Chủ dự án đồng ý cả bốn khuyến nghị.
 - Làm thành script trong `apps/server/scripts/`, đánh dấu được dữ liệu demo để chạy lại không nhân đôi và xoá được.
 - Script ghi vào Neon chính, nên **chỉ chủ dự án chạy**, sau khi xem script. Không gửi email thật (lịch phỏng vấn tạo thẳng trong DB, không qua outbox).
 - Lên plan chi tiết sau khi đợt 1 xong, vì dữ liệu cần theo đúng các trường của trang mới.
+
+## Admin bản D2 — bỏ bàn duyệt (lập 2026-11-15)
+
+**Trạng thái: XONG ĐỢT 1–3 (2026-11-15).** Q1–Q3 đã chốt. Đợt 3 đã ghi ở plan FE và BE `dashboard-employer-admin` (ghi chú đầu file), AD-16 (đoạn cập nhật 2026-11-15), `sip-ui` (mục "Admin — bản D2", bảng component) và plan `live-rescore` (mục "Còn mở" đã sửa). `FEATURE_BACKLOG.md` thêm dòng "Rút gọn dashboard Admin" ở mục 2 (chủ dự án đồng ý 2026-11-15). Thay mục "Admin — bản D" trong `docs/05-frontend/phases/dashboard-employer-admin/PLAN.md` ở phần bàn duyệt và cách bấm thẻ hàng chờ. Các khối khác của bản D giữ nguyên quy tắc hình thức (không khối tối, số `tabular-nums` font thường, `AdminPanel`, marigold chỉ cho thời gian chờ).
+
+### Lý do
+
+- Kiểm tổng 0.6 (2026-11-15, `docs/05-frontend/phases/live-rescore/PLAN.md`): thẻ "Hệ thống tự động" làm cột phải ("Nền tảng" + thẻ mới) dài hơn bàn duyệt, nên cột trái có khoảng trống lớn trước hàng biểu đồ.
+- Bàn duyệt **trùng** với trang quản lý: gọi đúng API của `/admin/jobs`, `/admin/companies`, `/admin/skills`, `/admin/education-catalog`. Cả bốn trang đều mặc định mở bộ lọc "Chờ duyệt", nên thẻ chỉ cần link thẳng, không phải sửa trang nào.
+- Đi ngược E1 (dashboard là điểm nhìn tổng quan và điểm chuyển trang, không thao tác tại chỗ), quy tắc mà Employer bản 2 đã theo và `sip-ui` đã ghi. Hai lần giáo viên nhận xét "rối" (Employer bản C, nhật ký hoạt động bản C) đều vì khối thao tác hoặc thống kê dày đặc.
+- Đây là khối nặng nhất của trang: `ModerationDesk.tsx` 558 dòng, có tab, ô lý do từ chối, nhãn giữ chỗ sau thao tác.
+
+### Quyết định đề xuất
+
+| # | Quyết định |
+|---|---|
+| A1 | Bỏ bàn duyệt khỏi `/admin/dashboard`. Duyệt và từ chối chỉ làm ở trang quản lý. |
+| A2 | Ba thẻ hàng chờ thành **link** sang trang quản lý (như E2): Tin chờ duyệt → `/admin/jobs`, Công ty chờ xác minh → `/admin/companies`. Danh mục chờ duyệt không phải một link mà có hai link ở cuối thẻ (Q1). Giữ số, "Chờ lâu nhất" (marigold), thanh chia nhóm. Cuối thẻ ghi "Xem … →". Bỏ `aria-pressed` và trạng thái "đang chọn". |
+| A3 | Đầu trang giữ dòng "**N** mục chờ duyệt · cập nhật lúc …" và nút "Làm mới". **Bỏ** nút "Bắt đầu duyệt" (Q2). |
+| A4 | (Q3) "Nền tảng" và "Hệ thống tự động" mỗi khối **một hàng, rộng hết trang**. Các mục bên trong xếp **theo cột** và dồn dần khi khối hẹp lại (container query theo bề rộng khối): "Nền tảng" 3 cột → 1 cột; "Hệ thống tự động" 4 cột → 2 cột → 1 cột. Hết khoảng trống ở cột trái. |
+| A5 | Phần dưới giữ nguyên: "Người dùng mới theo ngày" + "Doanh thu theo tuần"; trung tâm thông báo + hoạt động gần đây + người dùng theo vai trò. |
+| A6 | Làm như E7: đợt 1 gỡ khỏi trang, **chưa xoá code**; đợt 2 xoá component, hook, API không còn dùng, sau khi chủ dự án xác nhận lần nữa. |
+
+### Bố cục mới
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│ Tổng quan                                                       [Làm mới]  │
+│ 18 mục chờ duyệt · cập nhật lúc HH:mm ngày DD/MM/YYYY                      │
+├────────────────────────────────────────────────────────────────────────────┤
+│ Hàng chờ  Tin cũ nhất đã chờ 25 ngày                                       │
+│ ┌──────────────────────┐ ┌──────────────────────┐ ┌──────────────────────┐ │
+│ │ Tin chờ duyệt        │ │ Công ty chờ xác minh │ │ Danh mục chờ duyệt   │ │
+│ │ 18 tin  Chờ lâu nhất │ │ 0 công ty  Không có  │ │ 0 mục  Không có      │ │
+│ │ ▬▬▬▬▬▬ (thanh nhóm)  │ │ ▬▬▬▬▬▬               │ │ ▬▬▬▬▬▬               │ │
+│ │ Xem tin chờ duyệt →  │ │ Xem công ty chờ →    │ │ Kỹ năng 0 →          │ │
+│ │                      │ │                      │ │ Trường, ngành 0 →    │ │
+│ └──────────────────────┘ └──────────────────────┘ └──────────────────────┘ │
+│ ┌────────────────────────────────────────────────────────────────────────┐ │
+│ │ Nền tảng                                                               │ │
+│ │ Người dùng mới 7 ngày │ Doanh thu tháng 11/2026 │ Gói đang hoạt động   │ │
+│ └────────────────────────────────────────────────────────────────────────┘ │
+│ ┌────────────────────────────────────────────────────────────────────────┐ │
+│ │ Hệ thống tự động                                                       │ │
+│ │ Đang chờ chấm lại │ Lượt chấm gần nhất │ Hôm nay │ Chấm đêm gần nhất   │ │
+│ └────────────────────────────────────────────────────────────────────────┘ │
+│ Người dùng mới theo ngày (2fr)        │ Doanh thu theo tuần (1fr)          │
+│ Trung tâm thông báo (3fr)             │ Hoạt động gần đây + vai trò (2fr)  │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Đợt 1 — Frontend (gỡ khỏi trang)
+
+- `components/dashboard/admin/AdminQueues.tsx`:
+  - `QueueCard` từ `<button>` thành `Link` (`next/link`). Cả thẻ là một link, không lồng link trong link.
+  - Thẻ Danh mục (Q1) là `<section>` thường, không có hover của thẻ link. Cuối thẻ có hai link: "Kỹ năng N →" (`/admin/skills`, N = `queues.catalog.skills`) và "Trường, ngành N →" (`/admin/education-catalog`, N = `universities + majors`). Thanh chia nhóm theo loại giữ nguyên.
+  - Bỏ props `selected` / `onSelect`, bỏ `MODERATION_DESK_ID`. Hover và focus như thẻ Employer bản 2 (đổi màu viền, viền focus `brand-500`).
+  - Dòng cuối "Xem … →" màu `brand-700`, chữ 13px.
+- `app/admin/(console)/dashboard/page.tsx`:
+  - Bỏ `useAdminDashboardTasks`, state `selected`, `scrollToDesk`, `startReviewing`, `prefersReducedMotion` (chỉ bàn duyệt dùng), khối `ModerationDesk` và nút "Bắt đầu duyệt" (Q2).
+  - `PlatformMetrics` rồi `AutomationStatusPanel`, mỗi khối một hàng rộng hết trang (Q3).
+- `PlatformMetrics.tsx` và `AutomationStatusPanel.tsx` (Q3): thân khối từ `flex flex-col` thành lưới theo container query của chính khối (`@container` đặt ở `AdminPanel` hoặc thẻ bọc thân).
+  - "Nền tảng": 1 cột, từ `@4xl` (~896px) 3 cột. Không có bước 2 cột, vì 3 mục chia 2 cột để lại một ô lẻ.
+  - "Hệ thống tự động": 1 cột, từ `@xl` (~576px) 2 cột, từ `@4xl` 4 cột.
+  - Đường ngăn giữa các mục: hiện là `border-t` (bỏ ở mục đầu). Khi xếp cột thì đổi thành viền trái giữa các cột, viền trên giữa các hàng. Cách gọn: lưới `gap-px` trên nền `border-subtle`, mỗi ô nền `surface-card`. Số cột luôn chia hết số mục nên không có ô trống lộ nền.
+  - Các mục căn đầu (`items-start` theo nội dung). Kiểm chữ dài ("Hồ sơ tự chuyển Đang xem xét", câu lượt chấm có "còn K người…") không làm cột quá hẹp ở mốc 4 cột; nếu chật thì nâng mốc 4 cột lên `@5xl`.
+  - Trang tổng quan 375px: cả hai khối 1 cột, giống hiện tại.
+  - Sửa comment đầu trang.
+- `useAdminDashboard.ts`: chưa xoá gì. `ModerationQueue` vẫn được `AdminQueues` dùng làm khoá của ba thẻ.
+- Đọc hướng dẫn `Link` trong `node_modules/next/dist/docs/` trước khi sửa (theo `apps/web/AGENTS.md`). `DashButton` đã nhận `href` nên nếu giữ "Bắt đầu duyệt" thì chỉ đổi prop.
+
+**Kiểm:**
+- `tsc`, eslint cho các file sửa.
+- Trình duyệt qua 8080 (tài khoản Admin), 1536px, iframe ~800px (bước 2 cột) và iframe 375px: không khoảng trống, không cuộn ngang, số cột đúng ở từng mốc; bấm từng thẻ và hai link của thẻ Danh mục ra đúng trang ở bộ lọc "Chờ duyệt"; số trên thẻ bằng số dòng chờ của trang đó; Tab / Enter; trạng thái đang tải và lỗi của từng khối; số chờ trên menu vẫn đúng.
+
+**Kết quả đợt 1 (2026-11-15):**
+- Sửa `AdminQueues.tsx` (thẻ Tin, Công ty là `Link`; thẻ Danh mục là `<section>` có hai link), `dashboard/page.tsx` (bỏ bàn duyệt, "Bắt đầu duyệt", `useAdminDashboardTasks`, cuộn và focus), `PlatformMetrics.tsx` và `AutomationStatusPanel.tsx` (lưới `gap-px` trên nền `border-subtle`, `overflow-hidden rounded-b-[13px]` để ô dưới không đè góc bo).
+- `MODERATION_DESK_ID` vẫn export ở `AdminQueues.tsx` vì `ModerationDesk.tsx` (chưa xoá) còn import; xoá cùng ở đợt 2.
+- `tsc` web và eslint bốn file: qua.
+- Trình duyệt qua 8080 (tài khoản Admin): 1536px Nền tảng 3 cột, Hệ thống tự động 4 cột, hết khoảng trống; iframe 800px: 1 cột và 2 cột; iframe 375px: 1 cột cả hai. Không cuộn ngang ở cả hai bề rộng. Mốc 4 cột `@4xl` đủ chỗ, không cần nâng lên `@5xl`.
+- Thẻ Tin dẫn `/admin/jobs`, bộ lọc "Chờ duyệt" có 18 tin, khớp số trên thẻ; thẻ Công ty dẫn `/admin/companies`; hai link Danh mục dẫn `/admin/skills` và `/admin/education-catalog`. Tab đi qua bốn link theo thứ tự, vòng focus `brand-500` hiện rõ. Không còn bàn duyệt và nút "Bắt đầu duyệt" trên trang.
+
+### Đợt 2 — Xoá phần không còn dùng (sau khi chủ dự án xác nhận)
+
+Trước khi xoá, grep lại từng tên (kể cả `apps/server/tests`, `scripts`, `support-chat`, `packages/shared-types`).
+
+| Phía | Xoá | Giữ |
+|---|---|---|
+| Web | `components/dashboard/admin/ModerationDesk.tsx`; trong `hooks/useAdminDashboard.ts`: `useAdminDashboardTasks`, `useModerate`, `ModerationInput`, `ModerationDecision`, `CATALOG_PATH`, `moderationPath`, `managementKeys` | `ModerationQueue` (có thể đổi tên thành `AdminQueue`), `useAdminDashboardOverview` (menu dùng), các hook còn lại |
+| Server | `GET /admin/dashboard/tasks`: route, controller, `AdminDashboardService.tasks`, `TASK_LIMIT`; repository `listPendingJobPosts`, `listPendingCompanies`, `listPendingCatalogEntries` và `UserRepository.findCatalogSuggesters` nếu không còn ai gọi; test "tasks: …" trong `admin-dashboard-service.test.ts` | `overview.queues` (tổng, `oldestSince`, nhóm thời gian chờ, tách loại danh mục): thẻ và menu còn dùng |
+| Shared types | `AdminDashboardTasks`; `CatalogSuggester` nếu không còn chỗ dùng. Build lại `dist` | Các kiểu của `overview` |
+
+**Kiểm:** build shared types; `tsc` server và web; eslint web; unit test server; `GET /admin/dashboard/tasks` trả 404; xem lại trang trên trình duyệt.
+
+**Kết quả đợt 2 (2026-11-15):**
+- Đã xoá: `ModerationDesk.tsx`; trong `useAdminDashboard.ts`: `useAdminDashboardTasks`, `useModerate`, `ModerationInput`, `ModerationDecision`, `CATALOG_PATH`, `moderationPath`, `managementKeys`; `MODERATION_DESK_ID`; server: route `GET /admin/dashboard/tasks`, `DashboardController.adminTasks`, `AdminDashboardService.tasks` và `TASK_LIMIT` (service không còn nhận `userRepository`), `listPendingJobPosts`, `listPendingCompanies`, `listPendingCatalogEntries`, `PendingCatalogEntryRow`; test "tasks:"; shared type `AdminDashboardTasks`.
+- **Giữ** `UserRepository.findCatalogSuggesters` và `CatalogSuggester`: `catalog-suggestion-notifier.service.ts` còn dùng. Giữ tên `ModerationQueue` (không đổi tên để tránh sửa thêm file).
+- Build `shared-types`; `tsc` server và web; eslint web: qua. Unit test server 651/651 (bớt đúng test "tasks:"). Một lần chạy khác có `live-rescore-marker.test.ts` ("sửa liên tiếp cùng một ứng viên…") lỗi do canh giờ, không liên quan đợt này.
+- Qua 8080: `GET /api/admin/dashboard/tasks` trả 404 (cùng lúc `overview` không kèm token trả 401, tức route đã gỡ chứ không phải bị chặn); trang không còn gọi `tasks`, các khối hiện đủ, số chờ trên menu vẫn 18.
+
+### Đợt 3 — Tài liệu
+
+- `docs/05-frontend/phases/dashboard-employer-admin/PLAN.md` và `docs/06-backend/dashboard-employer-admin/PLAN.md` (D14, bước 6): ghi ở đầu file rằng bàn duyệt của Admin bản D đã được thay bởi bản D2 trong plan này, kèm danh sách đã xoá ở đợt 2.
+- `ARCHITECTURE_DECISIONS.md` AD-16: thêm đoạn cập nhật như lần Employer bản 2 (Admin cũng không thao tác tại chỗ nữa).
+- `sip-ui`: mục "Admin — bản D" bỏ phần bàn duyệt (tab, ô lý do, nhãn giữ chỗ), thêm "thẻ hàng chờ là link"; bảng component bỏ `ModerationDesk`, thêm `AutomationStatusPanel`.
+- `docs/05-frontend/phases/live-rescore/PLAN.md`: mục "Còn mở" về khoảng trống trỏ sang plan này.
+- `FEATURE_BACKLOG.md`: thêm dòng đã làm, chỉ khi chủ dự án đồng ý.
+
+### Câu hỏi cần chốt
+
+| # | Câu hỏi | Đề xuất |
+|---|---|---|
+| ~~Q1~~ | Thẻ "Danh mục chờ duyệt" gồm hai trang quản lý (kỹ năng ở `/admin/skills`, trường và ngành ở `/admin/education-catalog`). Trỏ đi đâu? (a) thẻ không phải một link; cuối thẻ có hai link "Kỹ năng N →" và "Trường, ngành N →"; (b) cả thẻ là link tới trang có mục chờ (cả hai có thì tới trang kỹ năng); (c) cả thẻ luôn tới `/admin/skills`. | **Chốt (a)** (2026-11-15). |
+| ~~Q2~~ | Nút "Bắt đầu duyệt" ở đầu trang: (a) bỏ, vì thẻ "Tin chờ duyệt" đã dẫn tới đúng trang đó; (b) giữ, thành link tới `/admin/jobs`. | **Chốt (a), bỏ nút** (2026-11-15). |
+| ~~Q3~~ | Hàng "Nền tảng" + "Hệ thống tự động" chia 1fr / 1fr hay giữ tỉ lệ 2fr / 1fr của bản D? | **Chốt theo chủ dự án** (2026-11-15): không chia đôi. Mỗi khối một hàng rộng hết trang, các mục bên trong xếp theo cột, dồn dần khi màn hình hẹp (A4). |
+
+### Ước lượng
+
+| Phần | Thời gian |
+|---|---|
+| Đợt 1 + kiểm trên trình duyệt | 1,5 giờ |
+| Đợt 2 | 1 giờ |
+| Đợt 3 | 0,5 giờ |
 
 ## Ghi chú của chủ dự án
 

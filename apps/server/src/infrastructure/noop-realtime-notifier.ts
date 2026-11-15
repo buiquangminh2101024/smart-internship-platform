@@ -1,6 +1,7 @@
 import type { Logger } from "../shared/logger";
 import type {
   ConversationUnavailablePayload,
+  MatchScoresUpdatedPayload,
   RealtimeMessagePayload,
   RealtimeNotificationPayload,
   RealtimeNotifier,
@@ -38,6 +39,9 @@ export class NoopRealtimeNotifier implements RealtimeNotifier {
       conversationId: payload.conversationId,
     });
   }
+
+  /** Không ghi log: mỗi lượt chấm có thể gửi cho nhiều employer; giao diện tự tải lại khi quay lại tab. */
+  pushMatchUpdate(_userId: string, _payload: MatchScoresUpdatedPayload): void {}
 
   disconnectUser(userId: string): void {
     this.logger.info("Realtime disconnect skipped (Socket.IO không khả dụng)", { userId });

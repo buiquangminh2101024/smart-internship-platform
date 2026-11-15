@@ -12,6 +12,8 @@ import { JobPostForm, type JobPostFormAction } from "@/components/jobs/JobPostFo
 import { JobPostSubmitResult } from "@/components/jobs/JobPostSubmitResult";
 import { ModerationBanner } from "@/components/jobs/ModerationBanner";
 import { EmployerJobQuotaNotice } from "@/components/jobs/EmployerJobQuotaNotice";
+import { AutoOutreachCard } from "@/components/employer/AutoOutreachCard";
+import { ApplicationAutomationCard } from "@/components/employer/ApplicationAutomationCard";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -204,6 +206,8 @@ function EmployerJobDetail({ params }: { params: Promise<{ id: string }> }) {
 
   const status = JOB_STATUS_LABEL[job.status];
   const left = daysLeft(job.expiresAt);
+  // AD-23 — tin đã kết thúc thì cài đặt tự mời không còn tác dụng nên không hiện thẻ.
+  const outreachActive = job.status === "DRAFT" || job.status === "PENDING" || job.status === "PUBLISHED";
 
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-4 px-6 py-12">
@@ -267,6 +271,11 @@ function EmployerJobDetail({ params }: { params: Promise<{ id: string }> }) {
               }
             />
 
+            {outreachActive ? <AutoOutreachCard jobId={job.id} published={job.status === "PUBLISHED"} /> : null}
+
+            {/* AD-25 — hiện ở mọi trạng thái: công tắc tự đóng hồ sơ đã phỏng vấn chỉ có tác dụng sau khi tin đóng. */}
+            <ApplicationAutomationCard jobId={job.id} thresholdEditable={outreachActive} />
+
             <Card padding="md" className="grid gap-3">
               <h2 className="text-xs font-semibold tracking-wide text-text-subtle uppercase">Ứng viên</h2>
               <div className="flex items-center justify-between">
@@ -276,8 +285,17 @@ function EmployerJobDetail({ params }: { params: Promise<{ id: string }> }) {
               <Button as="a" href={`/employer/jobs/${job.id}/applications`} variant="secondary" className="w-full">
                 Xem danh sách
               </Button>
-              {/* B3 — tin nháp/chờ duyệt chưa thể có lời mời nào. */}
-              {job.status !== "DRAFT" && job.status !== "PENDING" ? (
+              {/* B3 — tin nháp/chờ duyệt chưa thể có lời mời nào. Chỉ người đăng tin tìm / mời được
+                  (API trả 404 cho người khác cùng công ty), nên người khác thấy nút khoá kèm lý do,
+                  giống trang "Lời mời". */}
+              {job.status === "DRAFT" || job.status === "PENDING" ? null : job.isOwner === false ? (
+                <div className="grid gap-1">
+                  <Button variant="ghost" icon="lock" className="w-full" disabled>
+                    Tìm ứng viên phù hợp
+                  </Button>
+                  <p className="text-center text-sm text-text-muted">Chỉ người đăng tin mới tìm và mời được.</p>
+                </div>
+              ) : (
                 <Button
                   as="a"
                   href={`/employer/jobs/${job.id}/candidate-search`}
@@ -287,7 +305,7 @@ function EmployerJobDetail({ params }: { params: Promise<{ id: string }> }) {
                 >
                   Tìm ứng viên phù hợp
                 </Button>
-              ) : null}
+              )}
             </Card>
 
             <Card padding="md" className="grid gap-2">

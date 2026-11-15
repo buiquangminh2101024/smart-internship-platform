@@ -41,13 +41,14 @@ export function dashboardRouter(container: AwilixContainer): Router {
     },
   );
 
+  // Tiến độ tuyển theo tin (0.3) — endpoint riêng để khối này tải và báo lỗi riêng.
+  router.get("/employer/dashboard/hiring-progress", ...employerGuard, (req, res, next) => {
+    void resolveController().employerHiringProgress(req, res, next);
+  });
+
   // --- Admin ---
   router.get("/admin/dashboard/overview", ...adminGuard, (req, res, next) => {
     void resolveController().adminOverview(req, res, next);
-  });
-
-  router.get("/admin/dashboard/tasks", ...adminGuard, (req, res, next) => {
-    void resolveController().adminTasks(req, res, next);
   });
 
   router.get("/admin/dashboard/analytics", ...adminGuard, validate(dashboardAnalyticsQuerySchema, "query"), (req, res, next) => {

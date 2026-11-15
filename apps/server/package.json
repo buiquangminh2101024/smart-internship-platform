@@ -20,13 +20,22 @@
     "seed-match-demo": "dotenv -e ../../.env -- tsx scripts/seed-match-demo.ts",
     "seed-dashboard-demo": "dotenv -e ../../.env -- tsx scripts/seed-dashboard-demo.ts",
     "seed-activity-demo": "dotenv -e ../../.env -- tsx scripts/seed-activity-demo.ts",
+    "merge-duplicate-skills": "dotenv -e ../../.env -- tsx scripts/merge-duplicate-skills.ts",
+    "check-large-demo-library": "dotenv -e ../../.env -- tsx scripts/check-large-demo-library.ts",
+    "seed-large-demo": "dotenv -e ../../.env -- tsx scripts/seed-large-demo.ts",
     "eval-job-matching": "dotenv -e ../../.env -- tsx scripts/eval-job-matching.ts",
+    "rescore-match-scores": "dotenv -e ../../.env -- tsx scripts/rescore-match-scores.ts",
+    "process-applications": "dotenv -e ../../.env -- tsx scripts/process-applications.ts",
+    "job-alerts": "dotenv -e ../../.env -- tsx scripts/job-alerts.ts",
+    "simulate-inflow": "dotenv -e ../../.env -- tsx scripts/simulate-inflow.ts",
     "support-chat:index": "dotenv -e ../../.env -- tsx scripts/support-chat-index.ts",
     "support-chat:eval": "dotenv -e ../../.env -- tsx scripts/support-chat-eval.ts",
     "audit:archive": "dotenv -e ../../.env -- tsx scripts/audit-archive.ts",
     "audit:backfill-resubmit":"dotenv -e ../../.env -- tsx scripts/audit-backfill-resubmit.ts",
     "perf:audit-seed": "dotenv -e ../../.env -- tsx scripts/perf-audit-log-seed.ts",
-    "perf:audit-measure": "dotenv -e ../../.env -- tsx scripts/perf-audit-log-measure.ts"
+    "perf:audit-measure": "dotenv -e ../../.env -- tsx scripts/perf-audit-log-measure.ts",
+    "perf:live-rescore-measure": "dotenv -e ../../.env -- tsx scripts/perf-live-rescore-measure.ts",
+    "perf:live-rescore-embedding": "dotenv -e ../../.env -- tsx scripts/perf-live-rescore-embedding.ts"
   },
   "prisma": {
     "seed": "tsx scripts/seed.ts"

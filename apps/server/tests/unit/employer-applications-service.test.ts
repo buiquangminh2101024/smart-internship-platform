@@ -37,10 +37,16 @@ function row(id: string): CompanyApplicationRow {
     jobPostStatus: "PUBLISHED",
     awaitingSchedule: false,
     nextInterviewAt: null,
+    lastInterviewAt: null,
     requiredMatched: 3,
     requiredTotal: 4,
     optionalMatched: 1,
     optionalTotal: 2,
+    matchScore: 42,
+    matchThreshold: 80,
+    rejectSuggestBelowScore: 50,
+    changedBySystem: false,
+    needsResult: false,
   };
 }
 
@@ -61,6 +67,7 @@ function buildService(options: Options = {}) {
     updates: [] as Array<{ id: string; from: ApplicationStatus; to: ApplicationStatus; db: unknown }>,
     history: [] as Array<{ applicationId: string; fromStatus: ApplicationStatus | null; toStatus: ApplicationStatus; actorId: string | null }>,
     cancelled: [] as string[],
+    cancelReasons: [] as string[],
     notified: [] as Array<{ type: string; userId: string; payload: Record<string, unknown> }>,
     transactionTimeout: undefined as number | undefined,
   };
@@ -68,6 +75,7 @@ function buildService(options: Options = {}) {
     jobPostBelongsToCompany: async (jobPostId: string, companyId: string) => jobPostId !== "job-other-co" && companyId === EMPLOYER.companyId,
     countByStatus: async () => options.statusCounts ?? [{ status: "PENDING", count: 45 }, { status: "REJECTED", count: 5 }],
     countByJob: async () => [{ jobPostId: "job-1", title: "Thực tập sinh Frontend", status: "PUBLISHED", count: 50 }],
+    countFocus: async () => ({ reject: 9, result: 3 }),
     listForCompany: async (_companyId: string, filter: unknown, listOptions: { sort: string; offset: number; limit: number }) => {
       calls.list.push({ filter, options: listOptions });
       return [row("a-1"), row("a-2")];
@@ -106,11 +114,13 @@ function buildService(options: Options = {}) {
     employerRepository: {},
     employerIdentityCache: { require: async () => EMPLOYER },
     interviewsRepository: {
-      cancelUpcomingForApplication: async (applicationId: string) => {
+      cancelUpcomingForApplication: async (applicationId: string, reason: string) => {
         calls.cancelled.push(applicationId);
+        calls.cancelReasons.push(reason);
         return 1;
       },
     },
+    autoReviewTrigger: () => {},
     notificationsService: {
       notify: async (type: string, userId: string, payload: Record<string, unknown>) => {
         calls.notified.push({ type, userId, payload });
@@ -139,8 +149,16 @@ test("query: q được cắt khoảng trắng, q rỗng coi như không tìm, q
   assert.equal(listCompanyApplicationsQuerySchema.safeParse({ q: "a" }).success, false);
   assert.equal(listCompanyApplicationsQuerySchema.safeParse({ q: "x".repeat(101) }).success, false);
   assert.equal(listCompanyApplicationsQuerySchema.safeParse({ pageSize: "51" }).success, false);
-  assert.equal(listCompanyApplicationsQuerySchema.safeParse({ sort: "match" }).success, false);
+  assert.equal(listCompanyApplicationsQuerySchema.safeParse({ sort: "score" }).success, false);
   assert.equal(listCompanyApplicationsQuerySchema.safeParse({ status: "WAITING" }).success, false);
+});
+
+test("query AD-25: sort=match và focus hợp lệ; focus lạ hoặc focus cùng status ⇒ lỗi", () => {
+  assert.equal(query({ sort: "match" }).sort, "match");
+  assert.equal(query({ focus: "reject" }).focus, "reject");
+  assert.equal(query({ focus: "result" }).focus, "result");
+  assert.equal(listCompanyApplicationsQuerySchema.safeParse({ focus: "stale" }).success, false);
+  assert.equal(listCompanyApplicationsQuerySchema.safeParse({ focus: "reject", status: "PENDING" }).success, false);
 });
 
 test("body hàng loạt: trùng id, quá 50 hồ sơ, danh sách rỗng, đích ACCEPTED ⇒ lỗi", () => {
@@ -159,6 +177,16 @@ test("state machine: chỉ chuyển tiến một bước hoặc từ chối; tr�
   assert.equal(canTransition("INTERVIEWING", "REJECTED"), true);
   assert.equal(canTransition("REJECTED", "REVIEWING"), false);
   assert.equal(canTransition("CANCELLED", "REJECTED"), false);
+});
+
+test("JOB_CLOSED (AD-25): người dùng không chuyển sang được, cũng không chuyển ra được", () => {
+  for (const from of ["PENDING", "REVIEWING", "SHORTLISTED", "INTERVIEWING"] as const) {
+    assert.equal(canTransition(from, "JOB_CLOSED"), false);
+  }
+  assert.equal(canTransition("JOB_CLOSED", "PENDING"), false);
+  assert.equal(canTransition("JOB_CLOSED", "REVIEWING"), false);
+  assert.equal(canTransition("JOB_CLOSED", "REJECTED"), false);
+  assert.equal(bulkUpdateApplicationStatusSchema.safeParse({ applicationIds: ["a-1"], status: "JOB_CLOSED" }).success, false);
 });
 
 // ─── Tìm không dấu ──────────────────────────────────────────────────────────
@@ -187,18 +215,43 @@ test("mẫu tìm: bỏ dấu, chữ thường, thoát ký tự đặc biệt c�
 
 // ─── Danh sách ──────────────────────────────────────────────────────────────
 
-test("sort mặc định: Chờ duyệt ⇒ nộp lâu nhất trước; tab khác hoặc tất cả ⇒ mới nhất trước", () => {
-  assert.equal(defaultSort("PENDING"), "oldest");
-  assert.equal(defaultSort("REVIEWING"), "newest");
+test("sort mặc định (AD-25): Chờ duyệt, Đang xem xét ⇒ phù hợp nhất; nhóm gợi ý ⇒ nộp lâu nhất; còn lại ⇒ mới nhất", () => {
+  assert.equal(defaultSort("PENDING"), "match");
+  assert.equal(defaultSort("REVIEWING"), "match");
+  assert.equal(defaultSort("SHORTLISTED"), "newest");
   assert.equal(defaultSort(undefined), "newest");
+  assert.equal(defaultSort(undefined, "reject"), "oldest");
+  assert.equal(defaultSort(undefined, "result"), "oldest");
+});
+
+test("focus: chuyển xuống repository, total theo focusCounts, trả focusCounts", async () => {
+  const { service, calls } = buildService();
+  const page = await service.listCompanyApplications(EMPLOYER.userId, query({ focus: "reject" }));
+  assert.deepEqual(calls.list[0]!.filter, { jobPostId: undefined, q: undefined, status: undefined, focus: "reject" });
+  assert.equal(calls.list[0]!.options.sort, "oldest");
+  assert.equal(page.total, 9);
+  assert.deepEqual(page.focusCounts, { reject: 9, result: 3 });
+  const all = await service.listCompanyApplications(EMPLOYER.userId, query());
+  assert.equal(all.total, 50);
+  assert.deepEqual(all.focusCounts, { reject: 9, result: 3 });
+});
+
+test("dòng danh sách: điểm, dải theo X = 80 và Y = 50, cờ hệ thống", async () => {
+  const { service } = buildService();
+  const page = await service.listCompanyApplications(EMPLOYER.userId, query());
+  assert.equal(page.items[0]!.matchScore, 42);
+  assert.equal(page.items[0]!.matchBand, "BELOW");
+  assert.equal(page.items[0]!.changedBySystem, false);
+  assert.equal(page.items[0]!.needsResult, false);
+  assert.equal(page.items[0]!.lastInterviewAt, null);
 });
 
 test("bộ lọc và sort chuyển đúng xuống repository; sort=skills giữ nguyên", async () => {
   const { service, calls } = buildService();
   await service.listCompanyApplications(EMPLOYER.userId, query({ status: "PENDING", jobPostId: "job-1", q: "minh" }));
   await service.listCompanyApplications(EMPLOYER.userId, query({ status: "PENDING", sort: "skills" }));
-  assert.deepEqual(calls.list[0]!.filter, { jobPostId: "job-1", q: "minh", status: "PENDING" });
-  assert.equal(calls.list[0]!.options.sort, "oldest");
+  assert.deepEqual(calls.list[0]!.filter, { jobPostId: "job-1", q: "minh", status: "PENDING", focus: undefined });
+  assert.equal(calls.list[0]!.options.sort, "match");
   assert.equal(calls.list[1]!.options.sort, "skills");
 });
 
@@ -208,7 +261,8 @@ test("statusCounts đủ mọi trạng thái; total theo tab đang chọn hoặc
   assert.equal(all.total, 50);
   assert.equal(all.statusCounts.PENDING, 45);
   assert.equal(all.statusCounts.SHORTLISTED, 0);
-  assert.equal(Object.keys(all.statusCounts).length, 7);
+  assert.equal(all.statusCounts.JOB_CLOSED, 0);
+  assert.equal(Object.keys(all.statusCounts).length, 8);
   const rejected = await service.listCompanyApplications(EMPLOYER.userId, query({ status: "REJECTED" }));
   assert.equal(rejected.total, 5);
 });
@@ -321,6 +375,12 @@ test("từng hồ sơ: chuyển không hợp lệ ⇒ 400; người khác vừa 
     invalid.service.updateApplicationStatus(EMPLOYER.userId, "a-1", { status: "ACCEPTED" }),
     (error: { statusCode?: number }) => error.statusCode === 400,
   );
+  // AD-25: JOB_CLOSED chỉ hệ thống chuyển sang.
+  await assert.rejects(
+    invalid.service.updateApplicationStatus(EMPLOYER.userId, "a-1", { status: "JOB_CLOSED" }),
+    (error: { statusCode?: number }) => error.statusCode === 400,
+  );
+  assert.equal(invalid.calls.updates.length, 0);
 
   const raced = buildService({ targets: [target("a-1", "PENDING")], raced: ["a-1"] });
   await assert.rejects(
@@ -338,4 +398,57 @@ test("từng hồ sơ: được nhận ⇒ cùng chuỗi ghi như hàng loạt (
   assert.equal(calls.history.length, 1);
   assert.deepEqual(calls.cancelled, ["a-1"]);
   assert.equal(calls.notified[0]!.payload.newStatus, "ACCEPTED");
+});
+
+// ─── Lối hệ thống (AD-25, 0.4 bước 4a) ─────────────────────────────────────
+
+test("changeStatusBySystem: tự chuyển Đang xem xét ⇒ lịch sử actorId null, thông báo như người bấm, không huỷ lịch", async () => {
+  const { service, calls } = buildService();
+  assert.equal(await service.changeStatusBySystem(target("a-1", "PENDING"), "REVIEWING"), true);
+  assert.deepEqual(calls.updates.map(({ id, from, to, db }) => ({ id, from, to, db })), [
+    { id: "a-1", from: "PENDING", to: "REVIEWING", db: TX },
+  ]);
+  assert.deepEqual(calls.history, [{ applicationId: "a-1", fromStatus: "PENDING", toStatus: "REVIEWING", actorId: null }]);
+  assert.deepEqual(calls.cancelled, []);
+  assert.deepEqual(calls.notified[0]!.payload, {
+    applicationId: "a-1",
+    jobPostId: "job-1",
+    jobPostTitle: "Thực tập sinh Frontend",
+    companyName: "Công ty A",
+    oldStatus: "PENDING",
+    newStatus: "REVIEWING",
+  });
+});
+
+test("changeStatusBySystem: đóng hồ sơ ⇒ JOB_CLOSED, closeReason trong payload, huỷ lịch còn sót với lý do riêng", async () => {
+  const { service, calls } = buildService();
+  assert.equal(await service.changeStatusBySystem(target("a-2", "SHORTLISTED"), "JOB_CLOSED", { closeReason: "NO_RESULT" }), true);
+  assert.deepEqual(calls.history, [{ applicationId: "a-2", fromStatus: "SHORTLISTED", toStatus: "JOB_CLOSED", actorId: null }]);
+  assert.deepEqual(calls.cancelled, ["a-2"]);
+  assert.deepEqual(calls.cancelReasons, ["Tin tuyển dụng đã ngừng tuyển"]);
+  assert.equal(calls.notified[0]!.payload.newStatus, "JOB_CLOSED");
+  assert.equal(calls.notified[0]!.payload.closeReason, "NO_RESULT");
+});
+
+test("changeStatusBySystem: trạng thái vừa bị đổi ⇒ false, không ghi lịch sử, không thông báo", async () => {
+  const { service, calls } = buildService({ raced: ["a-1"] });
+  assert.equal(await service.changeStatusBySystem(target("a-1", "PENDING"), "REVIEWING"), false);
+  assert.equal(calls.history.length, 0);
+  assert.equal(calls.notified.length, 0);
+});
+
+test("changeStatusBySystem: đích hay trạng thái gốc ngoài lối hệ thống ⇒ lỗi lập trình, không ghi gì", async () => {
+  const { service, calls } = buildService();
+  // Không bao giờ tự từ chối / tự nhận.
+  for (const to of ["REJECTED", "ACCEPTED", "SHORTLISTED"]) {
+    await assert.rejects(service.changeStatusBySystem(target("a-1", "PENDING"), to as "REVIEWING"));
+  }
+  // REVIEWING chỉ từ PENDING; JOB_CLOSED không từ trạng thái đã kết thúc.
+  await assert.rejects(service.changeStatusBySystem(target("a-1", "SHORTLISTED"), "REVIEWING"));
+  for (const from of ["ACCEPTED", "REJECTED", "CANCELLED", "JOB_CLOSED"] as const) {
+    await assert.rejects(service.changeStatusBySystem(target("a-1", from), "JOB_CLOSED"));
+  }
+  // closeReason chỉ đi với JOB_CLOSED.
+  await assert.rejects(service.changeStatusBySystem(target("a-1", "PENDING"), "REVIEWING", { closeReason: "JOB_ENDED" }));
+  assert.equal(calls.updates.length, 0);
 });

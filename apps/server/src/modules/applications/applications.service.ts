@@ -2,12 +2,15 @@ import type {
   BulkStatusSkipReason,
   BulkUpdateApplicationStatusResult,
   CreateApplicationRequest,
+  EmployerApplicationsFocus,
   EmployerApplicationsPage,
   EmployerApplicationsSort,
   UpdateApplicationEvaluationRequest,
   UpdateApplicationStatusRequest,
 } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
+import type { CloseReason } from "../application-automation/application-automation.policy";
+import type { AutoReviewTrigger } from "../application-automation/application-automation.service";
 import type { EmployerRepository } from "../employers/employer.repository";
 import type { EmployerIdentityCache } from "../employers/employer-identity-cache";
 import type { InterviewsRepository } from "../interviews/interviews.repository";
@@ -17,12 +20,40 @@ import type { BulkUpdateApplicationStatusDto, ListCompanyApplicationsQuery } fro
 import type { ApplicationsRepository, StatusChangeTarget } from "./applications.repository";
 import type { PrismaClient, Prisma, ApplicationStatus } from "@prisma/client";
 
-/** cancelReason của lịch bị huỷ tự động khi hồ sơ có kết quả (AD-16 M2). */
-const INTERVIEW_CANCEL_REASON_DECIDED = "Hồ sơ đã có kết quả";
+/**
+ * cancelReason của lịch chưa diễn ra bị huỷ tự động khi hồ sơ kết thúc (AD-16 M2). Hệ thống
+ * chỉ đóng hồ sơ không còn lịch sắp tới (G3 không đóng), nên dòng `JOB_CLOSED` chỉ phòng
+ * trường hợp lịch được đặt chen vào giữa lúc chọn và lúc đóng.
+ */
+const INTERVIEW_CANCEL_REASON: Partial<Record<ApplicationStatus, string>> = {
+  ACCEPTED: "Hồ sơ đã có kết quả",
+  REJECTED: "Hồ sơ đã có kết quả",
+  JOB_CLOSED: "Tin tuyển dụng đã ngừng tuyển",
+};
+
+/**
+ * Lối hệ thống đổi trạng thái (AD-25): đích → các trạng thái được đi từ. Tách khỏi
+ * `STATUS_TRANSITIONS` (lối người dùng) để người dùng không bao giờ chuyển được sang `JOB_CLOSED`.
+ */
+const SYSTEM_TRANSITIONS = {
+  REVIEWING: ["PENDING"],
+  JOB_CLOSED: ["PENDING", "REVIEWING", "SHORTLISTED", "INTERVIEWING"],
+} as const satisfies Partial<Record<ApplicationStatus, readonly ApplicationStatus[]>>;
+
+export type SystemStatusTarget = keyof typeof SYSTEM_TRANSITIONS;
+
+/** Dữ liệu thêm vào thông báo APPLICATION_STATUS_CHANGED (chỉ lối hệ thống dùng). */
+interface StatusChangeExtra {
+  closeReason?: CloseReason;
+}
 /** Lô 50 hồ sơ ghi vài trăm câu lệnh (trạng thái, history, thông báo, outbox), như đặt lịch hàng loạt. */
 const BULK_TRANSACTION_TIMEOUT_MS = 30_000;
 
-/** State machine hồ sơ phía employer. Không có chuyển ngược: mọi lần đổi đều không hoàn tác được. */
+/**
+ * State machine hồ sơ phía employer. Không có chuyển ngược: mọi lần đổi đều không hoàn tác được.
+ * `JOB_CLOSED` (AD-25) không nằm trong bảng đích nào: chỉ hệ thống chuyển sang, người dùng
+ * (API đơn lẻ và hàng loạt) không chuyển được.
+ */
 const STATUS_TRANSITIONS: Record<ApplicationStatus, readonly ApplicationStatus[]> = {
   PENDING: ["REVIEWING", "REJECTED"],
   REVIEWING: ["SHORTLISTED", "REJECTED"],
@@ -31,15 +62,23 @@ const STATUS_TRANSITIONS: Record<ApplicationStatus, readonly ApplicationStatus[]
   ACCEPTED: [],
   REJECTED: [],
   CANCELLED: [],
+  JOB_CLOSED: [],
 };
 
 export function canTransition(from: ApplicationStatus, to: ApplicationStatus): boolean {
   return STATUS_TRANSITIONS[from].includes(to);
 }
 
-/** Tab Chờ duyệt: hồ sơ chờ lâu nhất trước. Tab khác: mới nhất trước. */
-export function defaultSort(status: ApplicationStatus | undefined): EmployerApplicationsSort {
-  return status === "PENDING" ? "oldest" : "newest";
+/**
+ * AD-25: tab Chờ duyệt và Đang xem xét ⇒ phù hợp nhất trước. Nhóm gợi ý (`focus`) ⇒ nộp lâu
+ * nhất trước. Còn lại ⇒ mới nhất trước. (Tab Chờ duyệt trước đây mặc định `oldest`; vẫn chọn được.)
+ */
+export function defaultSort(
+  status: ApplicationStatus | undefined,
+  focus?: EmployerApplicationsFocus | undefined,
+): EmployerApplicationsSort {
+  if (focus) return "oldest";
+  return status === "PENDING" || status === "REVIEWING" ? "match" : "newest";
 }
 
 /** Đủ mọi trạng thái, trạng thái không có hồ sơ là 0. */
@@ -56,6 +95,7 @@ export class ApplicationsService {
   private readonly employerIdentityCache: EmployerIdentityCache;
   private readonly notificationsService: NotificationsService;
   private readonly interviewsRepository: InterviewsRepository;
+  private readonly autoReviewTrigger: AutoReviewTrigger;
 
   constructor({
     prisma,
@@ -64,6 +104,7 @@ export class ApplicationsService {
     employerIdentityCache,
     notificationsService,
     interviewsRepository,
+    autoReviewTrigger,
   }: {
     prisma: PrismaClient;
     applicationsRepository: ApplicationsRepository;
@@ -71,6 +112,8 @@ export class ApplicationsService {
     employerIdentityCache: EmployerIdentityCache;
     notificationsService: NotificationsService;
     interviewsRepository: InterviewsRepository;
+    /** AD-25 — resolve ApplicationAutomationService lúc gọi, không tạo vòng phụ thuộc. */
+    autoReviewTrigger: AutoReviewTrigger;
   }) {
     this.prisma = prisma;
     this.applicationsRepository = applicationsRepository;
@@ -78,6 +121,7 @@ export class ApplicationsService {
     this.employerIdentityCache = employerIdentityCache;
     this.notificationsService = notificationsService;
     this.interviewsRepository = interviewsRepository;
+    this.autoReviewTrigger = autoReviewTrigger;
   }
 
   async createApplication(userId: string, dto: CreateApplicationRequest) {
@@ -146,6 +190,10 @@ export class ApplicationsService {
       );
       return id;
     });
+
+    // AD-25 lối 2: hồ sơ đã có điểm ≥ X thì tự chuyển "Đang xem xét" ngay; chưa có điểm thì
+    // chờ lượt hằng ngày. Sau commit, không chờ: đơn trả về vẫn là "Chờ duyệt".
+    this.autoReviewTrigger({ applicationId });
 
     return this.applicationsRepository.findCandidateApplicationById(applicationId, candidate.id);
   }
@@ -221,32 +269,37 @@ export class ApplicationsService {
 
   /**
    * Trang "Ứng viên" (mọi tin của công ty): phân trang theo số trang, `page` vượt trang
-   * cuối thì trả trang cuối (như D18). `total` lấy từ `statusCounts` nên không cần câu đếm riêng.
+   * cuối thì trả trang cuối (như D18). `total` lấy từ `statusCounts` (hoặc `focusCounts` khi
+   * có `focus`) nên không cần câu đếm riêng.
    */
   async listCompanyApplications(userId: string, query: ListCompanyApplicationsQuery): Promise<EmployerApplicationsPage> {
     const { companyId } = await this.requireEmployer(userId);
     const filter = { jobPostId: query.jobPostId, q: query.q };
-    const sort = query.sort ?? defaultSort(query.status);
+    const sort = query.sort ?? defaultSort(query.status, query.focus);
     const listPage = (page: number) =>
       this.applicationsRepository.listForCompany(
         companyId,
-        { ...filter, status: query.status },
+        { ...filter, status: query.status, focus: query.focus },
         { sort, offset: (page - 1) * query.pageSize, limit: query.pageSize },
       );
     // Lấy trang được hỏi cùng lúc với các số đếm để chỉ chờ DB một lượt. Tin của công ty khác
     // thì trang rỗng (mọi câu đều lọc theo công ty) và vẫn trả 404 bên dưới.
-    const [ownsJobPost, statusRows, jobCounts, requestedRows] = await Promise.all([
+    const [ownsJobPost, statusRows, jobCounts, focusCounts, requestedRows] = await Promise.all([
       query.jobPostId ? this.applicationsRepository.jobPostBelongsToCompany(query.jobPostId, companyId) : true,
       this.applicationsRepository.countByStatus(companyId, filter),
       this.applicationsRepository.countByJob(companyId, query.q),
+      this.applicationsRepository.countFocus(companyId, filter),
       listPage(query.page),
     ]);
     if (!ownsJobPost) throw new AppError(404, "Job post not found");
 
     const statusCounts = toStatusCounts(statusRows);
-    const total = query.status
-      ? statusCounts[query.status]
-      : Object.values(statusCounts).reduce((sum, count) => sum + count, 0);
+    // DTO không cho dùng chung `status` với `focus`.
+    const total = query.focus
+      ? focusCounts[query.focus]
+      : query.status
+        ? statusCounts[query.status]
+        : Object.values(statusCounts).reduce((sum, count) => sum + count, 0);
     const lastPage = Math.max(1, Math.ceil(total / query.pageSize));
     const page = Math.min(query.page, lastPage);
     // Trang vượt trang cuối (sửa URL, hay hồ sơ vừa đổi trạng thái) thì lấy lại trang cuối.
@@ -258,6 +311,7 @@ export class ApplicationsService {
       pageSize: query.pageSize,
       statusCounts,
       jobCounts,
+      focusCounts,
     };
   }
 
@@ -334,16 +388,40 @@ export class ApplicationsService {
   }
 
   /**
+   * Lối đổi trạng thái của hệ thống (AD-25): tự chuyển "Đang xem xét" và tự đóng "Tin đã đóng".
+   * Cùng chuỗi ghi với người dùng (`applyStatusChange`) trong một transaction riêng, lịch sử ghi
+   * `actorId = null`. Không kiểm quyền công ty: nơi gọi tự chọn hồ sơ bằng SQL.
+   * Trả false nếu trạng thái vừa bị đổi (người khác chen vào), khi đó không ghi gì.
+   * Đích hoặc trạng thái gốc ngoài `SYSTEM_TRANSITIONS` là lỗi lập trình ⇒ ném lỗi.
+   */
+  async changeStatusBySystem(
+    target: StatusChangeTarget,
+    to: SystemStatusTarget,
+    extra: StatusChangeExtra = {},
+  ): Promise<boolean> {
+    const allowedFrom: readonly ApplicationStatus[] | undefined = SYSTEM_TRANSITIONS[to];
+    if (!allowedFrom) throw new Error(`changeStatusBySystem: đích không hợp lệ ${String(to)}`);
+    if (!allowedFrom.includes(target.status)) {
+      throw new Error(`changeStatusBySystem: không chuyển ${target.status} → ${to}`);
+    }
+    if (extra.closeReason && to !== "JOB_CLOSED") {
+      throw new Error("changeStatusBySystem: closeReason chỉ dùng với JOB_CLOSED");
+    }
+    return this.prisma.$transaction((tx) => this.applyStatusChange(tx, target, to, null, extra));
+  }
+
+  /**
    * Chuỗi ghi của một lần đổi trạng thái (AD-16), chạy trong transaction của nơi gọi:
-   * đổi có điều kiện, lịch sử, (có kết quả) huỷ lịch sắp tới, thông báo + outbox email.
+   * đổi có điều kiện, lịch sử, (kết thúc) huỷ lịch sắp tới, thông báo + outbox email.
    * Ứng viên không bao giờ thấy trạng thái mới mà thiếu thông báo, và ngược lại.
-   * Trả false (không ghi gì) nếu trạng thái đã khác `app.status`.
+   * Trả false (không ghi gì) nếu trạng thái đã khác `app.status`. `actorId = null` ⇒ hệ thống.
    */
   private async applyStatusChange(
     tx: Prisma.TransactionClient,
     app: StatusChangeTarget,
     to: ApplicationStatus,
-    actorId: string,
+    actorId: string | null,
+    extra: StatusChangeExtra = {},
   ): Promise<boolean> {
     const count = await this.applicationsRepository.updateStatusIf(app.id, app.status, to, tx);
     if (count === 0) return false;
@@ -351,10 +429,11 @@ export class ApplicationsService {
       { applicationId: app.id, fromStatus: app.status, toStatus: to, actorId },
       tx,
     );
-    // Hồ sơ có kết quả thì lịch phỏng vấn chưa diễn ra không còn ý nghĩa. Không
+    // Hồ sơ kết thúc thì lịch phỏng vấn chưa diễn ra không còn ý nghĩa. Không
     // gửi INTERVIEW_CANCELLED: ứng viên đã nhận APPLICATION_STATUS_CHANGED ngay dưới.
-    if (to === "REJECTED" || to === "ACCEPTED") {
-      await this.interviewsRepository.cancelUpcomingForApplication(app.id, INTERVIEW_CANCEL_REASON_DECIDED, tx);
+    const cancelReason = INTERVIEW_CANCEL_REASON[to];
+    if (cancelReason) {
+      await this.interviewsRepository.cancelUpcomingForApplication(app.id, cancelReason, tx);
     }
     await this.notificationsService.notify(
       "APPLICATION_STATUS_CHANGED",
@@ -366,6 +445,7 @@ export class ApplicationsService {
         companyName: app.companyName,
         oldStatus: app.status,
         newStatus: to,
+        ...(extra.closeReason ? { closeReason: extra.closeReason } : {}),
       },
       tx,
     );

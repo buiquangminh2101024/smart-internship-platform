@@ -36,6 +36,27 @@ import { candidateInsightsRouter } from "./modules/candidate-insights/candidate-
 import { candidateOutreachRouter } from "./modules/candidate-outreach/candidate-outreach.routes";
 import { startCandidateOutreachExpiryJob } from "./modules/candidate-outreach/candidate-outreach-expiry.job";
 import type { CandidateOutreachRepository } from "./modules/candidate-outreach/candidate-outreach.repository";
+import { startAutoOutreachJob } from "./modules/candidate-outreach/auto-outreach.job";
+import { registerMatchScores } from "./modules/match-scores/match-scores.module";
+import { jobAlertsRouter } from "./modules/job-alerts/job-alerts.routes";
+import { startJobAlertsJob } from "./modules/job-alerts/job-alerts.job";
+import type { JobAlertService } from "./modules/job-alerts/job-alert.service";
+import { applicationAutomationRouter } from "./modules/application-automation/application-automation.module";
+import { startApplicationAutomationJob } from "./modules/application-automation/application-automation.job";
+import { startStaleApplicationReminderJob } from "./modules/application-automation/stale-application-reminder.job";
+import type { ApplicationAutomationService } from "./modules/application-automation/application-automation.service";
+import { startMatchScoreJob } from "./modules/match-scores/match-score.job";
+import type { MatchScoreRunStore } from "./modules/match-scores/match-score-run-store";
+import type { MatchScoreRepository } from "./modules/match-scores/match-score.repository";
+import type { MatchScoreService } from "./modules/match-scores/match-score.service";
+import type { AutoOutreachRepository } from "./modules/candidate-outreach/auto-outreach.repository";
+import type { AutoOutreachRunStore } from "./modules/candidate-outreach/auto-outreach-run-store";
+import type { AutoOutreachService } from "./modules/candidate-outreach/auto-outreach.service";
+import { registerLiveRescore } from "./modules/live-rescore/live-rescore.module";
+import { automationStatusRouter } from "./modules/live-rescore/automation-status.routes";
+import { startLiveRescoreJob } from "./modules/live-rescore/live-rescore.job";
+import type { LiveRescoreService } from "./modules/live-rescore/live-rescore.service";
+import type { CandidateRescoreMarker } from "./modules/live-rescore/candidate-rescore-marker";
 
 import { messagingRoutes } from "./modules/messaging/messaging.routes";
 
@@ -84,6 +105,10 @@ registerRealtime(container, io);
 app.use(cors({ origin: config.CORS_ORIGIN }));
 app.use(express.json());
 
+// Chấm lại theo ứng viên (AD-27): đăng ký trước mọi router vì candidateService,
+// candidateCvImportService, skillsService, educationCatalogService nhận candidateRescoreMarker.
+registerLiveRescore(container);
+
 app.use("/api", healthRouter(container));
 app.use("/api", authRouter(container));
 app.use("/api", usersRouter(container));
@@ -111,6 +136,14 @@ app.use("/api", jobMatchingRouter(container));
 app.use("/api", candidateInsightsRouter(container));
 // Sau jobMatchingRouter: dùng ruleJobMatcher/hybridJobMatcher/matchEmbeddingService/loader do router đó đăng ký.
 app.use("/api", candidateOutreachRouter(container));
+// Bảng điểm lưu sẵn (AD-24): dùng candidateOutreachService/candidateMatchProfileLoader, chưa có route riêng.
+registerMatchScores(container);
+// Job alert (AD-26 D7–D9): đăng ký jobScoredListener mà matchScoreService cần — trước khi
+// startMatchScoreJob bên dưới resolve service đó; notificationsService resolve lúc dùng.
+app.use("/api", jobAlertsRouter(container));
+// Tự xử lý hồ sơ (AD-25): applicationsService và autoOutreachService cần autoReviewTrigger do
+// hàm này đăng ký — resolve lúc có request hoặc lúc start job bên dưới.
+app.use("/api", applicationAutomationRouter(container));
 
 app.use("/api/conversations", messagingRoutes(container));
 
@@ -122,6 +155,8 @@ app.use("/api", notificationsRouter(container));
 app.use("/api", auditLogRouter(container));
 // Chỉ đọc (AD-16); các service nó gọi resolve lúc có request.
 app.use("/api", dashboardRouter(container));
+// Thẻ "Hệ thống tự động" của Admin (0.6 bước 8): đọc dấu, tóm tắt lượt ở Redis, số hôm nay.
+app.use("/api", automationStatusRouter(container));
 // Trang hỗ trợ bản A (AD-17) — công khai; notificationsService resolve lúc có request.
 app.use("/api", supportRouter(container));
 app.use("/api", jobReportsRouter(container));
@@ -145,6 +180,15 @@ startCandidateOutreachExpiryJob(
   container.resolve<CandidateOutreachRepository>("candidateOutreachRepository"),
   logger,
 );
+// Tự động mời theo tin (AD-23) — mỗi 15 phút, lưới an toàn cho các lối kích hoạt
+// tức thì và nơi mời bù khi lời mời hết hạn. Resolve sau notificationsRouter vì
+// autoOutreachService cần notificationsService.
+startAutoOutreachJob({
+  autoOutreachRepository: container.resolve<AutoOutreachRepository>("autoOutreachRepository"),
+  autoOutreachRunStore: container.resolve<AutoOutreachRunStore>("autoOutreachRunStore"),
+  autoOutreachService: container.resolve<AutoOutreachService>("autoOutreachService"),
+  logger,
+});
 // Báo tin sắp hết hạn (3 ngày) và gói sắp hết hạn (7 ngày) — 08:00 giờ Việt
 // Nam hằng ngày, mỗi đối tượng chỉ báo một lần nhờ Notification.dedupeKey (AD-16).
 startJobPostExpiringNoticeJob({
@@ -165,6 +209,23 @@ startInterviewReminderJob({
   notificationsService: container.resolve<NotificationsService>("notificationsService"),
   logger,
 });
+// Tự xử lý hồ sơ (AD-25): tự chuyển "Đang xem xét" và tự đóng "Tin đã đóng" lúc 08:30 giờ Việt
+// Nam hằng ngày (sau lượt chấm điểm 03:30); nhắc hồ sơ tồn 08:00 thứ Hai. Resolve sau
+// notificationsRouter và interviewsRouter vì service cần notificationsService, interviewsRepository.
+startApplicationAutomationJob({
+  applicationAutomationService: container.resolve<ApplicationAutomationService>("applicationAutomationService"),
+  logger,
+});
+startStaleApplicationReminderJob({
+  applicationAutomationService: container.resolve<ApplicationAutomationService>("applicationAutomationService"),
+  logger,
+});
+// Job alert (AD-26 D8, D10): email gộp và nhắc thêm kỹ năng lúc 08:00 giờ Việt Nam. Resolve sau
+// notificationsRouter vì service cần notificationsService, outboxRepository.
+startJobAlertsJob({
+  jobAlertService: container.resolve<JobAlertService>("jobAlertService"),
+  logger,
+});
 // Gộp số nhật ký theo giờ cho biểu đồ của trang nhật ký (AD-20) — chạy bù khi
 // khởi động, rồi phút 5 mỗi giờ.
 startAuditLogStatsJob({
@@ -177,6 +238,20 @@ startAuditLogRetentionJob({
   auditLogRepository: container.resolve<AuditLogRepository>("auditLogRepository"),
   logger,
   retentionDays: config.AUDIT_RETENTION_DAYS,
+});
+// Bảng điểm lưu sẵn (AD-24) — 03:30 giờ Việt Nam: xoá điểm của tin hết hiển thị, chấm
+// lại mọi tin đang hiển thị với một cache hồ sơ cho cả lượt, tối đa 45 phút.
+startMatchScoreJob({
+  matchScoreRepository: container.resolve<MatchScoreRepository>("matchScoreRepository"),
+  matchScoreService: container.resolve<MatchScoreService>("matchScoreService"),
+  matchScoreRunStore: container.resolve<MatchScoreRunStore>("matchScoreRunStore"),
+  logger,
+});
+// Chấm lại theo ứng viên (0.6, AD-27) — cron 15 phút, lưới an toàn cho hẹn giờ chờ ngừng
+// sửa 45 giây: hẹn giờ mất khi khởi động lại, vượt trần, lô lỗi, người vượt giới hạn embedding.
+startLiveRescoreJob({
+  liveRescoreService: container.resolve<LiveRescoreService>("liveRescoreService"),
+  logger,
 });
 // Transactional Outbox cho email notification — quét mỗi phút (AD-8).
 startOutboxJob(
@@ -193,6 +268,7 @@ startCatalogSuggestionQueueJob({
   universityRepository: container.resolve<UniversityRepository>("universityRepository"),
   majorRepository: container.resolve<MajorRepository>("majorRepository"),
   catalogMatchVerifier: container.resolve<CatalogMatchVerifier>("catalogMatchVerifier"),
+  candidateRescoreMarker: container.resolve<CandidateRescoreMarker>("candidateRescoreMarker"),
   logger,
 });
 

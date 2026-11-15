@@ -4,6 +4,7 @@ import { AppError } from "../../shared/errors/AppError";
 import type { Logger } from "../../shared/logger";
 import type { MajorDedupeService } from "../education-catalog/major-dedupe.service";
 import type { UniversityDedupeService } from "../education-catalog/university-dedupe.service";
+import type { CandidateRescoreMarker } from "../live-rescore/candidate-rescore-marker";
 import type { SkillDedupeService } from "../skills/skill-dedupe.service";
 import { normalizeSkillName } from "../skills/skill-normalize.util";
 import { suggestSkillSchema } from "../skills/skills.dto";
@@ -35,6 +36,7 @@ export class CandidateCvImportService {
   private readonly majorDedupeService: MajorDedupeService;
   private readonly skillDedupeService: SkillDedupeService;
   private readonly logger: Logger;
+  private readonly rescoreMarker: CandidateRescoreMarker;
 
   constructor({
     prisma,
@@ -43,6 +45,7 @@ export class CandidateCvImportService {
     majorDedupeService,
     skillDedupeService,
     logger,
+    candidateRescoreMarker,
   }: {
     prisma: PrismaClient;
     candidateRepository: CandidateRepository;
@@ -50,6 +53,7 @@ export class CandidateCvImportService {
     majorDedupeService: MajorDedupeService;
     skillDedupeService: SkillDedupeService;
     logger: Logger;
+    candidateRescoreMarker: CandidateRescoreMarker;
   }) {
     this.prisma = prisma;
     this.candidateRepository = candidateRepository;
@@ -57,6 +61,7 @@ export class CandidateCvImportService {
     this.majorDedupeService = majorDedupeService;
     this.skillDedupeService = skillDedupeService;
     this.logger = logger;
+    this.rescoreMarker = candidateRescoreMarker;
   }
 
   async importFromCv(userId: string, input: ImportFromCvInput): Promise<ImportFromCvResponse> {
@@ -176,6 +181,11 @@ export class CandidateCvImportService {
         skills: skillCount,
       };
     });
+
+    // AD-27 mục 1: sau transaction (không đánh dấu khi import hỏng). Không lọc theo phần
+    // được ghi: import gần như luôn có kỹ năng / học vấn / kinh nghiệm; lần hiếm chỉ thêm
+    // chứng chỉ thì chấm lại thừa một lần, vô hại.
+    await this.rescoreMarker.mark(candidate.id);
 
     this.logger.info("Imported CV extraction into candidate profile", {
       candidateId: candidate.id,

@@ -1,5 +1,11 @@
-import { Prisma, type JobPostStatus, type OutreachInvitationStatus, type PrismaClient } from "@prisma/client";
-import { BLOCKING_INVITATION_STATUSES } from "./candidate-outreach.config";
+import {
+  Prisma,
+  type JobPostStatus,
+  type OutreachInvitationSource,
+  type OutreachInvitationStatus,
+  type PrismaClient,
+} from "@prisma/client";
+import { BLOCKING_INVITATION_STATUSES, CANDIDATE_DAILY_INVITATION_CAP } from "./candidate-outreach.config";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -40,6 +46,8 @@ export interface OutreachJobPost {
   status: JobPostStatus;
   employerId: string;
   companyId: string;
+  /** Lần chấm bảng điểm gần nhất (AD-24). Khác null ⇒ trang tìm ứng viên đọc bảng (0.6 bước 7). */
+  matchScoresAt: Date | null;
 }
 
 /** Bộ lọc của danh sách lời mời cấp công ty; `status` là trạng thái hiển thị. */
@@ -69,7 +77,9 @@ export interface OutreachJobRow {
 }
 
 // Các cột DateTime lưu UTC không múi giờ ⇒ so với now() quy về UTC (giống dashboard.repository).
-const NOW_UTC = Prisma.sql`(now() AT TIME ZONE 'UTC')`;
+export const NOW_UTC = Prisma.sql`(now() AT TIME ZONE 'UTC')`;
+/** 0h UTC hôm nay trong SQL — cùng mốc với `startOfUtcDay` (trần lời mời của ứng viên). */
+export const START_OF_UTC_DAY = Prisma.sql`date_trunc('day', ${NOW_UTC})`;
 
 /**
  * Trạng thái hiển thị trong SQL — cùng quy tắc với `effectiveStatus` của mapper:
@@ -100,6 +110,16 @@ export interface CreateInvitationData {
   /** D7 — điểm lúc gửi; null khi không chấm được. */
   matchScore: number | null;
   matchWeightsVersion: string | null;
+  /** AD-23 — MANUAL (mời tay, "Mời tất cả gợi ý") hoặc AUTO (tự động mời). */
+  source: OutreachInvitationSource;
+}
+
+/**
+ * 0h UTC của ngày chứa `now` — mốc đếm trần lời mời của ứng viên (AD-23 mục 7). Cùng
+ * mốc với bộ đếm hạn mức Redis của công ty: làm mới lúc 7h sáng giờ Việt Nam.
+ */
+export function startOfUtcDay(now: Date = new Date()): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
 
 export class CandidateOutreachRepository {
@@ -120,7 +140,7 @@ export class CandidateOutreachRepository {
   findJobPost(jobPostId: string): Promise<OutreachJobPost | null> {
     return this.prisma.jobPost.findUnique({
       where: { id: jobPostId },
-      select: { id: true, title: true, status: true, employerId: true, companyId: true },
+      select: { id: true, title: true, status: true, employerId: true, companyId: true, matchScoresAt: true },
     });
   }
 
@@ -133,8 +153,22 @@ export class CandidateOutreachRepository {
    * năng APPROVED với tin (REQUIRED ∪ PREFERRED). Nhiều kỹ năng giao hơn xếp trước
    * để LIMIT không cắt mất người khớp nhất. Không lọc theo ngành/kinh nghiệm — để
    * hybrid ở giai đoạn B phản ánh qua điểm.
+   *
+   * `excludeCappedToday` (tự động mời, AD-23 mục 7): bỏ người đã nhận đủ
+   * CANDIDATE_DAILY_INVITATION_CAP lời mời từ 0h UTC hôm nay. Trang tìm ứng viên (mời tay)
+   * không bật cờ này: người đủ trần vẫn hiện, kèm `cappedToday`.
    */
-  async searchCandidatePool(jobPostId: string, limit: number): Promise<string[]> {
+  async searchCandidatePool(
+    jobPostId: string,
+    limit: number,
+    options: { excludeCappedToday?: boolean } = {},
+  ): Promise<string[]> {
+    const cappedFilter = options.excludeCappedToday
+      ? Prisma.sql`AND (
+        SELECT COUNT(*) FROM candidate_outreach_invitations r
+        WHERE r."candidateId" = cs."candidateId" AND r."createdAt" >= ${START_OF_UTC_DAY}
+      ) < ${CANDIDATE_DAILY_INVITATION_CAP}`
+      : Prisma.empty;
     const rows = await this.prisma.$queryRaw<Array<{ id: string }>>(Prisma.sql`
       SELECT cs."candidateId" AS id
       FROM candidate_skills cs
@@ -150,6 +184,7 @@ export class CandidateOutreachRepository {
         WHERE i."candidateId" = cs."candidateId" AND i."jobPostId" = ${jobPostId}
           AND i."status"::text IN (${Prisma.join(BLOCKING_INVITATION_STATUSES)})
       )
+      ${cappedFilter}
       GROUP BY cs."candidateId"
       ORDER BY COUNT(*) DESC, cs."candidateId"
       LIMIT ${limit}
@@ -235,12 +270,44 @@ export class CandidateOutreachRepository {
   }
 
   /** Q4 — lời mời PENDING/ACCEPTED/DECLINED của đúng cặp; chỉ EXPIRED mới cho mời lại. */
-  async hasBlockingInvitation(candidateId: string, jobPostId: string): Promise<boolean> {
-    const invitation = await this.prisma.candidateOutreachInvitation.findFirst({
+  async hasBlockingInvitation(candidateId: string, jobPostId: string, db: Db = this.prisma): Promise<boolean> {
+    const invitation = await db.candidateOutreachInvitation.findFirst({
       where: { candidateId, jobPostId, status: { in: BLOCKING_INVITATION_STATUSES } },
       select: { id: true },
     });
     return invitation !== null;
+  }
+
+  // ─── Trần lời mời của ứng viên (AD-23 mục 7) ──────────────────────────────
+
+  /**
+   * Q1 của plan 0.2 — khoá theo ứng viên tới hết transaction. Mọi đường tạo lời mời
+   * (mời tay, mời hàng loạt, tự động; mọi công ty) gọi hàm này trước khi kiểm lời mời
+   * đang chặn và trần trong ngày, nên hai lượt mời cùng một người chạy lần lượt: không
+   * thể có 2 lời mời cho một cặp ứng viên–tin, cũng không vượt trần khi nhiều công ty
+   * mời cùng lúc. Khoá xact tự nhả khi commit/rollback, chạy được qua pooler của Neon.
+   */
+  async lockCandidate(candidateId: string, tx: Prisma.TransactionClient): Promise<void> {
+    // $executeRaw thay vì $queryRaw: pg_advisory_xact_lock trả kiểu void, Prisma không đọc được.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${candidateId}))`;
+  }
+
+  /** Số lời mời ứng viên đã nhận từ 0h UTC hôm nay, mọi công ty, mọi nguồn, mọi trạng thái. */
+  countReceivedToday(candidateId: string, db: Db = this.prisma, now: Date = new Date()): Promise<number> {
+    return db.candidateOutreachInvitation.count({
+      where: { candidateId, createdAt: { gte: startOfUtcDay(now) } },
+    });
+  }
+
+  /** Như `countReceivedToday` cho nhiều người một lúc. Người chưa nhận lời mời nào không có trong Map. */
+  async countReceivedTodayByCandidate(candidateIds: string[], now: Date = new Date()): Promise<Map<string, number>> {
+    if (candidateIds.length === 0) return new Map();
+    const rows = await this.prisma.candidateOutreachInvitation.groupBy({
+      by: ["candidateId"],
+      where: { candidateId: { in: candidateIds }, createdAt: { gte: startOfUtcDay(now) } },
+      _count: { _all: true },
+    });
+    return new Map(rows.map((row) => [row.candidateId, row._count._all]));
   }
 
   // ─── CRUD lời mời ─────────────────────────────────────────────────────────
@@ -399,6 +466,26 @@ export class CandidateOutreachRepository {
   async findCandidateIdByUserId(userId: string): Promise<string | null> {
     const candidate = await this.prisma.candidate.findUnique({ where: { userId }, select: { id: true } });
     return candidate?.id ?? null;
+  }
+
+  // ─── Cài đặt của công ty (AD-23 mục 5) ────────────────────────────────────
+
+  /** Phần trăm hạn mức/ngày dành cho tự động mời; null khi không có công ty. */
+  async findAutoSharePercent(companyId: string): Promise<number | null> {
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { outreachAutoSharePercent: true },
+    });
+    return company?.outreachAutoSharePercent ?? null;
+  }
+
+  async updateAutoSharePercent(companyId: string, percent: number): Promise<number> {
+    const company = await this.prisma.company.update({
+      where: { id: companyId },
+      data: { outreachAutoSharePercent: percent },
+      select: { outreachAutoSharePercent: true },
+    });
+    return company.outreachAutoSharePercent;
   }
 
   /** Chỉ ghi đúng 1 cột. Q5: không đụng tới lời mời PENDING hiện có. */

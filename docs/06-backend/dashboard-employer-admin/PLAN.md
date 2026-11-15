@@ -5,13 +5,21 @@ Các lựa chọn đã được chủ dự án đồng ý (2026-09-29): `docs/te
 
 **Trạng thái: ĐÃ ĐƯỢC CHỦ DỰ ÁN DUYỆT (2026-09-29), chấp nhận toàn bộ đề xuất D7–D11. ĐANG TRIỂN KHAI: bước 0 xong (AD-16, `PROJECT_STRUCTURE.md` §4–§5); bước 1 xong, migration `20260929000000_add_dashboard_analytics_tables` đã được chủ dự án áp lên Neon (2026-09-29); bước 2, 3 và 4 xong, kiểm chứng trên PostgreSQL tạm. Bước 5 (Interview, gồm D12–D13 được chủ dự án đồng ý 2026-09-29) xong phần code, kiểm chứng trên PostgreSQL tạm; migration `20260929120000_add_interviews` **chưa áp lên Neon**, chờ chủ dự án đồng ý. Bước 6 (bổ sung dữ liệu cho dashboard Admin bản D, D14) được chủ dự án duyệt 2026-09-30 và **xong phần code** (không migration).**
 
-> **Phần Employer đã đổi (2026-11-04)** theo `docs/05-frontend/phases/employer-dashboard-v2/PLAN.md` (đợt 2). Phần Admin, thông báo, audit log, `interviews` trong file này vẫn đúng. Đã bỏ:
+> **Phần Employer đã đổi (2026-11-04)** theo `docs/05-frontend/phases/dashboard-v2/PLAN.md` (đợt 2). Phần Admin, thông báo, audit log, `interviews` trong file này vẫn đúng. Đã bỏ:
 >
 > - `GET /employer/dashboard/tasks` (cả `EmployerDashboardTasks`, `DashboardPendingApplication`, `DashboardAttentionJob`) và `InterviewsService.awaitingForCompany`.
 > - Trong `GET /employer/dashboard/overview`: `jobs.expiringIn7Days`, `jobs.topJob`, `applications.pendingWait`, `outreach.last30Days`, `interviews.next7Days`. Thay bằng `jobs.attention` và `interviews.last7Days`. Còn giữ `applications.pendingCount` (số chờ trên menu) và `outreach.quota` (dòng nhắc gói).
 > - Trong `GET /employer/dashboard/analytics`: `funnel`, `firstResponse` (kèm `FunnelStep`). Còn `applicationsDaily`, `viewsDaily`.
 >
 > Bảng `application_status_history` vẫn ghi như cũ; trang lịch phỏng vấn còn đọc nó (`interviews.repository.ts`, mốc chờ đặt lịch). Chỉ là không còn API phễu nào đọc.
+
+> **Phần Admin đổi một phần (2026-11-15)** theo Admin bản D2 (`docs/05-frontend/phases/dashboard-v2/PLAN.md`, đợt 2): dashboard Admin bỏ bàn duyệt. Đã bỏ:
+>
+> - `GET /admin/dashboard/tasks` (cả `AdminDashboardTasks`, `AdminDashboardService.tasks`, `DashboardController.adminTasks`) và repository `listPendingJobPosts`, `listPendingCompanies`, `listPendingCatalogEntries` (kèm `PendingCatalogEntryRow`). `AdminDashboardService` không còn nhận `userRepository`.
+> - Ở bước 6 (D14), "người đề xuất danh mục" giờ chỉ còn dùng cho thông báo danh mục (`UserRepository.findCatalogSuggesters`, `CatalogSuggester`).
+> - Mục "Thao tác tại chỗ — API sẵn có được tái dùng" không còn áp dụng cho dashboard: duyệt và từ chối chỉ làm ở trang quản lý (vẫn các API đó).
+>
+> Giữ nguyên `GET /admin/dashboard/overview` (`queues` có `oldestSince`, nhóm thời gian chờ, tách loại danh mục): thẻ hàng chờ và số chờ trên menu còn dùng.
 
 ## Mục tiêu
 

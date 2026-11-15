@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
 import type { AdminDashboardOverview } from "@sip/shared-types";
 import type { ModerationQueue } from "@/hooks/useAdminDashboard";
@@ -15,8 +16,20 @@ export const QUEUE_META: Record<ModerationQueue, { title: string; icon: string; 
 
 export const QUEUE_ORDER: ModerationQueue[] = ["jobPosts", "companies", "catalog"];
 
-/** Id của bàn duyệt — thẻ hàng chờ và nút "Bắt đầu duyệt" cuộn tới đây. */
-export const MODERATION_DESK_ID = "admin-moderation-desk";
+/*
+ * Bản D2 (docs/05-frontend/phases/dashboard-v2/PLAN.md, A2): thẻ hàng chờ dẫn sang trang quản lý,
+ * trang đó mặc định lọc "Chờ duyệt". Danh mục gồm hai trang nên thẻ không phải một link mà có hai
+ * link ở cuối thẻ (Q1).
+ */
+const QUEUE_LINK: Record<Exclude<ModerationQueue, "catalog">, { href: string; cta: string }> = {
+  jobPosts: { href: "/admin/jobs", cta: "Xem tin chờ duyệt" },
+  companies: { href: "/admin/companies", cta: "Xem công ty chờ" },
+};
+
+const CARD_CLASS =
+  "flex flex-col gap-3 rounded-[14px] border border-border-subtle bg-surface-card p-4 text-left text-sm shadow-[0_1px_2px_rgba(11,31,27,0.05)]";
+
+const LINK_CARD_CLASS = `group ${CARD_CLASS} transition-[border-color,box-shadow] duration-200 motion-reduce:transition-none hover:border-brand-300 hover:shadow-[0_4px_14px_rgba(11,31,27,0.07)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500`;
 
 function segmentsOf(queue: ModerationQueue, queues: AdminDashboardOverview["queues"]): SplitSegment[] {
   if (queue === "jobPosts") {
@@ -65,12 +78,10 @@ function oldestSummary(queues: AdminDashboardOverview["queues"]): ReactNode {
 
 export interface AdminQueuesProps {
   queues: AdminDashboardOverview["queues"];
-  selected: ModerationQueue;
-  onSelect: (queue: ModerationQueue) => void;
 }
 
-/** "Hàng chờ": câu tóm tắt mốc chờ lâu nhất và ba thẻ; bấm thẻ thì chọn tab tương ứng của bàn duyệt. */
-export function AdminQueues({ queues, selected, onSelect }: AdminQueuesProps) {
+/** "Hàng chờ": câu tóm tắt mốc chờ lâu nhất và ba thẻ dẫn sang trang quản lý. */
+export function AdminQueues({ queues }: AdminQueuesProps) {
   return (
     <section aria-labelledby="admin-queues-title">
       <div className="mb-3 flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
@@ -80,56 +91,74 @@ export function AdminQueues({ queues, selected, onSelect }: AdminQueuesProps) {
         <p className="text-[13px] text-text-muted">{oldestSummary(queues)}</p>
       </div>
       <div className="grid grid-cols-1 gap-4 @[900px]:grid-cols-3">
-        {QUEUE_ORDER.map((queue) => (
-          <QueueCard
-            key={queue}
-            queue={queue}
-            total={queues[queue].total}
-            oldestSince={queues[queue].oldestSince}
-            segments={segmentsOf(queue, queues)}
-            pressed={queue === selected}
-            onClick={() => onSelect(queue)}
-          />
-        ))}
+        {QUEUE_ORDER.map((queue) => {
+          const body = (
+            <QueueCardBody
+              queue={queue}
+              total={queues[queue].total}
+              oldestSince={queues[queue].oldestSince}
+              segments={segmentsOf(queue, queues)}
+            />
+          );
+          if (queue === "catalog") {
+            const c = queues.catalog;
+            return (
+              <section key={queue} aria-label={QUEUE_META.catalog.title} className={CARD_CLASS}>
+                {body}
+                <span className="mt-auto flex flex-wrap gap-x-4 gap-y-1 pt-1">
+                  <CatalogLink href="/admin/skills" label="Kỹ năng" count={c.skills} />
+                  <CatalogLink href="/admin/education-catalog" label="Trường, ngành" count={c.universities + c.majors} />
+                </span>
+              </section>
+            );
+          }
+          const link = QUEUE_LINK[queue];
+          return (
+            <Link key={queue} href={link.href} className={LINK_CARD_CLASS}>
+              {body}
+              <span className="mt-auto inline-flex items-center gap-1 pt-1 text-[13px] font-semibold text-brand-700 group-hover:underline">
+                {link.cta}
+                <Icon name="arrow-right" size={16} />
+              </span>
+            </Link>
+          );
+        })}
       </div>
     </section>
   );
 }
 
-function QueueCard({
+function CatalogLink({ href, label, count }: { href: string; label: string; count: number }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex items-center gap-1 rounded text-[13px] font-semibold text-brand-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+    >
+      {label} <span className="tabular-nums">{formatNumber(count)}</span>
+      <Icon name="arrow-right" size={16} />
+    </Link>
+  );
+}
+
+function QueueCardBody({
   queue,
   total,
   oldestSince,
   segments,
-  pressed,
-  onClick,
 }: {
   queue: ModerationQueue;
   total: number;
   oldestSince: string | null;
   segments: SplitSegment[];
-  pressed: boolean;
-  onClick: () => void;
 }) {
   const meta = QUEUE_META[queue];
   return (
-    <button
-      type="button"
-      aria-pressed={pressed}
-      aria-controls={MODERATION_DESK_ID}
-      onClick={onClick}
-      className={`flex cursor-pointer flex-col gap-3 rounded-[14px] border bg-surface-card p-4 text-left text-sm transition-[border-color,box-shadow] duration-200 motion-reduce:transition-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 ${
-        pressed
-          ? "border-brand-300 shadow-[0_0_0_3px_var(--color-brand-50),0_1px_2px_rgba(11,31,27,0.05)]"
-          : "border-border-subtle shadow-[0_1px_2px_rgba(11,31,27,0.05)] hover:border-border-default hover:shadow-[0_4px_14px_rgba(11,31,27,0.07)]"
-      }`}
-    >
+    <>
       <span className="flex items-center gap-2.5">
         <span aria-hidden className="grid h-8 w-8 place-items-center rounded-[9px] bg-brand-50 text-brand-600">
           <Icon name={meta.icon} size={18} />
         </span>
         <span className="flex-1 font-bold text-text-strong">{meta.title}</span>
-        <Icon name="chevron-right" size={16} className={pressed ? "text-brand-600" : "text-text-subtle"} />
       </span>
       <span className="flex items-end gap-3">
         <span>
@@ -152,6 +181,6 @@ function QueueCard({
         segments={segments}
         label={queue === "catalog" ? "Theo loại danh mục" : "Theo thời gian chờ"}
       />
-    </button>
+    </>
   );
 }

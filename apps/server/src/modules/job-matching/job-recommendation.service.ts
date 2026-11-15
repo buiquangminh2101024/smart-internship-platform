@@ -1,7 +1,9 @@
 import type { PrismaClient } from "@prisma/client";
-import type { JobRecommendationList, MatchResult } from "@sip/shared-types";
+import type { JobPost, JobRecommendationList, MatchResult } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
+import { parseOffsetCursor } from "../../shared/utils/offset-cursor";
 import type { CandidateMatchProfile, JobMatcher, JobMatchProfile } from "../../shared/ports/JobMatcher";
+import { buildCodeSuggestions } from "../candidate-insights/profile-suggestions.util";
 import type { CandidateMatchProfileLoader } from "./candidate-match-profile.loader";
 import type { JobMatchProfileLoader } from "./job-match-profile.loader";
 import {
@@ -9,7 +11,6 @@ import {
   MIN_RECOMMENDATION_SCORE,
   RECOMMENDATION_LIMIT,
   RECOMMENDATION_POOL_SIZE,
-  RECOMMENDATION_RECENT_DAYS,
   RECOMMENDATION_RERANK_SIZE,
 } from "./job-matching.config";
 import type { JobMatcherMode } from "./job-matching.service";
@@ -17,20 +18,28 @@ import type { JobRecommendationRepository } from "./job-recommendation.repositor
 import type { MatchEmbeddingService } from "./match-embedding.service";
 import { markSemanticPending } from "./scoring-job-matcher";
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 export interface TopMatchOptions {
   limit?: number;
   minScore?: number;
 }
 
+interface PageOptions {
+  offset: number;
+  limit: number;
+  minScore: number;
+}
+
 /**
- * "Việc làm phù hợp" (B2, AD-14 — docs/06-backend/candidate-insights/PLAN.md):
- * top tin hợp với MỘT hồ sơ, đối xứng với listApplicationMatches (N hồ sơ ↔ 1 tin).
- * Không LLM, không hạn mức, không cache — mỗi lần gọi tính lại; phần tốn kém duy
- * nhất (vector) đã tự cache theo contentHash ở MatchEmbeddingService.
- * `getTopMatches` là hàm dùng chung: module candidate-insights gọi thẳng hàm này
- * thay vì tự lọc/chấm lại.
+ * "Việc làm phù hợp" (B2, AD-14; AD-26 — docs/06-backend/job-discovery/PLAN.md bước 2):
+ * tin hợp với MỘT hồ sơ, đối xứng với listApplicationMatches (N hồ sơ ↔ 1 tin).
+ * Không LLM, không hạn mức.
+ * - TABLE (D1): đọc bảng điểm lưu sẵn (AD-24), phân trang; chấm hybrid lại các tin của
+ *   trang để có lý do theo tiêu chí và điểm mới nhất, rồi sắp lại trong trang.
+ * - LIVE (D2): ứng viên chưa có dòng nào cho tin đang hiển thị (vd. vừa tạo hồ sơ) —
+ *   lọc thô + rule + hybrid như trước, bỏ giới hạn 30 ngày, chỉ một trang.
+ * Cả hai trừ tin đã ứng tuyển / đã được mời (D3).
+ * `getTopMatches` là trang đầu, dùng chung với candidate-insights (trợ lý hồ sơ) để hai
+ * nơi cùng một danh sách.
  */
 export class JobRecommendationService {
   private readonly prisma: PrismaClient;
@@ -71,27 +80,108 @@ export class JobRecommendationService {
     this.mode = config.JOB_MATCHER_MODE;
   }
 
-  async recommendForUser(userId: string): Promise<JobRecommendationList> {
+  async recommendForUser(userId: string, options: { cursor?: string | undefined } = {}): Promise<JobRecommendationList> {
     const candidate = await this.prisma.candidate.findUnique({ where: { userId }, select: { id: true } });
     if (!candidate) throw new AppError(404, "Candidate profile not found");
-    return this.getTopMatches(candidate.id);
+    return this.listForCandidate(candidate.id, options);
   }
 
+  async listForCandidate(candidateId: string, options: { cursor?: string | undefined } = {}): Promise<JobRecommendationList> {
+    return this.findPage(candidateId, {
+      offset: parseRecommendationCursor(options.cursor),
+      limit: RECOMMENDATION_LIMIT,
+      minScore: MIN_RECOMMENDATION_SCORE,
+    });
+  }
+
+  /** Trang đầu — candidate-insights gọi thẳng hàm này thay vì tự lọc/chấm lại. */
   async getTopMatches(candidateId: string, options: TopMatchOptions = {}): Promise<JobRecommendationList> {
-    const limit = options.limit ?? RECOMMENDATION_LIMIT;
-    const minScore = options.minScore ?? MIN_RECOMMENDATION_SCORE;
+    return this.findPage(candidateId, {
+      offset: 0,
+      limit: options.limit ?? RECOMMENDATION_LIMIT,
+      minScore: options.minScore ?? MIN_RECOMMENDATION_SCORE,
+    });
+  }
 
-    const candidate = await this.candidateMatchProfileLoader.load(candidateId);
+  /**
+   * `MatchResult` (chấm rule) của các tin trang đầu — cùng tập tin với `getTopMatches`, chỉ
+   * khác thứ tự trong trang. Không nạp tin công khai, không lấy vector: dùng cho "Nên làm
+   * trước" của độ hoàn thiện (AD-26 mục 8), vốn chỉ đọc trạng thái kinh nghiệm / học vấn,
+   * hai thứ không phụ thuộc thành phần nội dung. Bước 3 đo: ~1,3 s qua getTopMatches.
+   */
+  async getTopMatchResults(candidateId: string, options: TopMatchOptions = {}): Promise<MatchResult[]> {
+    const pageOptions: PageOptions = {
+      offset: 0,
+      limit: options.limit ?? RECOMMENDATION_LIMIT,
+      minScore: options.minScore ?? MIN_RECOMMENDATION_SCORE,
+    };
+    const [candidate, page] = await Promise.all([
+      this.candidateMatchProfileLoader.load(candidateId),
+      this.repository.findScoredPage(candidateId, {
+        minScore: pageOptions.minScore,
+        offset: 0,
+        take: pageOptions.limit,
+      }),
+    ]);
     if (!candidate) throw new AppError(404, "Candidate profile not found");
-    // Cùng điều kiện với ScoringJobMatcher: không kỹ năng ⇒ mọi tin đều INSUFFICIENT_PROFILE.
-    if (candidate.skills.length === 0) return { status: "INSUFFICIENT_PROFILE", items: [] };
+    if (candidate.skills.length === 0) return [];
+    if (page.total === 0 && !(await this.repository.hasScoredVisibleJob(candidateId))) {
+      return (await this.findLivePage(candidate, pageOptions)).items.map((item) => item.match);
+    }
+    const scored = await this.scoreRule(
+      candidate,
+      page.rows.map((row) => row.jobPostId),
+    );
+    return scored.map((entry) => entry.match);
+  }
 
-    // Giai đoạn A — SQL lọc thô (kèm nới lỏng 1 lần).
+  private async findPage(candidateId: string, options: PageOptions): Promise<JobRecommendationList> {
+    // Các bước độc lập chạy song song: thời gian chủ yếu là độ trễ tới DB, không phải câu
+    // đọc bảng điểm (bước 2: câu trang 55–110 ms, nạp hồ sơ ~350 ms, nạp tin ~600 ms).
+    const [candidate, page] = await Promise.all([
+      this.candidateMatchProfileLoader.load(candidateId),
+      this.repository.findScoredPage(candidateId, {
+        minScore: options.minScore,
+        offset: options.offset,
+        take: options.limit,
+      }),
+    ]);
+    if (!candidate) throw new AppError(404, "Candidate profile not found");
+    // Cùng điều kiện với ScoringJobMatcher: không kỹ năng ⇒ mọi tin đều INSUFFICIENT_PROFILE
+    // (nên bảng điểm cũng không có dòng nào của ứng viên này).
+    if (candidate.skills.length === 0) return emptyList("INSUFFICIENT_PROFILE", "TABLE");
+
+    if (page.total === 0 && !(await this.repository.hasScoredVisibleJob(candidateId))) {
+      // D2 — chỉ một trang: trang sau của đường LIVE luôn rỗng.
+      return options.offset === 0 ? this.findLivePage(candidate, options) : emptyList("OK", "LIVE");
+    }
+
+    const ids = page.rows.map((row) => row.jobPostId);
+    const [rescored, jobPosts] = await Promise.all([
+      this.scoreJobs(candidate, ids),
+      this.repository.findPublicByIds(ids),
+    ]);
+    const items = attachJobPosts(sortByScore(rescored), jobPosts);
+
+    const nextOffset = options.offset + page.rows.length;
+    return {
+      status: "OK",
+      source: "TABLE",
+      items,
+      total: page.total,
+      nextCursor: page.rows.length > 0 && nextOffset < page.total ? String(nextOffset) : null,
+      suggestions: options.offset === 0 ? buildCodeSuggestions(items) : [],
+    };
+  }
+
+  /** Đường chấm trực tiếp (lọc thô → rule → hybrid top), bỏ giới hạn 30 ngày (D2). */
+  private async findLivePage(candidate: CandidateMatchProfile, options: PageOptions): Promise<JobRecommendationList> {
+    // Giai đoạn A — SQL lọc thô (kèm nới lỏng 1 lần), đã trừ đơn / lời mời.
     const poolIds = await this.repository.findCandidatePool({
+      candidateId: candidate.candidateId,
       skillIds: candidate.skills.map((skill) => skill.skillId),
-      publishedSince: new Date(Date.now() - RECOMMENDATION_RECENT_DAYS * DAY_MS),
       poolSize: RECOMMENDATION_POOL_SIZE,
-      minPool: limit,
+      minPool: options.limit,
     });
     const jobs = await this.jobMatchProfileLoader.loadMany(poolIds);
 
@@ -103,14 +193,37 @@ export class JobRecommendationService {
     const rescored = this.mode === "hybrid" ? await this.rescoreHybrid(candidate, shortlist) : shortlist;
 
     // Giai đoạn C — ngưỡng theo từng tin (D6), rồi lấy top.
-    const top = sortByScore(rescored.filter((entry) => (entry.match.score ?? 0) >= minScore)).slice(0, limit);
-
-    const jobPosts = await this.repository.findPublicByIds(top.map((entry) => entry.job.jobPostId));
-    const matchById = new Map(top.map((entry) => [entry.job.jobPostId, entry.match]));
+    const passing = rescored.filter((entry) => (entry.match.score ?? 0) >= options.minScore);
+    const top = sortByScore(passing).slice(0, options.limit);
+    const items = attachJobPosts(top, await this.repository.findPublicByIds(top.map((entry) => entry.job.jobPostId)));
     return {
       status: "OK",
-      items: jobPosts.map((jobPost) => ({ jobPost, match: matchById.get(jobPost.id)! })),
+      source: "LIVE",
+      items,
+      total: items.length,
+      nextCursor: null,
+      suggestions: buildCodeSuggestions(items),
     };
+  }
+
+  /**
+   * Chấm đầy đủ các tin của một trang bảng điểm (rule, rồi hybrid nếu bật). Giữ thứ tự
+   * `ids` (điểm lưu, mới đăng trước) để làm thứ tự hoà khi sắp lại (sort ổn định).
+   */
+  private async scoreJobs(candidate: CandidateMatchProfile, ids: string[]): Promise<ScoredJob[]> {
+    const ruleScored = await this.scoreRule(candidate, ids);
+    return this.mode === "hybrid" ? this.rescoreHybrid(candidate, ruleScored) : ruleScored;
+  }
+
+  /** Chấm rule các tin theo đúng thứ tự `ids`; tin đã bị xoá hoặc không chấm được bị bỏ. */
+  private async scoreRule(candidate: CandidateMatchProfile, ids: string[]): Promise<ScoredJob[]> {
+    const jobs = await this.jobMatchProfileLoader.loadMany(ids);
+    return ids.flatMap((id) => {
+      const job = jobs.get(id);
+      if (!job) return [];
+      const match = this.ruleJobMatcher.match({ candidate, job, semanticSimilarity: null });
+      return match.status === "SCORED" ? [{ job, match }] : [];
+    });
   }
 
   /**
@@ -143,4 +256,28 @@ interface ScoredJob {
 
 function sortByScore(entries: ScoredJob[]): ScoredJob[] {
   return [...entries].sort((left, right) => (right.match.score ?? 0) - (left.match.score ?? 0));
+}
+
+/** Ghép JobPost công khai theo đúng thứ tự `entries`; tin vừa bị xoá bị bỏ qua. */
+function attachJobPosts(entries: ScoredJob[], jobPosts: JobPost[]): JobRecommendationList["items"] {
+  const jobPostById = new Map(jobPosts.map((jobPost) => [jobPost.id, jobPost]));
+  return entries.flatMap(({ job, match }) => {
+    const jobPost = jobPostById.get(job.jobPostId);
+    return jobPost ? [{ jobPost, match }] : [];
+  });
+}
+
+function emptyList(
+  status: JobRecommendationList["status"],
+  source: JobRecommendationList["source"],
+): JobRecommendationList {
+  return { status, source, items: [], total: 0, nextCursor: null, suggestions: [] };
+}
+
+/**
+ * `cursor` là offset dạng chuỗi (thứ tự theo điểm không hợp với cursor theo id). Ứng viên
+ * nhiều tin nhất ở bước 0 có 218 tin ≥ 20, xa dưới trần offset 10.000.
+ */
+export function parseRecommendationCursor(cursor: string | undefined): number {
+  return parseOffsetCursor(cursor);
 }

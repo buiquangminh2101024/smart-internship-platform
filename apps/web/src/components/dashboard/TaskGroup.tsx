@@ -114,18 +114,27 @@ export function TaskRow({ initials, icon, title, meta, badge, actions, done = fa
   );
 }
 
+const TASK_BADGE_TONE = {
+  brand: "bg-brand-100 text-brand-700",
+  danger: "bg-red-100 text-red-700",
+  warning: "bg-marigold-100 text-marigold-800",
+  success: "bg-success-100 text-success-700",
+  // Ghi chú trung tính, không cần ai xử lý (vd. "Hệ thống tự chuyển", AD-25).
+  neutral: "bg-surface-hover text-text-muted",
+} as const;
+
 /** Nhãn trạng thái trong hàng (cao 22px, chữ 13px đậm). */
-export function TaskBadge({ tone, children }: { tone: "brand" | "danger" | "warning" | "success"; children: ReactNode }) {
-  const toneClass =
-    tone === "brand"
-      ? "bg-brand-100 text-brand-700"
-      : tone === "danger"
-        ? "bg-red-100 text-red-700"
-        : tone === "success"
-          ? "bg-success-100 text-success-700"
-          : "bg-marigold-100 text-marigold-800";
+export function TaskBadge({
+  tone,
+  children,
+}: {
+  tone: keyof typeof TASK_BADGE_TONE;
+  children: ReactNode;
+}) {
   return (
-    <span className={`inline-flex h-[22px] items-center rounded-full px-2 text-[13px] font-bold whitespace-nowrap ${toneClass}`}>
+    <span
+      className={`inline-flex h-[22px] items-center rounded-full px-2 text-[13px] font-bold whitespace-nowrap ${TASK_BADGE_TONE[tone]}`}
+    >
       {children}
     </span>
   );

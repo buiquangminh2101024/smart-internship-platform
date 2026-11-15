@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CatalogEntryStatus } from "@sip/shared-types";
 import { apiFetch, apiUpload } from "@/lib/api-client";
 import { suggestSkill } from "@/lib/skills";
@@ -14,6 +14,9 @@ import { CompanyImageUpload } from "@/components/employer/CompanyImageUpload";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ProfileInsightCard } from "@/components/candidate/ProfileInsightCard";
 import { OutreachSettingToggle } from "@/components/candidate/OutreachSettingToggle";
+import { ProfileCompletenessCard } from "@/components/candidate/ProfileCompletenessCard";
+import { useInvalidateProfileDerived } from "@/hooks/useProfileCompleteness";
+import { PROFILE_SECTION_ID } from "@/lib/profile-completeness";
 
 type CatalogItem = { id: string; name: string };
 type Values = Record<string, string | boolean>;
@@ -41,9 +44,9 @@ function emptyToUndefined(values: Values): Record<string, unknown> {
   return Object.fromEntries(Object.entries(values).map(([key, value]) => [key, value === "" ? undefined : value]));
 }
 
-function Section({ title, description, children }: { title: string; description?: string | undefined; children: React.ReactNode }) {
+function Section({ id, title, description, children }: { id?: string | undefined; title: string; description?: string | undefined; children: React.ReactNode }) {
   return (
-    <Card className="grid gap-5" padding="lg">
+    <Card id={id} className="grid scroll-mt-24 gap-5" padding="lg">
       <div>
         <h2 className="text-xl font-semibold text-text-strong">{title}</h2>
         {description ? <p className="mt-1 text-sm text-text-muted">{description}</p> : null}
@@ -58,9 +61,9 @@ function FormGrid({ children }: { children: React.ReactNode }) {
 }
 
 function CollectionSection({
-  title, description, items, endpoint, initial, fromItem, renderFields, formatItem, refresh,
+  id, title, description, items, endpoint, initial, fromItem, renderFields, formatItem, refresh,
 }: {
-  title: string; description?: string; items: Resource[]; endpoint: string; initial: Values;
+  id?: string; title: string; description?: string; items: Resource[]; endpoint: string; initial: Values;
   fromItem: (item: Resource) => Values;
   renderFields: (values: Values, set: (key: string, value: string | boolean) => void) => React.ReactNode;
   formatItem: (item: Resource) => React.ReactNode;
@@ -103,7 +106,7 @@ function CollectionSection({
   }
 
   return (
-    <Section title={title} description={description}>
+    <Section id={id} title={title} description={description}>
       {items.length ? <div className="grid gap-2">{items.map((item) => (
         <div key={item.id} className="flex items-start gap-3 rounded-lg border border-border-subtle p-3">
           <div className="min-w-0 flex-1 text-sm text-text-body">{formatItem(item)}</div>
@@ -145,6 +148,24 @@ export function CandidateProfileClient() {
     setPersonal({ fullName: data.fullName ?? "", headline: data.headline ?? "", bio: data.bio ?? "", phone: data.phone ?? "", dateOfBirth: dateInput(data.dateOfBirth), gender: data.gender ?? "", avatarUrl: data.avatarUrl ?? "", cityId: data.cityId ?? "" });
   }, []);
 
+  // AD-26 (F3): độ hoàn thiện và "Việc làm phù hợp" phụ thuộc hồ sơ — làm mới sau mỗi lần sửa
+  // (không gọi ở lần tải đầu để thẻ độ hoàn thiện không tải hai lần).
+  const invalidateDerived = useInvalidateProfileDerived();
+  const refreshAfterEdit = useCallback(async () => {
+    await refresh();
+    invalidateDerived();
+  }, [refresh, invalidateDerived]);
+
+  // Link "Nên làm trước" từ trang khác (vd. /profile#ho-so-kinh-nghiem): các phần chỉ có sau khi
+  // tải hồ sơ, nên trình duyệt chưa cuộn được — cuộn một lần khi hồ sơ đã hiện.
+  const scrolledToHash = useRef(false);
+  useEffect(() => {
+    if (!profile || scrolledToHash.current) return;
+    scrolledToHash.current = true;
+    const hash = window.location.hash.slice(1);
+    if (hash) document.getElementById(decodeURIComponent(hash))?.scrollIntoView({ block: "start" });
+  }, [profile]);
+
   useEffect(() => {
     void (async () => {
       try {
@@ -178,6 +199,7 @@ export function CandidateProfileClient() {
       if (freshData.avatarUrl) {
         window.dispatchEvent(new CustomEvent("avatar-updated", { detail: freshData.avatarUrl }));
       }
+      invalidateDerived();
     }
     catch (cause) { setProfileError(cause instanceof Error ? cause.message : "Không thể lưu hồ sơ."); }
     finally { setProfileSaving(false); }
@@ -191,14 +213,21 @@ export function CandidateProfileClient() {
       <div className="mx-auto grid max-w-4xl gap-6 px-6">
         <div><p className="text-sm font-semibold tracking-wider text-pine-600 uppercase">Hồ sơ ứng viên</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-text-strong">Hoàn thiện hồ sơ của bạn</h1><p className="mt-2 text-text-muted">Thông tin đầy đủ giúp nhà tuyển dụng hiểu rõ hơn về bạn.</p></div>
 
+        <ProfileCompletenessCard variant="full" />
+
         <ProfileInsightCard />
 
-        <OutreachSettingToggle
-          value={profile.isOpenToOutreach === true}
-          onChange={(isOpenToOutreach) => setProfile((current) => (current ? { ...current, isOpenToOutreach } : current))}
-        />
+        <div id={PROFILE_SECTION_ID.outreach} className="scroll-mt-24">
+          <OutreachSettingToggle
+            value={profile.isOpenToOutreach === true}
+            onChange={(isOpenToOutreach) => {
+              setProfile((current) => (current ? { ...current, isOpenToOutreach } : current));
+              invalidateDerived();
+            }}
+          />
+        </div>
 
-        <Section title="Thông tin cá nhân" description="Các thông tin cơ bản hiển thị trong hồ sơ ứng tuyển.">
+        <Section id={PROFILE_SECTION_ID.personal} title="Thông tin cá nhân" description="Các thông tin cơ bản hiển thị trong hồ sơ ứng tuyển.">
           <form onSubmit={savePersonal} className="grid gap-4">
             <div className="flex flex-col items-center mb-4">
               <div className="[&_div[role='button']]:!rounded-full [&_div[role='button']]:overflow-hidden [&_span.font-medium]:hidden [&_button]:text-center [&_button]:mx-auto">
@@ -226,24 +255,24 @@ export function CandidateProfileClient() {
           </form>
         </Section>
 
-        <CollectionSection title="Học vấn" description="Bạn có thể thêm lịch sử nhiều trường hoặc chương trình học." items={profile.educations} endpoint="/candidates/me/education" refresh={refresh}
+        <CollectionSection id={PROFILE_SECTION_ID.education} title="Học vấn" description="Bạn có thể thêm lịch sử nhiều trường hoặc chương trình học." items={profile.educations} endpoint="/candidates/me/education" refresh={refreshAfterEdit}
           initial={{ universityId: "", majorId: "", degree: "", startYear: "", endYear: "", isCurrent: false, description: "" }}
           fromItem={(item) => ({ universityId: String(item.universityId ?? ""), majorId: String(item.majorId ?? ""), degree: String(item.degree ?? ""), startYear: String(item.startYear ?? ""), endYear: String(item.endYear ?? ""), isCurrent: Boolean(item.isCurrent), description: String(item.description ?? "") })}
           formatItem={(item) => <><p className="font-semibold text-text-strong">{String((item.university as CatalogItem | null)?.name ?? "Chưa chọn trường")}</p><p>{String((item.major as CatalogItem | null)?.name ?? "Chưa chọn ngành")}{item.degree ? ` · ${String(item.degree)}` : ""}</p><p className="text-text-muted">{String(item.startYear ?? "?")} – {item.isCurrent ? "Hiện tại" : String(item.endYear ?? "?")}</p></>}
           renderFields={(v, set) => <><FormGrid><Select label="Trường đại học" value={String(v.universityId)} onChange={(e) => set("universityId", e.target.value)} options={options("universities", "Chọn trường")} /><Select label="Chuyên ngành" value={String(v.majorId)} onChange={(e) => set("majorId", e.target.value)} options={options("majors", "Chọn ngành")} /><Input label="Bằng cấp" value={String(v.degree)} onChange={(e) => set("degree", e.target.value)} placeholder="Cử nhân" /><Input label="Năm bắt đầu" type="number" min="1900" max="2100" value={String(v.startYear)} onChange={(e) => set("startYear", e.target.value)} /><Input label="Năm kết thúc" type="number" min="1900" max="2100" disabled={Boolean(v.isCurrent)} value={String(v.endYear)} onChange={(e) => set("endYear", e.target.value)} /></FormGrid><label className="flex items-center gap-2 text-sm text-text-body"><input type="checkbox" checked={Boolean(v.isCurrent)} onChange={(e) => set("isCurrent", e.target.checked)} />Đang theo học chương trình này</label><label className="grid gap-1.5 text-sm font-medium text-text-body">Mô tả<textarea className={textareaClass} value={String(v.description)} onChange={(e) => set("description", e.target.value)} /></label></>}
         />
 
-        <Section title="Kỹ năng" description="Chọn kỹ năng từ danh mục và cập nhật số năm kinh nghiệm.">
-          <SkillSection items={profile.skills} skills={catalogs.skills ?? []} refresh={refresh} />
+        <Section id={PROFILE_SECTION_ID.skills} title="Kỹ năng" description="Chọn kỹ năng từ danh mục và cập nhật số năm kinh nghiệm.">
+          <SkillSection items={profile.skills} skills={catalogs.skills ?? []} refresh={refreshAfterEdit} />
         </Section>
 
-        <CollectionSection title="Kinh nghiệm làm việc" items={profile.workExperiences} endpoint="/candidates/me/work-experiences" refresh={refresh}
+        <CollectionSection id={PROFILE_SECTION_ID.experience} title="Kinh nghiệm làm việc" items={profile.workExperiences} endpoint="/candidates/me/work-experiences" refresh={refreshAfterEdit}
           initial={{ company: "", position: "", startDate: "", endDate: "", isCurrent: false, description: "" }} fromItem={(i) => ({ company: String(i.company ?? ""), position: String(i.position ?? ""), startDate: dateInput(i.startDate), endDate: dateInput(i.endDate), isCurrent: Boolean(i.isCurrent), description: String(i.description ?? "") })}
           formatItem={(i) => <><p className="font-semibold text-text-strong">{String(i.position)} · {String(i.company)}</p><p className="text-text-muted">{dateInput(i.startDate) || "?"} – {i.isCurrent ? "Hiện tại" : dateInput(i.endDate) || "?"}</p></>}
           renderFields={(v, set) => <><FormGrid><Input required label="Công ty" value={String(v.company)} onChange={(e) => set("company", e.target.value)} /><Input required label="Vị trí" value={String(v.position)} onChange={(e) => set("position", e.target.value)} /><Input label="Ngày bắt đầu" type="date" value={String(v.startDate)} onChange={(e) => set("startDate", e.target.value)} /><Input label="Ngày kết thúc" type="date" disabled={Boolean(v.isCurrent)} value={String(v.endDate)} onChange={(e) => set("endDate", e.target.value)} /></FormGrid><label className="flex items-center gap-2 text-sm text-text-body"><input type="checkbox" checked={Boolean(v.isCurrent)} onChange={(e) => set("isCurrent", e.target.checked)} />Đang làm việc tại đây</label><label className="grid gap-1.5 text-sm font-medium text-text-body">Mô tả<textarea className={textareaClass} value={String(v.description)} onChange={(e) => set("description", e.target.value)} /></label></>}
         />
 
-        <CollectionSection title="Dự án nổi bật" items={profile.projects} endpoint="/candidates/me/projects" refresh={refresh}
+        <CollectionSection id={PROFILE_SECTION_ID.projects} title="Dự án nổi bật" items={profile.projects} endpoint="/candidates/me/projects" refresh={refreshAfterEdit}
           initial={{ name: "", url: "", startDate: "", endDate: "", isWorkingOn: false, description: "" }} fromItem={(i) => ({ name: String(i.name ?? ""), url: String(i.url ?? ""), startDate: dateInput(i.startDate), endDate: dateInput(i.endDate), isWorkingOn: Boolean(i.isWorkingOn), description: String(i.description ?? "") })}
           formatItem={(i) => <><p className="font-semibold text-text-strong">{String(i.name)}</p>{i.url ? <a className="text-pine-600 hover:underline" href={String(i.url)} target="_blank" rel="noreferrer">{String(i.url)}</a> : null}<p className="text-text-muted">{i.isWorkingOn ? "Đang thực hiện" : "Đã hoàn thành"}</p></>}
           renderFields={(v, set) => <><FormGrid><Input required label="Tên dự án" value={String(v.name)} onChange={(e) => set("name", e.target.value)} /><Input label="Liên kết dự án" type="url" value={String(v.url)} onChange={(e) => set("url", e.target.value)} placeholder="https://…" /><Input label="Ngày bắt đầu" type="date" value={String(v.startDate)} onChange={(e) => set("startDate", e.target.value)} /><Input label="Ngày kết thúc" type="date" disabled={Boolean(v.isWorkingOn)} value={String(v.endDate)} onChange={(e) => set("endDate", e.target.value)} /></FormGrid><label className="flex items-center gap-2 text-sm text-text-body"><input type="checkbox" checked={Boolean(v.isWorkingOn)} onChange={(e) => set("isWorkingOn", e.target.checked)} />Đang thực hiện dự án này</label><label className="grid gap-1.5 text-sm font-medium text-text-body">Mô tả<textarea className={textareaClass} value={String(v.description)} onChange={(e) => set("description", e.target.value)} /></label></>}

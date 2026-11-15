@@ -1,6 +1,8 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  BulkInviteResponse,
   CandidateOutreachInvitationDto,
+  CompanyOutreachSettings,
   CandidateSearchResultDto,
   CompanyOutreachInvitationDto,
   EmployerOutreachSummary,
@@ -15,7 +17,7 @@ import { apiFetch } from "@/lib/api-client";
 
 // Tìm & mời ứng viên (B3, AD-15) — docs/05-frontend/phases/candidate-outreach/PLAN.md.
 
-const searchKey = (jobId: string) => ["employer", "job-posts", jobId, "candidate-search"] as const;
+export const searchKey = (jobId: string) => ["employer", "job-posts", jobId, "candidate-search"] as const;
 const sentKey = (jobId: string) => ["employer", "job-posts", jobId, "outreach-invitations"] as const;
 /** Mọi key của trang "Lời mời" bắt đầu bằng key này (SocketProvider invalidate theo nó). */
 export const OUTREACH_KEY = ["employer", "outreach"] as const;
@@ -76,6 +78,49 @@ export function useSendOutreachInvitation(jobId: string) {
   });
 }
 
+/**
+ * "Mời tất cả gợi ý" (AD-23 mục 1a). Cập nhật cache "Gợi ý" tại chỗ, không tìm lại:
+ * - người được mời, hoặc bị bỏ qua vì không còn mời được cho tin này (đã ứng tuyển, tắt
+ *   cho phép mời, có lời mời đang chặn, không còn hồ sơ) ⇒ bỏ khỏi danh sách;
+ * - bỏ qua vì đã nhận đủ lời mời hôm nay ⇒ giữ lại, đánh dấu `cappedToday`;
+ * - bỏ qua vì công ty hết lượt ⇒ giữ nguyên, mai mời tiếp được.
+ */
+export function useBulkInviteOutreach(jobId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (candidateIds: string[]) =>
+      apiFetch<BulkInviteResponse>("employer", `/employer/job-posts/${jobId}/invitations/bulk`, {
+        method: "POST",
+        body: JSON.stringify({ candidateIds }),
+      }),
+    onSuccess: (result) => {
+      const removed = new Set([
+        ...result.invited.map((item) => item.candidateId),
+        ...result.skipped
+          .filter((item) => item.reason !== "CANDIDATE_CAP" && item.reason !== "QUOTA")
+          .map((item) => item.candidateId),
+      ]);
+      const capped = new Set(
+        result.skipped.filter((item) => item.reason === "CANDIDATE_CAP").map((item) => item.candidateId),
+      );
+      queryClient.setQueryData<CandidateSearchResultDto[]>(searchKey(jobId), (current) =>
+        current
+          ?.filter((item) => !removed.has(item.candidateId))
+          .map((item) => (capped.has(item.candidateId) ? { ...item, cappedToday: true } : item)),
+      );
+      if (result.invited.length > 0) {
+        const invitedIds = new Set(result.invited.map((item) => item.invitationId));
+        queryClient.setQueryData<SentOutreachInvitationDto[]>(sentKey(jobId), (current) => [
+          ...result.invited,
+          ...(current ?? []).filter((item) => !invitedIds.has(item.invitationId)),
+        ]);
+      }
+      void queryClient.invalidateQueries({ queryKey: OUTREACH_KEY });
+      void queryClient.invalidateQueries({ queryKey: ["employer", "dashboard", "overview"] });
+    },
+  });
+}
+
 // ─── Employer — trang "Lời mời" cấp công ty (docs/05-frontend/phases/outreach-hub/PLAN.md) ──
 
 export interface CompanyInvitationFilter {
@@ -90,6 +135,37 @@ export function useOutreachSummary() {
     queryKey: [...OUTREACH_KEY, "summary"],
     queryFn: () => apiFetch<EmployerOutreachSummary>("employer", "/employer/outreach/summary"),
     retry: 1,
+  });
+}
+
+const COMPANY_SETTINGS_KEY = [...OUTREACH_KEY, "settings"] as const;
+
+/** Tỉ lệ hạn mức/ngày dành cho tự động mời (AD-23 mục 5). Ai trong công ty cũng xem được. */
+export function useCompanyOutreachSettings(enabled: boolean) {
+  return useQuery({
+    queryKey: COMPANY_SETTINGS_KEY,
+    queryFn: () => apiFetch<CompanyOutreachSettings>("employer", "/employer/outreach/settings"),
+    enabled,
+    retry: 1,
+  });
+}
+
+/** Chỉ quản trị viên công ty (backend trả 403 cho người khác). Đổi tỉ lệ ⇒ số lượt tự động trong summary đổi theo. */
+export function useUpdateCompanyOutreachSettings() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (settings: CompanyOutreachSettings) =>
+      apiFetch<CompanyOutreachSettings>("employer", "/employer/outreach/settings", {
+        method: "PATCH",
+        body: JSON.stringify(settings),
+      }),
+    onSuccess: (settings) => {
+      queryClient.setQueryData<CompanyOutreachSettings>(COMPANY_SETTINGS_KEY, settings);
+      void queryClient.invalidateQueries({ queryKey: [...OUTREACH_KEY, "summary"] });
+      // 0.6 bước 8: tỉ lệ cho phần tự động 0 lời mời/ngày ⇒ thẻ tự mời của mọi tin đổi trạng thái
+      // (PAUSED_BY_COMPANY_SHARE ↔ trạng thái cũ). Key "job-auto" của useAutoOutreach.
+      void queryClient.invalidateQueries({ queryKey: [...OUTREACH_KEY, "job-auto"] });
+    },
   });
 }
 

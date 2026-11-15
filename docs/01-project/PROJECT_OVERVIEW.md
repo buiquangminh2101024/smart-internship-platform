@@ -54,6 +54,15 @@
 
 7. Truy cập ứng dụng qua **Nginx gateway**: `http://localhost:8080` (không gọi thẳng `localhost:4000` — Nginx là single entry point cho API, xem `infra/nginx/nginx.conf`).
 
+8. **(Tuỳ chọn) Dữ liệu demo lớn**: ~43 công ty, 400 tin, 1.500 ứng viên kèm đơn, lịch phỏng vấn, lời mời, tin nhắn, đã tính sẵn embedding. Mọi tài khoản có email `@large-demo.local` và mật khẩu `123456789`. Plan và số đo ở `docs/06-backend/large-demo-data/PLAN.md`.
+   ```bash
+   npm run seed-large-demo --workspace=apps/server -- --dry-run     # chỉ đọc: in sẽ xoá / tạo gì, ước dung lượng
+   npm run seed-large-demo --workspace=apps/server                  # xoá phần demo lớn cũ rồi ghi lại, tính embedding (riêng embedding ~1,5 phút)
+   npm run seed-large-demo --workspace=apps/server -- --embed-only  # chỉ tính embedding còn thiếu (khi bị ngắt hoặc đã chạy --no-embed)
+   npm run seed-large-demo --workspace=apps/server -- --reset       # chỉ xoá phần demo lớn
+   ```
+   Thêm `--scale 0.1` để chạy thử ~10% quy mô, `--seed <số>` để đổi bộ dữ liệu sinh ngẫu nhiên. Script chỉ đụng dữ liệu `@large-demo.local` / id `clargedemo…`, không đụng bộ `seed-match-demo`. Tài khoản chính: `tuyendung-mayxanh@large-demo.local` (nhà tuyển dụng) và `uv-backend-1@large-demo.local` (ứng viên); danh sách đầy đủ in ra cuối mỗi lần ghi. Gói "Doanh nghiệp" của công ty demo có hạn, script in ngày hết hạn gói. Khoảng 7 ngày trước ngày đó, cron sẽ gửi email nhắc gói tới địa chỉ demo. Để tránh, chạy lại script trước ngày đó (gói tính lại từ ngày chạy) hoặc đặt `DEV_SKIP_EMAIL_SENDING=true`.
+
 Nếu port 4000/3000/8080 đã bị chiếm hoặc cần đổi, cập nhật `PORT`, `CORS_ORIGIN`, `NEXT_PUBLIC_API_URL` tương ứng trong `.env`.
 
 ---

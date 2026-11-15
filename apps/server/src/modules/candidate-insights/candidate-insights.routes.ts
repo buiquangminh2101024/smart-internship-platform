@@ -50,7 +50,7 @@ export function candidateInsightsRouter(container: AwilixContainer): Router {
     ).singleton(),
     candidateInsightRateLimitService: asClass(CandidateInsightRateLimitService).singleton(),
     candidateInsightsRepository: asClass(CandidateInsightsRepository).singleton(),
-    // jobRecommendationService/candidateMatchProfileLoader do jobMatchingRouter đăng ký
+    // jobRecommendationService do jobMatchingRouter đăng ký
     // (mount trước router này trong main.ts).
     candidateInsightsService: asClass(CandidateInsightsService).singleton(),
     candidateInsightsController: asClass(CandidateInsightsController).singleton(),
@@ -66,6 +66,10 @@ export function candidateInsightsRouter(container: AwilixContainer): Router {
 
   router.post("/candidate/profile/insights", ...candidateGuard, (req, res, next) => {
     void resolveController().generateInsight(req, res, next);
+  });
+
+  router.get("/candidate/profile-completeness", ...candidateGuard, (req, res, next) => {
+    void resolveController().getCompleteness(req, res, next);
   });
 
   return router;

@@ -7,6 +7,7 @@ import type { NotificationGroup } from "@sip/shared-types";
 export const NOTIFICATION_GROUP_BY_TYPE: Record<NotificationType, NotificationGroup> = {
   APPLICATION_STATUS_CHANGED: "APPLICATIONS",
   APPLICATION_RECEIVED: "APPLICATIONS",
+  APPLICATIONS_NEED_ATTENTION: "APPLICATIONS",
   JOB_POST_APPROVED: "JOB_POSTS",
   JOB_POST_REJECTED: "JOB_POSTS",
   JOB_POST_TAKEN_DOWN: "JOB_POSTS",
@@ -17,6 +18,11 @@ export const NOTIFICATION_GROUP_BY_TYPE: Record<NotificationType, NotificationGr
   COMPANY_LINK_REQUESTED: "COMPANY",
   CANDIDATE_OUTREACH_INVITATION_RECEIVED: "INVITATIONS",
   CANDIDATE_OUTREACH_INVITATION_RESPONDED: "INVITATIONS",
+  AUTO_OUTREACH_SENT: "INVITATIONS",
+  // AD-26: phía ứng viên không có nhóm "việc làm"; job alert là cơ hội việc làm được đưa tới
+  // ứng viên giống lời mời, nên vào tab "Lời mời". Nhắc thêm kỹ năng là việc của tài khoản/hồ sơ.
+  JOB_ALERT: "INVITATIONS",
+  PROFILE_SKILLS_REMINDER: "ACCOUNT",
   SUBSCRIPTION_EXPIRING: "SUBSCRIPTION",
   CATALOG_ENTRY_SUGGESTED: "CATALOG",
   PAYMENT_COMPLETED: "PAYMENTS",

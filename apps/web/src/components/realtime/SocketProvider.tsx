@@ -3,7 +3,11 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { OUTREACH_KEY } from "@/hooks/useCandidateOutreach";
+import { COMPANY_APPLICATIONS_KEY } from "@/hooks/useApplications";
+import { jobAutoKey } from "@/hooks/useAutoOutreach";
+import { OUTREACH_KEY, searchKey } from "@/hooks/useCandidateOutreach";
+import { HIRING_PROGRESS_KEY } from "@/hooks/useEmployerDashboard";
+import { JOB_RECOMMENDATIONS_KEY } from "@/hooks/useJobRecommendations";
 import { useSocketConnection, isMessagingArea, type SocketStatus } from "@/hooks/useSocket";
 import { showBrowserNotification } from "@/lib/browser-notification";
 import { markNotificationRead } from "@/lib/notifications";
@@ -54,9 +58,23 @@ export function SocketProvider({
           void queryClient.invalidateQueries({ queryKey: ["candidate", "interviews"] });
           void queryClient.invalidateQueries({ queryKey: ["candidate", "applications"] });
         }
-        // Ứng viên trả lời lời mời: trạng thái dòng và số đếm ở trang "Lời mời" đã cũ.
-        if (area === "employer" && event.type === "CANDIDATE_OUTREACH_INVITATION_RESPONDED") {
+        // Báo tin việc làm (AD-26): có tin mới vừa được chấm ≥ ngưỡng nên "Việc làm phù hợp" đã cũ.
+        // Thông báo gộp trong ngày được sửa tại chỗ (cùng id) — làm mới danh sách ở trên là đủ,
+        // không chèn thêm vào cache nên không nhân đôi.
+        if (area === "candidate" && event.type === "JOB_ALERT") {
+          void queryClient.invalidateQueries({ queryKey: JOB_RECOMMENDATIONS_KEY });
+        }
+        // Ứng viên trả lời lời mời, hoặc hệ thống vừa tự gửi lời mời (AD-23):
+        // trạng thái dòng và số đếm ở trang "Lời mời" đã cũ.
+        if (
+          area === "employer" &&
+          (event.type === "CANDIDATE_OUTREACH_INVITATION_RESPONDED" || event.type === "AUTO_OUTREACH_SENT")
+        ) {
           void queryClient.invalidateQueries({ queryKey: OUTREACH_KEY });
+        }
+        // Nhắc tuần hồ sơ tồn (AD-25): số trên dải gợi ý và tab của trang "Ứng viên" có thể đã cũ.
+        if (area === "employer" && event.type === "APPLICATIONS_NEED_ATTENTION") {
+          void queryClient.invalidateQueries({ queryKey: COMPANY_APPLICATIONS_KEY });
         }
         showBrowserNotification(area, "system", {
           title: event.title,
@@ -82,6 +100,19 @@ export function SocketProvider({
           onClick: () =>
             router.push(`${MESSAGES_HREF[area]}?conversationId=${encodeURIComponent(event.conversationId)}`),
         });
+      },
+      // 0.6 (AD-27 mục 6): lượt chấm lại vừa đổi số "Phù hợp" của các tin này. Chỉ làm mới dữ liệu,
+      // không hiện thông báo trình duyệt. Mất socket thì refetchOnWindowFocus mặc định làm dự phòng.
+      onMatchScoresUpdated: ({ jobPostIds }) => {
+        if (area !== "employer") return;
+        void queryClient.invalidateQueries({ queryKey: HIRING_PROGRESS_KEY }); // tiến độ tuyển ở tổng quan
+        void queryClient.invalidateQueries({ queryKey: ["employerJobPosts"] }); // "Phù hợp N" ở /employer/jobs
+        for (const jobId of jobPostIds) {
+          void queryClient.invalidateQueries({ queryKey: jobAutoKey(jobId) }); // thẻ tự mời trên trang tin
+          // "Gợi ý" của trang tìm ứng viên chỉ tìm lại khi Employer bấm "Tìm lại" hoặc mở lại trang
+          // (useCandidateSearch): đánh dấu cũ nhưng không tìm ngay, để danh sách không đổi khi đang chọn.
+          void queryClient.invalidateQueries({ queryKey: searchKey(jobId), refetchType: "none" });
+        }
       },
     },
     enabled,

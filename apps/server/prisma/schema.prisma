@@ -57,6 +57,7 @@ enum ApplicationStatus {
   ACCEPTED
   REJECTED
   CANCELLED
+  JOB_CLOSED // AD-25 — hệ thống đóng vì tin đã ngừng tuyển (trạng thái cuối, chỉ hệ thống chuyển)
 }
 
 enum NotificationType {
@@ -84,6 +85,10 @@ enum NotificationType {
   SUPPORT_CONTACT_RECEIVED // AD-17 — Admin: có yêu cầu hỗ trợ mới từ trang /support
   ACCOUNT_ACTIVATED // AD-18 — người dùng: Admin kích hoạt thủ công tài khoản chưa xác thực
   PASSWORD_RESET_SUGGESTED // AD-18 — người dùng: Admin gửi hướng dẫn đặt lại mật khẩu (link /forgot-password)
+  AUTO_OUTREACH_SENT // AD-23 — employer: hệ thống đã tự gửi lời mời cho tin (gộp tối đa 1 thông báo/tin/ngày)
+  APPLICATIONS_NEED_ATTENTION // AD-25 — employer: nhắc hằng tuần về hồ sơ tồn (gộp 1 thông báo/công ty/tuần)
+  JOB_ALERT // AD-26 — ứng viên: có tin mới phù hợp (gộp 1 thông báo/ứng viên/ngày)
+  PROFILE_SKILLS_REMINDER // AD-26 — ứng viên: nhắc một lần thêm kỹ năng (tài khoản ≥ 24 giờ chưa có kỹ năng)
 }
 
 // AD-16 M2 — lịch phỏng vấn. "Đã diễn ra" suy ra từ scheduledAt, không lưu COMPLETED.
@@ -103,6 +108,21 @@ enum OutreachInvitationStatus {
   ACCEPTED
   DECLINED
   EXPIRED
+}
+
+// AD-23 — lời mời do nhà tuyển dụng tự bấm (MANUAL) hay do hệ thống tự gửi (AUTO).
+enum OutreachInvitationSource {
+  MANUAL
+  AUTO
+}
+
+// AD-23 — lý do tự động mời tạm dừng vì "hết ứng viên":
+// NO_MATCH = không còn ai đạt ngưỡng (kiểm lại sau vài giờ),
+// CANDIDATE_CAP = còn người đạt ngưỡng nhưng đều đã nhận đủ lời mời trong ngày
+// (kiểm lại sau 0h UTC = 7h sáng giờ Việt Nam).
+enum AutoOutreachExhaustedReason {
+  NO_MATCH
+  CANDIDATE_CAP
 }
 
 enum OutboxStatus {
@@ -392,7 +412,22 @@ model Candidate {
   // AD-15 — bật = cho phép Employer tìm thấy và xem hồ sơ (không lộ phone/email).
   isOpenToOutreach    Boolean                        @default(false)
   outreachInvitations CandidateOutreachInvitation[]
+  matchScores         JobCandidateMatchScore[]
+  // AD-26 — job alert: bật sẵn, tắt được ở Cài đặt.
+  jobAlertEnabled      Boolean    @default(true)
+  jobAlertEmailEnabled Boolean    @default(true)
+  jobAlertSameCityOnly Boolean    @default(false)
+  jobAlerts            JobAlert[]
 
+  // AD-27 — dấu "cần chấm lại theo ứng viên": đặt khi dữ liệu bộ chấm đọc đổi,
+  // xoá sau khi chấm nếu dấu ≤ lúc bắt đầu chấm. Null = không chờ chấm.
+  matchRescoreRequestedAt DateTime?
+  // AD-27 (Q2) — lần cuối hồ sơ đổi theo nghĩa bộ chấm; đặt cùng dấu, không bao
+  // giờ xoá. Lượt chấm theo tin dùng để đánh dấu lại người vừa sửa trong lúc chấm.
+  matchProfileChangedAt   DateTime?
+
+  // Lượt chấm lấy người có dấu, dấu cũ nhất trước.
+  @@index([matchRescoreRequestedAt])
   @@map("candidates")
 }
 
@@ -526,6 +561,9 @@ model Company {
   // AD-16 D13 — lần nộp/nộp lại hồ sơ xác minh gần nhất; mốc chờ của hàng đợi
   // Admin (updatedAt đổi cả khi đổi logo/banner hay bật/tắt requiresApproval).
   verificationSubmittedAt DateTime?
+  // AD-23 — phần trăm hạn mức lời mời/ngày mà tự động mời được dùng (0–100).
+  // Mời tay dùng được mọi lượt còn lại của tổng hạn mức. Chỉ quản trị viên công ty sửa.
+  outreachAutoSharePercent Int @default(80)
 
   employers            Employer[]
   jobPosts             JobPost[]
@@ -579,6 +617,9 @@ model SubscriptionPlan {
   // AD-15 — null = dùng ngưỡng mặc định trong code (DEFAULT_OUTREACH_DAILY_QUOTA),
   // KHÔNG phải "không giới hạn".
   outreachInvitationDailyQuota Int?
+  // AD-23 — hệ số mời H: mỗi tin bật tự động mời giữ hiringTarget × H lời mời
+  // đang hoạt động. null = dùng DEFAULT_POOL_MULTIPLIER trong code.
+  outreachPoolMultiplier       Int?
 
   companySubscriptions CompanySubscription[]
 
@@ -705,6 +746,28 @@ model JobPost {
   createdAt               DateTime      @default(now())
   updatedAt               DateTime      @updatedAt
 
+  // AD-23 — tự động mời ứng viên theo tin (0.2). Sửa qua API riêng, không qua
+  // updateDraft, nên sửa được ở mọi trạng thái của tin.
+  autoOutreachEnabled         Boolean                      @default(false)
+  autoOutreachMinScore        Int                          @default(80)
+  // Số người cần tuyển; ngừng tự mời khi số đơn ACCEPTED của tin ≥ hiringTarget.
+  hiringTarget                Int                          @default(1)
+  // Dấu "hết ứng viên": null = đang chạy bình thường.
+  autoOutreachExhaustedAt     DateTime?
+  autoOutreachExhaustedReason AutoOutreachExhaustedReason?
+  // AD-24 — lần chấm bảng điểm gần nhất của tin; null = chưa chấm. Job đêm chấm
+  // tin cũ nhất trước, UI hiện "cập nhật lúc…".
+  matchScoresAt               DateTime?
+
+  // AD-25 — tự xử lý hồ sơ (0.4). Sửa qua API riêng như cài đặt tự mời.
+  // Ngưỡng X của tự chuyển "Đang xem xét" dùng lại autoOutreachMinScore.
+  // Bật thì hồ sơ Chờ duyệt có điểm ≥ X tự chuyển PENDING → REVIEWING.
+  autoReviewEnabled           Boolean                      @default(true)
+  // Y: điểm dưới Y thì đề xuất từ chối (người xác nhận). Luôn Y < X.
+  rejectSuggestBelowScore     Int                          @default(50)
+  // Bật thì hồ sơ đã phỏng vấn chưa có kết quả tự đóng sau 30 ngày khi tin đã đóng.
+  autoCloseInterviewedEnabled Boolean                      @default(false)
+
   moderationActions   JobPostModerationAction[]
   reports             JobReport[]
   applications        Application[]
@@ -715,6 +778,8 @@ model JobPost {
   matchEmbedding      JobPostEmbedding?
   outreachInvitations CandidateOutreachInvitation[]
   dailyStats          JobPostDailyStat[]
+  matchScores         JobCandidateMatchScore[]
+  jobAlerts           JobAlert[]
 
   @@index([companyId, status])
   @@index([status, createdAt])
@@ -791,6 +856,45 @@ model JobPostEmbedding {
   @@map("job_post_embeddings")
 }
 
+// AD-24 — bảng điểm lưu sẵn (0.3): điểm mới nhất của mọi cặp (tin PUBLISHED, ứng
+// viên có chung ≥ 1 kỹ năng APPROVED). Dữ liệu dẫn xuất, xoá hết vẫn chấm lại
+// được. Ngưỡng, đơn và lời mời KHÔNG lưu ở đây mà so lúc đọc.
+model JobCandidateMatchScore {
+  jobPostId       String
+  jobPost         JobPost   @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  candidateId     String
+  candidate       Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  score           Int
+  // true ⇒ chưa có embedding lúc chấm, điểm là rule-only (markSemanticPending).
+  semanticPending Boolean   @default(false)
+  weightsVersion  String
+  scoredAt        DateTime  @default(now())
+
+  @@id([jobPostId, candidateId])
+  @@index([jobPostId, score])
+  // AD-26 — "Việc làm phù hợp" đọc bảng điểm theo ứng viên, sắp điểm giảm dần.
+  @@index([candidateId, score(sort: Desc)])
+  @@map("job_candidate_match_scores")
+}
+
+// AD-26 — job alert: mỗi cặp tin–ứng viên báo một lần. Sinh ngay sau khi tin
+// được chấm lúc đăng (AD-24 lối a); email gộp mỗi ngày đánh dấu emailedAt.
+model JobAlert {
+  candidateId String
+  candidate   Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  jobPostId   String
+  jobPost     JobPost   @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  // Điểm lúc báo.
+  score       Int
+  createdAt   DateTime  @default(now())
+  // null ⇒ chưa gửi trong email gộp.
+  emailedAt   DateTime?
+
+  @@id([candidateId, jobPostId])
+  @@index([emailedAt, createdAt])
+  @@map("job_alerts")
+}
+
 // Đầu ra LLM của "Phân tích hồ sơ" (AD-14, gộp A1+A4; KHÔNG bao gồm "Việc làm
 // phù hợp" — tính năng đó tách độc lập ở job-matching, không LLM, không lưu
 // persistent). topJobPostIds chỉ để debug/hiển thị "dựa trên N tin", không
@@ -828,11 +932,15 @@ model CandidateOutreachInvitation {
   // KHÔNG phải điểm hiện tại. null khi lúc đó không chấm được / status ≠ SCORED.
   matchScore          Int?
   matchWeightsVersion String?
+  // AD-23 — lời mời cũ (trước 0.2) đều là MANUAL.
+  source              OutreachInvitationSource @default(MANUAL)
 
   @@index([candidateId, jobPostId, status])
   @@index([companyId, createdAt])
   // D6 — danh sách "Đã mời" theo từng tin, mới nhất trước.
   @@index([jobPostId, createdAt])
+  // AD-23 — đếm số lời mời ứng viên đã nhận trong ngày (trần 10 lời mời/ngày).
+  @@index([candidateId, createdAt])
   @@map("candidate_outreach_invitations")
 }
 

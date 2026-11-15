@@ -118,7 +118,7 @@ export function EmployerPortalShell({ children }: { children: ReactNode }) {
           open={mobileNav.open}
           onClose={mobileNav.close}
           items={navItems}
-          header={<CompanyHeader company={company} wrap />}
+          header={<CompanyHeader company={company} />}
           footer={newJobButton}
           roleLabel="Doanh nghiệp"
           homeHref="/employer/dashboard"
@@ -131,19 +131,19 @@ export function EmployerPortalShell({ children }: { children: ReactNode }) {
   );
 }
 
-/** Tên công ty kèm huy hiệu xác minh. `wrap`: tên dài xuống tối đa 2 dòng (ngăn kéo) thay vì cắt. */
-function CompanyHeader({
-  company,
-  wrap = false,
-}: {
-  company: { name: string; isVerified: boolean } | undefined;
-  wrap?: boolean;
-}) {
+/**
+ * Tên công ty kèm huy hiệu xác minh (sidebar và ngăn kéo). Tên dài xuống tối đa 2 dòng; `min-w-0` để
+ * ô grid không giãn theo chữ, nếu không tên tràn khỏi cột 240px và kéo dài cả huy hiệu.
+ */
+function CompanyHeader({ company }: { company: { name: string; isVerified: boolean } | undefined }) {
+  const name = company?.name ?? "Employer Portal";
   return (
-    <div className={`grid gap-1 ${wrap ? "justify-items-start" : ""}`}>
-      <span className={`flex gap-2 text-sm font-semibold text-text-strong ${wrap ? "items-start" : "items-center"}`}>
-        <Icon name="building-2" size={16} className={`flex-none text-brand-600 ${wrap ? "mt-0.5" : ""}`} />
-        <span className={wrap ? "line-clamp-2 break-words" : "truncate"}>{company?.name ?? "Employer Portal"}</span>
+    <div className="grid min-w-0 justify-items-start gap-1">
+      <span className="flex min-w-0 items-start gap-2 text-sm font-semibold text-text-strong">
+        <Icon name="building-2" size={16} className="mt-0.5 flex-none text-brand-600" />
+        <span className="line-clamp-2 min-w-0 break-words" title={name}>
+          {name}
+        </span>
       </span>
       {company ? (
         <Badge tone={company.isVerified ? "success" : "warning"}>

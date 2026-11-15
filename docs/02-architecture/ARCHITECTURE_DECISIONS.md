@@ -357,7 +357,9 @@ Bắt buộc thêm khi gửi duyệt (áp dụng cho cả nhánh publish thẳng
 
 > **Trạng thái: ĐÃ LẬP KẾ HOẠCH và ĐƯỢC DUYỆT (2026-09-29), ĐANG TRIỂN KHAI: backend bước 0–4 xong (M1 đã áp lên Neon); bước 5 (Interview, M2, kèm D12–D13 duyệt 2026-09-29, mục 10–11) xong phần code, migration M2 chưa áp lên Neon; frontend chưa làm.**
 
-> **Cập nhật 2026-11-04 (dashboard Employer bản 2, `docs/05-frontend/phases/employer-dashboard-v2/PLAN.md`):** phía Employer bỏ luồng "việc cần làm" thao tác tại chỗ (`GET /employer/dashboard/tasks`) và phễu (`analytics.funnel`, `firstResponse`); dashboard Employer giờ chỉ là điểm chuyển trang, việc đang chờ hiện bằng số trên 4 thẻ. Mục 6 (quy ước phễu) không còn API nào dùng; bảng `application_status_history` vẫn ghi theo mục 3. Phần nói về "việc cần làm" ở mục 5 nay chỉ còn đúng với dashboard Admin. Các nguyên tắc còn lại (module `dashboard` chỉ đọc, đọc qua service của module chủ) giữ nguyên.
+> **Cập nhật 2026-11-04 (dashboard Employer bản 2, `docs/05-frontend/phases/dashboard-v2/PLAN.md`):** phía Employer bỏ luồng "việc cần làm" thao tác tại chỗ (`GET /employer/dashboard/tasks`) và phễu (`analytics.funnel`, `firstResponse`); dashboard Employer giờ chỉ là điểm chuyển trang, việc đang chờ hiện bằng số trên 4 thẻ. Mục 6 (quy ước phễu) không còn API nào dùng; bảng `application_status_history` vẫn ghi theo mục 3. Phần nói về "việc cần làm" ở mục 5 nay chỉ còn đúng với dashboard Admin. Các nguyên tắc còn lại (module `dashboard` chỉ đọc, đọc qua service của module chủ) giữ nguyên.
+
+> **Cập nhật 2026-11-15 (dashboard Admin bản D2, `docs/05-frontend/phases/dashboard-v2/PLAN.md`):** dashboard Admin cũng bỏ thao tác tại chỗ. Bàn duyệt (duyệt tin, xác minh công ty, duyệt danh mục) và `GET /admin/dashboard/tasks` đã gỡ; ba thẻ hàng chờ dẫn sang trang quản lý. Từ nay cả hai dashboard chỉ là điểm nhìn tổng quan và điểm chuyển trang: câu "thao tác tại chỗ … gọi lại API hiện có" ở mục 1 và phần "việc cần làm" ở mục 5 không còn màn hình nào dùng; việc đang chờ chỉ hiện bằng số (thẻ hàng chờ, số trên menu), tính từ trạng thái hiện tại, không lưu. Các nguyên tắc còn lại giữ nguyên.
 
 **Quyết định:**
 
@@ -647,3 +649,454 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 - `apps/web/src/app/jobs/[id]/page.tsx` (thêm nút Báo cáo)
 - `apps/web/src/app/admin/(console)/job-reports/page.tsx` (trang Admin mới)
 - `apps/web/src/components/layout/AdminConsoleShell.tsx` (thêm nav item)
+
+---
+
+## AD-23 — Tự động mời ứng viên theo tin (0.2): chỉ tiêu tuyển, hạn mức tính theo gói, chia lượt giữa các tin (sửa một phần AD-15)
+
+**Ngày:** 2026-11-09 · **Phase liên quan:** không thuộc phase đánh số. Mục 0.2 của `docs/01-project/FEATURE_BACKLOG.md`, theo nhận xét của giáo viên ở buổi demo 05/11/2026. Kế hoạch chi tiết: `docs/06-backend/auto-outreach/PLAN.md`, `docs/05-frontend/phases/auto-outreach/PLAN.md`.
+
+> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-09, chủ dự án duyệt từng câu hỏi). ĐÃ TRIỂN KHAI ĐỦ BACKEND VÀ FRONTEND (2026-11-10), đã kiểm trên Neon.** Ghi chú triển khai chi tiết ở `docs/06-backend/auto-outreach/PLAN.md` (backend) và `docs/05-frontend/phases/auto-outreach/PLAN.md` (frontend, kết quả kiểm F5).
+
+**Bối cảnh:** AD-15 chỉ cho mời tay từng người, hạn mức mặc định 3 lời mời/ngày/công ty và cả ba gói đều để `null`. Giáo viên yêu cầu: đăng tin xong thì hệ thống tự gợi ý và tự gửi lời mời, nhà tuyển dụng không phải vào từng tin để mời từng người.
+
+**Quyết định:**
+
+1. **Hai bước.** (a) Nút "Mời tất cả gợi ý" trên trang tìm ứng viên của một tin, có ở mọi gói kể cả Dùng thử. (b) Tự động mời: hệ thống tự tìm và tự gửi lời mời cho các tin đã bật. Gói Dùng thử **không** có tự động mời (tham khảo: Indeed chỉ cho "mời ứng tuyển" với tin Premium Sponsored).
+2. **Cài đặt theo từng tin, lưu thẳng trên `JobPost`:** `autoOutreachEnabled` (mặc định **tắt**), `autoOutreachMinScore` (ngưỡng điểm, mặc định 80, chủ dự án chọn), `hiringTarget` (số người cần tuyển, mặc định 1). Sửa được ở mọi trạng thái của tin, qua API riêng. Không đi qua `updateDraft`, vì tin đã gửi duyệt hoặc đang hiển thị thì không sửa nội dung được.
+3. **Mỗi tin giữ một số lời mời đang hoạt động:** mục tiêu = `hiringTarget × H` (H là hệ số mời của gói). "Đang hoạt động" là lời mời `PENDING` hoặc `ACCEPTED`. Có người từ chối hoặc lời mời hết hạn thì mời bù cho đủ. Hệ thống **dừng** khi số đơn `ACCEPTED` của tin ≥ `hiringTarget`, hoặc khi tin không còn `PUBLISHED`. Không còn ứng viên nào mời được thì tin được đánh dấu "hết ứng viên" (`autoOutreachExhaustedAt` + lý do). Có hai lý do: `CANDIDATE_CAP` (người phù hợp hôm nay đã nhận đủ lời mời) thì kiểm lại sau mốc đặt lại hằng ngày (7h sáng giờ Việt Nam); `NO_MATCH` (không ai đạt ngưỡng) thì kiểm lại mỗi 3 giờ, vì ứng viên mới hoặc hồ sơ thay đổi có thể đổi kết quả trong ngày. Nhà tuyển dụng hạ ngưỡng hoặc tăng số người cần tuyển thì bỏ dấu ngay.
+4. **Hạn mức/ngày tính theo gói:**
+
+   > hạn mức/ngày = max( S × C × H / T ,  C × H )
+
+   S là số tin của gói, C = 2 là số người cần tuyển trung bình một tin (**giả định**), H là hệ số mời của gói, T = 14 là số ngày hiệu lực của lời mời. Vế trái đủ để giữ đầy lời mời cho mọi tin, theo cách tính sức chứa: tổng số chỗ chia cho thời gian một lời mời chiếm chỗ. Vế phải là mức sàn, đủ để lấp đầy lời mời cho một tin ngay trong ngày đăng.
+
+   | Gói | S | H | Hạn mức/ngày |
+   |---|---|---|---|
+   | Dùng thử | 2 | 3 | 6 (chỉ mời tay) |
+   | Cơ bản | 5 | 4 | 8 |
+   | Tiêu chuẩn | 20 | 5 | 14 |
+   | Doanh nghiệp | 100 | 6 | 86 |
+
+   **Không có nguồn khoa học cho các con số cụ thể.** Đã tìm và không thấy bài báo hay tài liệu chính thức nào cho công thức hạn mức lời mời. Các bài tìm được chỉ ủng hộ việc **phải có giới hạn**: Arnosti, Johari & Kanoria (*Managing Congestion in Matching Markets*, MSOM) và Kanoria & Saban (*Management Science* 2021) về nghẽn thị trường; Coles, Kushnir & Niederle (*AEJ: Micro* 2013) về việc tín hiệu bị giới hạn thì mới đáng tin. H = 5 ở giữa dựa trên số liệu phễu tuyển dụng do các công ty bán công cụ tuyển dụng tự công bố (khoảng 15–20% ứng viên trả lời). H = 3/4/6 là **lựa chọn kinh doanh**, để gói cao giữ nhiều lời mời hơn cho mỗi tin. C, H và T đều là tham số có thể chỉnh.
+5. **Hạn mức dùng chung cho mời tay và tự động, công ty chỉnh tỉ lệ.** Thêm `Company.outreachAutoSharePercent` (0–100, mặc định 80; chỉ quản trị viên công ty được sửa). Tự động chỉ được gửi khi số đã gửi tự động hôm nay < hạn mức × tỉ lệ **và** tổng số đã gửi hôm nay < hạn mức. Mời tay dùng được mọi lượt còn lại của tổng hạn mức. Không tách hai hạn mức, vì công thức ở mục 4 chỉ tính ra một con số; tham khảo LinkedIn Hiring Assistant cũng trừ chung vào hạn mức InMail. Mức 80% là giá trị mặc định do thiết kế, không có nguồn.
+6. **Chia lượt giữa các tin khi không đủ hạn mức:** chia lần lượt, mỗi vòng một lời mời cho mỗi tin còn thiếu. Tin thiếu nhiều nhất **theo tỉ lệ** (thiếu / mục tiêu) đi trước, bằng nhau thì tin sắp hết hạn trước. Trong một tin, mời người điểm cao nhất mà đạt ngưỡng trước.
+7. **Mỗi ứng viên nhận tối đa 10 lời mời/ngày**, tính trên mọi công ty và cả mời tay lẫn tự động. Gặp người đã đủ thì tự động mời bỏ qua, chuyển sang người kế tiếp; mời tay thì trả 409. Lý do: tránh làm phiền và tránh lời mời dồn vào một nhóm nhỏ ứng viên điểm cao (Pizzato và cộng sự về quá tải người nhận; Mashayekhi và cộng sự, *ReCon*, RecSys 2023 về nghẽn trong gợi ý việc làm). Con số 10 do chủ dự án chọn.
+8. **Chạy nền ngay trong process hiện tại, không thêm hạ tầng.** Có ba lối kích hoạt: (a) tin vừa chuyển `PUBLISHED`, gồm tự đăng khi công ty không cần duyệt và Admin duyệt tin; (b) ứng viên từ chối lời mời; (c) cron `node-cron` mỗi 15 phút, quét mọi công ty có tin đang bật tự mời. Cron lo luôn việc mời bù khi lời mời hết hạn, mời ứng viên mới đổ vào, và chạy lại nếu (a)/(b) lỗi. (a) và (b) chạy **sau khi transaction xong**, không chờ kết quả, lỗi chỉ ghi log. Mỗi công ty chỉ có một lượt chạy cùng lúc, nhờ khoá Redis. Bảo vệ tải: lọc phần thiếu bằng một câu SQL gộp trước khi chấm điểm, giới hạn 60 giây mỗi lượt cron, không chạy chồng, nhường lượt cho request web giữa các tin, xoay vòng công ty theo lần chạy gần nhất. Người đã đủ trần trong ngày bị loại ngay ở bước lọc SQL. Tạo lời mời dùng advisory lock của Postgres theo ứng viên để không tạo trùng và không vượt trần khi chạy đồng thời. Có cần tách worker hay không sẽ quyết định theo số đo độ trễ event loop (bước 7 của plan backend); nếu cần thì viết AD riêng.
+9. **Lời mời ghi nguồn gửi:** thêm `CandidateOutreachInvitation.source` (`MANUAL`/`AUTO`). Lời mời tự động đứng tên người đăng tin (`employerId = jobPost.employerId`). Ứng viên nhận lời mời như cũ, không thấy khác biệt.
+10. **Báo cho nhà tuyển dụng gộp theo ngày:** loại thông báo mới `AUTO_OUTREACH_SENT`, gửi qua `notifyOnce` với khoá `auto-outreach:<jobPostId>:<ngày>`. Mỗi tin tối đa một thông báo/ngày, không gửi một thông báo cho mỗi lời mời.
+11. **Chưa có bảng điểm lưu sẵn.** Mỗi lượt chạy chấm lại lúc chạy, như trang tìm ứng viên (lọc SQL ≤ 50 người rồi chấm hybrid). Bảng điểm theo cặp tin–ứng viên để mục 0.3 làm.
+
+**Sửa so với AD-15:** mục 5 (hạn mức mặc định 3 lời mời/ngày, cả ba gói `null`) được thay bằng mục 4–5 ở trên. Mục 4 của AD-15 (không mời lại nếu đã có lời mời `PENDING`) và Q4 (đã `DECLINED` thì không mời lại cùng tin) giữ nguyên, áp dụng cho cả lời mời tự động. Opt-in bắt buộc (AD-15 mục 1) giữ nguyên: chỉ ứng viên tự bật `isOpenToOutreach` mới được mời.
+
+**Phương án không chọn:**
+
+- *Tách hạn mức tự động và mời tay:* cần hai con số cho mỗi gói nhưng con số cho mời tay không có căn cứ, và lượt không dùng ở bên này thì bên kia không dùng được.
+- *Hạn mức tính theo tháng có cộng dồn (như Indeed, LinkedIn):* phải làm lại bộ đếm Redis theo ngày đang có. Không đáng công cho khoá luận.
+- *Hàng đợi việc nền riêng (BullMQ...):* CLAUDE.md không cho thêm hạ tầng khi chưa có lý do. Cron cùng process đủ dùng cho quy mô demo.
+- *Dồn hết hạn mức cho tin thiếu nhiều nhất:* một tin mới đăng sẽ ăn hết lượt trong ngày, các tin chỉ cần mời bù 1–2 người lại không được gì.
+- *Tự động mời bật sẵn cho tin mới:* gửi lời mời thay mặt nhà tuyển dụng nên để họ chủ động bật.
+
+**Ảnh hưởng:**
+
+- `schema.prisma` + 1 migration viết tay:
+  - `JobPost`: `autoOutreachEnabled`, `autoOutreachMinScore`, `hiringTarget`, `autoOutreachExhaustedAt`, `autoOutreachExhaustedReason` (enum mới);
+  - `Company.outreachAutoSharePercent`;
+  - `SubscriptionPlan.outreachPoolMultiplier`;
+  - enum `OutreachInvitationSource` + cột `source`;
+  - `NotificationType.AUTO_OUTREACH_SENT`;
+  - index `(candidateId, createdAt)` trên bảng lời mời;
+  - cập nhật hạn mức và hệ số của ba gói theo tên.
+- `apps/server/src/modules/candidate-outreach/`: thêm service, cron và bộ chia lượt cho tự động mời; sửa bộ đếm hạn mức và `invite`.
+- `job-posts.service.ts`: gọi lối kích hoạt (a) sau khi tin chuyển `PUBLISHED`.
+- `notifications`: thêm 1 khoá template.
+- `main.ts`: khởi động cron mới.
+- `packages/shared-types`: thêm type mới.
+- Frontend:
+  - trang tìm ứng viên của tin: nút "Mời tất cả gợi ý";
+  - trang chi tiết tin: thẻ "Tự động mời ứng viên";
+  - trang "Lời mời": cài đặt tỉ lệ và nhãn "Tự động".
+
+**Ghi chú triển khai backend (2026-11-10):**
+
+- Thêm lối kích hoạt thứ tư ngoài ba lối ở mục 8: `PATCH` cài đặt tự mời của tin, khi bật lại, hạ ngưỡng điểm hoặc tăng số người cần tuyển lúc tin đang `PUBLISHED`.
+- Bảo vệ tải (plan Q4): lọc rẻ bằng một câu SQL; mỗi lượt cron tối đa 60 giây; khoá Redis theo công ty để không chạy chồng; nhường event loop giữa các tin; cron xoay vòng công ty theo lần chạy gần nhất. Tin không còn ai đạt ngưỡng được đánh dấu "hết ứng viên" (`NO_MATCH` kiểm lại sau 3 giờ, `CANDIDATE_CAP` sau mốc đặt lại hằng ngày).
+- Mục 8 được giữ sau khi đo (plan bước 7c–7d):
+  - Lượt cron cho 10 công ty: event loop p99 22 ms như lúc không chạy; API nhẹ chậm thêm khoảng 14%.
+  - Lúc phải tính nhiều embedding mới: API nhẹ chậm khoảng 2,5 lần trong 1–1,7 giây. Trang tìm ứng viên hiện có cũng gây mức này, nên không phải lý do riêng để tách.
+  - Không tách worker, không cần AD mới.
+- Mục 4: hạn mức không tính bằng hàm mà đọc từ cột `outreachInvitationDailyQuota` của gói; đã kiểm trên Neon ra đúng 8 / 14 / 86 (Dùng thử là hằng số 6 trong code).
+
+## AD-24 — Bảng điểm lưu sẵn theo cặp tin–ứng viên (0.3)
+
+**Ngày:** 2026-11-11 · **Phase liên quan:** không thuộc phase đánh số. Mục 0.3 của `docs/01-project/FEATURE_BACKLOG.md`, theo nhận xét của giáo viên ở buổi demo 05/11/2026. Kế hoạch chi tiết: `docs/06-backend/hiring-progress/PLAN.md`, `docs/05-frontend/phases/hiring-progress/PLAN.md`.
+
+> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-10). ĐÃ TRIỂN KHAI BACKEND (2026-11-11), đã nạp bảng và kiểm trên Neon.** Mục 6 chốt 2026-11-11, sau số đo. Frontend (F1–F5) xong 2026-11-11, ghi chú ở `docs/05-frontend/phases/hiring-progress/PLAN.md`. Ghi chú triển khai chi tiết ở `docs/06-backend/hiring-progress/PLAN.md`.
+
+**Bối cảnh:** trang tổng quan của nhà tuyển dụng cần số ứng viên phù hợp cho mọi tin đang hiển thị. Hiện chưa có điểm nào được lưu: trang tìm ứng viên và tự mời (AD-23) đều lọc SQL ≤ 50 người rồi chấm hybrid lúc chạy (khoảng 1 giây cho 50 người). Đo ngày 2026-11-11: 309/311 tin có hơn 50 người chung kỹ năng, nên muốn đếm đúng thì phải chấm cả pool. Trung vị pool là 438 người, chấm một tin mất khoảng 5 giây. Không chấm lúc mở trang được.
+
+**Quyết định:**
+
+1. **Bảng `job_candidate_match_scores`** lưu điểm mới nhất của từng cặp (tin, ứng viên): `score`, `semanticPending` (điểm rule-only vì chưa có embedding), `weightsVersion`, `scoredAt`. Thêm `JobPost.matchScoresAt`. Đây là **dữ liệu dẫn xuất**: xoá hết vẫn tính lại được.
+2. **Phạm vi chấm:** mọi ứng viên có chung ≥ 1 kỹ năng đã duyệt với tin `PUBLISHED`. Không giới hạn số người, không lọc opt-in, đơn hay lời mời. Chỉ lưu kết quả có điểm. Tin hết hiển thị thì xoá dòng.
+3. **Ngưỡng, lời mời và đơn không lưu trong bảng** mà so lúc đọc. Đổi ngưỡng tự mời của tin không cần chấm lại.
+4. **Cùng bộ chấm** với trang tìm ứng viên và tự mời (`CandidateOutreachService`: cùng quy tắc, cùng cosine, cùng cách xử lý khi thiếu embedding), để điểm trong bảng khớp điểm nhà tuyển dụng thấy.
+5. **Cập nhật:**
+   - (a) khi tin chuyển `PUBLISHED` (tự đăng hoặc Admin duyệt): chấm riêng tin đó, chạy sau commit, không chờ;
+   - (b) job đêm 3h30 giờ Việt Nam: chấm lại mọi tin đang hiển thị, tin chấm lâu nhất trước, giới hạn 45 phút mỗi lượt.
+
+   Chạy chung process như AD-23 mục 8, nhường event loop giữa các lô. Tin đang hiển thị không sửa được nội dung, nên không cần lối "sửa tin".
+6. **Job đêm nạp hồ sơ ứng viên một lần mỗi lượt** rồi dùng lại cho mọi tin.
+   - Số đo: khoảng 80% thời gian chấm một tin là nạp hồ sơ. Mỗi hồ sơ nằm trong pool của khoảng 87 tin.
+   - Chấm từng tin như (a) thì cả đêm ≈ 24 phút. Nạp một lần thì ≈ 2–3 phút.
+   - Cách làm: `CandidateOutreachService` tách phần chấm thành `scoreProfiles(job, profiles, …)`, nhận hồ sơ đã nạp. `scoreCandidates` hiện có nạp hồ sơ rồi gọi lại hàm này, nên điểm ở mọi nơi vẫn từ một chỗ (mục 4).
+   - Cache hồ sơ chỉ sống trong một lượt, trần 20.000 hồ sơ (vượt thì xoá sạch rồi nạp tiếp). Ứng viên sửa hồ sơ trong lúc chạy thì đêm sau mới vào bảng.
+   - Lối (a) dùng cache mới, chỉ nạp hồ sơ của pool tin đó.
+7. **Tự mời (AD-23) và trang tìm ứng viên vẫn chấm trực tiếp.** Chỉ chuyển sang đọc bảng sau khi mục 0.6 có chấm lại theo ứng viên (đánh dấu tường minh ứng viên "cần chấm lại", quét mỗi 15 phút; job đêm giữ làm lưới an toàn).
+
+**Số đo (2026-11-11, Neon, chỉ đọc):**
+
+- 311 tin, 1.523 ứng viên.
+- 131.928 cặp. Ước bảng ≈ 34 MB, cả DB hiện là 35 MB.
+- 1.521/1.523 hồ sơ đã có embedding đúng hash.
+- Chi tiết ở Ghi chú triển khai của plan backend.
+- **Lần nạp đầu (2026-11-11, có ghi):** 311 tin, 131.928 dòng, bảng thật 22 MB (thấp hơn ước 34 MB), chạy 301 giây. Dài hơn ước 2–3 phút ở mục 6 vì ước tính đó chưa tính phần ghi (≈ 118 giây) và phần nạp hồ sơ tin (≈ 73 giây). Vẫn rất xa giới hạn 45 phút.
+- **Kiểm thử (2026-11-11, bước 8 của plan backend):**
+  - mục 4 đúng: top 10 của bảng trùng trang tìm ứng viên ở tin có ≤ 50 người được tìm; ở 8 tin lớn nhất, 10/10 người trang tìm ứng viên trả về có cùng điểm trong bảng;
+  - mục 3 đúng: đổi ngưỡng 80 → 70 thì số Phù hợp đổi ngay (19 → 46), không chấm lại;
+  - mục 5a: tin có điểm khoảng 4 giây sau khi Admin bắt đầu duyệt;
+  - mục 5b: một lượt đêm chạy 291 giây cho 312 tin, không làm chậm web (event loop p99 22,4 → 22,6 ms, `/api/health` p50 giữ 48 ms, danh sách tin công khai p50 475 → 485 ms). Giữ chạy chung process;
+  - mục 7: giới hạn 50 của trang tìm ứng viên bỏ sót 8/114 người phù hợp (≈ 7%) ở 8 tin lớn nhất. Lợi ích chính của việc chuyển sang đọc bảng sau 0.6 là nhanh hơn.
+
+**Phương án không chọn:**
+
+- *Gắn vào cron 15 phút của 0.2:* lượt tự mời chỉ có 60 giây (đủ khoảng 38 tin pool 50), không đủ cho pool đầy đủ. Một cron cũng không nên làm hai việc.
+- *Chấm phần thay đổi theo thời gian sửa của ứng viên:* dễ sót, vì sửa kỹ năng không đổi `updatedAt` của ứng viên. Việc này để 0.6 làm bằng đánh dấu tường minh.
+- *Chấm lúc mở trang:* quá chậm (mục Bối cảnh).
+- *Chỉ lưu dòng điểm cao để giảm dung lượng:* ngưỡng của tin cho chỉnh 0–100, nên dòng nào cũng có thể cần.
+- *Job đêm gọi `scorePool` cho từng tin (bản đầu của plan):* ≈ 24 phút, sát ngưỡng 30 phút đặt ra ở bước 0, và hầu hết thời gian là nạp lại cùng một hồ sơ.
+
+**Ảnh hưởng:**
+
+- 1 bảng mới, `JobPost.matchScoresAt`, 1 migration viết tay.
+- Module mới `apps/server/src/modules/match-scores/`, 1 cron, 1 script chạy tay.
+- `job-posts.service.ts`: gọi lối kích hoạt (a).
+- 1 endpoint dashboard; mở rộng `AutoOutreachStatus` và thêm `JobPost.matchedCount` (danh sách tin của Employer) trong `packages/shared-types`.
+- `candidate-outreach.service.ts`: tách `scoreProfiles` và thêm `loadJobProfile` public (mục 6). Hành vi của trang tìm ứng viên, tự mời và chấm lúc gửi lời mời không đổi.
+
+## AD-25 — Hệ thống tự xử lý hồ sơ ứng tuyển (0.4): tự chuyển "Đang xem xét", đề xuất từ chối, nhắc hằng tuần, tự đóng hồ sơ của tin đã đóng (sửa một phần AD-13)
+
+**Ngày:** 2026-11-11 · **Phase liên quan:** không thuộc phase đánh số. Mục 0.4 của `docs/01-project/FEATURE_BACKLOG.md`, theo nhận xét của giáo viên ở buổi demo 05/11/2026 ("chờ 40 ngày, 70 ngày rồi vẫn còn đang chờ xử lý", "chưa thấy tính tự động"). Kế hoạch chi tiết: `docs/06-backend/application-automation/PLAN.md`, `docs/05-frontend/phases/application-automation/PLAN.md`.
+
+> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-11, chủ dự án duyệt từng điểm). ĐÃ TRIỂN KHAI BACKEND VÀ FRONTEND (2026-11-12): backend đã chạy và kiểm trên Neon, frontend F1–F6 đã kiểm trên trình duyệt.** Ba câu hỏi nhỏ của plan backend (Q1–Q3) đã chốt 2026-11-12. Ghi chú triển khai và số đo ở `docs/06-backend/application-automation/PLAN.md`. Lượt chạy đầu trên Neon đã đổi 387 hồ sơ (258 sang "Đang xem xét", 129 sang "Tin đã đóng"); đo tải lượt 8h30 cho thấy web không chậm đi, nên giữ chạy chung process (mục 9).
+
+**Bối cảnh:** hồ sơ nằm ở "Chờ duyệt" hàng chục ngày mà hệ thống không làm gì; nhà tuyển dụng phải tự mở từng hồ sơ. AD-13 mục 3 cấm hệ thống đổi `ApplicationStatus` và cấm tự sắp danh sách đơn theo điểm. Từ 0.3 (AD-24) đã có bảng điểm lưu sẵn, nên đọc điểm của mọi hồ sơ không còn đắt.
+
+**Tham khảo cách làm của các nền tảng khác (tìm ngày 2026-11-11):**
+
+- Tài liệu chính thức của Greenhouse, LinkedIn và Indeed: tự từ chối chỉ dựa trên **câu hỏi sàng lọc bắt buộc** do nhà tuyển dụng đặt, không dựa trên điểm phù hợp. LinkedIn và Indeed gửi thư từ chối trễ 3 ngày.
+- Blog của nhà cung cấp và tư vấn (không phải chuẩn ngành): chia ba dải, tự chuyển bước khi điểm cao, người xem ở dải giữa, điểm thấp đưa vào nhóm chờ rà thay vì tự từ chối.
+- **Không tìm thấy** nền tảng nào công bố việc tự đóng hồ sơ vì nhà tuyển dụng để quá lâu, hay chu kỳ nhắc nhà tuyển dụng. Các con số ở dưới (7, 14, 30 ngày; ngưỡng 50) vì vậy là **số do thiết kế, không có nguồn**.
+
+**Quyết định:**
+
+1. **Điểm ở trang "Ứng viên" đọc từ bảng điểm của AD-24**, không chấm lúc mở trang. Hồ sơ không có dòng điểm (tin không còn hiển thị, ứng viên không chung kỹ năng nào với tin, hoặc chưa tới lượt chấm đêm) hiện "Chưa có điểm" và không được hệ thống tự xử lý theo điểm.
+2. **Ba dải theo điểm, áp cho hồ sơ "Chờ duyệt" của tin đang hiển thị:**
+   - điểm ≥ X: hệ thống **tự chuyển** sang "Đang xem xét". Có công tắc theo tin `JobPost.autoReviewEnabled`, mặc định bật. Công tắc này **chỉ** điều khiển bước chuyển này; đề xuất từ chối, nhắc tuần và tự đóng (mục 5–8) không phụ thuộc nó;
+   - Y ≤ điểm < X: để nguyên cho người xem;
+   - điểm < Y: hệ thống **đề xuất từ chối**, nhà tuyển dụng bấm xác nhận một lần cho cả nhóm. Hệ thống **không bao giờ tự từ chối**.
+3. **Ngưỡng:** X dùng lại `JobPost.autoOutreachMinScore` (mặc định 80), để "Phù hợp" có một nghĩa ở tự mời, tiến độ tuyển và xử lý hồ sơ. Y là cột mới `JobPost.rejectSuggestBelowScore` (mặc định 50, phải nhỏ hơn X), sửa theo từng tin.
+4. **Thứ tự mặc định theo điểm:** tab "Chờ duyệt" và "Đang xem xét" của trang "Ứng viên", và trang hồ sơ theo tin, mặc định xếp "Phù hợp nhất". Nhà tuyển dụng vẫn đổi được.
+5. **Nhắc hằng tuần:** thứ Hai 8h (giờ Việt Nam), mỗi công ty một thông báo gộp cho mọi employer của công ty, chỉ khi còn việc tồn. "Tồn" là hồ sơ đứng yên quá 7 ngày, tính từ dữ liệu sẵn có: "Chờ duyệt" tính từ ngày nộp; trạng thái sau tính từ lần đổi trạng thái gần nhất (`application_status_history`); hồ sơ đã phỏng vấn tính từ buổi phỏng vấn gần nhất đã diễn ra. Không thêm cột, không cho công ty chỉnh số ngày.
+6. **Trạng thái mới `JOB_CLOSED` ("Tin đã đóng")** cho hồ sơ bị hệ thống đóng vì tin đã ngừng tuyển (`EXPIRED`, `CLOSED`, `TAKEN_DOWN`). Là trạng thái cuối. Không dùng `REJECTED`, vì chưa ai đánh giá ứng viên và số liệu phễu sẽ sai. Ứng viên nhận thông báo "tin đã ngừng nhận hồ sơ", không phải "không được chọn".
+7. **Lịch tự đóng sau khi tin đóng**, hệ thống ghi lịch sử với `actorId = null`:
+
+   | Nhóm hồ sơ | Tự đóng |
+   |---|---|
+   | Chờ duyệt | ngay, không chờ: ở lượt chạy hằng ngày đầu tiên sau khi tin đóng |
+   | Đang xem xét; Rút gọn / Mời phỏng vấn chưa có buổi nào diễn ra và không có lịch sắp tới | sau 14 ngày, lần nhắc tuần trước đó báo ngày sẽ đóng |
+   | Có lịch phỏng vấn sắp tới | không đóng |
+   | Đã phỏng vấn, chưa có kết quả | **không** tự đóng, trừ khi tin bật mục 8 |
+
+8. **Công tắc theo tin `JobPost.autoCloseInterviewedEnabled` (mặc định tắt):** khi bật, hồ sơ đã phỏng vấn mà chưa có kết quả được tự đóng sau 30 ngày, tính từ mốc muộn hơn giữa ngày tin đóng và buổi phỏng vấn gần nhất đã diễn ra. Chỉ áp khi tin đã đóng: tin còn mở thì chỉ nhắc. Khi tắt, hệ thống chỉ nhắc và trang "Ứng viên" có nhóm lọc "Cần kết quả".
+9. **Chạy nền chung process**, như AD-23 mục 8 và AD-24: thêm một cron hằng ngày (tự chuyển, tự đóng) và một cron hằng tuần (nhắc). Tự chuyển còn chạy ngay sau khi ứng viên nộp đơn, nếu đã có điểm trong bảng.
+
+**Sửa so với AD-13:**
+
+- Mục 3, vế "không đổi `ApplicationStatus`": hệ thống được tự đổi theo đúng hai lối ở trên (`PENDING → REVIEWING` theo điểm; `→ JOB_CLOSED` theo tin đã đóng). Vế "không ẩn/loại ứng viên" **giữ nguyên**: điểm không bao giờ tự từ chối ai.
+- Mục 3 và mục 9, vế "không sắp xếp danh sách đơn theo điểm ở thứ tự mặc định": bỏ, thay bằng mục 4 ở trên.
+- Phần còn lại của AD-13 (điểm kèm bằng chứng, thiếu dữ liệu không trừ điểm) giữ nguyên.
+
+**Phương án không chọn:**
+
+- *Tự từ chối theo điểm:* không nền tảng nào trong các tài liệu tìm được làm vậy; từ chối không hoàn tác được và gửi email cho ứng viên; điểm chỉ là gợi ý (AD-13).
+- *Tự từ chối theo câu hỏi sàng lọc (kiểu LinkedIn, Greenhouse):* hệ thống chưa có câu hỏi sàng lọc; là việc riêng ở backlog mục 3.
+- *Dùng `REJECTED` cho hồ sơ của tin đã đóng:* sai nghĩa với ứng viên, làm bẩn phễu và số "Phù hợp" của 0.3.
+- *Tự đóng hồ sơ đã phỏng vấn mặc định:* người đã phỏng vấn cần câu trả lời thật; hệ thống không biết kết quả buổi phỏng vấn. Để công ty tự bật theo tin.
+- *Cho công ty nhập số ngày nhắc / số ngày tự đóng:* thêm cài đặt ít ai chỉnh; để hằng số trong code.
+- *Chấm điểm trực tiếp ở trang "Ứng viên":* lý do như AD-24 (quá chậm cho mọi tin của công ty).
+
+**Ảnh hưởng:**
+
+- `schema.prisma` + 1 migration viết tay: `ApplicationStatus.JOB_CLOSED`; `NotificationType.APPLICATIONS_NEED_ATTENTION`; `JobPost.rejectSuggestBelowScore`, `JobPost.autoCloseInterviewedEnabled`, `JobPost.autoReviewEnabled`.
+- Module mới `apps/server/src/modules/application-automation/` (service, repository, 2 cron, 1 script chạy tay); `applications` mở một lối đổi trạng thái cho hệ thống và thêm điểm, sort, bộ lọc gợi ý vào `GET /employer/applications`.
+- Mọi chỗ liệt kê `ApplicationStatus` phải thêm `JOB_CLOSED`: state machine, `statusCounts`, nhãn ở server và web, câu đếm "Phù hợp" của AD-24, công cụ của chatbot hỗ trợ, bộ sinh dữ liệu demo.
+- Đơn `JOB_CLOSED` không nộp lại được (sửa 2026-11-12 sau bước 0 của plan backend): tin `EXPIRED`, `CLOSED`, `TAKEN_DOWN` hiện không có lối hiển thị lại. Khi có tính năng gia hạn tin (`FEATURE_BACKLOG.md` mục 4) thì cho nộp lại cùng lối với đơn `CANCELLED`.
+- Frontend: trang "Ứng viên", trang hồ sơ theo tin, thẻ cài đặt ở trang tin, form tạo tin, nhãn trạng thái phía ứng viên và Admin, trung tâm thông báo.
+
+## AD-26 — Ứng viên thấy nhiều việc phù hợp, xếp theo ưu tiên (0.5): "Việc làm phù hợp" đọc bảng điểm, điểm trên `/jobs`, job alert tự động, độ hoàn thiện hồ sơ (sửa một phần AD-14)
+
+**Ngày:** 2026-11-12 · **Phase liên quan:** không thuộc phase đánh số. Mục 0.5 của `docs/01-project/FEATURE_BACKLOG.md`, theo nhận xét của giáo viên ở buổi demo 05/11/2026 ("hệ thống sẽ giúp em làm sao tìm được công việc phù hợp với mình nhất", "không phải chỉ có một cái phù hợp mà có rất nhiều cái phù hợp tại vì có quá nhiều tiêu chí", "tự động nó làm"). Kế hoạch chi tiết: `docs/06-backend/job-discovery/PLAN.md`, `docs/05-frontend/phases/job-discovery/PLAN.md`.
+
+> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-12, chủ dự án duyệt từng điểm trong buổi trao đổi). BACKEND XONG (bước 0–9, 2026-11-13); FRONTEND XONG (F1–F6, 2026-11-13, `docs/05-frontend/phases/job-discovery/PLAN.md`).** Bước 0 (đo trên Neon, chỉ đọc) xong 2026-11-13. Kết quả ở plan backend, đã dẫn tới chỉnh trọng số ở mục 8. Bước 1 (schema, migration `20261113120000_add_job_discovery`) đã áp lên Neon 2026-11-13. Bước 2 (“Việc làm phù hợp” đọc bảng điểm) bước 3 (độ hoàn thiện hồ sơ, `GET /candidate/profile-completeness`) bước 4 (`GET /job-posts` theo người xem, sắp theo điểm, bộ lọc mới) bước 5 (job alert trong ứng dụng: module `job-alerts`, `NotificationsService.upsertDaily`, `GET`/`PATCH /candidate/job-alert-settings`) bước 6 (email gộp và nhắc thêm kỹ năng lúc 8h, script `job-alerts`) và bước 7 (`NotificationType` của shared-types thêm `JOB_ALERT`, `PROFILE_SKILLS_REMINDER`; các kiểu khác của bước 7 đã thêm dần ở bước 2–5) xong 2026-11-13. Bước 8 (kiểm thử qua gateway 8080: "Việc làm phù hợp", `/job-posts` p50 539–617 ms, job alert realtime gộp "2 tin", email gộp, nhắc một lần, độ hoàn thiện) xong 2026-11-13, kết quả ở plan backend.
+>
+> Số đo chính của bước 0:
+> - mỗi ứng viên có trung vị 61 tin điểm ≥ 20;
+> - 46% tin đang hiển thị đăng quá 30 ngày;
+> - một trang "Việc làm phù hợp" ≈ 0,8 giây (đường cũ 1,36 giây);
+> - nếu 20 tin gần nhất được duyệt cùng ngày, 31% ứng viên nhận báo sẽ nhận ≥ 2 tin.
+
+**Bối cảnh:**
+
+- "Việc làm phù hợp" (`JobRecommendationService.getTopMatches`, AD-14) chấm lúc mở trang: SQL lấy ≤ 50 tin đăng trong 30 ngày gần nhất, chấm rule cho cả 50, chấm hybrid lại top 20, trả top 10 có điểm ≥ 20. Hệ quả:
+  - tin đăng quá 30 ngày không bao giờ hiện;
+  - tin có điểm hybrid cao mà điểm rule thấp có thể bị bỏ sót;
+  - thứ tự có thể lệch với điểm nhà tuyển dụng thấy trong bảng điểm (AD-24);
+  - tin đã ứng tuyển vẫn hiện;
+  - mỗi thẻ chỉ có "Phù hợp x%", không có lý do.
+- Từ 0.3 (AD-24) đã có điểm hybrid của mọi cặp (tin đang hiển thị, ứng viên có chung ≥ 1 kỹ năng), nhưng phía ứng viên chưa dùng.
+- `/jobs` chỉ hiện 20 tin đầu (API có `cursor` nhưng trang không có "Xem thêm"), không có điểm phù hợp, không sắp xếp được. Bộ lọc kỹ năng liệt kê toàn bộ danh mục thành chip và buộc tin có **đủ** mọi kỹ năng đã chọn.
+- Chưa có job alert. Ứng viên chưa có kỹ năng nào không nằm trong bảng điểm, nên đứng ngoài mọi tính năng tự động mà không được báo.
+- Thanh độ hoàn thiện (`CompletenessBar`) chỉ hiện sau khi bấm "Phân tích hồ sơ" (gọi LLM, có hạn mức), và lấy số từ bản chụp của lần phân tích trước.
+
+**Quyết định:**
+
+1. **"Việc làm phù hợp" đọc từ bảng điểm của AD-24.**
+   - Lấy các tin đang hiển thị có dòng điểm của ứng viên, xếp theo điểm, **bỏ giới hạn 30 ngày**, có "Xem thêm" thay cho top 10 cố định.
+   - Mỗi trang chấm đầy đủ lại (cùng bộ chấm hybrid) các tin được hiển thị, để có `MatchResult` làm lý do xếp hạng và để điểm phản ánh hồ sơ mới nhất. Điểm hiện trên thẻ là điểm vừa chấm.
+   - **Dự phòng:** ứng viên chưa có dòng nào trong bảng (mới tạo hồ sơ, hoặc vừa thêm kỹ năng đầu tiên mà chưa tới lượt đêm) thì dùng đường chấm trực tiếp hiện có, bỏ giới hạn 30 ngày. Khi 0.6 có chấm lại theo ứng viên thì đường này chỉ còn là lưới an toàn.
+   - **Loại tin đã ứng tuyển** (có đơn ở mọi trạng thái trừ `CANCELLED`) và **tin mà ứng viên đã nhận lời mời** (lời mời `PENDING`, `ACCEPTED`, `DECLINED`; lời mời `EXPIRED` không loại).
+2. **Lý do xếp hạng theo từng tiêu chí** hiện trên mỗi thẻ, lấy từ `MatchResult` đã có: kỹ năng bắt buộc x/y, kỹ năng ưu tiên, kinh nghiệm, học vấn, mức tương đồng nội dung, kỹ năng còn thiếu. Không thêm tiêu chí chấm mới.
+3. **Địa điểm chỉ dùng để lọc, không vào công thức chấm.** Trọng số đã hiệu chỉnh ở GĐ2/GĐ3 giữ nguyên, bảng điểm không phải chấm lại.
+4. **`GET /job-posts` (công khai) nhận token ứng viên nhưng không bắt buộc** (`optionalAuthenticate`).
+   - Khách chưa đăng nhập nhận đúng kết quả như cũ.
+   - Ứng viên đăng nhập nhận thêm trên từng tin: điểm từ bảng điểm, đã lưu, đã ứng tuyển. Họ được dùng `sort=match` và bộ lọc "Chỉ tin phù hợp với tôi" (≥ 70).
+   - Không tách endpoint riêng, để chỉ có một danh sách tin.
+5. **Bộ lọc mới ở `/jobs`, chỉ dựa trên cột đã có:**
+   - kinh nghiệm yêu cầu (`minExperienceYears`);
+   - lương: có ghi rõ / thoả thuận;
+   - kỹ năng: "có ít nhất một" hoặc "đủ tất cả";
+   - từ khoá tìm cả trong tên kỹ năng của tin;
+   - kèm tổng số kết quả.
+
+   Không thêm cột mới cho tin (hình thức làm việc, cấp bậc). Không làm tìm không dấu, vì cần `unaccent` hoặc cột chuẩn hoá, tức là thay đổi hạ tầng DB, nên làm riêng.
+6. **Job alert tự động dựa trên bảng điểm**, ứng viên không phải lưu bộ lọc:
+   - Khi tin chuyển `PUBLISHED` và lối (a) của AD-24 chấm xong tin đó, hệ thống báo cho ứng viên có điểm ≥ **max(ngưỡng tự mời của tin, 70)**. Lượt chấm đêm **không** sinh báo: chỉ tin mới được báo.
+   - Bỏ qua: ứng viên đã ứng tuyển hoặc đã nhận lời mời của tin đó (cùng quy tắc mục 1); ứng viên tắt job alert; tin khác thành phố nếu ứng viên bật "chỉ thành phố của tôi".
+   - Mỗi cặp (ứng viên, tin) chỉ được báo một lần, ghi ở bảng mới `job_alerts`.
+   - **Thông báo trong ứng dụng gửi ngay nhưng gộp theo ngày.** Mỗi ứng viên có một thông báo `JOB_ALERT` mỗi ngày. Các tin tiếp theo trong ngày **cập nhật** thông báo đó ("N tin mới phù hợp với bạn"), đánh dấu lại là chưa đọc và đẩy realtime. Đây là lối mới của module `notifications`, vì `dedupeKey` hiện chỉ bỏ qua bản trùng.
+   - **Email gộp mỗi ngày một lần** (8h giờ Việt Nam), liệt kê các tin mới chưa gửi email, chỉ gửi khi có tin. Đi qua outbox (AD-8) như mọi email khác.
+   - **Bật sẵn** cho mọi ứng viên, tắt được trong Cài đặt (job alert, email job alert, chỉ thành phố của tôi). Khác lời mời của AD-15 (phải tự bật), vì job alert không công khai gì của ứng viên.
+7. **Nhắc một lần cho ứng viên chưa có kỹ năng:** thông báo `PROFILE_SKILLS_REMINDER` kèm email, gửi một lần duy nhất cho mỗi ứng viên (khoá `dedupeKey` theo ứng viên), cho tài khoản đã tạo từ 24 giờ trở lên mà chưa có kỹ năng nào.
+8. **Độ hoàn thiện hồ sơ tính bằng code, luôn hiện, không gọi LLM.**
+   - Endpoint riêng, tính trực tiếp mỗi lần gọi, không đọc bản chụp `CandidateProfileInsight`.
+   - **Tám mục, chia theo hậu quả khi thiếu** (chốt 2026-11-13):
+
+     | Nhóm | Mục | Trọng số |
+     |---|---|---|
+     | Cửa vào: thiếu là mất hẳn một tính năng | Kỹ năng (không có gợi ý, báo tin, không được tìm thấy) | 30 |
+     | | CV (nộp đơn bắt buộc chọn CV) | 15 |
+     | | Bật cho nhà tuyển dụng liên hệ (không nhận lời mời, kể cả tự động) | 10 |
+     | Ảnh hưởng điểm phù hợp (trọng số `hybrid-v2`: kỹ năng ≈ 43%, nội dung 40%, kinh nghiệm ≈ 13%, học vấn ≈ 4%) | Kinh nghiệm | 15 |
+     | | Dự án (vào văn bản nội dung; với sinh viên thường thay cho kinh nghiệm) | 10 |
+     | | Tiêu đề và giới thiệu (vào văn bản nội dung) | 5 |
+     | | Học vấn **có chọn ngành trong danh mục** (không chọn ngành thì bộ chấm coi như chưa có) | 10 |
+     | Chỉ dùng để lọc | Thành phố | 5 |
+
+     Thứ tự giữa các nhóm có căn cứ trong code. Con số trong từng nhóm là **số do thiết kế**. Riêng nhóm "ảnh hưởng điểm" được chỉnh ngày 2026-11-13 theo khảo sát NACE: kinh nghiệm 10 → 15, tiêu đề/giới thiệu 10 → 5. Nguồn:
+     - *Job Outlook 2022*: thực tập ở chính công ty 4,4/5; thực tập cùng ngành 4,3; ngành học 3,8; kinh nghiệm làm việc chung 3,7; GPA 3,1.
+     - *Job Outlook 2026 Spring Update*: khi hai ứng viên ngang nhau, nhà tuyển dụng chọn người có kinh nghiệm thực tập.
+
+     Đây là khảo sát nhà tuyển dụng ở Mỹ, chỉ dùng để định hướng. Link và số đo ở bước 0 của plan backend.
+   - **"Nên làm trước" theo từng ứng viên:** một mục còn thiếu được chọn từ chính các tin hợp nhất với ứng viên (trang đầu "Việc làm phù hợp"). Thứ tự: thiếu kỹ năng thì luôn là kỹ năng; sau đó mục mà ≥ 3/10 tin hợp nhất cần nhưng hồ sơ chưa có dữ liệu (tin yêu cầu kinh nghiệm mà kinh nghiệm `UNKNOWN`; tin ghi ngành mà học vấn `UNKNOWN`), kèm số tin làm bằng chứng; không có thì mục thiếu có trọng số cao nhất. Tính bằng code từ `MatchResult`, không gọi LLM.
+   - **Lời khuyên nói "giúp điểm chính xác hơn", không hứa "tăng điểm":** theo AD-13, mục thiếu bị bỏ ra khỏi công thức, nên khai ngành khác hoặc ít năm hơn tin yêu cầu có thể làm điểm giảm.
+   - Độ hoàn thiện **chỉ để hiển thị**, không ảnh hưởng điểm phù hợp hay độ tin cậy. Giữ D10 của candidate-insights và quy tắc "thiếu dữ liệu không trừ điểm" của AD-13. Độ tin cậy của bộ chấm vẫn tính trên bốn cờ cũ của `CandidateMatchProfile.completeness`; tám mục mới tính riêng, không sửa cờ đó.
+   - Gợi ý thiếu kỹ năng và lệch ngành (`SKILL_GAP`, `INDUSTRY_MISMATCH`, do code tạo) hiện ở trang "Việc làm phù hợp", tính từ danh sách đang xem.
+
+**Sửa so với AD-14:**
+
+- "Việc làm phù hợp" không còn chấm toàn bộ lúc mở trang và không còn giới hạn 30 ngày (mục 1). `getTopMatches`, mà trợ lý hồ sơ đang dùng, đi cùng lối mới để hai nơi ra cùng một danh sách.
+- "Phân tích hồ sơ" thu hẹp về phần LLM làm: đổi tên thành "Nhận xét cách viết hồ sơ (AI)", thẻ kết quả chỉ hiện điểm mạnh và gợi ý cách viết. Điểm độ hoàn thiện và gợi ý do code tạo chuyển ra ngoài (mục 8). Backend của chức năng phân tích và hạn mức giữ nguyên; không xoá cột hay dữ liệu đã lưu.
+- Phần còn lại của AD-14 ("LLM chỉ diễn đạt", không gọi LLM ở "Việc làm phù hợp") giữ nguyên.
+
+**Phương án không chọn:**
+
+- *Giữ chấm trực tiếp, chỉ nới giới hạn 30 ngày:* vẫn chỉ xét 50 tin, vẫn lệch điểm với phía nhà tuyển dụng, không phân trang được.
+- *Đưa địa điểm vào công thức chấm:* phải hiệu chỉnh lại trọng số đã có căn cứ ở GĐ2/GĐ3 và chấm lại cả bảng. Lọc là đủ cho nhu cầu "tìm việc gần nhà".
+- *Job alert theo bộ lọc ứng viên tự lưu (kiểu TopCV):* chỉ là khớp điều kiện, ứng viên phải tự tạo, không thể hiện được phần tự động. Để lại ở backlog mục 3.
+- *Ngưỡng báo dùng thẳng ngưỡng của tin:* nhà tuyển dụng hạ ngưỡng thấp thì ứng viên nhận tin rác. *Ngưỡng riêng hoàn toàn:* có hai nghĩa "phù hợp". Chọn ngưỡng của tin, có sàn 70.
+- *Mỗi tin một thông báo và một email:* Admin duyệt nhiều tin cùng lúc thì thành spam.
+- *Endpoint danh sách tin riêng cho ứng viên:* hai danh sách, hai bộ lọc phải giữ khớp nhau.
+- *Đưa độ hoàn thiện vào điểm:* điểm đo độ hợp giữa hồ sơ và một tin, không đo hồ sơ tốt hay dở.
+
+**Ảnh hưởng:**
+
+- `schema.prisma` + 1 migration viết tay:
+  - `NotificationType.JOB_ALERT`, `NotificationType.PROFILE_SKILLS_REMINDER`;
+  - `Candidate.jobAlertEnabled`, `Candidate.jobAlertEmailEnabled`, `Candidate.jobAlertSameCityOnly`;
+  - bảng `job_alerts`;
+  - index `(candidateId, score)` trên `job_candidate_match_scores`.
+- `job-matching`: "Việc làm phù hợp" đọc bảng điểm, có phân trang và lý do; `getTopMatches` đi cùng lối.
+- `job-posts`: `GET /job-posts` có `optionalAuthenticate`, thông tin theo người xem, `sort=match`, bộ lọc mới, tổng số.
+- `candidate-insights`: endpoint độ hoàn thiện.
+- Module mới `apps/server/src/modules/job-alerts/` (service, repository, cron email hằng ngày, cron nhắc một lần, API cài đặt, script chạy tay). `match-scores` gọi job alert sau lối (a). `notifications` thêm lối cập nhật thông báo gộp theo ngày.
+- `packages/shared-types`: kiểu mới cho danh sách gợi ý, thông tin theo người xem, độ hoàn thiện, cài đặt job alert.
+- Frontend: "Việc làm phù hợp", `/jobs`, `/profile`, Cài đặt, trung tâm thông báo, FAQ của chatbot hỗ trợ.
+
+## AD-27 — Chấm lại theo ứng viên gần thời gian thực (0.6): đánh dấu tường minh, chờ người dùng ngừng sửa rồi chấm, tự mời và trang tìm ứng viên đọc bảng điểm (sửa một phần AD-23, AD-24)
+
+**Ngày:** 2026-11-14 · **Phase liên quan:** không thuộc phase đánh số. Mục 0.6 của `docs/01-project/FEATURE_BACKLOG.md`, theo nhận xét của giáo viên ở buổi demo 05/11/2026 ("dữ liệu của mình liên tục đẩy lên… hồ sơ người ta liên tục đẩy lên, em phải xử lý được những cái đó", "tự động nó làm"). Kế hoạch chi tiết: `docs/06-backend/live-rescore/PLAN.md`, `docs/05-frontend/phases/live-rescore/PLAN.md`.
+
+> **Trạng thái: ĐÃ TRIỂN KHAI BACKEND (2026-11-14, bước 0–11 của `docs/06-backend/live-rescore/PLAN.md`, đã kiểm qua gateway 8080 và đo tải 200 ứng viên một đợt). Frontend chưa làm.** Hướng chốt cùng ngày, chủ dự án duyệt từng điểm trong buổi trao đổi. Q1–Q6 của plan backend đã chốt cùng ngày (chấm lại theo tin khi danh mục đổi; thêm cột `matchProfileChangedAt`; job alert lần đầu dùng lại `JOB_ALERT`; script mô phỏng gọi HTTP API; tóm tắt lượt gần nhất lưu ở Redis; realtime cho nhà tuyển dụng qua sự kiện Socket.IO `match-scores:updated`, tối đa một sự kiện mỗi công ty mỗi 15 giây, dự phòng bằng `refetchOnWindowFocus`). Bước 0 của plan (đo, chỉ đọc) đã làm ngày 2026-11-14. Kết quả dẫn tới hai quyết định chủ dự án chốt cùng ngày, ghi ở mục 5 và mục 11:
+> - **Q8:** chấm theo lô thay cho từng ứng viên;
+> - **Q7:** model embedding chạy trong một `worker_threads` duy nhất.
+
+**Bối cảnh:**
+
+- Bảng điểm `job_candidate_match_scores` (AD-24) chỉ cập nhật khi tin chuyển `PUBLISHED` (lối a) và ở lượt đêm 3h30. Ứng viên mới hoặc vừa sửa hồ sơ phải chờ tới đêm mới có điểm. Hệ quả:
+  - số "Phù hợp" (0.3) cũ tới gần 24 giờ;
+  - đơn của ứng viên chưa có điểm không được tự chuyển "Đang xem xét" (AD-25 mục 1);
+  - "Việc làm phù hợp" của ứng viên chưa có dòng điểm đi đường chấm trực tiếp (AD-26 mục 1, dự phòng); `/jobs` phải ghi "điểm cập nhật hằng đêm".
+- Tự mời (AD-23) và trang tìm ứng viên vẫn chấm trực tiếp trên ≤ 50 người lọc bằng SQL (AD-24 mục 7), bỏ sót khoảng 7% người phù hợp ở tin lớn. Tin bị đánh dấu `NO_MATCH` chỉ được kiểm lại sau 3 giờ; ứng viên bật cho liên hệ hay thêm kỹ năng không xoá được dấu này.
+- Không suy được "ai vừa đổi hồ sơ" từ `Candidate.updatedAt`, vì sửa kỹ năng, học vấn, kinh nghiệm, dự án không đổi cột này (AD-24, phương án không chọn).
+- Script `seed-large-demo` ghi thẳng bằng Prisma, không qua service, nên không kích hoạt việc tự động nào. Chưa có cách demo "dữ liệu đổ vào liên tục".
+
+**Quyết định:**
+
+1. **Đánh dấu tường minh bằng một cột trên `Candidate`:** `matchRescoreRequestedAt DateTime?` (chủ dự án chọn cách A, 2026-11-14). Mọi chỗ ghi dữ liệu mà bộ chấm đọc đặt cột này bằng `now()`:
+   - `CandidateService`: `updateProfile` (tiêu đề, giới thiệu), thêm / sửa / xoá kỹ năng, học vấn (kể cả đặt học vấn hiện tại), kinh nghiệm, dự án;
+   - `CandidateCvImportService.importFromCv` (AI trích xuất CV);
+   - phía danh mục: Admin duyệt / từ chối / gộp kỹ năng, duyệt / gộp ngành: đánh dấu **mọi** ứng viên có kỹ năng hoặc ngành đó bằng một câu SQL (mục 3 của buổi trao đổi). *Chính xác hoá khi làm bước 2 (2026-11-14):* danh sách người lấy **trước** khi đổi (từ chối / gộp xoá hoặc chuyển liên kết), đánh dấu sau khi đổi thành công. Lối ngành là sửa tên rồi duyệt / từ chối / gộp; duyệt ngành chỉ đổi trạng thái mà bộ chấm không đọc trạng thái ngành, nên không đánh dấu. Cron gộp tự động mục PENDING (LLM) cũng đánh dấu như Admin gộp. *Bước 5 (Q1, 2026-11-14):* cùng lúc lấy người, lấy luôn các tin đang hiển thị gắn mục đó; sau khi đổi thì xếp các tin này vào một hàng chờ trong bộ nhớ của lượt chấm theo ứng viên, chấm lại theo tin (`rescoreJob`, không sinh job alert) sau phần theo ứng viên, trong cùng giới hạn thời gian. Hàng chờ mất khi khởi động lại server (lượt đêm sửa). Các dòng do hàng chờ này ghi không có việc kéo theo của mục 6, giống lối theo tin hiện có.
+
+   Chứng chỉ, giải thưởng, ảnh đại diện không vào bộ chấm nên không đánh dấu. Bật / tắt `isOpenToOutreach` không đổi điểm nên không đánh dấu, nhưng xoá dấu "hết ứng viên" và kích hoạt tự mời (mục 6).
+2. **Chỉ xoá dấu khi dấu không mới hơn lúc bắt đầu chấm** (`UPDATE … SET "matchRescoreRequestedAt" = NULL WHERE "matchRescoreRequestedAt" <= <lúc bắt đầu>`). Ứng viên sửa tiếp trong lúc đang chấm thì dấu mới còn lại và được chấm ở lượt sau.
+3. **Hai lối kích hoạt, cùng một hàm "rút hàng":**
+   - **chờ người dùng ngừng sửa (debounce):** mỗi lần đánh dấu thì đặt lại hẹn giờ của ứng viên đó; hết khoảng chờ (mặc định 45 giây, trong khoảng 30–60 giây chủ dự án duyệt) thì gọi lượt chấm. Hẹn giờ nằm trong bộ nhớ của process;
+   - **cron mỗi 15 phút:** chấm mọi ứng viên còn dấu. Đây là lưới an toàn khi server khởi động lại (hẹn giờ mất nhưng dấu còn trong DB) hoặc khi lượt trước hết thời gian.
+
+   Lượt chấm đêm của AD-24 giữ nguyên.
+4. **Chấm lại một ứng viên = chấm hồ sơ đó với mọi tin đang hiển thị có chung ≥ 1 kỹ năng `APPROVED`**, bằng **cùng bộ chấm** với bảng điểm (AD-24 mục 4: cùng quy tắc, cùng cosine, cùng cách xử lý thiếu embedding), rồi thay toàn bộ dòng điểm của ứng viên với các tin đang hiển thị trong một transaction. Tin không còn chung kỹ năng thì dòng bị xoá. Kết quả phải bằng đúng kết quả chấm theo tin; có test so hai chiều.
+5. **Bảo vệ tải, chạy chung process** (giữ AD-23 mục 8; chủ dự án chốt không tách process riêng, 2026-11-14; model embedding chạy trong một luồng phụ của cùng process, xem mục 11):
+   - mỗi lúc chỉ một lượt chấm; chấm **lần lượt từng lô** ứng viên (mặc định 50 người, dấu cũ nhất trước); nhường event loop giữa hai lô (sửa sau bước 0, Q8 của plan):
+     - mỗi lô dùng chung một câu lấy pool ngược, một lần nạp hồ sơ, một câu hash và một câu cosine;
+     - mỗi lô ghi điểm và xoá dấu trong **một** transaction. Mục 2 áp theo lúc bắt đầu lô.
+     - Lý do: bước 0 đo thời gian chấm gần như toàn là round trip tới Neon (~44 ms mỗi câu từ máy dev). Chấm từng người mất khoảng 0,7 giây mỗi người (11 câu cộng 4 round trip ghi), 200 người khoảng 140 giây. Theo lô thì ước khoảng 17 round trip mỗi lô, 200 người khoảng 10 giây;
+   - mỗi lượt có giới hạn thời gian (mặc định 60 giây); hết giờ thì dừng, người còn lại giữ dấu;
+   - giới hạn số embedding mới mỗi lượt; người vượt có điểm rule-only (`semanticPending`) và giữ dấu;
+   - **cache hồ sơ tin đang hiển thị trong bộ nhớ** (`JobMatchProfile` kèm vector), singleton. Xoá khi danh mục kỹ năng / ngành đổi, mỗi mục sống tối đa 1 giờ. Tin `PUBLISHED` không sửa được nội dung (AD-24 mục 5), và câu lấy pool luôn lọc tin đang hiển thị, nên mục của tin đã thôi hiển thị không bao giờ được đọc. Cache chỉ dùng cho chấm theo ứng viên (và "Việc làm phù hợp" nếu bước 0 thấy có lợi); lượt chấm theo tin giữ cách cũ;
+   - các con số (khoảng chờ, giới hạn thời gian, số embedding mới, TTL cache) là **số do thiết kế**, đặt trong `live-rescore.config.ts`, chỉnh theo số đo ở bước 0 và bước kiểm thử.
+   - **Chính xác hoá khi làm bước 3 (2026-11-14):**
+     - Cache chỉ giữ `JobMatchProfile`. Hash vector tin đọc lại mỗi lô (một câu), vì vector tin có thể được tính ở lối khác. Giới hạn vector mới dùng chung cho tin và hồ sơ, tin trước.
+     - Mốc "lúc bắt đầu lô" (mục 2) lấy từ đồng hồ DB ngay trong câu chọn lô, trước khi nạp hồ sơ. Người giữ dấu (lỗi, vượt giới hạn embedding) không bị chọn lại trong cùng lượt.
+     - Lượt dừng vì hết giờ mà còn dấu, hoặc có yêu cầu chấm trong lúc chạy, thì chạy tiếp sau 1 giây, không chờ cron.
+     - Ghi theo lô dùng `skipDuplicates`: nếu lượt theo tin ghi cùng cặp xen vào giữa thì giữ dòng của lượt kia thay vì hỏng cả lô. Q2 sửa nếu dòng đó tính từ hồ sơ cũ.
+6. **Việc kéo theo sau khi chấm lại một ứng viên** (mục 4 của buổi trao đổi):
+   - **tự mời:** với các tin bật tự mời mà ứng viên vừa đạt ngưỡng và còn mời được (bật cho liên hệ, chưa nộp đơn, chưa có lời mời chặn, chưa đủ trần ngày), xoá dấu "hết ứng viên" của tin rồi kích hoạt lượt tự mời của công ty (`autoOutreachTrigger`, có khoá theo công ty sẵn);
+   - **tự chuyển "Đang xem xét":** gọi `autoReviewTrigger` cho đơn "Chờ duyệt" của ứng viên ở tin đang hiển thị (thêm dạng `{ candidateId }`);
+   - **job alert chỉ lần đầu:** ứng viên **lần đầu** có dòng điểm (trước lượt này không có dòng nào) thì báo các tin ≥ max(ngưỡng tin, 70) theo đúng luật AD-26 mục 6. Sửa hồ sơ về sau **không** sinh báo, để tránh spam;
+   - **realtime cho nhà tuyển dụng:** gộp theo lượt, mỗi công ty có tin vừa thêm người đạt ngưỡng nhận một sự kiện nhẹ để giao diện làm mới số "Phù hợp" (không ghi bảng `notifications`).
+   - **Chính xác hoá khi làm bước 4 (2026-11-14):**
+     - "Vừa đạt ngưỡng" lấy từ dòng cũ mà câu xoá trong transaction ghi trả lại (`DELETE … RETURNING`), so với dòng mới. Không thêm round trip.
+     - Tự chuyển và job alert chạy theo lô ứng viên (`autoReviewTrigger({ candidateIds })`, một câu ghi `job_alerts` cho cả lô), không theo từng người.
+     - "Lần đầu có điểm" chỉ tính dòng có phần ngữ nghĩa: người đang chờ embedding (điểm rule-only) được báo ở lượt có điểm đầy đủ. Ứng viên đã từng có dòng `job_alerts` không được báo lần đầu.
+     - Realtime gửi cả khi có người vừa rớt khỏi ngưỡng, vì số "Phù hợp" giảm cũng cần làm mới.
+     - Tự mời kích hoạt cả tin chưa có dấu "hết ứng viên", nhưng chỉ khi có người vừa đạt ngưỡng và còn mời được.
+     - Việc kéo theo chỉ ghi log khi lỗi. Các lô đã ghi vẫn được kích hoạt tự mời và realtime khi lượt hỏng giữa chừng.
+     - **Model lỗi lúc chấm (chủ dự án chọn D+, 2026-11-14):** người chỉ có dòng rule-only vì model lỗi bị xoá dấu. Lượt đêm sửa điểm của họ và báo luôn job alert lần đầu:
+       - câu xoá theo tin của lượt đêm trả người có dòng cũ rule-only (không thêm câu);
+       - cuối lượt, người có **mọi** dòng cũ đều rule-only được gửi sang job alert lần đầu;
+       - job alert lần đầu chỉ báo theo dòng có điểm đầy đủ.
+
+       Không chọn giữ dấu (chấm lại vô ích mỗi 15 phút khi model hỏng) hay dò định kỳ `semanticPending` (quét bảng, hoặc phải có cờ trong bộ nhớ dễ mất khi khởi động lại). Script `rescore-match-scores` không báo.
+
+       **Hạn chế đã biết (ghi 2026-11-14, chưa xử lý):**
+       - Tình huống: model lỗi đúng lúc tin X được đăng. Dòng (X, B) là rule-only và dưới ngưỡng, nên `insertForJob(X)` không báo B. Đêm sau, điểm đầy đủ của B với X vượt ngưỡng.
+       - Kết quả: B không bao giờ nhận job alert về X. Lượt đêm không báo theo tin (AD-26 D7). B cũng không được báo lần đầu vì còn có dòng đầy đủ ở tin khác.
+       - Vì sao chấp nhận: B vẫn thấy X trong "Việc làm phù hợp"; nhà tuyển dụng và tự mời vẫn thấy B. Trường hợp hiếm.
+       - Cách bịt nếu cần: lượt đêm báo các cặp vừa chuyển từ rule-only sang đầy đủ và đạt ngưỡng, chỉ với tin đăng gần đây. Câu xoá theo tin đã trả sẵn danh sách người.
+7. **Tự mời (AD-23) đọc bảng điểm** thay cho lọc SQL ≤ 50 rồi chấm. Chọn từ bảng những người điểm ≥ ngưỡng và còn mời được, điểm giảm dần, và **không chấm lại**: lời mời chỉ lưu `matchScore` và `matchWeightsVersion` (AD-15), cả hai có sẵn trong bảng. Độ mới của điểm do mục 3–4 bảo đảm. Tin chưa được chấm lần nào (`matchScoresAt = null`) thì đi đường cũ. (Sửa 2026-11-14: bản đầu chấm trực tiếp lại người sắp mời với lý do cần `MatchResult`, lý do đó không đúng.) *Bước 6 (2026-11-14):* mỗi tin lấy tối đa 2R người (R = số lượt tự động còn lại của công ty), câu đọc bảng đã lọc người không mời được. `createInvitation` nhận phần điểm `{ score, weightsVersion }` thay cho cả `MatchResult`. Đo trên Neon: 34 tin của Mây Xanh ~1,9 giây, so với ~27 giây của đường cũ. *Bước 7 (2026-11-14):* trang tìm ứng viên dùng cùng câu đọc bảng (ngưỡng 0, 10 người, không lọc trần ngày để vẫn hiện người đủ trần), rồi chấm lại 10 người đó để có lý do; tin chưa chấm đi đường cũ. Top 10 khớp cách tính độc lập trên 6 / 6 tin.
+8. **Trang tìm ứng viên đọc bảng điểm** (mục 5 của buổi trao đổi): lấy top 10 người còn mời được theo điểm lưu, chấm trực tiếp lại 10 người đó để có lý do, tổng số "phù hợp" lấy từ bảng. Hết giới hạn 50. Tin chưa được chấm thì đi đường cũ.
+9. **Script mô phỏng dữ liệu đổ vào** (mục 6 của buổi trao đổi): thêm ứng viên và tin theo từng đợt, **đi qua service** để mọi lối kích hoạt chạy như người dùng thật. Dùng lại bộ thư viện của `large-demo`, tiền tố email / id riêng để `--reset` xoá được. Chi tiết (gọi HTTP qua gateway hay dựng container trong script) ở plan backend.
+10. **Bổ sung đi kèm:**
+    - sửa lỗi còn treo của 0.2: tỉ lệ tự động của công ty là 0% thì trạng thái thẻ tự mời không ghi "Hệ thống tự mời bù…" (mục 8 của buổi trao đổi);
+    - Admin có thẻ "Hệ thống tự động": số ứng viên đang chờ chấm lại, dấu cũ nhất, lượt chấm gần nhất, số lời mời tự động / báo tin hôm nay (frontend 7h).
+    - *Bước 8 (2026-11-14):*
+      - Thẻ tự mời thêm trạng thái `PAUSED_BY_COMPANY_SHARE`, xét khi phần tự động **làm tròn ra 0 lời mời/ngày** (tỉ lệ 0%, hoặc tỉ lệ quá nhỏ so với hạn mức), xếp ngay sau `NOT_PUBLISHED`.
+      - `GET /admin/automation-status` (chỉ Admin) ghép dấu (DB), lượt chấm theo ứng viên gần nhất (Redis), số hôm nay theo giờ Việt Nam (DB), và lượt đêm gần nhất. Lượt đêm lưu ở một khoá Redis mới do cron ghi, vì `matchScoresAt` cũng bị lối chấm theo tin ghi.
+      - Redis lỗi thì phần lượt gần nhất là null, phần DB vẫn trả.
+    - *Bước 9 (2026-11-14):*
+      - Script `simulate-inflow` gửi ứng viên và tin (lấy từ bộ sinh demo lớn) qua gateway như người dùng thật.
+      - Dữ liệu mô phỏng nhận ra bằng miền email `@inflow-demo.local` và tiền tố tiêu đề `[Mô phỏng] `; `--reset` xoá theo hai dấu này.
+      - Lượt chấm rỗng không ghi đè tóm tắt lượt gần nhất.
+    - *Bước 10 (2026-11-14), đo qua gateway 8080:*
+      - Lượt chấm 200 người (200 vector mới) xong trong 16,6 s; event loop p99 11 ms, API như lúc nền. Chung process (D5) giữ nguyên.
+      - Lượt đêm 314 tin, 150.712 dòng, 330 s, web không chậm.
+      - Realtime `match-scores:updated` tới đúng nhà tuyển dụng, cách nhau ~15 s.
+      - Phát hiện ngoài phạm vi: `bcryptjs` cost 12 chặn luồng chính khi nhiều người đăng ký / đăng nhập cùng lúc (event loop ~0,8–1,2 s với 8 song song). Chờ chủ dự án quyết.
+11. **Model embedding chạy trong một `worker_threads` duy nhất** (Q7 của plan, chủ dự án chốt 2026-11-14 sau bước 0):
+    - **Số đo của bước 0:** 200 văn bản hồ sơ thật, request nhẹ gửi mỗi 50 ms.
+      - Mỗi lần embed **chặn luồng chính** khoảng 24 ms, tức suốt thời gian suy luận. Với model trên luồng chính: event loop p99 44 ms, request nhẹ p95 31 ms so với 1,8 ms lúc rảnh.
+      - Trong worker: event loop như lúc rảnh, request p95 1,1 ms, tốc độ embed không đổi.
+      - Giới hạn số luồng onnxruntime làm mỗi lần chặn **dài hơn**; embed theo lô chặn cả lô (event loop p50 0,6–1,3 giây). Cả hai đều loại.
+      - Nguyên nhân là luồng chính bị chặn, không phải tranh CPU. Khi nhiều người dùng cùng lúc, đây là điểm nghẽn đầu tiên: mỗi lần embed bắt **mọi** request phải chờ.
+    - **Một bản model:** worker nạp model **một lần**; luồng chính không nạp nữa. RAM giữ khoảng 0,8 GB như hiện tại.
+    - **Sửa ở `SkillEmbeddingService`, không sửa ở port `EmbeddingProvider`:**
+      - Mọi nơi dùng model đều đi qua `SkillEmbeddingService.embed`: chấm điểm và chatbot qua port; khử trùng kỹ năng và cron bổ sung vector kỹ năng gọi thẳng.
+      - Nếu chỉ thay bản cài của port thì khử trùng kỹ năng vẫn nạp model trên luồng chính, thành hai bản model (~1,6 GB).
+      - Chữ ký `embed(text): Promise<number[] | null>` giữ nguyên, nên các module gọi không đổi.
+    - **Giữ hành vi khi lỗi:** nạp model lỗi, worker chết, hoặc một lần embed quá thời gian chờ thì trả `null` (các tính năng lùi về cách không có embedding, như hiện tại). Worker chết thì lần gọi sau tạo lại; nạp model hỏng thì đánh dấu không dùng được như cờ `unavailable` hiện có.
+    - **Worker vẫn xử lý tuần tự** từng văn bản. Tốc độ embed không tăng; chỉ request web không còn bị chặn.
+    - **Đóng worker khi server dừng**, để `tsx watch` ở dev không để lại worker thừa giữ RAM. Chọn đúng file worker cho cả hai cách chạy: `tsx` (`.ts`) và bản build (`dist/*.js`).
+    - Trên máy chỉ có 1 vCPU, worker vẫn chia CPU với luồng chính. Request được xen vào nhờ hệ điều hành chia thời gian, nhưng không nhanh hơn. Từ 2 vCPU trở lên thì lợi ích mới đầy đủ.
+    - **Chính xác hoá khi làm bước 2b (2026-11-14):**
+      - `main.ts` không có xử lý dừng server nên không thêm. Worker thread chết cùng process (kể cả khi `tsx watch` khởi động lại). Worker chỉ giữ process sống khi đang có việc (`ref` / `unref`), nên script cũng tự thoát. `close()` có sẵn cho ai cần dừng chủ động.
+      - Thời gian chờ (10 giây) đo đúng một lần embed: client gửi từng việc một, không tính lúc nạp model hay lúc xếp hàng. Quá giờ thì dựng lại worker ở lần gọi sau. Worker chết **trước** khi nạp xong model thì coi như model không dùng được.
+      - RAM: worker tốn thêm khoảng 30–55 MB so với model trên luồng chính (đo cùng một script, 931 → 961 MB sau khi nạp model). Không có bản model thứ hai.
+
+**Sửa so với AD-23:** mục 11 ("chưa có bảng điểm, mỗi lượt chấm lại lúc chạy") được thay bằng mục 7 ở trên. Quy tắc kiểm lại `NO_MATCH` sau 3 giờ giữ làm lưới an toàn, nhưng dấu được xoá sớm khi có ứng viên mới đạt ngưỡng (mục 6).
+
+**Sửa so với AD-24:** mục 7 ("tự mời và trang tìm ứng viên vẫn chấm trực tiếp") được thực hiện bằng mục 7–8 ở trên. Câu "ứng viên sửa hồ sơ trong lúc chạy thì đêm sau mới vào bảng" (mục 6) không còn đúng: dấu của ứng viên đó vẫn còn và được chấm trong vài phút.
+
+**Phương án không chọn:**
+
+- *Bảng hàng đợi riêng (`candidate_rescore_queue`, mỗi thay đổi một dòng):* biết được lý do và lịch sử, nhưng phải gộp nhiều dòng của cùng người, phải dọn dòng cũ, và không màn hình nào cần lịch sử này. Ghi log là đủ để gỡ lỗi.
+- *Chấm ngay trong request lưu hồ sơ:* vài giây cho khoảng 87 tin mỗi lần lưu; ứng viên mới sửa 5–10 mục liên tiếp thì chấm lại 5–10 lần vô ích.
+- *Chỉ cron 15 phút:* demo trực tiếp phải chờ tới 15 phút mới thấy hệ thống phản ứng.
+- *Tách việc chấm ra process riêng hoặc dùng BullMQ:* số đo của AD-23 (bước 7c–7d) và AD-24 cho thấy chung process vẫn ổn ở quy mô demo. Process riêng còn phải xử lý lại realtime (Socket.IO chạy chung process với Express), thêm pool kết nối Neon, và web vẫn phải nạp model vì có nhiều chỗ embed trong request. (Chỉ model embedding chuyển sang luồng phụ, xem mục 11.)
+- *Giới hạn số luồng của onnxruntime, embed theo lô (bước 0):* đều làm luồng chính bị chặn lâu hơn (mục 11).
+- *Bật preview `relationJoins` của Prisma để nạp hồ sơ bằng một câu (bước 0, Q8):* bước 0 đo hồ sơ ứng viên giảm 319 → 47 ms, hồ sơ tin 466 → 108 ms. Không chọn ở 0.6 vì hai lý do:
+  - bật preview thì **mọi** truy vấn có `include` / `select` quan hệ trong app đổi sang join, phải kiểm lại gần như mọi trang, và tính năng preview có thể đổi khi nâng Prisma;
+  - khi đã chấm theo lô (mục 5), nó chỉ bớt thêm khoảng 6 round trip mỗi lô.
+
+  Có thể làm thành việc tối ưu riêng cho cả app, có AD và đo từng trang. Khi server đặt cùng vùng với Neon (round trip ~1–2 ms), lợi ích nhỏ đi nhiều.
+- *Cache hồ sơ tin trên Redis:* chỉ có một process nên không cần chia sẻ; Redis Cloud ở xa nên một lượt `MGET` cộng chuyển đổi khoảng 87 vector gần bằng một lượt đọc Neon; xoá cache phức tạp hơn. Cache đặt sau interface nhỏ (`getMany`, `invalidate`, `clear`) để sau này đổi sang cache hai tầng (bộ nhớ + Redis, xoá qua pub/sub) khi chạy nhiều instance.
+- *Báo job alert mỗi khi sửa hồ sơ làm có thêm tin đạt ngưỡng:* ứng viên sửa hồ sơ nhiều lần thì nhận báo liên tục.
+- *Suy thay đổi từ `updatedAt`:* sót các thay đổi ở bảng con (Bối cảnh).
+
+**Khi triển khai lên hosting:**
+- Đặt server **cùng vùng với Neon**: round trip giảm từ ~44 ms (máy dev) còn ~1–2 ms, nên mọi thời gian chấm ở bước 0 nhỏ đi nhiều lần.
+- Chọn máy tối thiểu ~2 GB RAM (model ~0,8 GB) và 2 vCPU (mục 11).
+- **Chạy nhiều instance cần AD riêng.** Khoá "một lượt mỗi lúc", hẹn giờ chờ ngừng sửa và cache hồ sơ tin hiện nằm trong bộ nhớ của một process; khi đó phải chuyển sang Redis / DB.
+
+**Hướng mở rộng (không làm ở 0.6):** embedding chạy trên máy riêng (thêm một `HttpEmbeddingProvider` sau port `EmbeddingProvider` có sẵn), hàng đợi kèm nhiều worker khi phải chấm hàng chục nghìn người cùng lúc, truy hồi hai tầng bằng index vector, read replica của Neon cho các trang chỉ đọc.
+
+**Ảnh hưởng:**
+
+- `schema.prisma` + 1 migration viết tay: `Candidate.matchRescoreRequestedAt` kèm index một phần (`WHERE … IS NOT NULL`); `Candidate.matchProfileChangedAt` (chống lượt chấm theo tin ghi đè điểm mới, Q2 của plan backend). Không thêm index `job_post_skills("skillId")`: bước 0 đo mọi câu < 2 ms.
+- `skills/skill-embedding.service.ts` (gửi việc sang worker) và một file worker mới trong `apps/server/src/infrastructure/` (mục 11). Các module gọi `embed` và port `EmbeddingProvider` không đổi.
+- `main.ts`: đóng worker khi server dừng.
+- Module mới `apps/server/src/modules/live-rescore/` (đánh dấu, hẹn giờ, lượt chấm, cron 15 phút, cache hồ sơ tin, số liệu cho Admin).
+- `candidates`, `skills`, `education-catalog`, `candidate-outreach` (đặt dấu, tự mời và trang tìm ứng viên đọc bảng), `match-scores` (ghi theo ứng viên), `application-automation` (`autoReviewTrigger` theo ứng viên), `job-alerts` (báo lần đầu), `RealtimeNotifier` (một sự kiện mới), `main.ts` (cron mới).
+- Script mới `simulate-inflow`.
+- `packages/shared-types`: trạng thái thẻ tự mời khi tỉ lệ 0%, DTO thẻ "Hệ thống tự động", payload sự kiện realtime.
+- Frontend: dòng chú thích ở `/jobs`, thẻ tự mời, làm mới số "Phù hợp" theo realtime, thẻ "Hệ thống tự động" của Admin, FAQ chatbot.

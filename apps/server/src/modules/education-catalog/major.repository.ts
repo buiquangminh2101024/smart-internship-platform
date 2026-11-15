@@ -1,5 +1,6 @@
 import type { CatalogAliasSource, CatalogEntryStatus, Prisma, PrismaClient } from "@prisma/client";
 import { normalizeMajorName } from "./education-catalog-normalize.util";
+import { planJobPostMajorMerge } from "./major-merge-plan";
 import type {
   AdminEducationCatalogRow,
   CatalogEntryRow,
@@ -157,8 +158,9 @@ export class MajorRepository implements EducationCatalogRepository {
   }
 
   /**
-   * Gộp `sourceId` (PENDING) vào `targetId`: chuyển Education sang mục đích, ghi
-   * tên cũ thành alias (feedback loop — lần sau khớp ngay ở bậc 0), rồi xoá nguồn.
+   * Gộp `sourceId` vào `targetId` (cron gộp mục PENDING, hoặc Admin gộp hai mục
+   * trùng): chuyển Education và ngành yêu cầu của tin sang mục đích, ghi tên cũ
+   * thành alias (feedback loop — lần sau khớp ngay ở bậc 0), rồi xoá nguồn.
    */
   async merge(sourceId: string, targetId: string, aliasSource: CatalogAliasSource): Promise<void> {
     if (sourceId === targetId) return;
@@ -168,6 +170,8 @@ export class MajorRepository implements EducationCatalogRepository {
       if (!source) return;
 
       await tx.education.updateMany({ where: { majorId: sourceId }, data: { majorId: targetId } });
+      // JobPostMajor cascade theo Major — không chuyển trước thì tin mất yêu cầu ngành.
+      await this.moveJobPostMajors(sourceId, targetId, tx);
       // Alias cũ của nguồn (nếu có) sẽ bị cascade xoá theo — chuyển sang đích trước.
       await tx.majorAlias.updateMany({ where: { majorId: sourceId }, data: { majorId: targetId } });
       await this.upsertAlias(source.name, targetId, aliasSource, tx);
@@ -184,6 +188,29 @@ export class MajorRepository implements EducationCatalogRepository {
       update: { majorId, source },
       create: { alias, majorId, source },
     });
+  }
+
+  private async moveJobPostMajors(sourceId: string, targetId: string, db: Db): Promise<void> {
+    const linkSelect = { jobPostId: true, relevance: true } satisfies Prisma.JobPostMajorSelect;
+    const sourceLinks = await db.jobPostMajor.findMany({ where: { majorId: sourceId }, select: linkSelect });
+    if (sourceLinks.length === 0) return;
+
+    const targetLinks = await db.jobPostMajor.findMany({
+      where: { majorId: targetId, jobPostId: { in: sourceLinks.map((link) => link.jobPostId) } },
+      select: linkSelect,
+    });
+    const plan = planJobPostMajorMerge(sourceLinks, targetLinks);
+
+    if (plan.creates.length > 0) {
+      await db.jobPostMajor.createMany({ data: plan.creates.map((link) => ({ ...link, majorId: targetId })) });
+    }
+    if (plan.promoteToPrimary.length > 0) {
+      await db.jobPostMajor.updateMany({
+        where: { majorId: targetId, jobPostId: { in: plan.promoteToPrimary } },
+        data: { relevance: "PRIMARY" },
+      });
+    }
+    // Liên kết cũ của nguồn để cascade dọn khi xoá ngành nguồn.
   }
 
   private async detachPendingMatchReferences(id: string, db: Db): Promise<void> {

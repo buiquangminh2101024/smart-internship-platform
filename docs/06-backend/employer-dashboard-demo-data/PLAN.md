@@ -1,6 +1,6 @@
 # Dữ liệu demo cho dashboard Employer (E11)
 
-Việc riêng của `docs/05-frontend/phases/employer-dashboard-v2/PLAN.md` (E11). Chỉ là một script trong `apps/server/scripts/`, không đổi schema, API hay giao diện.
+Việc riêng của `docs/05-frontend/phases/dashboard-v2/PLAN.md` (E11). Chỉ là một script trong `apps/server/scripts/`, không đổi schema, API hay giao diện.
 
 **Trạng thái: XONG (2026-11-04).** Chủ dự án đã tải CV mẫu (`docs/temp/cv-mau-demo.pdf`) và chạy bản ghi; đã kiểm DB (outbox giữ 36, gói `ACTIVE` tới 02/02/2027) và trang: dashboard, Ứng viên, Lịch phỏng vấn (hai tab), Tin tuyển dụng `?attention=1`, Tin nhắn, Lời mời. Chưa thử chạy lại lần hai và `--reset` (mục Kiểm, bước 3). Các chỗ khác plan ban đầu ghi ở mục "Khác plan khi làm" cuối file.
 

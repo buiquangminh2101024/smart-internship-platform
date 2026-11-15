@@ -129,3 +129,4 @@ questions:
 - Thông báo trong ứng dụng hiện ở **biểu tượng chuông** trên đầu trang: đơn ứng tuyển đổi trạng thái, lịch phỏng vấn, tin tuyển dụng được duyệt hoặc bị từ chối, tin nhắn mới…
 - Một số sự kiện quan trọng cũng được gửi qua **email**.
 - Thông báo bật lên của trình duyệt được bật hoặc tắt ở trang **Cài đặt**, mục **Thông báo qua trình duyệt**, gồm hai loại: **Tin nhắn mới** và **Thông báo hệ thống**. Nếu đã lỡ chặn quyền thông báo, hãy cho phép lại trong cài đặt trang của trình duyệt rồi bật lại.
+- Ứng viên bật hoặc tắt báo tin việc làm mới ở /settings#bao-tin-viec-lam.

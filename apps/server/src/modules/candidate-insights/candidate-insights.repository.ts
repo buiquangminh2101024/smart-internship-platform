@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import type { ProfileInsight, ProfileInsightSuggestion, ProfileInsightSuggestionKind } from "@sip/shared-types";
 import type { ProfileInsightInput } from "../../shared/ports/ProfileInsightGenerator";
+import type { ProfileCompletenessFacts } from "./profile-completeness.util";
 
 export interface SaveProfileInsightData {
   completenessScore: number;
@@ -20,6 +21,44 @@ export class CandidateInsightsRepository {
   async findCandidateIdByUserId(userId: string): Promise<string | null> {
     const candidate = await this.prisma.candidate.findUnique({ where: { userId }, select: { id: true } });
     return candidate?.id ?? null;
+  }
+
+  /**
+   * Tám mục của độ hoàn thiện (AD-26 mục 8) trong một câu đọc: đếm quan hệ, không nạp
+   * cả hồ sơ. CV chỉ đếm CV hiện trong "Quản lý CV" (CV tải lúc nộp đơn mà không lưu
+   * có `isHidden`); học vấn chỉ đếm dòng có chọn ngành (bộ chấm không so được ngành tự gõ).
+   */
+  async loadCompletenessFacts(candidateId: string): Promise<ProfileCompletenessFacts | null> {
+    const candidate = await this.prisma.candidate.findUnique({
+      where: { id: candidateId },
+      select: {
+        headline: true,
+        bio: true,
+        cityId: true,
+        isOpenToOutreach: true,
+        _count: {
+          select: {
+            skills: true,
+            cvs: { where: { isHidden: false } },
+            workExperiences: true,
+            projects: true,
+            educations: { where: { majorId: { not: null } } },
+          },
+        },
+      },
+    });
+    if (!candidate) return null;
+    const counts = candidate._count;
+    return {
+      skills: counts.skills > 0,
+      cv: counts.cvs > 0,
+      outreach: candidate.isOpenToOutreach,
+      experience: counts.workExperiences > 0,
+      projects: counts.projects > 0,
+      headlineOrBio: Boolean(candidate.headline?.trim() || candidate.bio?.trim()),
+      educationMajor: counts.educations > 0,
+      city: candidate.cityId !== null,
+    };
   }
 
   /** Dữ liệu gửi LLM — liệt kê đúng các trường ở D13, không select thêm gì. */

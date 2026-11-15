@@ -2,10 +2,10 @@ import type { NextFunction, Request, Response } from "express";
 import type {
   AdminDashboardAnalytics,
   AdminDashboardOverview,
-  AdminDashboardTasks,
   ApiResponse,
   EmployerDashboardAnalytics,
   EmployerDashboardOverview,
+  EmployerHiringProgress,
 } from "@sip/shared-types";
 import type { AdminDashboardService } from "./admin-dashboard.service";
 import type { DashboardAnalyticsQuery } from "./dashboard.dto";
@@ -49,22 +49,22 @@ export class DashboardController {
     }
   };
 
-  // --- Admin ---
-
-  adminOverview = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+  employerHiringProgress = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const result = await this.adminDashboardService.overview();
-      const body: ApiResponse<AdminDashboardOverview> = { success: true, data: result };
+      const result = await this.employerDashboardService.hiringProgress(req.user!.id);
+      const body: ApiResponse<EmployerHiringProgress> = { success: true, data: result };
       res.json(body);
     } catch (error) {
       next(error);
     }
   };
 
-  adminTasks = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+  // --- Admin ---
+
+  adminOverview = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const result = await this.adminDashboardService.tasks();
-      const body: ApiResponse<AdminDashboardTasks> = { success: true, data: result };
+      const result = await this.adminDashboardService.overview();
+      const body: ApiResponse<AdminDashboardOverview> = { success: true, data: result };
       res.json(body);
     } catch (error) {
       next(error);

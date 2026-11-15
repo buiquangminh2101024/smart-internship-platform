@@ -1,4 +1,7 @@
 import type { NotificationType } from "@prisma/client";
+import type { MatchScoresUpdatedPayload } from "@sip/shared-types";
+
+export type { MatchScoresUpdatedPayload };
 
 export interface RealtimeNotificationPayload {
   id: string;
@@ -38,6 +41,8 @@ export interface RealtimeNotifier {
   pushMessageToUser(userId: string, payload: RealtimeMessagePayload): Promise<void> | void;
   /** Event `conversation:unavailable` — khoá gửi tin ở phía chưa xoá. */
   notifyConversationUnavailable(userId: string, payload: ConversationUnavailablePayload): Promise<void> | void;
+  /** Event `match-scores:updated` — số "Phù hợp" của các tin đã đổi (0.6, Q5). */
+  pushMatchUpdate(userId: string, payload: MatchScoresUpdatedPayload): Promise<void> | void;
   /** Ngắt mọi socket đang mở của user — gọi sau khi Admin khoá tài khoản (AD-17). */
   disconnectUser(userId: string): Promise<void> | void;
 }
