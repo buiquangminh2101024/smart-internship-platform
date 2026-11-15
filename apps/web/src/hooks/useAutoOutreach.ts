@@ -15,7 +15,7 @@ export const DEFAULT_MIN_SCORE = 80;
  * Nằm dưới OUTREACH_KEY: SocketProvider làm mới cả nhóm khi có AUTO_OUTREACH_SENT hoặc
  * ứng viên trả lời lời mời, nên thẻ trên trang tin tự cập nhật số đếm.
  */
-const jobAutoKey = (jobId: string) => [...OUTREACH_KEY, "job-auto", jobId] as const;
+export const jobAutoKey = (jobId: string) => [...OUTREACH_KEY, "job-auto", jobId] as const;
 
 /** Số nguyên trong [min, max]; sai thì null. Dùng cho ô nhập của thẻ và form tạo tin. */
 export function parseIntInRange(value: string, min: number, max: number): number | null {

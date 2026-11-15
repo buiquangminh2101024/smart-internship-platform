@@ -9,6 +9,7 @@ import {
   useJobAutoOutreach,
   useUpdateJobAutoOutreach,
 } from "@/hooks/useAutoOutreach";
+import { useEmployerMe } from "@/hooks/useEmployerMe";
 import { ApiError } from "@/lib/api-client";
 import { formatVnDate, formatVnDayMonth, formatVnTime } from "@/lib/dashboard-format";
 import { Button } from "@/components/ui/Button";
@@ -69,6 +70,8 @@ function MatchedLine({ data, jobId }: { data: JobAutoOutreachDto; jobId: string 
 /** Dòng trạng thái theo `state` của server (không theo bản đang sửa). */
 function AutoOutreachStatus({ data, jobId }: { data: JobAutoOutreachDto; jobId: string }) {
   const { state, status } = data;
+  const { data: me } = useEmployerMe();
+  const isCompanyAdmin = me?.employer?.isCompanyAdmin ?? false;
   const invitationsLink = (
     <Button
       as="a"
@@ -116,6 +119,31 @@ function AutoOutreachStatus({ data, jobId }: { data: JobAutoOutreachDto; jobId: 
         <p>
           Đã tuyển đủ <Num value={status.hiredCount} />/<Num value={data.hiringTarget} />, hệ thống ngừng mời.
         </p>
+      );
+      break;
+    case "PAUSED_BY_COMPANY_SHARE":
+      // 0.6 bước 8: tỉ lệ tự động của công ty 0% (hoặc làm tròn ra 0 lời mời/ngày).
+      body = (
+        <>
+          <p>
+            Tỉ lệ tự động mời của công ty hiện cho 0 lời mời/ngày, nên hệ thống không tự mời cho tin này. Mời tay
+            vẫn dùng được.
+          </p>
+          {isCompanyAdmin ? (
+            <Button
+              as="a"
+              href="/employer/outreach"
+              variant="link"
+              size="sm"
+              iconAfter="arrow-right"
+              className="w-fit text-sm"
+            >
+              Chỉnh tỉ lệ ở trang Lời mời
+            </Button>
+          ) : (
+            <p className="text-text-muted">Quản trị viên công ty chỉnh được tỉ lệ này ở trang Lời mời.</p>
+          )}
+        </>
       );
       break;
     case "NO_MATCH":

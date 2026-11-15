@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { io, Socket } from "socket.io-client";
 import type {
   ConversationUnavailableEvent,
+  MatchScoresUpdatedPayload,
   Message,
   MessageNotificationEvent,
   NotificationEvent,
@@ -26,6 +27,11 @@ export interface SocketHandlers {
   onNotification?: (event: NotificationEvent) => void;
   /** `notification:new_message` — dòng ghim tin nhắn + browser notification. */
   onMessageNotification?: (event: MessageNotificationEvent) => void;
+  /**
+   * `match-scores:updated` — số "Phù hợp" của các tin vừa đổi sau lượt chấm lại (0.6, AD-27 mục 6).
+   * Chỉ employer nhận; server gửi tối đa một sự kiện mỗi công ty mỗi 15 giây.
+   */
+  onMatchScoresUpdated?: (payload: MatchScoresUpdatedPayload) => void;
 }
 
 /**
@@ -96,6 +102,10 @@ export function useSocketConnection(area: AuthArea, handlers: SocketHandlers, en
 
     socket.on("notification:new_message", (event: MessageNotificationEvent) => {
       handlersRef.current.onMessageNotification?.(event);
+    });
+
+    socket.on("match-scores:updated", (payload: MatchScoresUpdatedPayload) => {
+      handlersRef.current.onMatchScoresUpdated?.(payload);
     });
 
     socket.on("connect_error", (err) => {

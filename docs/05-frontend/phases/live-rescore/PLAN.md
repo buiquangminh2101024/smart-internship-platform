@@ -1,6 +1,6 @@
 # Chấm lại theo ứng viên gần thời gian thực (0.6) — Frontend
 
-> **Trạng thái: ĐÃ LẬP KẾ HOẠCH (2026-11-14), các câu hỏi của plan backend đã chốt. CHƯA TRIỂN KHAI.** Làm sau khi backend xong bước tương ứng (ghi ở từng bước dưới đây).
+> **Trạng thái: ĐANG TRIỂN KHAI. Đợt 2 (F3 + F4) xong 2026-11-15; F1, F2, F5, F6 chưa làm.** Lập kế hoạch 2026-11-14, các câu hỏi của plan backend đã chốt. Thứ tự đợt: 2 (F3 + F4) → 3 (F5) → 1 (F1 + F2 + câu chữ FAQ của F6) → kiểm tổng. Làm sau khi backend xong bước tương ứng (ghi ở từng bước dưới đây).
 
 Mục 0.6 của `docs/01-project/FEATURE_BACKLOG.md`. Quyết định kiến trúc: AD-27. Backend: `docs/06-backend/live-rescore/PLAN.md` (D1–D12, Q1–Q6). Phạm vi do chủ dự án chọn ngày 2026-11-14: **7a–7d, 7g, 7h**. 7e (trạng thái "Đang cập nhật việc làm phù hợp…" ở `/profile`) và 7f ("Xem thêm" ở trang tìm ứng viên) để sau.
 
@@ -46,6 +46,7 @@ FAQ chatbot                    apps/server/content/support-faq/*.md + faq-index.
 
 - `components/employer/AutoOutreachCard.tsx`: trạng thái mới (backend bước 8) hiện câu kiểu "Công ty đang để tỉ lệ tự động 0%, hệ thống không tự mời. Mời tay vẫn dùng được." kèm link tới chỗ chỉnh tỉ lệ ở trang "Lời mời" (chỉ hiện link với quản trị viên công ty nếu dữ liệu có sẵn; không thì chỉ hiện câu).
 - Phụ thuộc: backend bước 8.
+- *Đã làm 2026-11-15:* `AutoOutreachCard` thêm nhánh `PAUSED_BY_COMPANY_SHARE`: câu "Tỉ lệ tự động mời của công ty hiện cho 0 lời mời/ngày…", vẫn có link "Xem lời mời". Quản trị viên công ty (`useEmployerMe().employer.isCompanyAdmin`) thấy link "Chỉnh tỉ lệ ở trang Lời mời" (`/employer/outreach`); người khác thấy câu "Quản trị viên công ty chỉnh được…". Không dùng `#anchor` vì khối tỉ lệ tải sau nên trình duyệt không cuộn tới. Đổi tỉ lệ ở trang "Lời mời" thì làm mới thẻ tự mời của mọi tin (`[...OUTREACH_KEY, "job-auto"]`).
 
 ### F4 — Số "Phù hợp" tự làm mới theo realtime (7g)
 
@@ -59,6 +60,12 @@ FAQ chatbot                    apps/server/content/support-faq/*.md + faq-index.
 - Dự phòng khi mất socket: `refetchOnWindowFocus` mặc định của TanStack Query (đã bật sẵn). Không thêm `refetchInterval`.
 - Kiểm: chạy `simulate-inflow` với một tin của Mây Xanh, số "Phù hợp" trên tổng quan đổi mà không cần tải lại trang.
 - Phụ thuộc: backend bước 4.
+- *Đã làm 2026-11-15:* `useSocketConnection` thêm handler `onMatchScoresUpdated` (type `MatchScoresUpdatedPayload`). `SocketProvider`, chỉ area `employer`, invalidate:
+  - `HIRING_PROGRESS_KEY`;
+  - `["employerJobPosts"]`;
+  - `jobAutoKey(id)` của từng tin trong `jobPostIds`.
+
+  **Khác plan:** "Gợi ý" của trang tìm ứng viên (`searchKey(id)`) chỉ đánh dấu cũ (`refetchType: "none"`), không tìm lại ngay. Lý do: hook này cố ý chỉ tìm lại khi bấm "Tìm lại" hoặc mở lại trang, để danh sách không đổi thứ tự khi nhà tuyển dụng đang chọn người mời. Chưa kiểm trên trình duyệt; để lượt kiểm tổng.
 
 ### F5 — Thẻ "Hệ thống tự động" cho Admin (7h)
 

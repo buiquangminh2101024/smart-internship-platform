@@ -4,7 +4,9 @@ import { createContext, useContext, useMemo, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { COMPANY_APPLICATIONS_KEY } from "@/hooks/useApplications";
-import { OUTREACH_KEY } from "@/hooks/useCandidateOutreach";
+import { jobAutoKey } from "@/hooks/useAutoOutreach";
+import { OUTREACH_KEY, searchKey } from "@/hooks/useCandidateOutreach";
+import { HIRING_PROGRESS_KEY } from "@/hooks/useEmployerDashboard";
 import { JOB_RECOMMENDATIONS_KEY } from "@/hooks/useJobRecommendations";
 import { useSocketConnection, isMessagingArea, type SocketStatus } from "@/hooks/useSocket";
 import { showBrowserNotification } from "@/lib/browser-notification";
@@ -98,6 +100,19 @@ export function SocketProvider({
           onClick: () =>
             router.push(`${MESSAGES_HREF[area]}?conversationId=${encodeURIComponent(event.conversationId)}`),
         });
+      },
+      // 0.6 (AD-27 mục 6): lượt chấm lại vừa đổi số "Phù hợp" của các tin này. Chỉ làm mới dữ liệu,
+      // không hiện thông báo trình duyệt. Mất socket thì refetchOnWindowFocus mặc định làm dự phòng.
+      onMatchScoresUpdated: ({ jobPostIds }) => {
+        if (area !== "employer") return;
+        void queryClient.invalidateQueries({ queryKey: HIRING_PROGRESS_KEY }); // tiến độ tuyển ở tổng quan
+        void queryClient.invalidateQueries({ queryKey: ["employerJobPosts"] }); // "Phù hợp N" ở /employer/jobs
+        for (const jobId of jobPostIds) {
+          void queryClient.invalidateQueries({ queryKey: jobAutoKey(jobId) }); // thẻ tự mời trên trang tin
+          // "Gợi ý" của trang tìm ứng viên chỉ tìm lại khi Employer bấm "Tìm lại" hoặc mở lại trang
+          // (useCandidateSearch): đánh dấu cũ nhưng không tìm ngay, để danh sách không đổi khi đang chọn.
+          void queryClient.invalidateQueries({ queryKey: searchKey(jobId), refetchType: "none" });
+        }
       },
     },
     enabled,

@@ -17,7 +17,7 @@ import { apiFetch } from "@/lib/api-client";
 
 // Tìm & mời ứng viên (B3, AD-15) — docs/05-frontend/phases/candidate-outreach/PLAN.md.
 
-const searchKey = (jobId: string) => ["employer", "job-posts", jobId, "candidate-search"] as const;
+export const searchKey = (jobId: string) => ["employer", "job-posts", jobId, "candidate-search"] as const;
 const sentKey = (jobId: string) => ["employer", "job-posts", jobId, "outreach-invitations"] as const;
 /** Mọi key của trang "Lời mời" bắt đầu bằng key này (SocketProvider invalidate theo nó). */
 export const OUTREACH_KEY = ["employer", "outreach"] as const;
@@ -162,6 +162,9 @@ export function useUpdateCompanyOutreachSettings() {
     onSuccess: (settings) => {
       queryClient.setQueryData<CompanyOutreachSettings>(COMPANY_SETTINGS_KEY, settings);
       void queryClient.invalidateQueries({ queryKey: [...OUTREACH_KEY, "summary"] });
+      // 0.6 bước 8: tỉ lệ cho phần tự động 0 lời mời/ngày ⇒ thẻ tự mời của mọi tin đổi trạng thái
+      // (PAUSED_BY_COMPANY_SHARE ↔ trạng thái cũ). Key "job-auto" của useAutoOutreach.
+      void queryClient.invalidateQueries({ queryKey: [...OUTREACH_KEY, "job-auto"] });
     },
   });
 }
