@@ -1,5 +1,5 @@
 // Chạy: node --import tsx --test tests/unit/job-post-attention.test.ts (từ apps/server)
-// "Tin cần chú ý" (docs/05-frontend/phases/employer-dashboard-v2/PLAN.md B1, B2):
+// "Tin cần chú ý" (docs/05-frontend/phases/dashboard-v2/PLAN.md B1, B2):
 // - query `attention=1` không đi cùng `status`;
 // - danh sách chỉ ra tin bị từ chối và tin PUBLISHED hết hạn trong 7 ngày;
 // - số đếm cho dashboard bằng số dòng của danh sách trên cùng dữ liệu.

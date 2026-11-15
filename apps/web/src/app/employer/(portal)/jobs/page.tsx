@@ -30,7 +30,7 @@ const STATUS_OPTIONS: { value: JobFilter; label: string }[] = [
 
 /**
  * Bộ lọc của trang nằm trên URL để dashboard trỏ thẳng vào được
- * (`/employer/jobs?attention=1`, docs/05-frontend/phases/employer-dashboard-v2/PLAN.md F1).
+ * (`/employer/jobs?attention=1`, docs/05-frontend/phases/dashboard-v2/PLAN.md F1).
  * Giá trị lạ bị bỏ qua; có `attention=1` thì bỏ qua `status`.
  */
 function useJobFilterParam() {

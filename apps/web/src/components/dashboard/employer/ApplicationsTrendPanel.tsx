@@ -27,7 +27,7 @@ const METRIC_COPY: Record<Metric, { title: string; unit: string; empty: string }
 const PANEL_SKELETON_HEIGHT = 380;
 
 /**
- * Biểu đồ đường của dashboard Employer (docs/05-frontend/phases/employer-dashboard-v2/PLAN.md, F2):
+ * Biểu đồ đường của dashboard Employer (docs/05-frontend/phases/dashboard-v2/PLAN.md, F2):
  * chuyển Hồ sơ / Lượt xem (E10) và kỳ 7/30/90 ngày. Không gồm phễu.
  */
 export function ApplicationsTrendPanel() {

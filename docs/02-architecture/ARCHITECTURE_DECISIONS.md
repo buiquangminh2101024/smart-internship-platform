@@ -357,7 +357,7 @@ Bắt buộc thêm khi gửi duyệt (áp dụng cho cả nhánh publish thẳng
 
 > **Trạng thái: ĐÃ LẬP KẾ HOẠCH và ĐƯỢC DUYỆT (2026-09-29), ĐANG TRIỂN KHAI: backend bước 0–4 xong (M1 đã áp lên Neon); bước 5 (Interview, M2, kèm D12–D13 duyệt 2026-09-29, mục 10–11) xong phần code, migration M2 chưa áp lên Neon; frontend chưa làm.**
 
-> **Cập nhật 2026-11-04 (dashboard Employer bản 2, `docs/05-frontend/phases/employer-dashboard-v2/PLAN.md`):** phía Employer bỏ luồng "việc cần làm" thao tác tại chỗ (`GET /employer/dashboard/tasks`) và phễu (`analytics.funnel`, `firstResponse`); dashboard Employer giờ chỉ là điểm chuyển trang, việc đang chờ hiện bằng số trên 4 thẻ. Mục 6 (quy ước phễu) không còn API nào dùng; bảng `application_status_history` vẫn ghi theo mục 3. Phần nói về "việc cần làm" ở mục 5 nay chỉ còn đúng với dashboard Admin. Các nguyên tắc còn lại (module `dashboard` chỉ đọc, đọc qua service của module chủ) giữ nguyên.
+> **Cập nhật 2026-11-04 (dashboard Employer bản 2, `docs/05-frontend/phases/dashboard-v2/PLAN.md`):** phía Employer bỏ luồng "việc cần làm" thao tác tại chỗ (`GET /employer/dashboard/tasks`) và phễu (`analytics.funnel`, `firstResponse`); dashboard Employer giờ chỉ là điểm chuyển trang, việc đang chờ hiện bằng số trên 4 thẻ. Mục 6 (quy ước phễu) không còn API nào dùng; bảng `application_status_history` vẫn ghi theo mục 3. Phần nói về "việc cần làm" ở mục 5 nay chỉ còn đúng với dashboard Admin. Các nguyên tắc còn lại (module `dashboard` chỉ đọc, đọc qua service của module chủ) giữ nguyên.
 
 **Quyết định:**
 

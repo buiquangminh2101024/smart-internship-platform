@@ -22,7 +22,7 @@ const GRID_CLASS = "grid grid-cols-1 gap-4 @xl:grid-cols-2 @4xl:grid-cols-4";
 const CARD_SKELETON_HEIGHT = 232;
 
 /**
- * Bốn thẻ chính của dashboard Employer (docs/05-frontend/phases/employer-dashboard-v2/PLAN.md, E2):
+ * Bốn thẻ chính của dashboard Employer (docs/05-frontend/phases/dashboard-v2/PLAN.md, E2):
  * mỗi thẻ là một link sang trang quản lý tương ứng. Thẻ là **việc đang chờ**, không thao tác tại chỗ.
  */
 export function EmployerSummaryCards({ overview }: { overview: EmployerDashboardOverview }) {

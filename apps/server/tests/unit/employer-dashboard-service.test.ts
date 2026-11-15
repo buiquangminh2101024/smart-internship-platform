@@ -53,7 +53,7 @@ test("overview: tin cần chú ý lấy từ job-posts; còn số hồ sơ chờ
   assert.deepEqual(overview.jobs.attention, { total: 3, rejected: 1, expiringIn7Days: 2 });
   assert.equal(overview.applications.pendingCount, 1);
   assert.deepEqual(overview.outreach, { quota: QUOTA });
-  // Trường của bản C đã bỏ ở đợt 2 (employer-dashboard-v2).
+  // Trường của bản C đã bỏ ở đợt 2 (dashboard-v2).
   assert.equal("expiringIn7Days" in overview.jobs, false);
   assert.equal("topJob" in overview.jobs, false);
   assert.equal("pendingWait" in overview.applications, false);

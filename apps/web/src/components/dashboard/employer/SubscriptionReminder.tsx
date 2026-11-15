@@ -24,7 +24,7 @@ export interface Reminder {
 }
 
 /**
- * Chọn **một** câu nhắc theo thứ tự ưu tiên (docs/05-frontend/phases/employer-dashboard-v2/PLAN.md, F3).
+ * Chọn **một** câu nhắc theo thứ tự ưu tiên (docs/05-frontend/phases/dashboard-v2/PLAN.md, F3).
  * Trả null khi không có gì cần nhắc. Hàm thuần để kiểm được mọi trường hợp mà không cần React.
  */
 export function pickReminder(

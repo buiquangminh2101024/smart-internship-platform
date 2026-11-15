@@ -31,7 +31,7 @@ function useToast() {
 }
 
 /**
- * Tổng quan của Employer (docs/05-frontend/phases/employer-dashboard-v2/PLAN.md):
+ * Tổng quan của Employer (docs/05-frontend/phases/dashboard-v2/PLAN.md):
  * dòng nhắc gói dịch vụ (chỉ khi cần) → 4 thẻ việc đang chờ (bấm sang trang quản lý) →
  * biểu đồ hồ sơ theo ngày → tiến độ tuyển theo tin (0.3, thay "Hiệu quả tin đang hiển thị",
  * docs/05-frontend/phases/hiring-progress/PLAN.md) → trung tâm thông báo.
