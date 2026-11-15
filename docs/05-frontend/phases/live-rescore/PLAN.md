@@ -1,6 +1,6 @@
 # Chấm lại theo ứng viên gần thời gian thực (0.6) — Frontend
 
-> **Trạng thái: ĐANG TRIỂN KHAI. Đợt 2 (F3 + F4) xong 2026-11-15; F1, F2, F5, F6 chưa làm.** Lập kế hoạch 2026-11-14, các câu hỏi của plan backend đã chốt. Thứ tự đợt: 2 (F3 + F4) → 3 (F5) → 1 (F1 + F2 + câu chữ FAQ của F6) → kiểm tổng. Làm sau khi backend xong bước tương ứng (ghi ở từng bước dưới đây).
+> **Trạng thái: ĐANG TRIỂN KHAI. Đợt 2 (F3 + F4) và đợt 3 (F5) xong 2026-11-15; F1, F2, F6 chưa làm.** Lập kế hoạch 2026-11-14, các câu hỏi của plan backend đã chốt. Thứ tự đợt: 2 (F3 + F4) → 3 (F5) → 1 (F1 + F2 + câu chữ FAQ của F6) → kiểm tổng. Làm sau khi backend xong bước tương ứng (ghi ở từng bước dưới đây).
 
 Mục 0.6 của `docs/01-project/FEATURE_BACKLOG.md`. Quyết định kiến trúc: AD-27. Backend: `docs/06-backend/live-rescore/PLAN.md` (D1–D12, Q1–Q6). Phạm vi do chủ dự án chọn ngày 2026-11-14: **7a–7d, 7g, 7h**. 7e (trạng thái "Đang cập nhật việc làm phù hợp…" ở `/profile`) và 7f ("Xem thêm" ở trang tìm ứng viên) để sau.
 
@@ -77,6 +77,12 @@ FAQ chatbot                    apps/server/content/support-faq/*.md + faq-index.
 - `useAutomationStatus`: `GET /admin/automation-status`, `refetchInterval` 15 giây khi tab đang hiển thị. Trạng thái tải, lỗi, và "Không có ứng viên nào đang chờ" khi N = 0.
 - Không có thao tác tại chỗ (dashboard là điểm xem, như dashboard Employer bản 2).
 - Phụ thuộc: backend bước 8.
+- *Đã làm 2026-11-15:*
+  - `useAutomationStatus` (`hooks/useAdminDashboard.ts`): key `[...ADMIN_DASHBOARD_KEY, "automation-status"]`, nên nút "Làm mới" của trang cũng làm mới thẻ; `refetchInterval` 15 giây, không chạy khi tab ẩn.
+  - `components/dashboard/admin/AutomationStatusPanel.tsx`: `AdminPanel` của bản D, bốn mục "Đang chờ chấm lại", "Lượt chấm gần nhất", "Hôm nay", "Chấm đêm gần nhất". Tự tải và tự báo lỗi (`BlockSkeleton` / `BlockError`).
+  - Marigold chỉ cho "lâu nhất X phút" (thời gian chờ, theo quy tắc bản D). N = 0 thì ghi "Không có ứng viên nào đang chờ." kèm dấu tích. `lastRun` / `nightly` null thì ghi "Chưa có lượt nào trong 7 ngày qua".
+  - Vị trí: cột phải cạnh bàn duyệt, dưới "Nền tảng".
+  - Chưa xem trên trình duyệt (375px / desktop); để lượt kiểm tổng.
 
 ### F6 — FAQ chatbot và kiểm tổng (7d)
 

@@ -18,6 +18,7 @@ import { NotificationCenter } from "@/components/dashboard/NotificationCenter";
 import { ActivityTimeline } from "@/components/dashboard/admin/ActivityTimeline";
 import { AdminTrendAndRevenue, UsersByRolePanel } from "@/components/dashboard/admin/AdminAnalytics";
 import { AdminQueues, MODERATION_DESK_ID } from "@/components/dashboard/admin/AdminQueues";
+import { AutomationStatusPanel } from "@/components/dashboard/admin/AutomationStatusPanel";
 import { ModerationDesk } from "@/components/dashboard/admin/ModerationDesk";
 import { PlatformMetrics } from "@/components/dashboard/admin/PlatformMetrics";
 
@@ -41,7 +42,7 @@ function prefersReducedMotion(): boolean {
 
 /**
  * Tổng quan của Admin — bản D "bàn duyệt" (AD-16, D14): hàng chờ → bàn duyệt +
- * nền tảng → người dùng mới + doanh thu → thông báo + hoạt động + vai trò.
+ * nền tảng + hệ thống tự động (0.6 F5) → người dùng mới + doanh thu → thông báo + hoạt động + vai trò.
  * Mỗi khối tải và báo lỗi độc lập. Số dùng font chữ thường kèm `tabular-nums`
  * (khác Employer bản C dùng mono), nên trang đè `--font-num` về font sans.
  */
@@ -153,18 +154,21 @@ export default function AdminDashboardPage() {
           />
         )}
 
-        {overview.isPending ? (
-          <BlockSkeleton height={420} />
-        ) : overview.isError ? (
-          <BlockError
-            what="số liệu nền tảng"
-            onRetry={() => void overview.refetch()}
-            retrying={overview.isFetching}
-            minHeight={120}
-          />
-        ) : (
-          <PlatformMetrics overview={overview.data} updatedAt={overview.dataUpdatedAt} />
-        )}
+        <div className="flex min-w-0 flex-col gap-4">
+          {overview.isPending ? (
+            <BlockSkeleton height={420} />
+          ) : overview.isError ? (
+            <BlockError
+              what="số liệu nền tảng"
+              onRetry={() => void overview.refetch()}
+              retrying={overview.isFetching}
+              minHeight={120}
+            />
+          ) : (
+            <PlatformMetrics overview={overview.data} updatedAt={overview.dataUpdatedAt} />
+          )}
+          <AutomationStatusPanel />
+        </div>
       </div>
 
       <AdminTrendAndRevenue analytics={analytics} range={range} onRangeChange={setRange} />

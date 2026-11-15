@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   ActivityActorFilter,
+  AdminAutomationStatus,
   AdminDashboardAnalytics,
   AdminDashboardOverview,
   AdminDashboardTasks,
@@ -57,6 +58,19 @@ export function useAdminActivity(actor: ActivityActorFilter) {
       apiFetch<PaginatedResponse<AuditActivityItem>>("admin", `/admin/activity?limit=${ACTIVITY_LIMIT}&actor=${actor}`),
     staleTime: STALE_MS,
     placeholderData: (previous) => previous,
+  });
+}
+
+/** Thẻ "Hệ thống tự động" làm mới mỗi 15 giây (bằng nhịp realtime của 0.6), chỉ khi tab đang hiển thị. */
+const AUTOMATION_REFRESH_MS = 15_000;
+
+/** GET /admin/automation-status (0.6 bước 8, plan frontend F5). Nằm dưới ADMIN_DASHBOARD_KEY để "Làm mới" làm mới luôn. */
+export function useAutomationStatus() {
+  return useQuery({
+    queryKey: [...ADMIN_DASHBOARD_KEY, "automation-status"],
+    queryFn: () => apiFetch<AdminAutomationStatus>("admin", "/admin/automation-status"),
+    refetchInterval: AUTOMATION_REFRESH_MS,
+    refetchIntervalInBackground: false,
   });
 }
 
