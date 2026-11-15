@@ -115,7 +115,7 @@ export interface NotificationPayloadMap {
   // AD-26 D8 — một thông báo mỗi ứng viên mỗi ngày (upsertDaily, khoá
   // job-alert:<ứng viên>:<ngày giờ VN>); tin sau trong ngày cập nhật lại thông báo đó.
   JOB_ALERT: {
-    /** Tin mới nhất vừa được báo. */
+    /** Tin mới nhất vừa được báo (lần chấm đầu: tin điểm cao nhất, xem `firstScored`). */
     jobPostId: string;
     jobPostTitle: string;
     companyName: string;
@@ -123,6 +123,11 @@ export interface NotificationPayloadMap {
     score: number;
     /** Số tin đã báo cho ứng viên trong ngày (giờ VN), tính cả tin này — đếm từ `job_alerts`. */
     todayCount: number;
+    /**
+     * 0.6 (AD-27 mục 6, Q3): báo lần đầu cho ứng viên mới, cả loạt tin cùng lúc nên tin kèm theo là
+     * tin điểm cao nhất, không phải tin mới nhất. Không có = báo theo tin mới được chấm.
+     */
+    firstScored?: boolean;
   };
   // AD-26 D10 — nhắc một lần (notifyOnce, khoá profile-skills-reminder:<ứng viên>). Nội dung cố định.
   PROFILE_SKILLS_REMINDER: Record<string, never>;

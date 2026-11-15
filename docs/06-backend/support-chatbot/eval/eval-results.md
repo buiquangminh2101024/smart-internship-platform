@@ -1,13 +1,13 @@
 # Kết quả eval chatbot hỗ trợ — bậc 2 (so khớp FAQ)
 
-> Sinh tự động bởi `apps/server/scripts/support-chat-eval.ts` lúc 2026-11-13T09:30:19.189Z — không sửa tay; chạy lại script để cập nhật. Phương pháp: `../PLAN.md` mục "Bộ eval" và "Pipeline xử lý một câu hỏi".
+> Sinh tự động bởi `apps/server/scripts/support-chat-eval.ts` lúc 2026-11-15T01:45:15.547Z — không sửa tay; chạy lại script để cập nhật. Phương pháp: `../PLAN.md` mục "Bộ eval" và "Pipeline xử lý một câu hỏi".
 
-Model embedding `Xenova/paraphrase-multilingual-MiniLM-L12-v2`, phiên bản FAQ `b330fa0ec796`. Bộ câu hỏi do người soạn, cỡ nhỏ: con số chỉ mang tính chỉ báo. Score là cosine giữa câu hỏi và **câu hỏi mẫu gần nhất** của mỗi mục FAQ người hỏi được thấy.
+Model embedding `Xenova/paraphrase-multilingual-MiniLM-L12-v2`, phiên bản FAQ `971e53eba49a`. Bộ câu hỏi do người soạn, cỡ nhỏ: con số chỉ mang tính chỉ báo. Score là cosine giữa câu hỏi và **câu hỏi mẫu gần nhất** của mỗi mục FAQ người hỏi được thấy.
 
 ## Dữ liệu
 
 - 118 câu: 110 câu hỏi mới (faq 84 · llm 11 · out_of_scope 15) và 8 câu nối tiếp (có `history`). 17 câu hỏi mới gõ không dấu — không trả thẳng, không chặn, luôn xuống bậc 3–4 (chọn đoạn bằng bản bỏ dấu của câu hỏi mẫu).
-- Thời gian embed một câu (đã làm nóng model): trung vị 6,2 ms, lớn nhất 208,0 ms.
+- Thời gian embed một câu (đã làm nóng model): trung vị 7,3 ms, lớn nhất 35,2 ms.
 
 ## Ngưỡng đang dùng (`support-chat.config.ts`)
 
@@ -113,7 +113,7 @@ Mục đúng (`faqId`) có nằm trong 3 mục đưa vào prompt không. Cột "
 | Cách xếp hạng | Top-1 (mọi câu có faqId) | Top-3 (mọi câu có faqId) | Top-1 (câu llm) | Top-3 (câu llm) |
 | --- | --- | --- | --- | --- |
 | `question` — score câu hỏi mẫu cao nhất | 56/94 | 72/94 | 1/10 | 5/10 |
-| `content` — score với `title + nội dung` | 44/94 | 64/94 | 3/10 | 5/10 |
+| `content` — score với `title + nội dung` | 43/94 | 63/94 | 3/10 | 5/10 |
 | `max` — max(câu hỏi mẫu, nội dung) | 57/94 | 75/94 | 1/10 | 6/10 |
 | `mean` — trung bình (câu hỏi mẫu, nội dung) | 55/94 | 74/94 | 1/10 | 5/10 |
 | `server` — ◀ `contextRankOf` server đang dùng | 55/94 | 74/94 | 1/10 | 5/10 |
@@ -180,7 +180,7 @@ Bỏ dấu nhân tạo 93 câu hỏi mới có dấu (giữ nhãn) để có c�
 | So với | Top-1 đúng mục | Top-3 có mục đúng |
 | --- | --- | --- |
 | Câu hỏi mẫu gốc | 3/79 | 19/79 |
-| Bản bỏ dấu của câu hỏi mẫu ◀ | 18/79 | 27/79 |
+| Bản bỏ dấu của câu hỏi mẫu ◀ | 18/79 | 23/79 |
 
 Score cao nhất (so với bản bỏ dấu): câu trong phạm vi 0,636–0,950, câu ngoài phạm vi 0,387–0,923 — hai nhóm chồng lên nhau gần hết nên không có ngưỡng chặn an toàn.
 
@@ -290,7 +290,7 @@ Câu `llm` mà mục đúng **không** nằm trong top-3 (cách `question`): 5.
 | --- | --- | --- | --- |
 | q074 | Nếu tôi huỷ đơn rồi thì có nộp lại vào đúng tin đó được không và có cần CV khác không? | application-cancel | cv-extract, cv-builder, candidate-interviews |
 | q076 | Đang có gói còn 10 ngày mà mua gói khác thì số tin còn lại có được cộng vào không? | subscription-payment | subscription-trial, company-join, subscription-plans |
-| q077 | Ứng viên đang ở bước phỏng vấn, tôi muốn nhận luôn thì có phải đợi phỏng vấn xong không? | employer-applications | employer-interviews, candidate-search-invite, job-apply |
+| q077 | Ứng viên đang ở bước phỏng vấn, tôi muốn nhận luôn thì có phải đợi phỏng vấn xong không? | employer-applications | employer-interviews, candidate-search-invite, auto-outreach |
 | q079 | Một tin bị hạ thì tôi có mất lượt đăng không, và ứng viên đã nộp có còn xem được không? | jobpost-status | employer-applications, subscription-plans, candidate-search-invite |
 | q083 | Hệ thống có dùng AI không, AI làm những gì? | about-internhub | jobpost-requirements-ai, profile-insight, recommended-jobs |
 

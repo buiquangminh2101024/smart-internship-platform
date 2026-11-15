@@ -241,9 +241,7 @@ export function JobRecommendationsClient() {
               {first.source === "LIVE" ? (
                 <p className="flex items-start gap-1.5 text-[13px] text-text-muted">
                   <Icon name="info" size={14} className="mt-0.5 shrink-0" />
-                  <span>
-                    Danh sách đầy đủ sẽ có sau khi hệ thống cập nhật hồ sơ của bạn (trong vòng một ngày).
-                  </span>
+                  <span>Danh sách đầy đủ sẽ có sau vài phút, khi hệ thống chấm xong hồ sơ của bạn.</span>
                 </p>
               ) : null}
 

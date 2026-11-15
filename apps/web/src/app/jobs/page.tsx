@@ -283,7 +283,7 @@ function PublicJobsView() {
 
           {isCandidate ? (
             <p className="text-[13px] text-text-muted">
-              Điểm phù hợp cập nhật hằng đêm theo hồ sơ của bạn, chỉ mang tính tham khảo.
+              Điểm phù hợp cập nhật trong vài phút sau khi bạn sửa hồ sơ, chỉ mang tính tham khảo.
             </p>
           ) : null}
         </>

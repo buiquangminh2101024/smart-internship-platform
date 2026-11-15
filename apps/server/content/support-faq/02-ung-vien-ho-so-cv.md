@@ -131,7 +131,7 @@ Trang **Việc làm phù hợp** (/recommended-jobs) liệt kê các tin đang h
 - Khối **Kỹ năng nên bổ sung** liệt kê kỹ năng nhiều tin phù hợp cần mà bạn chưa có, kèm số tin.
 - Không hiện tin bạn đã ứng tuyển hoặc đã được nhà tuyển dụng mời.
 
-Danh sách trống thường vì hồ sơ chưa có kỹ năng: hãy thêm kỹ năng và chọn ngành học ở **Hồ sơ ứng viên** (/profile). Nếu bạn vừa thêm kỹ năng đầu tiên, trang hiện trước một số tin, danh sách đầy đủ có trong vòng một ngày.
+Danh sách trống thường vì hồ sơ chưa có kỹ năng: hãy thêm kỹ năng và chọn ngành học ở **Hồ sơ ứng viên** (/profile). Nếu bạn vừa thêm kỹ năng đầu tiên, trang hiện trước một số tin, danh sách đầy đủ có sau vài phút. Khi bạn sửa kỹ năng, ngành học hay kinh nghiệm, danh sách cũng cập nhật trong vài phút.
 
 ## outreach-optin
 audience: candidate

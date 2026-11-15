@@ -598,11 +598,13 @@ const templates: { [T in NotificationType]: Renderer<T> } = {
 
   // AD-26 D8 — chỉ trong app; email gộp mỗi ngày đi riêng qua JobAlertService (bước 6).
   // Thông báo được cập nhật tại chỗ khi có tin mới trong ngày, nên tiêu đề luôn là tổng trong ngày.
+  // Báo lần đầu cho ứng viên mới (0.6) nêu tin điểm cao nhất thay cho tin mới nhất.
   JOB_ALERT: (data) => {
     const latest = `"${data.jobPostTitle}" của ${data.companyName}, phù hợp ${data.score}%`;
+    const lead = data.firstScored ? "Phù hợp nhất" : "Mới nhất";
     return {
       title: `${data.todayCount} tin mới phù hợp với bạn`,
-      body: data.todayCount > 1 ? `Mới nhất: ${latest}.` : `${latest}.`,
+      body: data.todayCount > 1 ? `${lead}: ${latest}.` : `${latest}.`,
       link: "/recommended-jobs",
       email: null,
     };

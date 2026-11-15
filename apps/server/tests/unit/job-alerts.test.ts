@@ -261,6 +261,11 @@ test("template JOB_ALERT: tiêu đề là tổng trong ngày, nêu tin mới nh�
   const two = renderNotification("JOB_ALERT", { ...base, todayCount: 2 }, CTX);
   assert.equal(two.title, "2 tin mới phù hợp với bạn");
   assert.equal(two.body, 'Mới nhất: "Thực tập React" của Mây Xanh, phù hợp 86%.');
+  // Báo lần đầu cho ứng viên mới (0.6): tin kèm theo là tin điểm cao nhất.
+  const first = renderNotification("JOB_ALERT", { ...base, todayCount: 5, firstScored: true }, CTX);
+  assert.equal(first.title, "5 tin mới phù hợp với bạn");
+  assert.equal(first.body, 'Phù hợp nhất: "Thực tập React" của Mây Xanh, phù hợp 86%.');
+  assert.equal(first.link, "/recommended-jobs");
 });
 
 test("template PROFILE_SKILLS_REMINDER: link hồ sơ, có email với link tuyệt đối", () => {

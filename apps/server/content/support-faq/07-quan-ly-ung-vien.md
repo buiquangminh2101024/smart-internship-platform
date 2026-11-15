@@ -94,3 +94,20 @@ Vào **Tin tuyển dụng** (/employer/jobs), mở một tin **Đang hiển th�
 - Mỗi ứng viên chỉ được mời một lần cho mỗi tin. Lời mời hết hạn sau **14 ngày**.
 - Số lời mời mỗi ngày giới hạn theo gói của công ty: dùng thử 6, Cơ bản 8, Tiêu chuẩn 14, Doanh nghiệp 86 lời mời/ngày. Hạn mức được làm mới lúc 7h sáng. Cần đang dùng thử hoặc có gói còn hiệu lực.
 - Ứng viên chấp nhận thì một hội thoại được tạo để hai bên trao đổi. Theo dõi các lời mời đã gửi ở **Lời mời** (/employer/outreach).
+
+## auto-outreach
+audience: employer
+title: Tự động mời ứng viên
+questions:
+- Hệ thống có tự mời ứng viên cho tin không?
+- Cài đặt tự động mời cho tin ở đâu?
+- Ứng viên mới đăng ký có được tự mời không?
+- Tại sao tin của tôi không tự mời ai?
+- Số Phù hợp của tin cập nhật khi nào?
+
+Ở trang chi tiết tin, thẻ **Tự động mời ứng viên** (chỉ người đăng tin thấy) có công tắc bật tự mời, **Số người cần tuyển** và **Ngưỡng phù hợp** (mặc định 80%). Khi bật, bạn không cần mời tay: hệ thống tự gửi lời mời cho ứng viên đạt ngưỡng, mời bù khi có người từ chối hoặc lời mời hết hạn, và ngừng khi đã tuyển đủ.
+
+- Ứng viên mới đăng ký hoặc vừa sửa hồ sơ được chấm điểm trong vài phút. Ai đạt ngưỡng cũng được tự mời, không phải chờ hôm sau.
+- Số **Phù hợp** của tin ở danh sách tin và trang tổng quan cũng cập nhật trong vài phút, không cần tải lại trang.
+- Chỉ mời ứng viên đã bật cho phép nhà tuyển dụng tìm thấy và chưa ứng tuyển tin.
+- Tự động mời có từ gói Cơ bản và dùng chung hạn mức lời mời mỗi ngày với mời tay. Quản trị viên công ty chọn phần hạn mức dành cho tự động mời ở trang **Lời mời** (/employer/outreach). Để 0% thì hệ thống không tự mời, mời tay vẫn dùng được.

@@ -220,6 +220,7 @@ export class JobAlertService {
             companyName: row.companyName,
             score: row.score,
             todayCount: todayCounts.get(row.candidateId) ?? 1,
+            firstScored: true,
           },
           jobAlertDedupeKey(row.candidateId, now),
         );

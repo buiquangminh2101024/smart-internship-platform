@@ -36,6 +36,7 @@ Khi một tin mới được duyệt và có mức độ phù hợp với hồ s
 - Các tin trong cùng một ngày gộp vào **một thông báo** ở chuông, ví dụ "3 tin mới phù hợp với bạn". Bấm vào để mở **Việc làm phù hợp** (/recommended-jobs).
 - **Email tổng hợp** gửi lúc 8 giờ sáng, tối đa 10 tin, chỉ gửi khi có tin mới.
 - Mỗi tin chỉ báo một lần. Không báo tin bạn đã ứng tuyển hoặc đã được mời.
+- Khi bạn vừa tạo hồ sơ và thêm kỹ năng, trong vài phút hệ thống báo **một lần** các tin đang hiển thị đạt ngưỡng, cũng gộp vào một thông báo. Sau đó chỉ báo khi có tin mới; sửa hồ sơ không báo lại.
 
 Báo tin **bật sẵn**. Để tắt, vào **Cài đặt**, thẻ **Báo tin việc làm phù hợp** (/settings#bao-tin-viec-lam), gồm ba công tắc: **Báo khi có tin mới phù hợp**, **Gửi email tổng hợp mỗi ngày** và **Chỉ tin ở thành phố của tôi** (cần chọn thành phố trong hồ sơ trước).
 
@@ -145,12 +146,13 @@ questions:
 - Thẻ mức độ phù hợp trên trang tin là gì?
 - Tôi còn thiếu kỹ năng gì so với yêu cầu của tin?
 - Điểm phù hợp thấp có bị loại không?
+- Sửa hồ sơ bao lâu thì điểm phù hợp cập nhật?
 
 Ở trang chi tiết tin, thẻ **Mức độ phù hợp** so sánh hồ sơ của bạn với yêu cầu của tin: kỹ năng bắt buộc và ưu tiên, số năm kinh nghiệm, ngành học, kèm mức độ gần nghĩa giữa hồ sơ và mô tả công việc, và giải thích phần nào bạn đã đáp ứng, phần nào còn thiếu.
 
 Điểm chỉ mang tính tham khảo, không quyết định việc bạn được nhận. Hệ thống **không bao giờ tự từ chối** đơn vì điểm thấp; chỉ nhà tuyển dụng mới từ chối được. Đơn có điểm đạt ngưỡng của tin có thể được hệ thống tự chuyển sang **Đang xem xét**. Để điểm sát hơn, hãy cập nhật kỹ năng, học vấn và kinh nghiệm ở **Hồ sơ ứng viên** (/profile).
 
-Khi bạn đăng nhập, trang **Việc thực tập** (/jobs) hiện **Phù hợp x%** trên từng tin, có cách sắp xếp **Phù hợp nhất** và bộ lọc **Chỉ tin phù hợp với tôi (≥ 70%)**. Điểm ở danh sách này cập nhật mỗi đêm, nên có thể lệch một chút với thẻ trên trang tin ngay sau khi bạn sửa hồ sơ.
+Khi bạn đăng nhập, trang **Việc thực tập** (/jobs) hiện **Phù hợp x%** trên từng tin, có cách sắp xếp **Phù hợp nhất** và bộ lọc **Chỉ tin phù hợp với tôi (≥ 70%)**. Sau khi bạn sửa hồ sơ, điểm ở danh sách này và ở **Việc làm phù hợp** cập nhật trong vài phút. Trong vài phút đó, điểm ở danh sách có thể lệch một chút với thẻ trên trang tin.
 
 ## candidate-interviews
 audience: candidate
