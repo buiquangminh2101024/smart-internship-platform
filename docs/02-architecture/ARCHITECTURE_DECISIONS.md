@@ -1107,7 +1107,7 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 
 **Ngày:** 2026-11-17 · **Phase liên quan:** không thuộc phase đánh số. Mục 0.7 của `docs/01-project/FEATURE_BACKLOG.md`. Kế hoạch chi tiết: `docs/06-backend/invitation-apply/PLAN.md`, `docs/05-frontend/phases/invitation-apply/PLAN.md`.
 
-> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-17, chủ dự án duyệt từng điểm, gồm Q1–Q4 của plan backend). CHƯA TRIỂN KHAI.**
+> **Trạng thái: ĐÃ TRIỂN KHAI (2026-11-17).** Chủ dự án duyệt từng điểm, gồm Q1–Q4 của plan backend. Migration `20261117120000_add_application_invitation` đã áp lên Neon; backend và frontend đã kiểm trên trình duyệt.
 
 **Bối cảnh:** theo AD-15 mục 6, ứng viên chấp nhận lời mời thì hệ thống chỉ mở hội thoại. Ứng viên không có trong danh sách ứng viên của tin, nên nhà tuyển dụng không xét duyệt, hẹn phỏng vấn hay tuyển được theo luồng chuẩn; muốn vậy ứng viên phải tự vào tin nộp đơn lần nữa.
 

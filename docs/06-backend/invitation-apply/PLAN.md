@@ -1,6 +1,6 @@
 # Nhận lời mời = ứng tuyển vào tin (0.7) — Backend
 
-> **Trạng thái: XONG CODE BACKEND BƯỚC 1–8 (2026-11-17), CHƯA ÁP MIGRATION LÊN NEON, CHƯA KIỂM THẬT (bước 9).** Chủ dự án duyệt từng điểm; Q1–Q4 đã chốt cùng ngày (cuối plan). tsc server + web sạch, 665/665 test. Chi tiết ở mục Ghi chú triển khai. Quyết định kiến trúc: AD-28 trong `docs/02-architecture/ARCHITECTURE_DECISIONS.md`. Frontend: `docs/05-frontend/phases/invitation-apply/PLAN.md`.
+> **Trạng thái: XONG (2026-11-17).** Bước 1–8 code xong; bước 9: migration đã áp lên Neon, đã kiểm thật qua `localhost:8080` cùng frontend, FAQ đã cập nhật. Chủ dự án duyệt từng điểm; Q1–Q4 đã chốt cùng ngày (cuối plan). tsc server + web sạch, 665/665 test. Chi tiết ở mục Ghi chú triển khai. Quyết định kiến trúc: AD-28 trong `docs/02-architecture/ARCHITECTURE_DECISIONS.md`. Frontend: `docs/05-frontend/phases/invitation-apply/PLAN.md`.
 
 ## Mục tiêu
 

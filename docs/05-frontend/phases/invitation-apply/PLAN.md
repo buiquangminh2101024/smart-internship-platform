@@ -1,6 +1,6 @@
 # Nhận lời mời = ứng tuyển vào tin (0.7) — Frontend
 
-> **Trạng thái: ĐÃ CHỐT, CHƯA CODE (lập và chốt 2026-11-17).** Làm sau backend (`docs/06-backend/invitation-apply/PLAN.md`). Quyết định kiến trúc: AD-28. Mọi giao diện theo skill `sip-ui` (token, component có sẵn).
+> **Trạng thái: XONG (2026-11-17).** F1–F4 code xong; F5 đã kiểm bước 1, 2, 3, 5b trên `localhost:8080` (xem Ghi chú triển khai ở cuối). Làm sau backend (`docs/06-backend/invitation-apply/PLAN.md`). Quyết định kiến trúc: AD-28. Mọi giao diện theo skill `sip-ui` (token, component có sẵn).
 
 ## Mục tiêu
 
@@ -64,3 +64,13 @@ Qua gateway `localhost:8080`, tài khoản demo Mây Xanh:
 5b. Ứng viên có lời mời đang chờ mở `/jobs/[id]/apply` ⇒ thấy khung báo; nộp xong lời mời thành "Đã chấp nhận", đơn "Đang xem xét".
 5c. Thông báo gộp: mời thủ công bởi người khác người đăng tin ⇒ cả hai nhận; lời mời tự động ⇒ một người nhận.
 6. Kiểm bề rộng điện thoại.
+
+## Ghi chú triển khai (2026-11-17)
+
+- `AcceptInvitationDialog` dựa trên `components/ui/Dialog` (`<dialog>` gốc, toàn màn hình ≤ 480px). Không dùng effect để chọn CV: CV đang chọn suy ra từ lựa chọn của người dùng, nếu chưa chọn thì lấy CV mặc định. Hộp lời mời đặt `key` theo lời mời nên mỗi lần mở là một form mới.
+- Trang "Đơn ứng tuyển": nút "Hủy đơn" chỉ hiện với đơn `PENDING`, khớp với server (server chỉ cho huỷ đơn Chờ duyệt). Trước đây nút hiện cả ở `REVIEWING` và bấm thì lỗi.
+- `InvitedBadge` nằm trong `ApplicationRow.tsx` và dùng lại ở trang chi tiết hồ sơ.
+- Kiểm F5 trên `localhost:8080` (Mây Xanh mời ứng viên `vaicamuahe@gmail.com`, hai tin "[Kiểm 0.5 #1/#2]"):
+  - Bước 1–3 đạt: hộp thoại chọn sẵn CV mặc định; nhận lời xong hiện toast và hai nút "Xem đơn ứng tuyển", "Xem hội thoại"; "Đơn ứng tuyển" có nhãn "Được mời" và trạng thái "Đang xem xét", không có nút huỷ; nhà tuyển dụng nhận thông báo gộp có link sang hồ sơ; danh sách và trang chi tiết đều có nhãn "Được mời".
+  - Bước 5b đạt: trang nộp đơn hiện khung báo lời mời; nộp xong hiện câu "Đã nhận lời mời…".
+  - Chưa kiểm bằng trình duyệt: bước 4 (dữ liệu demo của ứng viên này không có lời mời đã nhận mà chưa có đơn), bước 5 (ứng viên chưa có CV), bước 5c (hai người nhận khác nhau) và bề rộng 375px (cửa sổ trình duyệt không thu nhỏ được). Các trường hợp này đã có unit test backend.

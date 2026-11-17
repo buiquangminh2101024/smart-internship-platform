@@ -181,6 +181,12 @@ export default function ApplicationsPage() {
                           Tin {JOB_STATUS_LABEL[app.jobPost.status]?.label?.toLowerCase() ?? app.jobPost.status}
                         </Badge>
                       ) : null}
+                      {app.invitationId ? (
+                        // AD-28: đơn từ lời mời vào thẳng Đang xem xét, không qua Chờ duyệt.
+                        <Badge tone="brand" icon="mail-check">
+                          Được mời
+                        </Badge>
+                      ) : null}
                       <Badge tone={APPLICATION_STATUS_LABEL[app.status]?.tone ?? "neutral"}>
                         {APPLICATION_STATUS_LABEL[app.status]?.label ?? app.status}
                       </Badge>
@@ -195,7 +201,8 @@ export default function ApplicationsPage() {
                           Nhắn tin
                         </Button>
                       ) : null}
-                      {(app.status === "PENDING" || app.status === "REVIEWING") && (
+                      {/* Server chỉ cho huỷ đơn Chờ duyệt; đơn từ lời mời không huỷ được (AD-28). */}
+                      {app.status === "PENDING" && (
                         <Button variant="ghost" className="text-red-600 hover:text-red-700 hover:bg-red-50" size="sm" onClick={() => void handleCancel(app.id)}>
                           Hủy đơn
                         </Button>

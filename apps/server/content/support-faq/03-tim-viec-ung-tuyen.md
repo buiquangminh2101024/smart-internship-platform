@@ -182,7 +182,7 @@ questions:
 - Tin tuyển dụng đóng rồi còn nhắn được không?
 - Trao đổi với ứng viên qua tin nhắn
 
-- **Ứng viên**: ở **Ứng tuyển của tôi** (/applications), bấm **Nhắn tin** trên đơn. Nếu chấp nhận một lời mời ứng tuyển, hội thoại cũng được tạo tự động. Hộp thư ở /messages.
+- **Ứng viên**: ở **Ứng tuyển của tôi** (/applications), bấm **Nhắn tin** trên đơn. Nếu nhận lời một lời mời ứng tuyển, đơn được tạo ở trạng thái Đang xem xét và hội thoại cũng được tạo tự động. Hộp thư ở /messages.
 - **Nhà tuyển dụng**: nhắn từ trang chi tiết hồ sơ ứng viên. Hộp thư ở **Tin nhắn** (/employer/messages).
 
 Mỗi hội thoại gắn với một tin tuyển dụng. Khi tin **đã đóng, hết hạn hoặc bị gỡ**, hội thoại chỉ còn xem được, không gửi thêm tin, và lúc đó bạn có thể xoá hội thoại.

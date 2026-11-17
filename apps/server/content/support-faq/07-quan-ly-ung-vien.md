@@ -93,7 +93,7 @@ Vào **Tin tuyển dụng** (/employer/jobs), mở một tin **Đang hiển th�
 - Chỉ gồm ứng viên **đã bật cho phép nhà tuyển dụng tìm thấy** và chưa ứng tuyển tin này. Số điện thoại và email không hiển thị.
 - Mỗi ứng viên chỉ được mời một lần cho mỗi tin. Lời mời hết hạn sau **14 ngày**.
 - Số lời mời mỗi ngày giới hạn theo gói của công ty: dùng thử 6, Cơ bản 8, Tiêu chuẩn 14, Doanh nghiệp 86 lời mời/ngày. Hạn mức được làm mới lúc 7h sáng. Cần đang dùng thử hoặc có gói còn hiệu lực.
-- Ứng viên chấp nhận thì một hội thoại được tạo để hai bên trao đổi. Theo dõi các lời mời đã gửi ở **Lời mời** (/employer/outreach).
+- Ứng viên nhận lời thì hồ sơ của họ vào thẳng tab **Đang xem xét** ở trang Ứng viên, có nhãn **Được mời** (lời mời tự động ghi **Được mời · Tự động**), và một hội thoại được tạo để hai bên trao đổi. Người gửi lời mời và người đăng tin cùng nhận thông báo. Theo dõi các lời mời đã gửi ở **Lời mời** (/employer/outreach).
 
 ## auto-outreach
 audience: employer
