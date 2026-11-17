@@ -319,12 +319,19 @@ export function JobPostForm({
   return (
     <div className="grid gap-4">
       {notice}
+      {initial?.status === "PUBLISHED" ? (
+        <Card padding="sm" className="border-pine-200 bg-pine-50 text-pine-900 text-sm">
+          💡 <strong>Tin tuyển dụng đang hiển thị:</strong> Bạn có thể cập nhật hạn nộp hồ sơ, mức lương, quyền lợi và địa chỉ làm việc.
+        </Card>
+      ) : null}
 
       <Card padding="lg" className="grid gap-4">
         <h2 className="text-base font-semibold text-text-strong">Thông tin cơ bản</h2>
         <Input
           label="Tiêu đề tin tuyển dụng"
           required
+          disabled={initial?.status === "PUBLISHED"}
+          hint={initial?.status === "PUBLISHED" ? "Không thể thay đổi tiêu đề của tin tuyển dụng đã xuất bản." : undefined}
           placeholder="Thực tập sinh Full Stack"
           error={errors.title?.message}
           {...register("title")}
@@ -569,15 +576,23 @@ export function JobPostForm({
             Hủy
           </Button>
         ) : null}
-        <Button type="button" variant="secondary" disabled={saving} onClick={() => handle("draft")}>
-          Lưu nháp
-        </Button>
-        <Button type="button" variant="secondary" icon="eye" disabled={saving} onClick={() => handle("preview")}>
-          Xem trước
-        </Button>
-        <Button type="button" loading={saving} onClick={() => handle("submit")}>
-          Gửi duyệt
-        </Button>
+        {initial?.status === "PUBLISHED" ? (
+          <Button type="button" loading={saving} onClick={() => handle("draft")}>
+            Lưu thay đổi
+          </Button>
+        ) : (
+          <>
+            <Button type="button" variant="secondary" disabled={saving} onClick={() => handle("draft")}>
+              Lưu nháp
+            </Button>
+            <Button type="button" variant="secondary" icon="eye" disabled={saving} onClick={() => handle("preview")}>
+              Xem trước
+            </Button>
+            <Button type="button" loading={saving} onClick={() => handle("submit")}>
+              Gửi duyệt
+            </Button>
+          </>
+        )}
       </div>
     </div>
   );

@@ -145,3 +145,56 @@ test("Sửa tin không đụng kỹ năng/ngành → chỉ cập nhật tin", as
   await service.updateDraft(EMPLOYER.userId, "job-1", { title: "Tên mới" } as never);
   assert.deepEqual(committed, ["update"]);
 });
+
+test("Sửa tin PUBLISHED với trường an toàn (lương, quyền lợi) -> cập nhật thành công", async () => {
+  const { service, committed } = buildService();
+  // Override status to PUBLISHED
+  const originalFindById = (service as any).jobPostRepository.findById;
+  (service as any).jobPostRepository.findById = async () => {
+    const post = await originalFindById();
+    return { ...post, status: "PUBLISHED", title: "Thực tập sinh Backend", description: "Mô tả" };
+  };
+
+  await service.updateDraft(EMPLOYER.userId, "job-1", {
+    benefits: "Trợ cấp 5tr + ăn trưa",
+    address: "Tầng 5 toà nhà FPT",
+    isNegotiable: true,
+  } as never);
+  assert.deepEqual(committed, ["update"]);
+});
+
+test("Sửa tin PUBLISHED thay đổi title -> 400", async () => {
+  const { service, committed } = buildService();
+  const originalFindById = (service as any).jobPostRepository.findById;
+  (service as any).jobPostRepository.findById = async () => {
+    const post = await originalFindById();
+    return { ...post, status: "PUBLISHED", title: "Thực tập sinh Backend" };
+  };
+
+  await assert400(
+    service.updateDraft(EMPLOYER.userId, "job-1", { title: "Tiêu đề mới toanh" } as never),
+    "Cannot change the title of an already published job post",
+  );
+  assert.deepEqual(committed, []);
+});
+
+test("Sửa tin PUBLISHED của công ty requiresApproval cố đổi description -> 400", async () => {
+  const { service, committed } = buildService();
+  const originalFindById = (service as any).jobPostRepository.findById;
+  (service as any).jobPostRepository.findById = async () => {
+    const post = await originalFindById();
+    return {
+      ...post,
+      status: "PUBLISHED",
+      title: "Thực tập sinh Backend",
+      description: "Mô tả gốc",
+      company: { requiresApproval: true },
+    };
+  };
+
+  await assert400(
+    service.updateDraft(EMPLOYER.userId, "job-1", { description: "Mô tả bị đổi hoàn toàn" } as never),
+    "Published job posts only allow updating deadline, salary, benefits, and address. To change core requirements, please create a new job post.",
+  );
+  assert.deepEqual(committed, []);
+});

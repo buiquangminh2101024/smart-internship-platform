@@ -34,6 +34,7 @@ export default function ApplicationsPage() {
   }
   
   const [dialog, setDialog] = useState<{ isOpen: boolean; title: string; message: string; type: "success" | "error" | "info"; onConfirm?: () => void; isDestructive?: boolean; hideCancel?: boolean }>({ isOpen: false, title: "", message: "", type: "info" });
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
 
   const handleCancel = (id: string) => {
     setDialog({
@@ -103,8 +104,61 @@ export default function ApplicationsPage() {
         </Card>
       ) : (
         <div className="grid gap-4">
-          <p className="text-sm text-text-muted">{applications.length} đơn ứng tuyển</p>
-          {applications.map((app) => {
+          {/* Bộ lọc tab trạng thái */}
+          <div className="flex flex-wrap gap-1.5 border-b border-border-subtle pb-3">
+            {[
+              { id: "ALL", label: "Tất cả", count: applications.length },
+              {
+                id: "IN_REVIEW",
+                label: "Đang xem xét",
+                count: applications.filter(a => a.status === "PENDING" || a.status === "REVIEWING").length,
+              },
+              {
+                id: "INTERVIEW",
+                label: "Phỏng vấn & Rút gọn",
+                count: applications.filter(a => a.status === "SHORTLISTED" || a.status === "INTERVIEWING").length,
+              },
+              {
+                id: "ACCEPTED",
+                label: "Được nhận",
+                count: applications.filter(a => a.status === "ACCEPTED").length,
+              },
+              {
+                id: "CLOSED",
+                label: "Đã đóng / Từ chối",
+                count: applications.filter(a => a.status === "REJECTED" || a.status === "CANCELLED" || a.status === "JOB_CLOSED").length,
+              },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setStatusFilter(tab.id)}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  statusFilter === tab.id
+                    ? "bg-pine-600 text-white"
+                    : "bg-surface-page text-text-muted hover:bg-surface-hover hover:text-text-strong"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span className={`rounded-full px-1.5 py-0.2 text-[10px] tabular-nums ${
+                  statusFilter === tab.id ? "bg-white/20 text-white" : "bg-neutral-200 text-text-muted"
+                }`}>
+                  {tab.count}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {applications
+            .filter((app) => {
+              if (statusFilter === "ALL") return true;
+              if (statusFilter === "IN_REVIEW") return app.status === "PENDING" || app.status === "REVIEWING";
+              if (statusFilter === "INTERVIEW") return app.status === "SHORTLISTED" || app.status === "INTERVIEWING";
+              if (statusFilter === "ACCEPTED") return app.status === "ACCEPTED";
+              if (statusFilter === "CLOSED") return app.status === "REJECTED" || app.status === "CANCELLED" || app.status === "JOB_CLOSED";
+              return true;
+            })
+            .map((app) => {
             const jobInactive = INACTIVE_JOB_STATUSES.has(app.jobPost.status);
             const showJobStatus = jobInactive && (app.status === "PENDING" || app.status === "REVIEWING");
             return (
@@ -123,12 +177,12 @@ export default function ApplicationsPage() {
                   <div className="flex flex-col items-end gap-3 shrink-0">
                     <div className="flex flex-wrap justify-end gap-2">
                       {showJobStatus ? (
-                        <Badge tone={JOB_STATUS_LABEL[app.jobPost.status].tone}>
-                          Tin {JOB_STATUS_LABEL[app.jobPost.status].label.toLowerCase()}
+                        <Badge tone={JOB_STATUS_LABEL[app.jobPost.status]?.tone ?? "neutral"}>
+                          Tin {JOB_STATUS_LABEL[app.jobPost.status]?.label?.toLowerCase() ?? app.jobPost.status}
                         </Badge>
                       ) : null}
-                      <Badge tone={APPLICATION_STATUS_LABEL[app.status].tone}>
-                        {APPLICATION_STATUS_LABEL[app.status].label}
+                      <Badge tone={APPLICATION_STATUS_LABEL[app.status]?.tone ?? "neutral"}>
+                        {APPLICATION_STATUS_LABEL[app.status]?.label ?? app.status}
                       </Badge>
                     </div>
                     {app.status === "JOB_CLOSED" ? (

@@ -5,9 +5,8 @@ import { SiteFooter } from "@/components/marketing/SiteFooter";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
-import { Input } from "@/components/ui/Input";
+import { HeroSearchBar } from "@/components/marketing/HeroSearchBar";
 import { RoleBadge } from "@/components/ui/RoleBadge";
-import { Select } from "@/components/ui/Select";
 
 export const metadata: Metadata = {
   title: "InternHub — Kết nối thực tập, mở đầu sự nghiệp",
@@ -60,16 +59,7 @@ export default function CandidateHomePage() {
               Tin tuyển dụng thực tập từ doanh nghiệp đã xác thực, tập trung ở một nơi. Bạn theo dõi được từng hồ sơ
               đã gửi, từ lúc gửi tới lúc có kết quả.
             </p>
-            <Card padding="sm" className="flex max-w-xl flex-col gap-2 sm:flex-row">
-              <Input icon="search" placeholder="Vị trí, kỹ năng hoặc công ty" className="flex-[1.4]" />
-              <Select
-                options={["Tất cả khu vực", "Hà Nội", "TP. Hồ Chí Minh", "Đà Nẵng"]}
-                className="flex-1"
-              />
-              <Button as="a" href="/jobs" icon="search">
-                Tìm việc
-              </Button>
-            </Card>
+            <HeroSearchBar />
             <div className="flex flex-wrap gap-6 text-sm text-pine-200">
               <span className="inline-flex items-center gap-1.5">
                 <Icon name="badge-check" size={16} />
@@ -81,8 +71,25 @@ export default function CandidateHomePage() {
               </span>
             </div>
           </div>
-          <div className="hidden h-[360px] items-center justify-center rounded-xl border border-dashed border-white/25 bg-white/5 text-center text-sm text-pine-200 md:flex">
-            Ảnh: sinh viên trao đổi với nhà tuyển dụng tại ngày hội việc làm
+          <div className="hidden flex-col items-center justify-center gap-6 rounded-xl bg-white/10 p-8 md:flex">
+            <div className="grid grid-cols-2 gap-4 w-full max-w-xs">
+              <div className="rounded-xl bg-white/15 p-4 text-center backdrop-blur">
+                <span className="block text-3xl font-bold text-white">1.2K+</span>
+                <span className="text-xs text-pine-200">Doanh nghiệp</span>
+              </div>
+              <div className="rounded-xl bg-white/15 p-4 text-center backdrop-blur">
+                <span className="block text-3xl font-bold text-white">3.8K+</span>
+                <span className="text-xs text-pine-200">Tin thực tập</span>
+              </div>
+              <div className="rounded-xl bg-white/15 p-4 text-center backdrop-blur">
+                <span className="block text-3xl font-bold text-white">12K+</span>
+                <span className="text-xs text-pine-200">Sinh viên</span>
+              </div>
+              <div className="rounded-xl bg-white/15 p-4 text-center backdrop-blur">
+                <span className="block text-3xl font-bold text-white">85%</span>
+                <span className="text-xs text-pine-200">Tỉ lệ phỏng vấn</span>
+              </div>
+            </div>
           </div>
         </div>
       </section>

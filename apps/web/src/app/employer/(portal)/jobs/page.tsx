@@ -325,9 +325,14 @@ function EmployerJobsContent() {
                     Xem tin
                   </Button>
                   {job.status === "PUBLISHED" ? (
-                    <Button as="a" href={`/jobs/${job.id}`} variant="link">
-                      Xem bản công khai
-                    </Button>
+                    <>
+                      <Button as="a" href={`/jobs/${job.id}`} variant="link">
+                        Xem bản công khai
+                      </Button>
+                      <Button as="a" href={`/employer/jobs/${job.id}?edit=1`} variant="link">
+                        Chỉnh sửa
+                      </Button>
+                    </>
                   ) : null}
                   {job.status === "DRAFT" ? (
                     <>

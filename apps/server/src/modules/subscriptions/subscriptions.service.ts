@@ -160,7 +160,7 @@ export class SubscriptionsService {
     // placeholder cho bản ghi PENDING (schema NOT NULL), xem SUBSCRIPTION_BILLING_DESIGN.md §6.3.
     const now = new Date();
     const companySubscription = await this.prisma.$transaction(async (tx) => {
-      await this.companySubscriptionRepository.cancelActiveOrPending(employer.companyId, tx);
+      await this.companySubscriptionRepository.cancelPending(employer.companyId, tx);
       return this.companySubscriptionRepository.create(
         { companyId: employer.companyId, planId: plan.id, startDate: now, endDate: now, status: "PENDING" },
         tx,

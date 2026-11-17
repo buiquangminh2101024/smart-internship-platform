@@ -81,6 +81,20 @@ export class CompanySubscriptionRepository {
   // bản ghi PENDING mới — đảm bảo tại một thời điểm chỉ có tối đa 1 subscription
   // không-terminal (áp dụng cho cả nâng cấp giữa kỳ lẫn checkout lại sau khi
   // bỏ dở lần trước, xem subscriptions.service.ts#checkout).
+  cancelPending(companyId: string, db: Db = this.prisma): Promise<Prisma.BatchPayload> {
+    return db.companySubscription.updateMany({
+      where: { companyId, status: "PENDING" },
+      data: { status: "CANCELLED" },
+    });
+  }
+
+  cancelActive(companyId: string, db: Db = this.prisma): Promise<Prisma.BatchPayload> {
+    return db.companySubscription.updateMany({
+      where: { companyId, status: "ACTIVE" },
+      data: { status: "CANCELLED" },
+    });
+  }
+
   cancelActiveOrPending(companyId: string, db: Db = this.prisma): Promise<Prisma.BatchPayload> {
     return db.companySubscription.updateMany({
       where: { companyId, status: { in: ["ACTIVE", "PENDING"] } },
