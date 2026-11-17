@@ -232,6 +232,10 @@ export class PaymentsService {
       rawResponse: JSON.stringify({ clientReported: "USER_CANCELLED" }),
     });
     await this.paymentRepository.updateStatus(payment.id, "FAILED");
+    const companySubscription = await this.companySubscriptionRepository.findById(payment.companySubscriptionId);
+    if (companySubscription) {
+      await this.companySubscriptionRepository.cancelPending(companySubscription.companyId);
+    }
     return "FAILED";
   }
 
@@ -244,7 +248,10 @@ export class PaymentsService {
 
     const startDate = new Date();
     const endDate = new Date(startDate.getTime() + companySubscription.plan.durationDays * 24 * 60 * 60 * 1000);
-    await this.companySubscriptionRepository.activate(companySubscription.id, { startDate, endDate });
+    await this.prisma.$transaction(async (tx) => {
+      await this.companySubscriptionRepository.cancelActive(companySubscription.companyId, tx);
+      await this.companySubscriptionRepository.activate(companySubscription.id, { startDate, endDate }, tx);
+    });
   }
 
   /**

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useApplyJob } from "@/hooks/useApplications";
 import { useCvList } from "@/hooks/useCvs";
@@ -26,16 +26,19 @@ export default function ApplyJobPage() {
   
   const [dialog, setDialog] = useState<{ isOpen: boolean; title: string; message: string; type: "success" | "error" | "info"; onConfirm?: () => void }>({ isOpen: false, title: "", message: "", type: "info" });
 
-  // Tự động chọn CV mặc định khi danh sách CV tải xong
+  // Tự động chọn CV mặc định khi danh sách CV tải xong — chỉ chạy 1 lần
+  // khi cvs load lần đầu. Không phụ thuộc selectedCvId để tránh reset khi
+  // người dùng chọn "Tải CV từ máy" (setSelectedCvId("") → effect chạy lại).
+  const hasInitializedCv = useRef(false);
   useEffect(() => {
+    if (hasInitializedCv.current) return;
     if (!cvs || cvs.length === 0) return;
-    if (selectedCvId) return; // Không ghi đè nếu người dùng đã chọn
     const defaultCv = cvs.find((cv) => cv.isDefault) ?? cvs[0];
     if (defaultCv) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSelectedCvId(defaultCv.id);
     }
-  }, [cvs, selectedCvId]);
+    hasInitializedCv.current = true;
+  }, [cvs]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

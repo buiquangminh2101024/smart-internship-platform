@@ -82,6 +82,9 @@ function QuickActions({
           <Button as="a" href={`/jobs/${job.id}`} variant="secondary" icon="external-link" fullWidth>
             Xem tin public
           </Button>
+          <Button type="button" variant="secondary" icon="pencil" fullWidth disabled={busy} onClick={onEdit}>
+            Chỉnh sửa tin
+          </Button>
           <Button type="button" variant="danger" icon="circle-slash" fullWidth loading={busy} onClick={onClose}>
             Đóng tin tuyển dụng
           </Button>

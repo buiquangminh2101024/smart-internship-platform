@@ -171,8 +171,8 @@ export function ChatLayout({ area }: ChatLayoutProps) {
   return (
     <div className="flex h-full overflow-hidden bg-white">
       {overlays}
-      {/* Sidebar (List) */}
-      <div className="w-80 flex-shrink-0 border-r border-border-subtle bg-surface-page flex flex-col">
+      {/* Sidebar (List) — ẩn trên mobile khi đang xem một hội thoại */}
+      <div className={`w-full md:w-80 flex-shrink-0 border-r border-border-subtle bg-surface-page flex flex-col ${activeConversationId ? "hidden md:flex" : "flex"}`}>
         <div className="flex gap-1 border-b border-border-subtle p-2">
           {[
             { label: "Tất cả", value: false },
@@ -277,12 +277,20 @@ export function ChatLayout({ area }: ChatLayoutProps) {
         </div>
       </div>
 
-      {/* Main content (Chat) */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* Main content (Chat) — ẩn trên mobile khi chưa chọn hội thoại */}
+      <div className={`flex-1 flex flex-col min-w-0 ${!activeConversationId ? "hidden md:flex" : "flex"}`}>
         {activeConversation ? (
           <>
             {/* Header */}
             <div className="p-4 border-b border-border-subtle bg-white flex items-center gap-3">
+              <button
+                type="button"
+                aria-label="Quay lại danh sách"
+                onClick={() => setActiveConversationId(null)}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-text-body transition-colors hover:bg-surface-hover md:hidden"
+              >
+                <Icon name="arrow-left" size={20} />
+              </button>
               <div className="flex-1 min-w-0">
                 <h3 className="font-semibold text-text-strong truncate">
                   {area === "candidate" ? activeConversation.employer.name : activeConversation.candidate.name}

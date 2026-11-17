@@ -286,8 +286,46 @@ export class JobPostsService {
   async updateDraft(userId: string, id: string, dto: UpdateJobPostRequest): Promise<JobPostDto> {
     const { companyId } = await this.requireEmployer(userId);
     const jobPost = await this.requireOwnedJobPost(companyId, id);
-    if (jobPost.status !== "DRAFT") {
-      throw new AppError(409, "Only a draft job post can be edited");
+    if (jobPost.status !== "DRAFT" && jobPost.status !== "PUBLISHED") {
+      throw new AppError(409, "Only draft or published job posts can be edited");
+    }
+
+    if (jobPost.status === "PUBLISHED") {
+      if (dto.title !== undefined && dto.title.trim() !== jobPost.title) {
+        throw new AppError(400, "Cannot change the title of an already published job post");
+      }
+
+      if (jobPost.company.requiresApproval) {
+        const isDescChanged = dto.description !== undefined && dto.description.trim() !== jobPost.description.trim();
+        const isReqChanged = dto.requirements !== undefined && dto.requirements.trim() !== (jobPost.requirements ?? "").trim();
+        const isJobTypeChanged = dto.jobType !== undefined && dto.jobType !== jobPost.jobType;
+        const isIndustryChanged = dto.industryId !== undefined && (dto.industryId || null) !== jobPost.industryId;
+        const isCityChanged = dto.cityId !== undefined && (dto.cityId || null) !== jobPost.cityId;
+        const isExpChanged = dto.minExperienceYears !== undefined && (dto.minExperienceYears || null) !== jobPost.minExperienceYears;
+
+        let isSkillsChanged = false;
+        if (dto.skillIds !== undefined) {
+          const currentSkillIds = new Set(jobPost.skills.map((s) => s.skillId));
+          if (dto.skillIds.length !== currentSkillIds.size || !dto.skillIds.every((sId) => currentSkillIds.has(sId))) {
+            isSkillsChanged = true;
+          }
+        }
+
+        let isMajorsChanged = false;
+        if (dto.majors !== undefined) {
+          const currentMajorIds = new Set(jobPost.majors.map((m) => m.majorId));
+          if (dto.majors.length !== currentMajorIds.size || !dto.majors.every((m) => currentMajorIds.has(m.majorId))) {
+            isMajorsChanged = true;
+          }
+        }
+
+        if (isDescChanged || isReqChanged || isJobTypeChanged || isIndustryChanged || isCityChanged || isExpChanged || isSkillsChanged || isMajorsChanged) {
+          throw new AppError(
+            400,
+            "Published job posts only allow updating deadline, salary, benefits, and address. To change core requirements, please create a new job post.",
+          );
+        }
+      }
     }
 
     await this.assertRelationIdsExist(dto);
@@ -301,6 +339,10 @@ export class JobPostsService {
       await this.writeRelations(id, dto, tx);
       return row;
     });
+
+    if (jobPost.status === "PUBLISHED") {
+      this.matchScoreTrigger?.(id);
+    }
 
     if (dto.skillIds || dto.majors) {
       return toJobPostDto(await this.requireJobPost(id));
