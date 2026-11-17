@@ -51,6 +51,8 @@ export interface NotificationPayloadMap {
     jobPostTitle: string;
     candidateName: string | null;
     accepted: boolean;
+    /** AD-28 — có khi nhận lời tạo đơn mới: thông báo gộp "đã nhận lời và ứng tuyển". */
+    applicationId?: string;
   };
   // AD-23 — tự động mời theo tin. Gửi bằng notifyOnce, khoá auto-outreach:<tin>:<ngày>,
   // nên sentCount là số lời mời của lượt chạy đầu tiên trong ngày.

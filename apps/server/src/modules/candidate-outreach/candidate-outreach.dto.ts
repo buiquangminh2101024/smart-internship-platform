@@ -1,10 +1,20 @@
 import { z } from "zod";
 import { HIRING_TARGET_MAX, TOP_RESULT_COUNT } from "./candidate-outreach.config";
 
-// POST /candidate/outreach-invitations/:id/respond
-export const respondOutreachInvitationSchema = z.object({
-  action: z.enum(["ACCEPT", "DECLINE"]),
-});
+// Cùng giới hạn với createApplicationSchema (applications.dto.ts).
+const invitationApplicationFields = {
+  cvId: z.string().cuid(),
+  coverLetter: z.string().max(2000).optional(),
+};
+
+// POST /candidate/outreach-invitations/:id/respond — AD-28: nhận lời = ứng tuyển, nên ACCEPT kèm CV.
+export const respondOutreachInvitationSchema = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("DECLINE") }),
+  z.object({ action: z.literal("ACCEPT"), ...invitationApplicationFields }),
+]);
+
+// POST /candidate/outreach-invitations/:id/apply — AD-28 mục 5: lời mời ACCEPTED chưa có đơn.
+export const applyFromInvitationSchema = z.object(invitationApplicationFields);
 
 // POST /employer/job-posts/:jobId/invitations/bulk — "Mời tất cả gợi ý" (AD-23).
 // Tối đa bằng số người của tab "Gợi ý"; id trùng được gộp ở service.

@@ -453,12 +453,16 @@ test("ứng viên từ chối lời mời ⇒ kích hoạt lượt tự mời c�
         respondIfPending: async () => true,
       },
       notificationsService: { notify: async () => {} },
-      messagingService: { createConversation: async () => ({ id: "conv-1" }) },
+      // AD-28 — nhận lời đi qua InvitationApplicationService (tạo đơn + hội thoại).
+      invitationApplicationService: {
+        acceptInTx: async () => ({ applicationId: "app-1", linkedExisting: false }),
+        openConversation: async () => "conv-1",
+      },
       autoOutreachTrigger: (companyId: string) => triggered.push(companyId),
       logger: { info: () => {}, warn: () => {}, error: () => {} },
       config: { JOB_MATCHER_MODE: "rule" },
     } as unknown as ConstructorParameters<typeof CandidateOutreachService>[0]);
-    await service.respond("user-cand-1", "inv-1", action);
+    await service.respond("user-cand-1", "inv-1", action, action === "ACCEPT" ? { cvId: "cv-1" } : undefined);
     assert.deepEqual(triggered, expected, action);
   }
 });

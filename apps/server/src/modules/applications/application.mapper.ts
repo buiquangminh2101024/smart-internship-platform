@@ -22,6 +22,7 @@ export function toCandidateApplicationSummary(app: ApplicationWithCandidateRelat
     cvId: app.cvId,
     status: app.status,
     coverLetter: app.coverLetter,
+    invitationId: app.invitationId,
     createdAt: app.createdAt.toISOString(),
     updatedAt: app.updatedAt.toISOString(),
     jobPost: toJobPostDto(app.jobPost as any),
@@ -39,10 +40,12 @@ export function toEmployerApplicationDetail(app: ApplicationWithEmployerRelation
     coverLetter: app.coverLetter,
     employerNotes: app.employerNotes,
     rating: app.rating,
+    invitationId: app.invitationId,
     createdAt: app.createdAt.toISOString(),
     updatedAt: app.updatedAt.toISOString(),
     jobPost: toJobPostDto(app.jobPost as any),
     cv: toCvRecord(app.cv),
+    invitation: app.invitation ? { id: app.invitation.id, source: app.invitation.source } : null,
     candidate: {
       ...app.candidate,
       createdAt: app.candidate.createdAt.toISOString(),
@@ -71,6 +74,7 @@ export function toEmployerApplicationListItem(row: CompanyApplicationRow): Emplo
     },
     jobPost: { id: row.jobPostId, title: row.jobPostTitle, status: row.jobPostStatus },
     awaitingSchedule: row.awaitingSchedule,
+    invitation: row.invitationId && row.invitationSource ? { id: row.invitationId, source: row.invitationSource } : null,
     nextInterviewAt: row.nextInterviewAt?.toISOString() ?? null,
     lastInterviewAt: row.lastInterviewAt?.toISOString() ?? null,
     skillMatch: {

@@ -1166,17 +1166,37 @@ export interface CandidateOutreachInvitationDto {
   company: { id: string; name: string; logoUrl: string | null };
   /** Chỉ có khi ACCEPTED và hội thoại đã được tạo. */
   conversationId: string | null;
+  /**
+   * AD-28 — đơn (khác CANCELLED) của ứng viên vào tin này, nếu có. Lời mời ACCEPTED mà
+   * null ⇒ nhận lời theo kiểu cũ, chưa có đơn: frontend hiện "Ứng tuyển ngay".
+   */
+  applicationId: string | null;
 }
 
 export type OutreachInvitationAction = "ACCEPT" | "DECLINE";
 
-export interface RespondOutreachInvitationRequest {
-  action: OutreachInvitationAction;
-}
+/** AD-28 — nhận lời = ứng tuyển, nên ACCEPT phải kèm CV. */
+export type RespondOutreachInvitationRequest =
+  | { action: "DECLINE" }
+  | { action: "ACCEPT"; cvId: string; coverLetter?: string };
 
 export interface RespondOutreachInvitationResponse {
   status: OutreachInvitationStatus;
   conversationId: string | null;
+  /** AD-28 — đơn vừa tạo, hoặc đơn có sẵn được gắn lời mời; null khi DECLINE. */
+  applicationId: string | null;
+  /** true ⇒ ứng viên đã có đơn từ trước: chỉ gắn lời mời, trạng thái đơn không đổi. */
+  linkedExisting: boolean;
+}
+
+/** AD-28 — POST /candidate/outreach-invitations/:id/apply (lời mời ACCEPTED chưa có đơn). */
+export interface ApplyFromInvitationRequest {
+  cvId: string;
+  coverLetter?: string;
+}
+
+export interface ApplyFromInvitationResponse {
+  applicationId: string;
 }
 
 export interface OutreachSettings {
@@ -1561,8 +1581,16 @@ export interface Application {
   coverLetter: string | null;
   employerNotes?: string | null;
   rating?: number | null;
+  /** AD-28 — đơn đến từ lời mời (nhận lời = ứng tuyển); null = ứng viên tự nộp. */
+  invitationId: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** AD-28 — lời mời sinh ra đơn, cho nhãn "Được mời" / "Được mời · Tự động". */
+export interface ApplicationInvitationInfo {
+  id: string;
+  source: OutreachInvitationSource;
 }
 
 export interface CreateApplicationRequest {
@@ -1589,6 +1617,7 @@ export interface EmployerApplicationDetail extends Application {
   jobPost: JobPost;
   cv: CvRecord;
   candidate: any;
+  invitation: ApplicationInvitationInfo | null;
 }
 
 /** GET /employer/applications/:id — chi tiết hồ sơ kèm mọi lịch phỏng vấn, sớm nhất trước. */
@@ -1645,6 +1674,8 @@ export interface EmployerApplicationListItem {
   jobPost: { id: string; title: string; status: JobPostStatus };
   /** SHORTLISTED, hoặc INTERVIEWING chưa có lịch SCHEDULED — cùng định nghĩa với `AwaitingScheduleApplication`. */
   awaitingSchedule: boolean;
+  /** AD-28 — đơn đến từ lời mời. */
+  invitation: ApplicationInvitationInfo | null;
   /** Lịch SCHEDULED gần nhất còn ở tương lai, nếu có. */
   nextInterviewAt: string | null;
   /** Buổi phỏng vấn (SCHEDULED) gần nhất đã diễn ra, nếu có — cho "phỏng vấn N ngày trước". */

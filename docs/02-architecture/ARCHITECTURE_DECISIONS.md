@@ -1100,3 +1100,39 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 - Script mới `simulate-inflow`.
 - `packages/shared-types`: trạng thái thẻ tự mời khi tỉ lệ 0%, DTO thẻ "Hệ thống tự động", payload sự kiện realtime.
 - Frontend: dòng chú thích ở `/jobs`, thẻ tự mời, làm mới số "Phù hợp" theo realtime, thẻ "Hệ thống tự động" của Admin, FAQ chatbot.
+
+---
+
+## AD-28 — Nhận lời mời là ứng tuyển vào tin (0.7): tạo đơn "Đang xem xét" gắn với lời mời (sửa một phần AD-15)
+
+**Ngày:** 2026-11-17 · **Phase liên quan:** không thuộc phase đánh số. Mục 0.7 của `docs/01-project/FEATURE_BACKLOG.md`. Kế hoạch chi tiết: `docs/06-backend/invitation-apply/PLAN.md`, `docs/05-frontend/phases/invitation-apply/PLAN.md`.
+
+> **Trạng thái: ĐÃ CHỐT HƯỚNG (2026-11-17, chủ dự án duyệt từng điểm, gồm Q1–Q4 của plan backend). CHƯA TRIỂN KHAI.**
+
+**Bối cảnh:** theo AD-15 mục 6, ứng viên chấp nhận lời mời thì hệ thống chỉ mở hội thoại. Ứng viên không có trong danh sách ứng viên của tin, nên nhà tuyển dụng không xét duyệt, hẹn phỏng vấn hay tuyển được theo luồng chuẩn; muốn vậy ứng viên phải tự vào tin nộp đơn lần nữa.
+
+**Quyết định:**
+
+1. **Nhận lời = ứng tuyển.** Nút "Nhận lời & ứng tuyển" mở hộp thoại chọn CV (chọn sẵn CV mặc định) và thư giới thiệu không bắt buộc. Lời mời chuyển `ACCEPTED` và đơn được tạo trong **một transaction**; hội thoại vẫn mở sau đó như AD-15 mục 6. Bỏ lối "nhận lời mà chưa nộp đơn".
+2. **Cột mới `Application.invitationId`** (nullable, unique, `ON DELETE SET NULL`) gắn đơn với lời mời. Dùng cho nhãn "Được mời" ở danh sách ứng viên và tỉ lệ mời → đơn.
+3. **Đơn từ lời mời vào thẳng `REVIEWING`**, không phụ thuộc điểm hay công tắc `autoReviewEnabled` của AD-25: nhà tuyển dụng đã chủ động chọn người này. Lịch sử trạng thái ghi dòng khởi tạo `null → REVIEWING` (hoặc `CANCELLED → REVIEWING` khi mở lại đơn đã huỷ), `actorId` là ứng viên; không bị đếm là "hệ thống tự chuyển".
+4. **Một thông báo gộp** "X đã nhận lời và ứng tuyển", dùng lại loại `CANDIDATE_OUTREACH_INVITATION_RESPONDED` với payload thêm `applicationId`; không gửi thêm `APPLICATION_RECEIVED`. Người nhận là **người mời và người đăng tin** (bỏ trùng; lời mời tự động đứng tên người đăng tin nên chỉ một người). Hệ thống không có người phụ trách đơn, mọi employer của công ty vẫn thấy và xử lý được đơn; nhắc tuần của AD-25 là lưới an toàn cho cả công ty.
+5. **Lời mời đã `ACCEPTED` trước thay đổi này** không được tạo đơn tự động (cần CV và sự đồng ý của ứng viên). Ứng viên có nút "Ứng tuyển ngay" (endpoint `POST /candidate/outreach-invitations/:id/apply`) khi tin còn tuyển.
+6. **Kiểm lại tin trong transaction**: tin không còn `PUBLISHED` hoặc đã quá hạn thì trả 409 và không ghi gì.
+7. **Lời mời và đơn tự nộp trùng tin:** ứng viên có lời mời `PENDING` mà nộp đơn thường thì coi như nhận lời (đơn `REVIEWING`, gắn lời mời); ứng viên đã có đơn mà nhận lời thì chỉ gắn lời mời vào đơn, không đổi trạng thái đơn. Ứng viên luôn được báo trước và sau rằng hồ sơ vào thẳng "Đang xem xét".
+8. **Đơn từ lời mời không huỷ được** (giữ quy tắc chỉ huỷ đơn `PENDING`); hộp thoại nhận lời ghi rõ.
+9. Logic tạo đơn nằm ở `ApplicationsService` (hàm lõi nhận `tx`); `candidate-outreach` gọi qua DI, không tự ghi bảng `applications`. Nộp đơn thường không đổi hành vi.
+
+**Phương án không chọn:**
+
+- *Nhận lời thì tự tạo đơn bằng CV mặc định:* ứng viên không chọn được CV, không biết mình đã nộp đơn; lỗi khi chưa có CV mặc định.
+- *Giữ nhận lời = chat, thêm nút dẫn sang trang ứng tuyển:* hai bước nên dễ bỏ dở, và hệ thống không biết đơn đến từ lời mời.
+- *Đơn từ lời mời để `PENDING` rồi để AD-25 tự chuyển:* với lời mời tự động gần như luôn lên `REVIEWING` ngay (cùng ngưỡng `autoOutreachMinScore`), nhưng lời mời thủ công dưới ngưỡng hoặc tin tắt công tắc sẽ để đơn nằm "Chờ duyệt" dù nhà tuyển dụng đã chủ động mời.
+
+**Ảnh hưởng:**
+
+- `schema.prisma` + 1 migration viết tay (cột `applications."invitationId"`).
+- `applications` (tách hàm lõi tạo đơn), `candidate-outreach` (`respond` nhận `cvId`, endpoint `apply`, DTO lời mời có `applicationId`), `notifications` (template gộp), DTO danh sách / chi tiết đơn phía employer có `invitation`.
+- `packages/shared-types`: request / response của `respond`, `ApplyFromInvitationRequest`, `CandidateOutreachInvitationDto.applicationId`, `EmployerApplicationListItem.invitation`.
+- Frontend: hộp thoại nhận lời, hộp lời mời, nhãn "Được mời".
+- FAQ trợ lý hỗ trợ: các câu nói "chấp nhận lời mời sẽ tạo hội thoại".

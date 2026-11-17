@@ -1,6 +1,8 @@
 import type { NextFunction, Request, Response } from "express";
 import type {
   ApiResponse,
+  ApplyFromInvitationRequest,
+  ApplyFromInvitationResponse,
   BulkInviteRequest,
   BulkInviteResponse,
   CandidateOutreachInvitationDto,
@@ -107,10 +109,29 @@ export class CandidateOutreachController {
 
   respond = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { action } = req.body as RespondOutreachInvitationRequest;
-      const result = await this.candidateOutreachService.respond(req.user!.id, req.params.id as string, action);
+      const request = req.body as RespondOutreachInvitationRequest;
+      const result = await this.candidateOutreachService.respond(
+        req.user!.id,
+        req.params.id as string,
+        request.action,
+        request.action === "ACCEPT" ? { cvId: request.cvId, coverLetter: request.coverLetter } : undefined,
+      );
       const body: ApiResponse<RespondOutreachInvitationResponse> = { success: true, data: result };
       res.json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  applyFromInvitation = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { cvId, coverLetter } = req.body as ApplyFromInvitationRequest;
+      const result = await this.candidateOutreachService.applyFromInvitation(req.user!.id, req.params.id as string, {
+        cvId,
+        coverLetter,
+      });
+      const body: ApiResponse<ApplyFromInvitationResponse> = { success: true, data: result };
+      res.status(201).json(body);
     } catch (error) {
       next(error);
     }

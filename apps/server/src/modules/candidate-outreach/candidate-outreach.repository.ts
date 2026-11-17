@@ -11,7 +11,9 @@ type Db = PrismaClient | Prisma.TransactionClient;
 
 // Đọc candidates (+ quan hệ), applications, conversations; đọc/ghi
 // candidate_outreach_invitations và đúng 1 cột candidates.isOpenToOutreach.
-// Không sửa module candidates/applications/messaging.
+// Ngoại lệ AD-28: ghi đúng cột applications.invitationId khi gắn lời mời vào đơn có
+// sẵn (linkInvitationIfUnlinked). Tạo đơn đi qua applications/application-submit.ts.
+// Không sửa module candidates/messaging.
 
 /** Thông tin hiển thị trên thẻ kết quả tìm — cố ý KHÔNG select phone/email/dateOfBirth (D2). */
 export interface CandidateSearchCardRow {
@@ -428,6 +430,59 @@ export class CandidateOutreachRepository {
       data: { status, respondedAt: now },
     });
     return result.count === 1;
+  }
+
+  // ─── AD-28 — nhận lời = ứng tuyển (docs/06-backend/invitation-apply/PLAN.md) ──
+
+  /** Lời mời PENDING còn hạn, tin còn PUBLISHED, của đúng cặp tin–ứng viên (Q4). */
+  findOpenPendingForJob(candidateId: string, jobPostId: string, db: Db = this.prisma): Promise<InvitationWithRelations | null> {
+    return db.candidateOutreachInvitation.findFirst({
+      where: {
+        candidateId,
+        jobPostId,
+        status: "PENDING",
+        expiresAt: { gt: new Date() },
+        jobPost: { status: "PUBLISHED" },
+      },
+      include: invitationInclude,
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
+  findByIdTx(id: string, db: Db): Promise<InvitationWithRelations | null> {
+    return db.candidateOutreachInvitation.findUnique({ where: { id }, include: invitationInclude });
+  }
+
+  /** Tin của lời mời, đọc lại trong transaction: còn tuyển không, và người đăng tin. */
+  findJobForAcceptance(
+    jobPostId: string,
+    db: Db,
+  ): Promise<{ id: string; title: string; status: JobPostStatus; expiresAt: Date | null; employer: { userId: string } } | null> {
+    return db.jobPost.findUnique({
+      where: { id: jobPostId },
+      select: { id: true, title: true, status: true, expiresAt: true, employer: { select: { userId: true } } },
+    });
+  }
+
+  /** Đơn đã gắn với lời mời này (unique), nếu có. */
+  async findApplicationIdByInvitation(invitationId: string, db: Db = this.prisma): Promise<string | null> {
+    const row = await db.application.findUnique({ where: { invitationId }, select: { id: true } });
+    return row?.id ?? null;
+  }
+
+  /** Đơn khác CANCELLED của ứng viên theo từng tin — hộp lời mời biết lời mời nào đã có đơn. */
+  async findActiveApplicationIdsByJobPost(candidateId: string, jobPostIds: string[]): Promise<Map<string, string>> {
+    if (jobPostIds.length === 0) return new Map();
+    const rows = await this.prisma.application.findMany({
+      where: { candidateId, jobPostId: { in: jobPostIds }, status: { not: "CANCELLED" } },
+      select: { id: true, jobPostId: true },
+    });
+    return new Map(rows.map((row) => [row.jobPostId, row.id]));
+  }
+
+  /** Gắn lời mời vào đơn có sẵn khi đơn chưa gắn lời mời nào (Q4). */
+  async linkInvitationIfUnlinked(applicationId: string, invitationId: string, db: Db): Promise<void> {
+    await db.application.updateMany({ where: { id: applicationId, invitationId: null }, data: { invitationId } });
   }
 
   /** conversationId theo từng jobPostId của Candidate — gắn vào lời mời ACCEPTED trong hộp lời mời. */

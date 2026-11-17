@@ -1,4 +1,4 @@
-import { Prisma, type ApplicationStatus, type JobPostStatus } from "@prisma/client";
+import { Prisma, type ApplicationStatus, type JobPostStatus, type OutreachInvitationSource } from "@prisma/client";
 import type { PrismaClient } from "@prisma/client";
 import type { EmployerApplicationsFocus, EmployerApplicationsSort } from "@sip/shared-types";
 import { NOW_UTC } from "../candidate-outreach/candidate-outreach.repository";
@@ -37,6 +37,9 @@ export interface CompanyApplicationRow {
   optionalTotal: number;
   /** Điểm lưu sẵn (AD-24); null ⇒ không có dòng điểm. */
   matchScore: number | null;
+  /** AD-28 — lời mời sinh ra đơn; nguồn null khi đơn không đến từ lời mời. */
+  invitationId: string | null;
+  invitationSource: OutreachInvitationSource | null;
   /** X của tin (`autoOutreachMinScore`). */
   matchThreshold: number;
   /** Y của tin như đã lưu; kẹp Y < X ở `matchBand`. */
@@ -198,6 +201,7 @@ export type ApplicationWithEmployerRelations = Prisma.ApplicationGetPayload<{
         awards: true;
       };
     };
+    invitation: { select: { id: true; source: true } };
   };
 }>;
 
@@ -208,7 +212,14 @@ export class ApplicationsRepository {
   }
 
   async create(
-    data: { jobPostId: string; candidateId: string; cvId: string; coverLetter?: string; status: ApplicationStatus },
+    data: {
+      jobPostId: string;
+      candidateId: string;
+      cvId: string;
+      coverLetter?: string | null;
+      status: ApplicationStatus;
+      invitationId?: string | null;
+    },
     db: Db = this.prisma,
   ) {
     return db.application.create({
@@ -224,8 +235,8 @@ export class ApplicationsRepository {
     return db.applicationStatusHistory.create({ data });
   }
 
-  async findByJobAndCandidate(jobPostId: string, candidateId: string) {
-    return this.prisma.application.findUnique({
+  async findByJobAndCandidate(jobPostId: string, candidateId: string, db: Db = this.prisma) {
+    return db.application.findUnique({
       where: {
         jobPostId_candidateId: { jobPostId, candidateId },
       },
@@ -275,6 +286,7 @@ export class ApplicationsRepository {
             awards: true,
           },
         },
+        invitation: { select: { id: true, source: true } },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -301,6 +313,7 @@ export class ApplicationsRepository {
             awards: true,
           },
         },
+        invitation: { select: { id: true, source: true } },
       },
     });
   }
@@ -337,6 +350,9 @@ export class ApplicationsRepository {
              ${LAST_INTERVIEW_AT} AS "lastInterviewAt",
              sm."requiredMatched", sm."requiredTotal", sm."optionalMatched", sm."optionalTotal",
              ms."score" AS "matchScore",
+             a."invitationId",
+             (SELECT inv."source"::text FROM candidate_outreach_invitations inv
+              WHERE inv."id" = a."invitationId") AS "invitationSource",
              j."autoOutreachMinScore" AS "matchThreshold",
              j."rejectSuggestBelowScore" AS "rejectSuggestBelowScore",
              ${CHANGED_BY_SYSTEM} AS "changedBySystem",
@@ -445,7 +461,15 @@ export class ApplicationsRepository {
 
   async update(
     id: string,
-    data: Partial<{ status: ApplicationStatus; employerNotes: string | null; rating: number | null; cvId: string; coverLetter: string | null; reappliedAt: Date }>,
+    data: Partial<{
+      status: ApplicationStatus;
+      employerNotes: string | null;
+      rating: number | null;
+      cvId: string;
+      coverLetter: string | null;
+      reappliedAt: Date;
+      invitationId: string;
+    }>,
     db: Db = this.prisma,
   ) {
     return db.application.update({
