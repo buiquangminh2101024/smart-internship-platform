@@ -440,6 +440,16 @@ Unit test (theo mẫu `tests/unit/job-post-*.test.ts`):
 - Sự kiện công ty: tạo báo cáo / xử lý gỡ tin / thu hồi tin ⇒ gọi `jobQualityCompanyTrigger` đúng một lần với đúng `companyId`; `rescorePendingForCompany` chỉ chấm tin `PENDING` của công ty đó, một tin lỗi không dừng lượt.
 - Sửa tin đang hiển thị: chấm lại; chuyển sang `SUGGEST_REJECT` ⇒ một thông báo cho mỗi Admin; sửa tiếp vẫn ở vùng xấu ⇒ không báo nữa; mới có cờ chặn dù vẫn ở vùng xấu ⇒ báo; tin nháp sửa ⇒ không chấm.
 - `tsc` và toàn bộ test server.
+- **Đã làm (2026-11-20):** đối chiếu từng mục trên với test của bước 2–9. Phần lớn đã có sẵn: bước 5 có `job-post-moderation-transition`, bước 7 có `job-post-bulk-moderation`, bước 8 có `publish-follow-up`, bước 4 và 4b có `job-quality-service` và `job-reports-service`. Các chỗ còn thiếu đã bổ sung, **10 test**, 757/757, `tsc` sạch cho server (`src`, `tests`):
+  - `job-quality.test.ts` (+9):
+    - sát ngưỡng thì không trừ, vượt một đơn vị thì trừ, cho mọi ngưỡng trong `QUALITY_THRESHOLDS`: mô tả 149 / 150 / 299 / 300, yêu cầu 49 / 50, tiêu đề 9 / 10 / 100 / 101, viết hoa đúng tỉ lệ 0,7, lặp 3 / 4 ký tự và 3 / 4 biểu tượng cảm xúc, lương gấp đúng 3 lần, địa chỉ 9 / 10 ký tự, hạn nộp đúng 7 ngày, kinh nghiệm 0,9 / 1 năm, 8 / 9 kỹ năng bắt buộc, lương thực tập đúng 20 triệu, bị từ chối 2 / 3 lần, công ty bị từ chối nhiều, công ty chưa có tin được duyệt;
+    - liên hệ bằng email; trần của báo cáo đã xác nhận (50) và đang chờ (30);
+    - mỗi nhóm từ khoá trừ một lần, điểm tiêu chí không âm;
+    - làm tròn: 98,5 lên 99, 86,25 xuống 86;
+    - mép vùng: tổng đúng 80 và hai tiêu chí đúng 50 ⇒ đề xuất duyệt, 79 ⇒ cần xem kỹ; tiêu chí đúng 40 không dính điểm sàn cứng; tổng 50 ⇒ cần xem kỹ, 49 ⇒ đề xuất từ chối;
+    - lý do tự sinh bỏ lỗi tiêu chí 6 dù công ty bị trừ về 0.
+  - `job-quality-service.test.ts` (+1): bị từ chối, sửa tin nháp rồi bấm chấm lại, sau đó gửi lại ⇒ so với mã băm của lần gửi bị từ chối. Có sửa thì không trừ; chỉ bấm chấm lại mà không sửa thì vẫn trừ `RESUBMITTED_UNCHANGED`.
+  - Không sửa code: mọi case mới đều qua ngay.
 
 ### Bước 11 — Kiểm thật và tài liệu
 
@@ -448,6 +458,45 @@ Unit test (theo mẫu `tests/unit/job-post-*.test.ts`):
 - Q4: Mây Xanh có tin chờ duyệt; ứng viên báo cáo một tin đang hiển thị khác của Mây Xanh ⇒ điểm tiêu chí 6 của tin chờ giảm, "chấm lúc" đổi.
 - Sửa tin đang hiển thị của Mây Xanh, thêm "đóng phí đào tạo" vào quyền lợi ⇒ Admin nhận thông báo, trang chi tiết hiện cờ chặn; sửa lại cho sạch ⇒ điểm trở lại.
 - Cập nhật AD-29 (trạng thái), backlog, FAQ trợ lý hỗ trợ của employer nếu có câu nói về lý do từ chối tin.
+- **Đã làm (2026-11-20):**
+  - Migration đã áp lên Neon từ bước 4.
+  - `score-job-quality --dry-run --status PENDING` trên Neon:
+    - **18 tin PENDING**, cả 18 ở vùng đề xuất duyệt (84–98 điểm, trung vị 98), không tin nào có cờ chặn;
+    - lỗi hay gặp nhất: `DESCRIPTION_SHORT` (17/18 tin) và `NO_MAJOR` (7/18);
+    - nạp dữ liệu 1,2 s, chấm 29 ms.
+  - Chưa chạy chế độ ghi.
+  - Backlog đã cập nhật.
+  - FAQ `content/support-faq/05-dang-tin.md` ("Tin bị từ chối quay về Nháp kèm lý do; bạn sửa theo lý do rồi gửi duyệt lại") vẫn đúng, nên không sửa. Câu này không nhắc điểm hay quy tắc chấm (Q1).
+  - **Kiểm qua gateway 8080** (bằng API: web chưa có giao diện điểm, phần frontend có plan riêng):
+    - Mây Xanh có `requiresApproval = false`, nên mình tạm bật `true` để tin vào hàng đợi, kiểm xong thì trả lại `false`.
+    - Dữ liệu dùng:
+      - 4 tin thử `[Kiểm AD-29]`: G1 và G2 là tin tốt, M là tin thiếu thông tin, F là tin có "phí đào tạo";
+      - tài khoản Admin, employer Mây Xanh và một ứng viên demo.
+    - **Gửi duyệt và hàng đợi:**
+      - G1 và G2 được 100 điểm, đề xuất duyệt.
+      - F được 85 điểm, có cờ `ASKS_FOR_MONEY` ⇒ đề xuất từ chối, lý do "Vi phạm chính sách. …("phí đào tạo")".
+      - M được 80 điểm nhưng độ đầy đủ chỉ 35 (< điểm sàn cứng 40) ⇒ đề xuất từ chối, lý do "Thiếu thông tin. …".
+      - `sort=score_desc` xếp tin chưa chấm xuống cuối. Lọc `band=SUGGEST_REJECT` / `UNSCORED` đúng, `pendingByBand` đúng.
+      - API employer trả `quality: null` và có `submittedAt`. API công khai trả 404 cho tin chờ duyệt.
+    - **Hai lần duyệt cùng lúc G1** ⇒ 200 và 409 "Tin đã được xử lý bởi người khác". Chỉ có một moderation action `APPROVED`, ghi 100 / `SUGGEST_APPROVE`.
+    - **Duyệt hàng loạt `[G2, G1, id không tồn tại]`** (1,2 s):
+      - `succeeded = [G2]`; G1 bị bỏ qua với lý do `NOT_PENDING`, id lạ với lý do `NOT_FOUND`;
+      - moderation action và audit đều có `bulk: true`, kèm `batchId` và điểm.
+    - **Từ chối hàng loạt `[M, F]` không kèm lý do** ⇒ cả hai về nháp. Lý do tự sinh có trong moderation action, audit và thông báo cho employer.
+    - **Việc sau duyệt:** bảng điểm của G1 (duyệt đơn) và G2 (lô) đều có 249 dòng. Không có thông báo job alert nào cho ứng viên về tin thử. Không kiểm tự mời, vì tin thử không bật tự mời (đã đo ở bước 8).
+    - **Gửi lại M y nguyên** ⇒ `RESUBMITTED_UNCHANGED`, 73 điểm.
+    - **Q4:**
+      - ứng viên báo cáo G1 ⇒ trong vài giây, M được chấm lại với lý do `COMPANY_EVENT`: uy tín công ty 100 → 90 (`COMPANY_OPEN_REPORTS`), tổng 73 → 72, "chấm lúc" đổi;
+      - tin PENDING có sẵn của Mây Xanh (`clargedemojob0241`) cũng được chấm (97 điểm);
+      - Admin bỏ qua (`DISMISS`) báo cáo ⇒ M về lại 100 / 73.
+    - **Sửa G2 đang hiển thị, thêm "đóng phí đào tạo"** ⇒ chấm lại với lý do `PUBLISHED_EDIT`: 85 điểm, `SUGGEST_REJECT`, cờ chặn. Admin nhận đúng **1** thông báo `JOB_POST_QUALITY_DROPPED` ("Tin đang hiển thị bị tụt điểm", link `/admin/jobs/<id>`). Sửa lại cho sạch ⇒ 100 điểm, không thông báo thêm.
+    - **Dọn dẹp:**
+      - M bị từ chối đơn có lý do (API Admin trả kèm `quality`); M và F để ở nháp, G1 và G2 đã đóng;
+      - báo cáo thử trên G1 ở trạng thái đã bỏ qua;
+      - thông báo kiểm duyệt đã gửi tới 3 employer của Mây Xanh và tới Admin;
+      - `requiresApproval` đã trả về `false`.
+  - **Script chế độ ghi:** chủ dự án chạy `score-job-quality --status PENDING` trên Neon. Đã ghi 18/18 tin trong 3,9 s (~215 ms mỗi tin). Kết quả khớp với dry-run: cả 18 tin đề xuất duyệt, 84–98 điểm, không cờ chặn. Riêng `clargedemojob0241` lên 98 điểm (lúc chấm qua Q4 là 97, vì khi đó báo cáo thử còn đang chờ). Hàng đợi chờ duyệt không còn tin chưa chấm.
+  - **Bước 11 xong.**
 
 ## Câu hỏi đã chốt (2026-11-20)
 

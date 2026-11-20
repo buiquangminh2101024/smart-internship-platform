@@ -271,6 +271,29 @@ test("chấm lại: ghi điểm với lý do được truyền, KHÔNG ghi submi
   }
 });
 
+test("bị từ chối, sửa tin nháp rồi bấm chấm lại, sau đó gửi lại ⇒ so với mã băm của lần gửi bị từ chối", async () => {
+  const before = input();
+  const after = input({ description: before.description + " Làm việc tại văn phòng." });
+  for (const [draft, expectPenalty] of [
+    [after, false],
+    [before, true], // không sửa gì, chỉ bấm chấm lại ⇒ vẫn là gửi lại y nguyên
+  ] as const) {
+    const { service, writes } = buildService([loaded("job-1", draft)]);
+    // Dòng tin trong DB sau lần gửi bị từ chối; lần chấm lại ghi đè các cột nó trả về.
+    const row: Record<string, unknown> = { submittedContentHash: contentHash(before) };
+    await service.scoreAndStore("job-1", { reason: "MANUAL", now: NOW });
+    Object.assign(row, writes[0]!.data);
+    assert.equal(row.submittedContentHash, contentHash(before));
+
+    const columns = await service.submissionColumns(target("job-1", row.submittedContentHash as string, "REJECTED"), {
+      now: NOW,
+      autoPublished: false,
+    });
+    assert.equal(issueCodes(columns).includes("RESUBMITTED_UNCHANGED"), expectPenalty);
+    assert.equal(columns.submittedContentHash, contentHash(draft));
+  }
+});
+
 test("chấm lại tin PENDING giữ cờ 'gửi lại không sửa' của lần gửi (loader đưa vào signals)", async () => {
   const { service, writes } = buildService([loaded("job-1", input({}, { resubmittedUnchanged: true }), "PENDING")]);
   await service.scoreAndStore("job-1", { reason: "COMPANY_EVENT", now: NOW });

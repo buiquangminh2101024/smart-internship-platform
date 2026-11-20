@@ -4,6 +4,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildRejectReason, contentHash, foldText, scoreJobPost, type JobQualityInput, type JobQualityResult } from "../../src/modules/job-posts/job-quality";
+import type { JobQualityIssueCode } from "../../src/modules/job-posts/job-quality.config";
 
 const NOW = new Date("2026-11-20T03:00:00Z");
 const DAY = 86_400_000;
@@ -337,4 +338,183 @@ test("mã băm: không đổi khi chỉ khác khoảng trắng / thứ tự kỹ
 test("foldText bỏ dấu tiếng Việt, cả chữ đ và văn bản dạng NFD", () => {
   assert.equal(foldText("Đặt CỌC Phí Hồ Sơ"), "dat coc phi ho so");
   assert.equal(foldText("phí".normalize("NFD")), "phi");
+});
+
+// ─── Bước 10 — sát ngưỡng, trần, làm tròn, mép vùng ──────────────────────
+
+/** Chuỗi chữ thường không dấu cách, không lặp ký tự: chỉ độ dài là đáng kể. */
+const letters = (n: number) => Array.from({ length: n }, (_, i) => "abcdefghij"[i % 10]).join("");
+
+/** Tin không lỗi nào: 100 điểm ở mọi tiêu chí. */
+const CLEAN = baseInput({ description: letters(300), benefits: "Phụ cấp, laptop" }, { companySubmitCount: 3, companyApprovedCount: 3 });
+const fromClean = (overrides: Partial<JobQualityInput> = {}, signals: Partial<JobQualityInput["signals"]> = {}): JobQualityInput => ({
+  ...CLEAN,
+  ...overrides,
+  signals: { ...CLEAN.signals, ...signals },
+});
+const has = (code: JobQualityIssueCode, overrides: Partial<JobQualityInput> = {}, signals: Partial<JobQualityInput["signals"]> = {}) =>
+  codes(scoreJobPost(fromClean(overrides, signals), NOW)).includes(code);
+
+test("tin sạch dùng cho các case sát ngưỡng: 100 điểm, không lỗi", () => {
+  const r = scoreJobPost(CLEAN, NOW);
+  assert.equal(r.score, 100);
+  assert.deepEqual(codes(r), []);
+});
+
+test("sát ngưỡng thì không trừ, vượt một đơn vị thì trừ: nội dung", () => {
+  assert.ok(has("DESCRIPTION_TOO_SHORT", { description: letters(149) }));
+  assert.ok(!has("DESCRIPTION_TOO_SHORT", { description: letters(150) }));
+  assert.ok(has("DESCRIPTION_SHORT", { description: letters(150) }));
+  assert.ok(has("DESCRIPTION_SHORT", { description: letters(299) }));
+  assert.ok(!has("DESCRIPTION_SHORT", { description: letters(300) }));
+
+  assert.ok(has("REQUIREMENTS_TOO_SHORT", { requirements: letters(49) }));
+  assert.ok(!has("REQUIREMENTS_TOO_SHORT", { requirements: letters(50) }));
+
+  assert.ok(has("TITLE_LENGTH", { title: letters(9) }));
+  assert.ok(!has("TITLE_LENGTH", { title: letters(10) }));
+  assert.ok(!has("TITLE_LENGTH", { title: letters(100) }));
+  assert.ok(has("TITLE_LENGTH", { title: letters(101) }));
+
+  // Viết hoa: tỉ lệ đúng 0,7 ⇒ trừ, 0,6 ⇒ không; dưới 10 chữ cái thì không xét.
+  assert.ok(has("TITLE_SHOUTING", { title: "ABCDEFGhij" }));
+  assert.ok(!has("TITLE_SHOUTING", { title: "ABCDEFghij" }));
+  assert.ok(!has("TITLE_SHOUTING", { title: "ABCDEFGHI" }));
+
+  // Lặp 3 ký tự hoặc 3 biểu tượng cảm xúc ⇒ không; 4 ⇒ trừ. Chữ số lặp không tính.
+  assert.ok(!has("SPAMMY_FORMAT", { title: "Thực tập sinh!!!" }));
+  assert.ok(has("SPAMMY_FORMAT", { title: "Thực tập sinh!!!!" }));
+  assert.ok(!has("SPAMMY_FORMAT", { title: "Thực tập sinh 2000000" }));
+  assert.ok(!has("SPAMMY_FORMAT", { title: "Thực tập sinh \u{1F525}⭐\u{1F389}" }));
+  const emoji = scoreJobPost(fromClean({ title: "Thực tập sinh \u{1F525}⭐\u{1F389}\u{1F4BC}" }), NOW);
+  assert.match(criterion(emoji, "CONTENT").issues.find((i) => i.code === "SPAMMY_FORMAT")!.message, /biểu tượng cảm xúc \(4\)/);
+
+  const email = scoreJobPost(fromClean({ benefits: "Gửi CV về tuyen.dung@congty.vn" }), NOW);
+  assert.match(criterion(email, "CONTENT").issues.find((i) => i.code === "CONTACT_IN_CONTENT")!.message, /email/);
+});
+
+test("sát ngưỡng thì không trừ, vượt một đơn vị thì trừ: minh bạch, thực tập, rủi ro, công ty", () => {
+  // Khoảng lương gấp đúng 3 lần ⇒ không trừ.
+  assert.ok(!has("SALARY_RANGE_WIDE", { salaryMin: 2_000_000, salaryMax: 6_000_000 }));
+  assert.ok(has("SALARY_RANGE_WIDE", { salaryMin: 2_000_000, salaryMax: 6_000_001 }));
+
+  assert.ok(!has("ADDRESS_VAGUE", { address: "12A Lê Lợi" })); // 10 ký tự
+  assert.ok(has("ADDRESS_VAGUE", { address: "12 Lê Lợi" })); // 9 ký tự
+
+  assert.ok(!has("DEADLINE_TOO_SOON", { expiresAt: new Date(NOW.getTime() + 7 * DAY) }));
+  assert.ok(has("DEADLINE_TOO_SOON", { expiresAt: new Date(NOW.getTime() + 7 * DAY - 1) }));
+
+  assert.ok(has("INTERN_EXPERIENCE_HIGH", { minExperienceYears: 1 }));
+  assert.ok(!has("INTERN_EXPERIENCE_HIGH", { minExperienceYears: 0.9 }));
+  assert.ok(has("INTERN_EXPERIENCE_SOME", { minExperienceYears: 0.9 }));
+
+  const required = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ skillId: `s${i}`, importance: "REQUIRED" as const, status: "APPROVED" as const }));
+  assert.ok(!has("TOO_MANY_REQUIRED_SKILLS", { skills: required(8) }));
+  assert.ok(has("TOO_MANY_REQUIRED_SKILLS", { skills: required(9) }));
+
+  // Lương thực tập đúng 20 triệu ⇒ không trừ.
+  assert.ok(!has("INTERN_SALARY_OUTLIER", { salaryMin: 15_000_000, salaryMax: 20_000_000 }));
+  assert.ok(has("INTERN_SALARY_OUTLIER", { salaryMin: 15_000_000, salaryMax: 20_000_001 }));
+
+  assert.ok(!has("REJECTED_MANY_TIMES", {}, { rejectionCount: 2 }));
+  assert.ok(has("REJECTED_MANY_TIMES", {}, { rejectionCount: 3 }));
+
+  // Từ chối nhiều: cần từ 4 lần gửi và tỉ lệ từ 0,5.
+  assert.ok(!has("COMPANY_HIGH_REJECTION", {}, { companySubmitCount: 3, companyRejectCount: 3 }));
+  assert.ok(has("COMPANY_HIGH_REJECTION", {}, { companySubmitCount: 4, companyRejectCount: 2 }));
+  assert.ok(!has("COMPANY_HIGH_REJECTION", {}, { companySubmitCount: 5, companyRejectCount: 2 }));
+
+  assert.ok(!has("COMPANY_NO_HISTORY", {}, { companyApprovedCount: 1 }));
+  assert.ok(has("COMPANY_NO_HISTORY", {}, { companyApprovedCount: 0 }));
+});
+
+test("lỗi tính theo số lần có trần: báo cáo đã xác nhận tối đa 50, đang chờ tối đa 30", () => {
+  const penaltyOf = (signals: Partial<JobQualityInput["signals"]>) =>
+    criterion(scoreJobPost(fromClean({}, signals), NOW), "COMPANY").issues.map((i) => [i.code, i.penalty]);
+  assert.deepEqual(penaltyOf({ companyConfirmedReports: 1 }), [["COMPANY_CONFIRMED_REPORTS", 25]]);
+  assert.deepEqual(penaltyOf({ companyConfirmedReports: 3 }), [["COMPANY_CONFIRMED_REPORTS", 50]]);
+  assert.deepEqual(penaltyOf({ companyOpenReports: 2 }), [["COMPANY_OPEN_REPORTS", 20]]);
+  assert.deepEqual(penaltyOf({ companyOpenReports: 5 }), [["COMPANY_OPEN_REPORTS", 30]]);
+});
+
+test("mỗi nhóm từ khoá trừ một lần dù khớp nhiều từ; điểm tiêu chí không âm", () => {
+  const r = scoreJobPost(fromClean({ benefits: "Đóng phí đào tạo, phí hồ sơ và đặt cọc 500k; kết bạn Zalo hoặc Telegram" }), NOW);
+  const risk = criterion(r, "RISK");
+  assert.deepEqual(risk.issues.map((i) => [i.code, i.penalty]), [
+    ["ASKS_FOR_MONEY", 60],
+    ["OFF_PLATFORM_CONTACT", 55],
+  ]);
+  assert.equal(risk.score, 0); // 100 − 115, không xuống âm
+  assert.deepEqual(r.flags, ["ASKS_FOR_MONEY"]);
+
+  const content = criterion(
+    scoreJobPost(fromClean({ title: "VIỆC LÀM ".repeat(12) + "!!!!", description: "Gọi 0912345678", requirements: "Biết code" }), NOW),
+    "CONTENT",
+  );
+  assert.equal(content.issues.reduce((sum, i) => sum + i.penalty, 0), 110);
+  assert.equal(content.score, 0);
+});
+
+test("tổng điểm làm tròn tới số nguyên gần nhất", () => {
+  // 100 − 15% × 10 = 98,5 ⇒ 99.
+  const up = scoreJobPost(fromClean({ address: "HN" }), NOW);
+  assert.equal(criterion(up, "TRANSPARENCY").score, 90);
+  assert.equal(up.score, 99);
+  // 100 − 25% × 55 = 86,25 ⇒ 86.
+  const down = scoreJobPost(fromClean({ benefits: "Liên hệ qua Telegram" }), NOW);
+  assert.equal(criterion(down, "RISK").score, 45);
+  assert.equal(down.score, 86);
+});
+
+test("mép vùng duyệt: tổng đúng 80, hai tiêu chí đúng 50 ⇒ đề xuất duyệt; tụt 1 điểm ⇒ cần xem kỹ", () => {
+  const edge = { requirements: null, benefits: null, description: letters(149), title: "Thực tập" };
+  const r = scoreJobPost(fromClean(edge), NOW);
+  assert.equal(criterion(r, "COMPLETENESS").score, 50);
+  assert.equal(criterion(r, "CONTENT").score, 50);
+  assert.equal(r.score, 80);
+  assert.equal(r.band, "SUGGEST_APPROVE");
+
+  const below = scoreJobPost(fromClean(edge, { companyOpenReports: 1 }), NOW);
+  assert.equal(below.score, 79);
+  assert.equal(below.band, "NEEDS_REVIEW");
+});
+
+test("mép vùng từ chối: tiêu chí đúng 40 không dính điểm sàn cứng; tổng đúng 50 ⇒ cần xem kỹ, 49 ⇒ đề xuất từ chối", () => {
+  const c40 = scoreJobPost(fromClean({ skills: [{ skillId: "s1", importance: "PREFERRED", status: "APPROVED" }], benefits: null, majors: [] }), NOW);
+  assert.equal(criterion(c40, "COMPLETENESS").score, 40);
+  assert.equal(c40.band, "NEEDS_REVIEW");
+
+  const weak = (overrides: Partial<JobQualityInput> = {}) =>
+    fromClean(
+      {
+        skills: [{ skillId: "s1", importance: "PREFERRED", status: "PENDING" }],
+        benefits: null,
+        majors: [],
+        description: letters(149),
+        title: "Tuyển!!!!",
+        minExperienceYears: 2,
+        salaryMin: 8_000_000,
+        salaryMax: 5_000_000,
+        address: "HN",
+        ...overrides,
+      },
+      { companyRetractions: 4, companyOpenReports: 3, rejectionCount: 3 },
+    );
+  const at50 = scoreJobPost(weak(), NOW);
+  // Tiêu chí 1–5 đều ≥ 40; tiêu chí 6 về 0 nhưng không xét điểm sàn cứng.
+  assert.deepEqual(at50.criteria.map((c) => c.score), [40, 40, 60, 50, 80, 0]);
+  assert.equal(at50.score, 50);
+  assert.equal(at50.band, "NEEDS_REVIEW");
+
+  const at49 = scoreJobPost(weak({ expiresAt: new Date(NOW.getTime() + 3 * DAY) }), NOW);
+  assert.equal(at49.score, 49);
+  assert.equal(at49.band, "SUGGEST_REJECT");
+});
+
+test("lý do từ chối tự sinh không lấy lỗi của tiêu chí 6 dù công ty bị trừ nặng", () => {
+  const r = scoreJobPost(fromClean({ description: letters(149) }, { companyRetractions: 3, companyConfirmedReports: 2, companyOpenReports: 1 }), NOW);
+  assert.equal(criterion(r, "COMPANY").score, 0);
+  assert.equal(buildRejectReason(r), "Thiếu thông tin. Mô tả công việc quá ngắn (149/150 ký tự).");
+  assert.equal(buildRejectReason(scoreJobPost(fromClean({}, { companyRetractions: 3 }), NOW)), null);
 });
