@@ -49,6 +49,13 @@ enum ModerationActionType {
   RETRACTED
 }
 
+// AD-29 — vùng gợi ý của điểm chất lượng tin (≥ 80 / 50–79 / < 50 hoặc có cờ chặn).
+enum JobQualityBand {
+  SUGGEST_APPROVE
+  NEEDS_REVIEW
+  SUGGEST_REJECT
+}
+
 enum ApplicationStatus {
   PENDING
   REVIEWING
@@ -89,6 +96,7 @@ enum NotificationType {
   APPLICATIONS_NEED_ATTENTION // AD-25 — employer: nhắc hằng tuần về hồ sơ tồn (gộp 1 thông báo/công ty/tuần)
   JOB_ALERT // AD-26 — ứng viên: có tin mới phù hợp (gộp 1 thông báo/ứng viên/ngày)
   PROFILE_SKILLS_REMINDER // AD-26 — ứng viên: nhắc một lần thêm kỹ năng (tài khoản ≥ 24 giờ chưa có kỹ năng)
+  JOB_POST_QUALITY_DROPPED // AD-29 — Admin: tin đang hiển thị được sửa và tụt xuống vùng đề xuất từ chối / mới có cờ chặn
 }
 
 // AD-16 M2 — lịch phỏng vấn. "Đã diễn ra" suy ra từ scheduledAt, không lưu COMPLETED.
@@ -397,26 +405,26 @@ model Candidate {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  educations      Education[]
-  workExperiences WorkExperience[]
-  projects        Project[]
-  certificates    Certificate[]
-  awards          Award[]
-  skills          CandidateSkill[]
-  cvs             Cv[]
-  savedJobs       SavedJob[]
-  applications    Application[]
-  conversations   Conversation[]
-  matchEmbedding  CandidateEmbedding?
-  profileInsight  CandidateProfileInsight?
+  educations           Education[]
+  workExperiences      WorkExperience[]
+  projects             Project[]
+  certificates         Certificate[]
+  awards               Award[]
+  skills               CandidateSkill[]
+  cvs                  Cv[]
+  savedJobs            SavedJob[]
+  applications         Application[]
+  conversations        Conversation[]
+  matchEmbedding       CandidateEmbedding?
+  profileInsight       CandidateProfileInsight?
   // AD-15 — bật = cho phép Employer tìm thấy và xem hồ sơ (không lộ phone/email).
-  isOpenToOutreach    Boolean                        @default(false)
-  outreachInvitations CandidateOutreachInvitation[]
-  matchScores         JobCandidateMatchScore[]
+  isOpenToOutreach     Boolean                       @default(false)
+  outreachInvitations  CandidateOutreachInvitation[]
+  matchScores          JobCandidateMatchScore[]
   // AD-26 — job alert: bật sẵn, tắt được ở Cài đặt.
-  jobAlertEnabled      Boolean    @default(true)
-  jobAlertEmailEnabled Boolean    @default(true)
-  jobAlertSameCityOnly Boolean    @default(false)
+  jobAlertEnabled      Boolean                       @default(true)
+  jobAlertEmailEnabled Boolean                       @default(true)
+  jobAlertSameCityOnly Boolean                       @default(false)
   jobAlerts            JobAlert[]
 
   // AD-27 — dấu "cần chấm lại theo ứng viên": đặt khi dữ liệu bộ chấm đọc đổi,
@@ -553,17 +561,17 @@ model Company {
   // Xác thực doanh nghiệp lúc Employer hoàn tất thủ tục (Phase 4, xem
   // employers.service.ts) — độc lập với isVerified/verifiedAt ở trên (giữ
   // nguyên cho các phase đọc thẳng isVerified), service layer đồng bộ 2 phía.
-  verificationStatus CompanyVerificationStatus  @default(PENDING)
-  verificationMethod CompanyVerificationMethod?
-  businessLicenseUrl String?
-  verificationNote   String?
-  rejectedAt         DateTime?
+  verificationStatus       CompanyVerificationStatus  @default(PENDING)
+  verificationMethod       CompanyVerificationMethod?
+  businessLicenseUrl       String?
+  verificationNote         String?
+  rejectedAt               DateTime?
   // AD-16 D13 — lần nộp/nộp lại hồ sơ xác minh gần nhất; mốc chờ của hàng đợi
   // Admin (updatedAt đổi cả khi đổi logo/banner hay bật/tắt requiresApproval).
-  verificationSubmittedAt DateTime?
+  verificationSubmittedAt  DateTime?
   // AD-23 — phần trăm hạn mức lời mời/ngày mà tự động mời được dùng (0–100).
   // Mời tay dùng được mọi lượt còn lại của tổng hạn mức. Chỉ quản trị viên công ty sửa.
-  outreachAutoSharePercent Int @default(80)
+  outreachAutoSharePercent Int                        @default(80)
 
   employers            Employer[]
   jobPosts             JobPost[]
@@ -605,15 +613,15 @@ model Employer {
 // Industry...), giữ createdAt/updatedAt vì giá/quota/isActive có thể được
 // Admin chỉnh sửa theo thời gian, cần audit.
 model SubscriptionPlan {
-  id           String   @id @default(cuid())
-  name         String   @unique
-  description  String?
-  jobPostQuota Int
-  durationDays Int
-  price        Int
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                           String   @id @default(cuid())
+  name                         String   @unique
+  description                  String?
+  jobPostQuota                 Int
+  durationDays                 Int
+  price                        Int
+  isActive                     Boolean  @default(true)
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
   // AD-15 — null = dùng ngưỡng mặc định trong code (DEFAULT_OUTREACH_DAILY_QUOTA),
   // KHÔNG phải "không giới hạn".
   outreachInvitationDailyQuota Int?
@@ -762,11 +770,26 @@ model JobPost {
   // AD-25 — tự xử lý hồ sơ (0.4). Sửa qua API riêng như cài đặt tự mời.
   // Ngưỡng X của tự chuyển "Đang xem xét" dùng lại autoOutreachMinScore.
   // Bật thì hồ sơ Chờ duyệt có điểm ≥ X tự chuyển PENDING → REVIEWING.
-  autoReviewEnabled           Boolean                      @default(true)
+  autoReviewEnabled           Boolean @default(true)
   // Y: điểm dưới Y thì đề xuất từ chối (người xác nhận). Luôn Y < X.
-  rejectSuggestBelowScore     Int                          @default(50)
+  rejectSuggestBelowScore     Int     @default(50)
   // Bật thì hồ sơ đã phỏng vấn chưa có kết quả tự đóng sau 30 ngày khi tin đã đóng.
-  autoCloseInterviewedEnabled Boolean                      @default(false)
+  autoCloseInterviewedEnabled Boolean @default(false)
+
+  // AD-29 — chấm điểm chất lượng tin và duyệt hàng loạt.
+  // Lần gửi duyệt gần nhất; hàng đợi sắp theo cột này thay cho createdAt.
+  submittedAt          DateTime?
+  // Điểm 0–100 của lần chấm gần nhất; null = chưa chấm.
+  qualityScore         Int?
+  qualityBand          JobQualityBand?
+  // { criteria: [{ key, score, weight, issues: [{ code, penalty, message }] }], flags, reason }
+  qualityBreakdown     Json?
+  // Phiên bản bộ chấm (QUALITY_SCORE_VERSION) — khác bản hiện tại thì UI báo "đã có phiên bản mới".
+  qualityVersion       Int?
+  qualityScoredAt      DateTime?
+  // SHA-256 nội dung tin lúc gửi duyệt. Chỉ ghi khi gửi duyệt (không ghi khi Admin
+  // chấm lại), để phát hiện "gửi lại không sửa gì" (RESUBMITTED_UNCHANGED).
+  submittedContentHash String?
 
   moderationActions   JobPostModerationAction[]
   reports             JobReport[]
@@ -783,6 +806,9 @@ model JobPost {
 
   @@index([companyId, status])
   @@index([status, createdAt])
+  // AD-29 — hàng đợi kiểm duyệt sắp theo điểm / theo lúc gửi duyệt.
+  @@index([status, qualityScore])
+  @@index([status, submittedAt])
   @@map("job_posts")
 }
 
@@ -915,19 +941,19 @@ model CandidateProfileInsight {
 // mức gửi lời mời theo Subscription (D4 — chung cho cả công ty, không theo
 // từng Employer). employerId chỉ để biết ai đã gửi, không dùng để tính quota.
 model CandidateOutreachInvitation {
-  id          String                   @id @default(cuid())
-  companyId   String
-  company     Company                  @relation(fields: [companyId], references: [id])
-  employerId  String
-  employer    Employer                 @relation(fields: [employerId], references: [id])
-  jobPostId   String
-  jobPost     JobPost                  @relation(fields: [jobPostId], references: [id])
-  candidateId String
-  candidate   Candidate                @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  status      OutreachInvitationStatus @default(PENDING)
-  createdAt   DateTime                 @default(now())
-  expiresAt   DateTime
-  respondedAt DateTime?
+  id                  String                   @id @default(cuid())
+  companyId           String
+  company             Company                  @relation(fields: [companyId], references: [id])
+  employerId          String
+  employer            Employer                 @relation(fields: [employerId], references: [id])
+  jobPostId           String
+  jobPost             JobPost                  @relation(fields: [jobPostId], references: [id])
+  candidateId         String
+  candidate           Candidate                @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  status              OutreachInvitationStatus @default(PENDING)
+  createdAt           DateTime                 @default(now())
+  expiresAt           DateTime
+  respondedAt         DateTime?
   // D7 — ảnh chụp điểm lúc gửi lời mời (server tự chấm lại riêng ứng viên này),
   // KHÔNG phải điểm hiện tại. null khi lúc đó không chấm được / status ≠ SCORED.
   matchScore          Int?
@@ -947,14 +973,19 @@ model CandidateOutreachInvitation {
 }
 
 model JobPostModerationAction {
-  id        String               @id @default(cuid())
-  jobPostId String
-  jobPost   JobPost              @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
-  action    ModerationActionType
-  actorId   String?
-  actor     User?                @relation(fields: [actorId], references: [id])
-  reason    String?
-  createdAt DateTime             @default(now())
+  id           String               @id @default(cuid())
+  jobPostId    String
+  jobPost      JobPost              @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  action       ModerationActionType
+  actorId      String?
+  actor        User?                @relation(fields: [actorId], references: [id])
+  reason       String?
+  createdAt    DateTime             @default(now())
+  // AD-29 — điểm và vùng của tin tại lúc Admin quyết định (dữ liệu hiệu chỉnh
+  // trọng số về sau); bulk = quyết định qua duyệt / từ chối hàng loạt.
+  qualityScore Int?
+  qualityBand  JobQualityBand?
+  bulk         Boolean              @default(false)
 
   @@map("job_post_moderation_actions")
 }
@@ -980,7 +1011,7 @@ model Cv {
   uploadedAt  DateTime  @default(now())
 
   // --- Builder CV fields ---
-  isBuilder   Boolean   @default(false)
+  isBuilder   Boolean @default(false)
   templateId  String?
   builderData Json?
 
@@ -1009,14 +1040,14 @@ model SavedJob {
 // ─── applications ───────────────────────────────────────────────────────
 
 model Application {
-  id            String            @id @default(cuid())
+  id            String                       @id @default(cuid())
   jobPostId     String
-  jobPost       JobPost           @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
+  jobPost       JobPost                      @relation(fields: [jobPostId], references: [id], onDelete: Cascade)
   candidateId   String
-  candidate     Candidate         @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  candidate     Candidate                    @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   cvId          String
-  cv            Cv                @relation(fields: [cvId], references: [id])
-  status        ApplicationStatus @default(PENDING)
+  cv            Cv                           @relation(fields: [cvId], references: [id])
+  status        ApplicationStatus            @default(PENDING)
   coverLetter   String?
   employerNotes String?
   rating        Int?
@@ -1024,8 +1055,8 @@ model Application {
   // AD-28 — đơn đến từ lời mời (nhận lời = ứng tuyển). null = ứng viên tự nộp.
   invitationId  String?                      @unique
   invitation    CandidateOutreachInvitation? @relation(fields: [invitationId], references: [id], onDelete: SetNull)
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  createdAt     DateTime                     @default(now())
+  updatedAt     DateTime                     @updatedAt
 
   statusHistory ApplicationStatusHistory[]
   interviews    Interview[]

@@ -1,6 +1,6 @@
 # Chấm điểm chất lượng tin và duyệt / từ chối hàng loạt — Backend
 
-> **Trạng thái: ĐÃ CHỐT CÂU HỎI, chờ duyệt để code (lập 2026-11-20).** Chủ dự án chốt Q1–Q6 cùng ngày (Q4 đổi thành **có** tự chấm lại; thêm chấm lại khi sửa tin đang hiển thị). Chưa code. Quyết định kiến trúc: AD-29 trong `docs/02-architecture/ARCHITECTURE_DECISIONS.md` (bản đề xuất). Frontend: `docs/05-frontend/phases/job-quality-moderation/PLAN.md`. Backlog: dòng 📌 ở mục 2 của `docs/01-project/FEATURE_BACKLOG.md`.
+> **Trạng thái: ĐANG LÀM (lập 2026-11-20).** Chủ dự án chốt Q1–Q7 cùng ngày (Q4 đổi thành **có** tự chấm lại; thêm chấm lại khi sửa tin đang hiển thị) và duyệt code. Bước 1 xong, migration `20261120120000_add_job_quality_score` **đã áp lên Neon** (2026-11-20). Bước 2 xong (bộ chấm thuần + 18 unit test). Quyết định kiến trúc: AD-29 trong `docs/02-architecture/ARCHITECTURE_DECISIONS.md` (bản đề xuất). Frontend: `docs/05-frontend/phases/job-quality-moderation/PLAN.md`. Backlog: dòng 📌 ở mục 2 của `docs/01-project/FEATURE_BACKLOG.md`.
 
 ## Mục tiêu
 
@@ -156,7 +156,7 @@ Mỗi mã lỗi của tiêu chí 1–5 gắn với một lý do chọn sẵn c�
 |---|---|
 | Thiếu thông tin | tiêu chí 1, `DESCRIPTION_TOO_SHORT`, `REQUIREMENTS_TOO_SHORT`, `ADDRESS_VAGUE` |
 | Thông tin không hợp lệ | `SALARY_INVALID`, `SALARY_RANGE_WIDE`, `DEADLINE_TOO_SOON`, `INTERN_EXPERIENCE_HIGH`, `TOO_MANY_REQUIRED_SKILLS` |
-| Nội dung không phù hợp | `TITLE_SHOUTING`, `SPAMMY_FORMAT`, `CONTACT_IN_CONTENT`, `OFF_PLATFORM_CONTACT`, `TOO_GOOD_TO_BE_TRUE`, `INTERN_SALARY_OUTLIER` |
+| Nội dung không phù hợp | `TITLE_LENGTH`, `TITLE_SHOUTING`, `SPAMMY_FORMAT`, `CONTACT_IN_CONTENT`, `OFF_PLATFORM_CONTACT`, `TOO_GOOD_TO_BE_TRUE`, `INTERN_SALARY_OUTLIER` |
 | Vi phạm chính sách | `ASKS_FOR_MONEY` |
 | (không đưa vào lý do) | `SALARY_NEGOTIABLE`, `SALARY_ONE_SIDED`, `INTERN_EXPERIENCE_SOME`, `REQUIREMENTS_NOT_CONFIRMED`, `PENDING_SKILLS`, `DESCRIPTION_SHORT`, `RESUBMITTED_UNCHANGED`, `REJECTED_MANY_TIMES`, tiêu chí 6 |
 
@@ -231,6 +231,7 @@ approve / reject (một tin, bulk) ──► JobPostsService
   - `NotificationType` thêm `JOB_POST_QUALITY_DROPPED` (Admin: tin đang hiển thị bị sửa và tụt điểm, bước 4b).
 - Migration `202611xx_add_job_quality_score`: thêm cột, enum, giá trị enum thông báo, index. Backfill `submittedAt` bằng SQL từ dòng `SUBMITTED` mới nhất của mỗi tin.
 - `prisma generate`, `tsc`.
+- **Đã làm (2026-11-20):** schema + migration `20261120120000_add_job_quality_score` (sinh bằng `prisma migrate diff` giữa schema HEAD và schema mới, không đụng DB). Khai báo luôn payload / mẫu / nhóm của `JOB_POST_QUALITY_DROPPED` (server `notification.types.ts`, `notification-templates.ts`, `notification-groups.ts`; `shared-types` `NotificationType`; web `lib/notifications.ts` nhóm + nhãn nút) vì các map `Record<NotificationType, …>` bắt buộc đủ khoá. Icon / màu của thông báo để F4b. `tsc` server + web sạch, 665/665 unit test. Đã áp migration lên Neon (`npm run db:deploy`, 2026-11-20).
 
 ### Bước 2 — Bộ chấm thuần và cấu hình
 
@@ -241,6 +242,17 @@ approve / reject (một tin, bulk) ──► JobPostsService
   - `buildRejectReason(result): string | null`: lý do tự sinh; `null` khi không có lỗi nào được phép đưa vào lý do.
   - `contentHash(input)`, `foldText(s)` (bỏ dấu, chữ thường).
 - `JobQualityInput` gồm: các trường của tin, kỹ năng (mức + trạng thái), ngành, và tín hiệu đã nạp (`previousContentHash`, `lastModerationAction`, `rejectionCount`, `companyRetractions180d`, `companyConfirmedReports180d`, `companyOpenReports`, `companySubmitCount`, `companyRejectCount`, `companyApprovedCount`).
+
+- **Đã làm (2026-11-20):** `job-quality.config.ts`, `job-quality.ts`, `tests/unit/job-quality.test.ts` (18 test, gồm hai ví dụ 91 / 76 điểm của plan). Toàn bộ 683/683 unit test qua. Khác / bổ sung so với mô tả trên:
+  - **Tín hiệu "gửi lại không sửa"** là một cờ `signals.resubmittedUnchanged` do loader (bước 4) tính, thay cho cặp `previousContentHash` + `lastModerationAction`. Lý do: lúc chấm lại một tin `PENDING` (sự kiện công ty, nút Chấm lại), thao tác gần nhất đã là `SUBMITTED` và `submittedContentHash` đã là mã của lần gửi này, nên không còn gì để so; nếu tính lại từ hai giá trị đó thì lỗi `RESUBMITTED_UNCHANGED` sẽ biến mất sau lần chấm lại. Loader: lúc gửi duyệt so mã mới với `submittedContentHash` cũ khi thao tác trước là `REJECTED`; lúc chấm lại tin `PENDING` thì giữ cờ từ `qualityBreakdown` của lần chấm trước; tin ở trạng thái khác thì `false`.
+  - **Phủ định trước từ khoá đòi tiền** không bị tính (`QUALITY_MONEY_NEGATION`): "miễn phí đào tạo", "không thu phí hồ sơ", "không cần nộp tiền hay đặt cọc" là quyền lợi. Phủ định ở câu khác ("Không cần kinh nghiệm. Đặt cọc 500k") vẫn bị bắt.
+  - Từ khoá khớp theo ranh giới từ ("Zalora" không phải "zalo"); câu giải thích trích nguyên cụm từ gốc có dấu.
+  - Số điện thoại không bắt đầu sau chữ số / dấu chấm, để khoảng lương "8.000.000-10.000.000" không bị nhầm. Link chỉ tính `http(s)://`, `www.` và tên miền `.com / .vn / .com.vn / .net.vn / .me / .ly` (không bắt "ASP.NET", "Node.js").
+  - `SPAMMY_FORMAT`: ký tự lặp không tính chữ số ("10000" không phải spam).
+  - Không ghi lương và không chọn "Thoả thuận" (chỉ gặp khi chấm lại tin nháp) ⇒ `SALARY_NEGOTIABLE` với câu "Chưa ghi mức lương".
+  - `DEADLINE_TOO_SOON` tính từ `submittedAt` (lúc gửi duyệt), không phải lúc chấm lại.
+  - Mã băm gộp khoảng trắng, sắp kỹ năng / ngành theo id, **không** gồm hạn nộp và `requirementsConfirmedAt` (đổi những thứ đó không phải "sửa theo góp ý").
+  - `TITLE_LENGTH` đưa vào lý do "Nội dung không phù hợp" (bảng lý do trước đây bỏ sót mã này).
 
 ### Bước 3 — Hiệu chỉnh trên dữ liệu (trước khi chốt số)
 

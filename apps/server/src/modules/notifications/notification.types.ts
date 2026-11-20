@@ -133,6 +133,17 @@ export interface NotificationPayloadMap {
   };
   // AD-26 D10 — nhắc một lần (notifyOnce, khoá profile-skills-reminder:<ứng viên>). Nội dung cố định.
   PROFILE_SKILLS_REMINDER: Record<string, never>;
+  // AD-29 Q7 — gửi mọi Admin khi tin đang hiển thị được sửa và chuyển sang xấu (tụt xuống
+  // SUGGEST_REJECT hoặc mới có cờ chặn). Sửa tiếp mà vẫn xấu thì không gửi lại.
+  JOB_POST_QUALITY_DROPPED: {
+    jobPostId: string;
+    jobPostTitle: string;
+    companyName: string;
+    /** Điểm chất lượng sau lần sửa. */
+    score: number;
+    /** true = có cờ chặn (ví dụ yêu cầu nộp tiền). */
+    blocked: boolean;
+  };
 }
 
 // Khoá của map phải trùng khít enum Prisma: thêm giá trị vào enum mà quên khai

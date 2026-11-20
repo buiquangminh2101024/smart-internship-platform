@@ -1141,7 +1141,7 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 
 **Ngày:** 2026-11-20 · **Phase liên quan:** không thuộc phase đánh số. Dòng 📌 ở mục 2 của `docs/01-project/FEATURE_BACKLOG.md`. Kế hoạch chi tiết: `docs/06-backend/job-quality-moderation/PLAN.md`, `docs/05-frontend/phases/job-quality-moderation/PLAN.md`.
 
-> **Trạng thái: ĐỀ XUẤT, câu hỏi đã chốt (2026-11-20), chờ duyệt để code.** Chủ dự án chốt Q1–Q7 của plan backend. Chưa code, chưa có migration.
+> **Trạng thái: ĐÃ DUYỆT, đang triển khai (2026-11-20).** Chủ dự án chốt Q1–Q7 của plan backend và duyệt code. Migration `20261120120000_add_job_quality_score` đã áp lên Neon; bộ chấm thuần (bước 2) đã có.
 
 **Bối cảnh:** Admin phải mở từng tin để duyệt hoặc từ chối. Hàng đợi chỉ xem được trang đầu, sắp theo ngày tạo tin thay vì ngày gửi duyệt. `approve` / `reject` / `retract` kiểm trạng thái ngoài transaction, nên hai admin xử lý cùng lúc có thể cùng thành công. Duyệt xong hệ thống tự gửi lời mời ngay (AD-23), nên duyệt nhầm tin kém hoặc tin lừa đảo ảnh hưởng tới ứng viên trước khi Admin kịp thu hồi.
 

@@ -282,6 +282,16 @@ const templates: { [T in NotificationType]: Renderer<T> } = {
     email: null,
   }),
 
+  // AD-29 Q7 — cho Admin, chỉ trong app. Không tự gỡ tin; Admin mở tin để quyết định thu hồi.
+  JOB_POST_QUALITY_DROPPED: (data) => ({
+    title: "Tin đang hiển thị bị tụt điểm",
+    body: data.blocked
+      ? `Tin "${data.jobPostTitle}" của ${data.companyName} vừa được sửa và có dấu hiệu rủi ro (${data.score} điểm).`
+      : `Tin "${data.jobPostTitle}" của ${data.companyName} vừa được sửa và tụt xuống vùng đề xuất từ chối (${data.score} điểm).`,
+    link: `/admin/jobs/${data.jobPostId}`,
+    email: null,
+  }),
+
   // B3, AD-15. Hộp lời mời của Candidate nằm ở trang hồ sơ (frontend PLAN CO-3).
   CANDIDATE_OUTREACH_INVITATION_RECEIVED: (data, ctx) => {
     const title = "Bạn nhận được lời mời ứng tuyển";

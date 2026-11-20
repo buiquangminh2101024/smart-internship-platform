@@ -58,7 +58,9 @@ export type NotificationType =
   | "APPLICATIONS_NEED_ATTENTION"
   // AD-26 — tin mới phù hợp (gộp 1 thông báo/ứng viên/ngày); nhắc một lần thêm kỹ năng
   | "JOB_ALERT"
-  | "PROFILE_SKILLS_REMINDER";
+  | "PROFILE_SKILLS_REMINDER"
+  // AD-29 — Admin: tin đang hiển thị được sửa và tụt xuống vùng đề xuất từ chối / mới có cờ chặn
+  | "JOB_POST_QUALITY_DROPPED";
 
 /** Loại vấn đề của form /support (AD-17). */
 export type SupportCategory = "ACCOUNT_SUSPENDED" | "OTHER";
