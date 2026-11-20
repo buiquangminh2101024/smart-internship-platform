@@ -40,6 +40,31 @@ Các bước F1–F6 bên dưới giữ nguyên nội dung, chỉ gộp lại kh
   - **Lệch so với F4b:** F4b ghi màu đỏ, nhưng sip-ui quy định mọi thông báo cảnh báo dùng marigold, kể cả tin bị hạ. Để đồng bộ, đợt này dùng marigold; nếu muốn đỏ thì `NotificationCenter` phải có thêm một tông màu mới.
 - Kiểm: `tsc` web sạch; eslint sạch trên các file đã sửa (28 lỗi còn lại đều có từ trước, ở file khác). Chưa kiểm trên trình duyệt: chuông thông báo kiểm ở đợt 4 (F6 bước 9), danh sách kiểm ở đợt 2.
 
+**Đợt 2 — đã làm (2026-11-20):**
+
+- **Trang `/admin/jobs`** viết lại:
+  - Trạng thái, vùng và sắp xếp nằm trên URL (`router.replace`). Sắp xếp mặc định không ghi lên URL. Giá trị sai thì quay về mặc định.
+  - Tab vùng gạch chân, có số đếm từ `pendingByBand`, phím ←/→/Home/End. Tab "Chưa chấm" chỉ hiện khi có tin.
+  - Ô sắp xếp: khi lọc "Chờ duyệt" có Gửi trước / Điểm cao nhất / Điểm thấp nhất; khi lọc "Đang hiển thị" có Mới tạo trước / Điểm thấp nhất / Điểm cao nhất; trạng thái khác không có ô này.
+  - Mỗi dòng tin có ô chọn (chỉ tin chờ duyệt), ngày gửi duyệt (`submittedAt`, không có thì dùng ngày tạo), `JobQualityBadge` và 1–2 lỗi nặng nhất (cờ chặn chữ đỏ).
+  - Cuối danh sách có "Đang hiện X / N tin" và nút "Xem thêm". Mỗi tab có câu riêng khi rỗng, có trạng thái lỗi và nút "Thử lại".
+- **Chọn và thao tác hàng loạt:**
+  - Ô "Chọn N tin đang hiện" (ba trạng thái).
+  - Nút "Chọn tất cả tin trong vùng" chỉ có ở tab Đề xuất duyệt và Đề xuất từ chối. Nút này tải thêm trang cho tới khi mọi tin được chọn đều có trên trang, để hộp thoại hiện đủ tên và lý do.
+  - Đổi bộ lọc thì bỏ chọn.
+  - Thanh chọn dùng lại `SelectionBar`. Chọn quá 50 tin thì hai nút mờ và có câu "Mỗi lần xử lý tối đa 50 tin".
+- **Hộp thoại** (`components/admin/JobBulkDialogs.tsx`):
+  - `BulkApproveDialog` dùng `Dialog` chứ không dùng `ConfirmDialog`, vì phải liệt kê tên tin. Tin ngoài vùng đề xuất duyệt được cảnh báo, kèm nút "Bỏ chọn K tin này".
+  - `BulkRejectDialog` hiện lý do tự sinh của từng tin. Có tuỳ chọn "Dùng một lý do chung" và cảnh báo khi có tin sẽ bị bỏ qua. Nút ghi đúng số tin sẽ bị từ chối; khoá khi không có tin nào từ chối được.
+  - `BulkResultDialog` liệt kê các tin bị bỏ qua kèm lý do.
+  - Lô còn `pending` thì trang hỏi lại mỗi 2 giây, tối đa 30 giây. Xong thì hiện toast số tin đã xử lý; nếu vẫn chưa xong thì hiện toast nhắc tải lại trang sau.
+- **Lý do chọn sẵn:** tách thành `JOB_REJECT_PRESET_REASONS` + `composeRejectReason` trong `job-post-display.ts`. `RejectJobModal` dùng lại, hành vi không đổi.
+- **Kiểm:**
+  - `tsc` và eslint của các file đã sửa đều sạch.
+  - Trình duyệt, desktop, qua 8080 (Admin): tab có số đếm (18 / 0 / 0 / 18), URL đổi theo tab, chọn tất cả trong vùng chọn được 18 tin.
+  - Đã mở hộp duyệt và hộp từ chối: hộp từ chối báo 11 tin chưa có lý do, nút ghi "Từ chối 7 tin". Không bấm xác nhận, vì đây là dữ liệu thật trên Neon.
+  - Màn hình 375px chưa kiểm được, vì Chrome không thu nhỏ cửa sổ; để sang đợt 4.
+
 ### F1 — Type và hook
 
 - Type mới trong `packages/shared-types` (backend bước 9): `JobQualityDto`, `JobQualityBand`, `BulkModerationResult`, `JobPost.submittedAt`, `JobPost.quality`, `JobPostStats.pendingByBand`.

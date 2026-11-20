@@ -1,4 +1,5 @@
 import type {
+  BulkModerationSkipReason,
   JobPostStatus,
   JobPostType,
   JobQualityBandFilter,
@@ -47,6 +48,34 @@ export function topQualityIssues(quality: JobQualityDto | null, limit = 2): JobQ
     .flatMap((criterion) => criterion.issues)
     .sort((a, b) => Number(flags.has(b.code)) - Number(flags.has(a.code)) || b.penalty - a.penalty)
     .slice(0, limit);
+}
+
+/** Trần số tin mỗi lần duyệt / từ chối hàng loạt — khớp `MODERATION_BATCH_LIMIT` phía server (Q2). */
+export const BULK_MODERATION_LIMIT = 50;
+
+/** Vì sao một tin bị bỏ qua trong lô (F3). */
+export const BULK_SKIP_REASON_LABEL: Record<BulkModerationSkipReason, string> = {
+  NOT_PENDING: "Đã được người khác xử lý",
+  REASON_REQUIRED: "Chưa có lý do từ chối",
+  NOT_FOUND: "Không còn tồn tại",
+  FAILED: "Lỗi khi xử lý, thử lại sau",
+};
+
+/**
+ * Lý do từ chối / thu hồi chọn sẵn (ảnh mẫu `Screenshot 2026-09-12 134745.png`). Dùng chung cho
+ * `RejectJobModal` và hộp từ chối hàng loạt.
+ */
+export const JOB_REJECT_PRESET_REASONS = [
+  "Thiếu thông tin",
+  "Nội dung không phù hợp",
+  "Thông tin không hợp lệ",
+  "Vi phạm chính sách",
+  "Khác",
+];
+
+/** Ghép lý do chọn sẵn + phần nhập tự do thành một chuỗi `reason`; "" khi không có gì. */
+export function composeRejectReason(checked: string[], detail: string): string {
+  return [checked.join(", "), detail.trim()].filter(Boolean).join(". ");
 }
 
 export const JOB_TYPE_LABEL: Record<JobPostType, string> = {
