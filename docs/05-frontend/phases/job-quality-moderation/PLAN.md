@@ -89,6 +89,54 @@ Các bước F1–F6 bên dưới giữ nguyên nội dung, chỉ gộp lại kh
   - `splitRejectReason` và `composeRejectReason` ghép ngược ra đúng chuỗi ban đầu với 3 mẫu.
   - Để sang đợt 4 (F6), vì phải ghi dữ liệu: điền sẵn lý do trên tin thật có cờ chặn, nút "Chấm lại", lỗi 409, cảnh báo ở nút Thu hồi.
 
+#### Đợt 4 — đã làm (2026-11-21)
+
+Kiểm F6 qua gateway 8080 trên Neon, chỉ dùng tin thử `[Kiểm AD-29]` của Mây Xanh, không đụng 18 tin demo đang chờ duyệt. Không sửa code.
+
+- **Chuẩn bị:**
+  - Chủ dự án bật "Yêu cầu duyệt tin" cho Mây Xanh; kiểm xong mình tắt lại.
+  - Phần employer và ứng viên làm bằng API: gửi lại F và M, tạo #3 và #4 bằng cách chép nội dung G1. Phần Admin làm trên giao diện.
+- **Bước 1:** sau khi gửi duyệt, các tab hiện 19 / 0 / 2 / 21. Tin M được 73 điểm, đề xuất từ chối, có hai lỗi nặng nhất.
+- **Bước 2:**
+  - Tin F: 78 điểm, có cờ chặn.
+  - Hộp Từ chối tick sẵn "Vi phạm chính sách", ô chi tiết điền sẵn câu về "phí đào tạo".
+  - Bấm "Chấm lại": nút hiện đang chạy, dòng cuối đổi thành "00:10 … do Admin chấm lại".
+- **Bước 3:**
+  - Duyệt #3 ở trang chi tiết.
+  - Duyệt hàng loạt #4 cùng M và F: hộp cảnh báo "2 tin không nằm trong vùng đề xuất duyệt" kèm tên và điểm. "Bỏ chọn 2 tin này" làm hộp còn "Duyệt 1 tin".
+  - Sau khi duyệt: số đếm còn 18 / 0 / 2 / 20; #4 hiện ở trang công khai; Mây Xanh nhận thông báo "đã được duyệt".
+  - Không bấm "Chọn tất cả tin trong vùng" thật, để giữ nguyên 18 tin demo.
+- **Bước 4:**
+  - Từ chối hàng loạt M và F, không dùng lý do chung. Hộp hiện lý do tự sinh của từng tin.
+  - Toast "Đã từ chối 2 tin". Mây Xanh nhận đúng lý do riêng của từng tin.
+- **Bước 5:**
+  - Tab 2 đang mở F (vẫn là "Chờ duyệt") khi F bị từ chối ở tab 1. Bấm Duyệt ở tab 2 thì hiện "Tin đã được xử lý bởi quản trị viên khác…", trang tải lại và F thành Nháp.
+  - Nếu tab 2 được focus trước khi bấm, React Query tự tải lại và nút Duyệt biến mất. Đây cũng là hành vi đúng.
+- **Bước 6:**
+  - Ở bộ lọc Đang hiển thị, "Xem thêm" đưa danh sách từ 20 / 291 lên 40 / 291 tin.
+  - Tab, sắp xếp và trạng thái nằm trên URL; tải lại trang vẫn giữ.
+  - Hàng đợi chờ duyệt có 21 tin ⇒ "Xem thêm" tải được tin thứ 21.
+- **Bước 7:** cửa sổ không đổi cỡ được, nên đo bằng iframe rộng 375px.
+  - Trang hàng đợi, thanh chọn và trang chi tiết (mở hết sáu tiêu chí) đều không cuộn ngang.
+  - Hộp duyệt rộng 342px; hộp từ chối hàng loạt chiếm cả màn hình.
+  - Hàng tab vùng tự cuộn trong khung của nó.
+- **Bước 8 (Q4):**
+  - Ứng viên demo báo cáo #3 ⇒ M được chấm lại: uy tín công ty 100 → 90, tổng 73 → 72, dòng "Chấm lúc … khi công ty có báo cáo vi phạm…".
+  - Sau đó Admin bỏ qua báo cáo ở trang Báo cáo vi phạm.
+- **Bước 9 (Q7):**
+  - Sửa #4 đang hiển thị, thêm "đóng phí đào tạo" ⇒ chuông và trung tâm thông báo có "Tin đang hiển thị bị tụt điểm" (84 điểm, marigold).
+  - Bấm thông báo ⇒ mở trang chi tiết #4, thấy cờ chặn, dòng "khi tin đang hiển thị được sửa", và cảnh báo đỏ trên nút Thu hồi tin.
+  - Sửa lần hai mà vẫn còn phí ⇒ không có thông báo thứ hai.
+- **Dọn dữ liệu:**
+  - Quyền lợi của #4 về như cũ; #3 và #4 đã đóng; F và M ở Nháp.
+  - Báo cáo thử đã bỏ qua; "Yêu cầu duyệt tin" của Mây Xanh đã tắt.
+- **Ghi nhận, chưa sửa:**
+  - ~~Ở bộ lọc Đang hiển thị, "Điểm thấp nhất" xếp tin "Chưa chấm" lên đầu.~~ Nhận định sai, đã kiểm lại (2026-11-21):
+    - `moderationOrderBy` đã dùng `nulls: "last"` cho cả `score_asc` lẫn `score_desc`, nên tin chưa chấm vốn đã xếp cuối.
+    - Hai cách sắp xếp cho cùng danh sách toàn tin "Chưa chấm", vì hiện **không tin đang hiển thị nào có điểm**. Script `score-job-quality` mới ghi tin PENDING; tin thử từng được chấm đều đã đóng.
+    - Muốn "Điểm thấp nhất" có ích ở bộ lọc Đang hiển thị thì chủ dự án chạy `score-job-quality -- --status PUBLISHED` (chạy `--dry-run` trước). Lệnh này ghi lên Neon.
+  - `Toast` dùng chung không nằm trong vùng `aria-live`, nên trình đọc màn hình không đọc kết quả duyệt / từ chối. Đây là lỗi có sẵn của component, ngoài phạm vi đợt này.
+
 ### F1 — Type và hook
 
 - Type mới trong `packages/shared-types` (backend bước 9): `JobQualityDto`, `JobQualityBand`, `BulkModerationResult`, `JobPost.submittedAt`, `JobPost.quality`, `JobPostStats.pendingByBand`.
