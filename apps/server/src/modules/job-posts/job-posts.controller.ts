@@ -8,8 +8,9 @@ import type {
   JobPost,
   JobPostSearchQuery,
   JobPostStats,
-  JobPostStatus,
   JobQualityDto,
+  ModerationQueueIdsResponse,
+  ModerationQueueQuery,
   PaginatedResponse,
   RejectJobPostRequest,
   RetractJobPostRequest,
@@ -176,9 +177,21 @@ export class JobPostsController {
 
   listForModeration = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { status, cursor } = req.query as { status?: JobPostStatus; cursor?: string };
-      const result = await this.jobPostsService.listForModeration(status, cursor);
+      const { cursor, ...filter } = req.query as ModerationQueueQuery;
+      const result = await this.jobPostsService.listForModeration(filter, cursor);
       const body: ApiResponse<PaginatedResponse<JobPost>> = { success: true, data: result };
+      res.json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  moderationIds = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      // moderationIdsQuerySchema đã bỏ mọi khoá lạ (kể cả `cursor`).
+      const filter = req.query as Omit<ModerationQueueQuery, "cursor">;
+      const result = await this.jobPostsService.moderationIds(filter);
+      const body: ApiResponse<ModerationQueueIdsResponse> = { success: true, data: result };
       res.json(body);
     } catch (error) {
       next(error);

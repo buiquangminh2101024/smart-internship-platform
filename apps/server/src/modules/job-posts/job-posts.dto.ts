@@ -60,10 +60,26 @@ export const employerJobPostListQuerySchema = z
     path: ["attention"],
   });
 
-export const moderationQueueQuerySchema = z.object({
+/** AD-29 Q2 — trần số tin của một lần chọn / thao tác hàng loạt. */
+export const MODERATION_BATCH_LIMIT = 50;
+
+// AD-29 bước 6 — lọc theo vùng chất lượng (UNSCORED = chưa có điểm) và chọn thứ tự.
+const QUALITY_BAND_FILTERS = ["SUGGEST_APPROVE", "NEEDS_REVIEW", "SUGGEST_REJECT", "UNSCORED"] as const;
+const MODERATION_SORTS = ["submitted_asc", "score_desc", "score_asc", "created_desc"] as const;
+
+const moderationFilterFields = {
   status: z.enum(JOB_POST_STATUSES).optional(),
+  band: z.enum(QUALITY_BAND_FILTERS).optional(),
+  sort: z.enum(MODERATION_SORTS).optional(),
+};
+
+export const moderationQueueQuerySchema = z.object({
+  ...moderationFilterFields,
   cursor: z.string().optional(),
 });
+
+/** GET /admin/job-posts/ids — cùng bộ lọc với hàng đợi, không phân trang. */
+export const moderationIdsQuerySchema = z.object(moderationFilterFields);
 
 export const jobPostSearchQuerySchema = z.object({
   q: optionalText,

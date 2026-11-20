@@ -480,6 +480,8 @@ function buildJobPostsService(jobPost: ReturnType<typeof fullJobPost>) {
       findExistingSkillIds: async () => new Set(),
       findExistingMajorIds: async () => new Set(),
       createModerationAction: async () => {},
+      transitionIfStatus: async () => true,
+      findQuality: async () => ({ qualityScore: null, qualityBand: jobPost.qualityBand }),
       update: async (_id: string, data: object) => ({ ...jobPost, ...data }),
     },
     employerRepository: { findManyByCompanyId: async () => [] },

@@ -25,6 +25,7 @@ import {
   createJobPostSchema,
   employerJobPostListQuerySchema,
   jobPostSearchQuerySchema,
+  moderationIdsQuerySchema,
   moderationQueueQuerySchema,
   rejectJobPostSchema,
   retractJobPostSchema,
@@ -138,6 +139,11 @@ export function jobPostsRouter(container: AwilixContainer): Router {
   });
   router.get("/admin/job-posts/stats", ...adminGuard, (req, res, next) => {
     void resolveController().moderationStats(req, res, next);
+  });
+  // AD-29 bước 6 — id khớp bộ lọc (tối đa một lô) cho "Chọn tất cả tin trong vùng".
+  // Khai báo trước `/admin/job-posts/:id` để "ids" không bị hiểu là id tin.
+  router.get("/admin/job-posts/ids", ...adminGuard, validate(moderationIdsQuerySchema, "query"), (req, res, next) => {
+    void resolveController().moderationIds(req, res, next);
   });
   router.get("/admin/job-posts/:id", ...adminGuard, (req, res, next) => {
     void resolveController().moderationDetail(req, res, next);

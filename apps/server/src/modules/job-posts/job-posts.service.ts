@@ -13,6 +13,7 @@ import type {
   JobPostAttentionSummary,
   JobPostSearchQuery,
   JobPostStats,
+  ModerationQueueIdsResponse,
   PaginatedResponse,
   SubmitJobPostResponse,
   UpdateJobPostRequest,
@@ -36,7 +37,9 @@ import {
   type JobPostRepository,
   type JobPostWithRelations,
   type JobPostWriteData,
+  type ModerationQueueFilter,
 } from "./job-post.repository";
+import { MODERATION_BATCH_LIMIT } from "./job-posts.dto";
 import type { JobQualityCompanyTrigger, JobQualityService } from "./job-quality.service";
 
 // Employer tự chọn ngày hết hạn nhưng không quá 90 ngày kể từ lúc đặt —
@@ -492,16 +495,24 @@ export class JobPostsService {
 
   // ─── Admin ───────────────────────────────────────────────────────────────
 
+  /** AD-29 bước 6 — hàng đợi lọc theo trạng thái / vùng, sắp theo `filter.sort`, kèm `total`. */
   async listForModeration(
-    status: JobPostStatus | undefined,
+    filter: ModerationQueueFilter,
     cursor: string | undefined,
   ): Promise<PaginatedResponse<JobPostDto>> {
-    const page = await this.jobPostRepository.findModerationQueue(status, cursor);
-    return this.toPage(page);
+    const page = await this.jobPostRepository.findModerationQueue(filter, cursor);
+    if (!page) throw new AppError(400, "Invalid cursor", "INVALID_CURSOR");
+    return { ...this.toPage(page), total: page.total };
+  }
+
+  /** Id khớp bộ lọc hàng đợi (tối đa một lô hàng loạt) — nút "Chọn tất cả tin trong vùng". */
+  async moderationIds(filter: ModerationQueueFilter): Promise<ModerationQueueIdsResponse> {
+    return this.jobPostRepository.findModerationIds(filter, MODERATION_BATCH_LIMIT);
   }
 
   async moderationStats(): Promise<JobPostStats> {
-    return this.countStats({});
+    const [stats, pendingByBand] = await Promise.all([this.countStats({}), this.jobPostRepository.countPendingByBand()]);
+    return { ...stats, pendingByBand };
   }
 
   async getForModeration(id: string): Promise<JobPostDto> {
@@ -515,8 +526,13 @@ export class JobPostsService {
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
-      await this.jobPostRepository.createModerationAction({ jobPostId: id, action: "APPROVED", actorId }, tx);
-      const result = await this.jobPostRepository.update(id, { status: "PUBLISHED", publishedAt: new Date() }, tx);
+      const result = await this.moderateTransition(
+        tx,
+        jobPost,
+        "PENDING",
+        { status: "PUBLISHED", publishedAt: new Date() },
+        { action: "APPROVED", actorId },
+      );
       await this.notifyCompanyEmployers(jobPost.companyId, "JOB_POST_APPROVED", { jobPostId: id, jobPostTitle: jobPost.title }, tx);
       await this.auditLogService.record(
         {
@@ -545,8 +561,7 @@ export class JobPostsService {
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
-      await this.jobPostRepository.createModerationAction({ jobPostId: id, action: "REJECTED", actorId, reason }, tx);
-      const result = await this.jobPostRepository.update(id, { status: "DRAFT" }, tx);
+      const result = await this.moderateTransition(tx, jobPost, "PENDING", { status: "DRAFT" }, { action: "REJECTED", actorId, reason });
       await this.notifyCompanyEmployers(
         jobPost.companyId,
         "JOB_POST_REJECTED",
@@ -582,8 +597,13 @@ export class JobPostsService {
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
-      await this.jobPostRepository.createModerationAction({ jobPostId: id, action: "RETRACTED", actorId, reason }, tx);
-      const result = await this.jobPostRepository.update(id, { status: "TAKEN_DOWN" }, tx);
+      const result = await this.moderateTransition(
+        tx,
+        jobPost,
+        "PUBLISHED",
+        { status: "TAKEN_DOWN" },
+        { action: "RETRACTED", actorId, reason },
+      );
       await this.notifyCompanyEmployers(
         jobPost.companyId,
         "JOB_POST_TAKEN_DOWN",
@@ -610,6 +630,36 @@ export class JobPostsService {
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
+
+  /**
+   * AD-29 (điểm 8) — bước đầu tiên của approve / reject / retract trong transaction:
+   * đổi trạng thái chỉ khi tin còn `from`. Admin khác đã xử lý trước ⇒ ném 409 ngay,
+   * transaction rollback, không ghi moderation action / thông báo / audit nào.
+   * Moderation action ghi kèm điểm và vùng của tin lúc quyết định: đọc lại SAU khi đổi
+   * trạng thái (dòng tin đang bị khoá), không dùng bản đọc đầu hàm vì lối chấm nền
+   * (bước 4b) có thể đã ghi điểm mới xen giữa.
+   * Đọc lại tin sau khi ghi action để DTO trả về có action mới nhất (banner lý do).
+   */
+  private async moderateTransition(
+    tx: Prisma.TransactionClient,
+    jobPost: JobPostWithRelations,
+    from: JobPostStatus,
+    data: JobPostWriteData,
+    action: { action: "APPROVED" | "REJECTED" | "RETRACTED"; actorId: string; reason?: string },
+  ): Promise<JobPostWithRelations> {
+    const moved = await this.jobPostRepository.transitionIfStatus(jobPost.id, from, data, tx);
+    if (!moved) {
+      throw new AppError(409, "Tin đã được xử lý bởi người khác");
+    }
+    const quality = await this.jobPostRepository.findQuality(jobPost.id, tx);
+    await this.jobPostRepository.createModerationAction(
+      { jobPostId: jobPost.id, ...action, qualityScore: quality?.qualityScore ?? null, qualityBand: quality?.qualityBand ?? null },
+      tx,
+    );
+    const result = await this.jobPostRepository.findById(jobPost.id, tx);
+    if (!result) throw new AppError(404, "Job post not found");
+    return result;
+  }
 
   private async notifyCompanyEmployers<T extends "JOB_POST_APPROVED" | "JOB_POST_REJECTED" | "JOB_POST_TAKEN_DOWN">(
     companyId: string,

@@ -1453,6 +1453,35 @@ export interface JobPostStats {
   pending: number;
   draft: number;
   closed: number;
+  /** AD-29 — số tin PENDING theo vùng chất lượng; chỉ GET /admin/job-posts/stats có. */
+  pendingByBand?: Record<JobQualityBandFilter, number>;
+}
+
+/** AD-29 — bộ lọc vùng của hàng đợi Admin; `UNSCORED` = tin chưa có điểm. */
+export type JobQualityBandFilter = JobQualityBand | "UNSCORED";
+
+/**
+ * AD-29 — thứ tự hàng đợi Admin. Mặc định `submitted_asc` khi lọc PENDING (gửi trước
+ * xử lý trước), `created_desc` cho trạng thái khác. Tin chưa có giá trị luôn xếp cuối.
+ */
+export type ModerationQueueSort = "submitted_asc" | "score_desc" | "score_asc" | "created_desc";
+
+/** Query của GET /admin/job-posts (có `cursor`) và GET /admin/job-posts/ids (không có). */
+export interface ModerationQueueQuery {
+  status?: JobPostStatus;
+  band?: JobQualityBandFilter;
+  sort?: ModerationQueueSort;
+  cursor?: string;
+}
+
+/**
+ * GET /admin/job-posts/ids — tối đa 50 id (trần một lần thao tác hàng loạt, Q2)
+ * khớp bộ lọc, theo đúng sort.
+ */
+export interface ModerationQueueIdsResponse {
+  ids: string[];
+  /** Số tin khớp bộ lọc; lớn hơn `ids.length` nghĩa là danh sách đã bị cắt. */
+  total: number;
 }
 
 // ─── CV & Saved Jobs (Phase 7) ───────────────────────────────────────────
