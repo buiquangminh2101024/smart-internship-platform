@@ -30,6 +30,7 @@ import { ToastViewport, type ToastData } from "@/components/ui/Toast";
 import { DashButton } from "@/components/dashboard/DashButton";
 import { RowCheckbox, SelectionBar, TriStateCheckbox } from "@/components/interviews/SelectionBar";
 import { JobQualityBadge } from "@/components/admin/JobQualityBadge";
+import { JobQualityLegendButton } from "@/components/admin/JobQualityLegendDialog";
 import {
   BulkApproveDialog,
   BulkRejectDialog,
@@ -286,9 +287,12 @@ function AdminJobQueue() {
 
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-6 px-4 py-12 sm:px-6">
-      <div className="grid gap-1">
-        <h1 className="text-2xl font-semibold text-text-strong">Kiểm duyệt tin tuyển dụng</h1>
-        <p className="text-sm text-text-muted">Xem và xử lý các tin tuyển dụng cần kiểm duyệt.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="grid gap-1">
+          <h1 className="text-2xl font-semibold text-text-strong">Kiểm duyệt tin tuyển dụng</h1>
+          <p className="text-sm text-text-muted">Xem và xử lý các tin tuyển dụng cần kiểm duyệt.</p>
+        </div>
+        <JobQualityLegendButton size="md" />
       </div>
 
       {stats ? (

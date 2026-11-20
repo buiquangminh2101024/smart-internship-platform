@@ -78,6 +78,22 @@ export function composeRejectReason(checked: string[], detail: string): string {
   return [checked.join(", "), detail.trim()].filter(Boolean).join(". ");
 }
 
+/**
+ * Tách lý do tự sinh của server ("Thiếu thông tin, Vi phạm chính sách. Chi tiết…") thành các lý do
+ * chọn sẵn + phần chi tiết, để điền sẵn vào `RejectJobModal` (F4). Phần đầu không khớp lý do chọn
+ * sẵn nào thì đưa cả chuỗi vào phần chi tiết. Ngược với `composeRejectReason`.
+ */
+export function splitRejectReason(reason: string): { checked: string[]; detail: string } {
+  const cut = reason.indexOf(". ");
+  if (cut > 0) {
+    const head = reason.slice(0, cut).split(", ");
+    if (head.every((part) => JOB_REJECT_PRESET_REASONS.includes(part))) {
+      return { checked: head, detail: reason.slice(cut + 2).trim() };
+    }
+  }
+  return { checked: [], detail: reason.trim() };
+}
+
 export const JOB_TYPE_LABEL: Record<JobPostType, string> = {
   INTERNSHIP: "Thực tập sinh",
   PART_TIME: "Bán thời gian",

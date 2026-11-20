@@ -65,6 +65,30 @@ Các bước F1–F6 bên dưới giữ nguyên nội dung, chỉ gộp lại kh
   - Đã mở hộp duyệt và hộp từ chối: hộp từ chối báo 11 tin chưa có lý do, nút ghi "Từ chối 7 tin". Không bấm xác nhận, vì đây là dữ liệu thật trên Neon.
   - Màn hình 375px chưa kiểm được, vì Chrome không thu nhỏ cửa sổ; để sang đợt 4.
 
+**Đợt 3 — đã làm (2026-11-20):**
+
+- **Thẻ "Điểm chất lượng"** (`components/admin/JobQualityCard.tsx`):
+  - Hiện ở mọi trạng thái của tin, rộng hết trang, đặt ngay dưới thẻ tiêu đề tin. Không để ở cột phải vì cột này dính khi cuộn; sáu tiêu chí mở ra sẽ dài hơn màn hình.
+  - Điểm tổng, nhãn vùng, cờ chặn nền đỏ ("… — không thể vào vùng đề xuất duyệt").
+  - Sáu tiêu chí dùng `<details>`: tên, trọng số, thanh điểm (dưới 40 đỏ, dưới 80 marigold, còn lại xanh), điểm số. Mở ra thấy từng lỗi và "−N". Tiêu chí không có lỗi thì hiện dấu tích, không mở được.
+  - Dòng cuối: "Chấm lúc HH:mm DD/MM/YYYY {lý do} · phiên bản thuật toán vN", kèm "Đã có phiên bản mới" khi `outdated`. Có nút "Chấm lại".
+  - Tin chưa có điểm: "Tin chưa được chấm." kèm nút "Chấm lại".
+- **Trang chi tiết** `/admin/jobs/[id]`:
+  - Phần kiểm tự động của `ReviewChecklist` đã bỏ. Kinh nghiệm, ngành phù hợp và phần "Admin tự đánh giá" giữ nguyên.
+  - Hiện "Ngày gửi duyệt" theo `submittedAt`.
+  - Tin đang hiển thị bị đề xuất từ chối hoặc có cờ chặn: cảnh báo đỏ phía trên nút Thu hồi tin.
+  - Gặp lỗi 409: đóng hộp thoại, báo "Tin đã được xử lý bởi quản trị viên khác" và tải lại tin.
+  - Từ chối: `RejectJobModal` có thêm prop `initialReason`. `splitRejectReason` tách lý do tự sinh thành các ô chọn sẵn và phần chi tiết. Thu hồi tin không truyền prop này nên hành vi giữ nguyên.
+- **F5:**
+  - Nội dung chú giải ở `lib/job-quality-legend.ts`, kèm `QUALITY_LEGEND_VERSION` và nhãn lý do chấm.
+  - `JobQualityLegendButton` mở `Dialog` gồm sáu tiêu chí và trọng số, ba vùng, cờ chặn và một câu nhắc Admin vẫn là người quyết định.
+  - Nút đặt ở đầu trang hàng đợi và trên thẻ điểm.
+- **Kiểm:**
+  - `tsc` và eslint đều sạch.
+  - Trình duyệt, desktop: hộp "Cách tính điểm" mở và đóng bằng Esc; trang chi tiết tin `clargedemojob0150` hiện 98/100, Đề xuất duyệt, tiêu chí 2 được 90 và mở ra thấy lỗi "−10", dòng "Chấm lúc … do hệ thống chấm bổ sung · phiên bản thuật toán v1".
+  - `splitRejectReason` và `composeRejectReason` ghép ngược ra đúng chuỗi ban đầu với 3 mẫu.
+  - Để sang đợt 4 (F6), vì phải ghi dữ liệu: điền sẵn lý do trên tin thật có cờ chặn, nút "Chấm lại", lỗi 409, cảnh báo ở nút Thu hồi.
+
 ### F1 — Type và hook
 
 - Type mới trong `packages/shared-types` (backend bước 9): `JobQualityDto`, `JobQualityBand`, `BulkModerationResult`, `JobPost.submittedAt`, `JobPost.quality`, `JobPostStats.pendingByBand`.
