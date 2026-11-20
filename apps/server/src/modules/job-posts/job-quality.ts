@@ -7,6 +7,7 @@ import {
   QUALITY_BANDS,
   QUALITY_BLOCKING_CODES,
   QUALITY_CRITERIA,
+  QUALITY_HARD_FLOOR_EXEMPT,
   QUALITY_KEYWORDS,
   QUALITY_MONEY_NEGATION,
   QUALITY_PENALTIES,
@@ -56,7 +57,6 @@ export interface JobQualityInput {
   /** Lúc gửi duyệt gần nhất; mốc tính "hạn nộp còn bao lâu". null ⇒ dùng `now`. */
   submittedAt: Date | null;
   minExperienceYears: number | null;
-  requirementsConfirmedAt: Date | null;
   skills: ReadonlyArray<{ skillId: string; importance: SkillImportance; status: CatalogEntryStatus }>;
   majors: ReadonlyArray<{ majorId: string; relevance: MajorRelevance }>;
   signals: JobQualitySignals;
@@ -242,7 +242,6 @@ function scoreInternshipFit(input: JobQualityInput, add: IssueSink) {
   const required = input.skills.filter((s) => s.importance === "REQUIRED").length;
   if (required > T.maxRequiredSkills)
     add("TOO_MANY_REQUIRED_SKILLS", `Quá nhiều kỹ năng bắt buộc (${required}, nên tối đa ${T.maxRequiredSkills}).`);
-  if (!input.requirementsConfirmedAt) add("REQUIREMENTS_NOT_CONFIRMED", "Nhà tuyển dụng chưa xác nhận yêu cầu bằng AI.");
   if (input.skills.some((s) => s.status === "PENDING")) add("PENDING_SKILLS", "Có kỹ năng mới đang chờ duyệt vào danh mục.");
 }
 
@@ -318,9 +317,10 @@ export function scoreJobPost(input: JobQualityInput, now: Date): JobQualityResul
   const score = Math.round(criteria.reduce((sum, c) => sum + c.score * c.weight, 0) / 100);
   const flags = criteria.flatMap((c) => c.issues.map((i) => i.code)).filter((code) => QUALITY_BLOCKING_CODES.has(code));
   const belowFloor = criteria.some((c) => c.score < QUALITY_BANDS.criterionFloor);
+  const belowHardFloor = criteria.some((c) => !QUALITY_HARD_FLOOR_EXEMPT.has(c.key) && c.score < QUALITY_BANDS.criterionHardFloor);
 
   let band: JobQualityBand;
-  if (score < QUALITY_BANDS.rejectBelow || flags.length > 0) band = "SUGGEST_REJECT";
+  if (score < QUALITY_BANDS.rejectBelow || flags.length > 0 || belowHardFloor) band = "SUGGEST_REJECT";
   else if (score >= QUALITY_BANDS.approveMin && !belowFloor) band = "SUGGEST_APPROVE";
   else band = "NEEDS_REVIEW";
 
@@ -354,7 +354,7 @@ export function buildRejectReason(result: Pick<JobQualityResult, "criteria">): s
  * id). Không gồm hạn nộp và các cài đặt (tự mời, tự xử lý hồ sơ): đổi những thứ đó không phải
  * "sửa theo góp ý".
  */
-export function contentHash(input: Omit<JobQualityInput, "signals" | "submittedAt" | "expiresAt" | "requirementsConfirmedAt">): string {
+export function contentHash(input: Omit<JobQualityInput, "signals" | "submittedAt" | "expiresAt">): string {
   const payload = [
     clean(input.title),
     clean(input.description),

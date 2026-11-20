@@ -9,7 +9,7 @@ const NOW = new Date("2026-11-20T03:00:00Z");
 const DAY = 86_400_000;
 
 // Ví dụ trong plan: 240 ký tự mô tả, có yêu cầu, không quyền lợi, lương 3–5 triệu,
-// chưa xác nhận yêu cầu bằng AI, công ty chưa có tin nào được duyệt ⇒ 91 điểm.
+// công ty chưa có tin nào được duyệt ⇒ 93 điểm.
 const DESCRIPTION_240 = "Tham gia phát triển API cho hệ thống quản lý đơn hàng bằng NodeJS và PostgreSQL. ".repeat(3).slice(0, 240);
 
 function baseInput(overrides: Partial<JobQualityInput> = {}, signals: Partial<JobQualityInput["signals"]> = {}): JobQualityInput {
@@ -28,7 +28,6 @@ function baseInput(overrides: Partial<JobQualityInput> = {}, signals: Partial<Jo
     expiresAt: new Date(NOW.getTime() + 30 * DAY),
     submittedAt: NOW,
     minExperienceYears: null,
-    requirementsConfirmedAt: null,
     skills: [
       { skillId: "s-node", importance: "REQUIRED", status: "APPROVED" },
       { skillId: "s-sql", importance: "PREFERRED", status: "APPROVED" },
@@ -52,7 +51,7 @@ function baseInput(overrides: Partial<JobQualityInput> = {}, signals: Partial<Jo
 const codes = (r: JobQualityResult) => r.criteria.flatMap((c) => c.issues.map((i) => i.code));
 const criterion = (r: JobQualityResult, key: string) => r.criteria.find((c) => c.key === key)!;
 
-test("ví dụ của plan: 91 điểm, đề xuất duyệt", () => {
+test("ví dụ của plan: 93 điểm, đề xuất duyệt", () => {
   assert.equal(DESCRIPTION_240.length, 240);
   const r = scoreJobPost(baseInput(), NOW);
   assert.deepEqual(
@@ -61,21 +60,21 @@ test("ví dụ của plan: 91 điểm, đề xuất duyệt", () => {
       ["COMPLETENESS", 80],
       ["CONTENT", 90],
       ["TRANSPARENCY", 100],
-      ["INTERNSHIP_FIT", 80],
+      ["INTERNSHIP_FIT", 100],
       ["RISK", 100],
       ["COMPANY", 90],
     ],
   );
-  assert.equal(r.score, 91);
+  assert.equal(r.score, 93);
   assert.equal(r.band, "SUGGEST_APPROVE");
   assert.deepEqual(r.flags, []);
   assert.equal(r.version, 1);
 });
 
-test("cùng tin có 'phí đào tạo': 76 điểm nhưng cờ chặn ⇒ đề xuất từ chối", () => {
+test("cùng tin có 'phí đào tạo': 78 điểm nhưng cờ chặn ⇒ đề xuất từ chối", () => {
   const r = scoreJobPost(baseInput({ description: DESCRIPTION_240 + " Ứng viên nộp phí đào tạo 500k." }), NOW);
   assert.equal(criterion(r, "RISK").score, 40);
-  assert.equal(r.score, 76);
+  assert.equal(r.score, 78);
   assert.deepEqual(r.flags, ["ASKS_FOR_MONEY"]);
   assert.equal(r.band, "SUGGEST_REJECT");
   assert.match(criterion(r, "RISK").issues[0].message, /"phí đào tạo"/);
@@ -160,9 +159,9 @@ test("tiêu chí 3: các trường hợp lương, địa chỉ, hạn nộp", ()
 
 test("tiêu chí 4: kinh nghiệm chỉ xét tin thực tập; nhiều kỹ năng bắt buộc; kỹ năng chờ duyệt", () => {
   const skills = Array.from({ length: 9 }, (_, i) => ({ skillId: `s${i}`, importance: "REQUIRED" as const, status: i === 0 ? ("PENDING" as const) : ("APPROVED" as const) }));
-  const r = scoreJobPost(baseInput({ minExperienceYears: 2, skills, requirementsConfirmedAt: NOW }), NOW);
+  const r = scoreJobPost(baseInput({ minExperienceYears: 2, skills }), NOW);
   assert.deepEqual(criterion(r, "INTERNSHIP_FIT").issues.map((i) => i.code), ["INTERN_EXPERIENCE_HIGH", "TOO_MANY_REQUIRED_SKILLS", "PENDING_SKILLS"]);
-  assert.deepEqual(criterion(scoreJobPost(baseInput({ minExperienceYears: 0.5 }), NOW), "INTERNSHIP_FIT").issues.map((i) => i.code), ["INTERN_EXPERIENCE_SOME", "REQUIREMENTS_NOT_CONFIRMED"]);
+  assert.deepEqual(criterion(scoreJobPost(baseInput({ minExperienceYears: 0.5 }), NOW), "INTERNSHIP_FIT").issues.map((i) => i.code), ["INTERN_EXPERIENCE_SOME"]);
   assert.ok(!codes(scoreJobPost(baseInput({ jobType: "FULL_TIME", minExperienceYears: 3 }), NOW)).some((c) => c.startsWith("INTERN_")));
 });
 
@@ -186,7 +185,7 @@ test("tiêu chí 6: trừ theo số lần có trần; công ty bị từ chối 
 });
 
 test("điểm sàn: tổng ≥ 80 nhưng một tiêu chí < 50 ⇒ cần xem kỹ, không đề xuất duyệt", () => {
-  const good = { benefits: "Phụ cấp, laptop", requirementsConfirmedAt: NOW, description: DESCRIPTION_240.repeat(2) };
+  const good = { benefits: "Phụ cấp, laptop", description: DESCRIPTION_240.repeat(2) };
   const r = scoreJobPost(baseInput(good, { companyApprovedCount: 3, companyRetractions: 3 }), NOW);
   assert.ok(r.score >= 80, `score ${r.score}`);
   assert.equal(criterion(r, "COMPANY").score, 25);
@@ -206,6 +205,110 @@ test("vùng từ chối khi tổng < 50", () => {
   assert.deepEqual(r.flags, []);
 });
 
+// Bước 3 — tin mẫu cố ý xấu (chỉ trong test, không ghi DB): mỗi tin phải rơi đúng vùng.
+// Tin nền là một tin tốt, công ty đã có lịch sử duyệt sạch.
+const GOOD_SAMPLE = baseInput(
+  {
+    title: "Thực tập sinh Kinh doanh",
+    description:
+      "Hỗ trợ đội kinh doanh tìm kiếm khách hàng doanh nghiệp, chuẩn bị báo giá, cập nhật thông tin khách hàng trên CRM và tham gia các buổi gặp khách hàng cùng trưởng nhóm. Được hướng dẫn quy trình bán hàng B2B từ đầu, báo cáo tiến độ hằng tuần với người hướng dẫn.",
+    requirements: "Sinh viên năm 3, năm 4 khối kinh tế; giao tiếp tốt, chủ động, sử dụng thành thạo Excel.",
+    benefits: "Phụ cấp hằng tháng, có dấu thực tập, cơ hội lên nhân viên chính thức.",
+    salaryMin: 3_000_000,
+    salaryMax: 4_000_000,
+    address: "Tầng 5, 12 Nguyễn Huệ, Quận 1",
+  },
+  { companySubmitCount: 3, companyApprovedCount: 3 },
+);
+
+test("tin mẫu: tin tốt ⇒ đề xuất duyệt", () => {
+  const r = scoreJobPost(GOOD_SAMPLE, NOW);
+  assert.equal(r.band, "SUGGEST_APPROVE");
+  assert.ok(r.score >= 95, `score ${r.score}`);
+});
+
+test("tin mẫu: đòi phí hồ sơ ⇒ đề xuất từ chối dù tổng điểm còn cao", () => {
+  const r = scoreJobPost({ ...GOOD_SAMPLE, description: GOOD_SAMPLE.description + " Ứng viên trúng tuyển đóng phí hồ sơ 200.000đ trước khi nhận việc." }, NOW);
+  assert.ok(r.score >= 80, `score ${r.score}`);
+  assert.deepEqual(r.flags, ["ASKS_FOR_MONEY"]);
+  assert.equal(r.band, "SUGGEST_REJECT");
+});
+
+test("tin mẫu: lương thực tập 30 triệu + 'việc nhẹ lương cao' ⇒ không được đề xuất duyệt", () => {
+  const r = scoreJobPost(
+    { ...GOOD_SAMPLE, description: GOOD_SAMPLE.description + " Việc nhẹ lương cao, không cần kinh nghiệm.", salaryMin: 30_000_000, salaryMax: 35_000_000 },
+    NOW,
+  );
+  assert.ok(codes(r).includes("INTERN_SALARY_OUTLIER") && codes(r).includes("TOO_GOOD_TO_BE_TRUE"));
+  assert.notEqual(r.band, "SUGGEST_APPROVE");
+});
+
+test("tin mẫu: chỉ lương thực tập trên 20 triệu ⇒ cần xem kỹ (rủi ro 45 dưới sàn)", () => {
+  const r = scoreJobPost({ ...GOOD_SAMPLE, salaryMin: 25_000_000, salaryMax: 30_000_000 }, NOW);
+  assert.equal(criterion(r, "RISK").score, 45);
+  assert.ok(r.score >= 80, `score ${r.score}`);
+  assert.equal(r.band, "NEEDS_REVIEW");
+});
+
+test("tin mẫu: mời kết bạn Zalo + số điện thoại ⇒ cần xem kỹ (rủi ro dưới sàn), không đề xuất duyệt", () => {
+  const r = scoreJobPost(
+    { ...GOOD_SAMPLE, description: GOOD_SAMPLE.description + " Ứng viên quan tâm kết bạn Zalo 0912 345 678 để được phỏng vấn nhanh." },
+    NOW,
+  );
+  assert.equal(criterion(r, "RISK").score, 45);
+  assert.ok(r.score >= 80, `score ${r.score}`);
+  assert.equal(r.band, "NEEDS_REVIEW");
+});
+
+test("tin mẫu: mô tả 1 dòng, thiếu hết các mục ⇒ đề xuất từ chối do điểm sàn cứng, lý do 'Thiếu thông tin'", () => {
+  const r = scoreJobPost(
+    {
+      ...GOOD_SAMPLE,
+      title: "Tuyển gấp thực tập",
+      description: "Tuyển thực tập sinh làm việc văn phòng, lương cao, đi làm ngay.",
+      requirements: null,
+      benefits: null,
+      skills: [],
+      majors: [],
+      address: null,
+      salaryMin: null,
+      salaryMax: null,
+      isNegotiable: true,
+    },
+    NOW,
+  );
+  assert.ok(r.score >= 50, `score ${r.score}`);
+  assert.ok(criterion(r, "COMPLETENESS").score < 40);
+  assert.deepEqual(r.flags, []);
+  assert.equal(r.band, "SUGGEST_REJECT");
+  assert.match(buildRejectReason(r) ?? "", /^Thiếu thông tin/);
+});
+
+test("điểm sàn cứng không xét tiêu chí uy tín công ty", () => {
+  const r = scoreJobPost({ ...GOOD_SAMPLE, signals: { ...GOOD_SAMPLE.signals, companyRetractions: 3 } }, NOW);
+  assert.equal(criterion(r, "COMPANY").score, 25);
+  assert.notEqual(r.band, "SUGGEST_REJECT");
+});
+
+test("tin mẫu: gộp nhiều dấu hiệu xấu (viết hoa, Zalo, đặt cọc, thiếu nội dung) ⇒ đề xuất từ chối, tổng < 50", () => {
+  const r = scoreJobPost(
+    {
+      ...GOOD_SAMPLE,
+      title: "TUYỂN GẤP!!!! VIỆC NHẸ LƯƠNG CAO",
+      description: "Việc nhẹ lương cao, inbox Zalo 0912345678, đặt cọc 500k giữ chỗ.",
+      requirements: null,
+      benefits: null,
+      skills: [],
+      majors: [],
+      salaryMin: 30_000_000,
+      salaryMax: null,
+    },
+    NOW,
+  );
+  assert.ok(r.score < 50, `score ${r.score}`);
+  assert.equal(r.band, "SUGGEST_REJECT");
+});
+
 test("lý do từ chối tự sinh: đúng định dạng RejectJobModal, bỏ tiêu chí 6 và lỗi nhẹ", () => {
   const r = scoreJobPost(baseInput({ description: "Làm backend, đóng phí đào tạo trước khi nhận việc.", isNegotiable: true, salaryMin: null, salaryMax: null }), NOW);
   assert.equal(
@@ -223,7 +326,6 @@ test("mã băm: không đổi khi chỉ khác khoảng trắng / thứ tự kỹ
     title: "  Thực tập sinh   Backend NodeJS ",
     skills: [...a.skills].reverse(),
     expiresAt: new Date(NOW.getTime() + 60 * DAY),
-    requirementsConfirmedAt: NOW,
   });
   assert.equal(contentHash(a), contentHash(b));
   assert.equal(scoreJobPost(a, NOW).contentHash, contentHash(a));

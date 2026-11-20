@@ -35,6 +35,7 @@ Admin hiện phải mở từng tin để duyệt hoặc từ chối. Sau thay �
 - **Điểm tổng** = Σ (điểm tiêu chí × trọng số), làm tròn, thang 0–100.
 - **Cờ chặn** cho lỗi nghiêm trọng: có cờ thì tin không bao giờ vào vùng *Đề xuất duyệt*, dù tổng cao. Lý do: một tin lừa đảo điền đầy đủ thông tin vẫn có thể đạt 85 điểm nếu chỉ cộng trọng số.
 - **Điểm sàn từng tiêu chí**: tin có tiêu chí nào dưới 50 thì không vào vùng *Đề xuất duyệt*. Lý do: điểm cao ở tiêu chí này không được che lỗi nặng ở tiêu chí khác.
+- **Điểm sàn cứng** (thêm sau bước 3): tiêu chí 1–5 nào dưới 40 thì vào *Đề xuất từ chối*. Lý do: rủi ro + công ty + thực tập (45 điểm) hầu như luôn đầy, nên tin chỉ thiếu thông tin không bao giờ có tổng < 50.
 - **Chỉ xét nội dung tin và lịch sử công ty.** Không dùng dữ liệu của ứng viên, không dùng việc ứng viên từ chối lời mời (đó là chuyện bình thường, đã có mời bù của AD-23).
 - Mọi con số (trọng số, mức trừ, ngưỡng, từ khoá) nằm trong **một file cấu hình** có `QUALITY_SCORE_VERSION`. Đổi số nào thì tăng version.
 
@@ -90,7 +91,7 @@ Chỉ chấm các mục **không bắt buộc** lúc gửi duyệt. Hạn nộp,
 | `INTERN_EXPERIENCE_HIGH` | Loại tin `INTERNSHIP` và yêu cầu ≥ 1 năm kinh nghiệm | 40 | Sinh viên thực tập thường chưa có kinh nghiệm đi làm. |
 | `INTERN_EXPERIENCE_SOME` | Loại tin `INTERNSHIP`, yêu cầu > 0 và < 1 năm | 10 | Chấp nhận được nhưng thu hẹp người nộp. |
 | `TOO_MANY_REQUIRED_SKILLS` | > 8 kỹ năng bắt buộc | 20 | Yêu cầu dàn trải, khó có ai đạt (SocialTalent gọi là "requirements bloat"). |
-| `REQUIREMENTS_NOT_CONFIRMED` | `requirementsConfirmedAt` trống | 20 | NTD chưa xác nhận yêu cầu bằng AI, nên điểm phù hợp với ứng viên kém chính xác hơn. |
+| ~~`REQUIREMENTS_NOT_CONFIRMED`~~ | **Bỏ sau bước 3** | — | 99,5% tin dính nên không phân biệt được tin tốt / kém; dùng hay không dùng tính năng AI không phải chất lượng tin. |
 | `PENDING_SKILLS` | Có kỹ năng còn chờ duyệt trong danh mục | 10 | Kỹ năng chưa duyệt không hiện công khai và chưa được dùng đầy đủ khi chấm phù hợp. |
 
 Hai lỗi kinh nghiệm chỉ áp dụng cho tin thực tập. Các loại tin khác vẫn chấm các dòng còn lại.
@@ -102,9 +103,9 @@ So khớp từ khoá trên tiêu đề, mô tả, yêu cầu, quyền lợi **sa
 | Mã lỗi | Điều kiện | Trừ | Cờ chặn | Giải thích |
 |---|---|---|---|---|
 | `ASKS_FOR_MONEY` | Nhóm "đòi tiền": phí hồ sơ, phí đào tạo, phí giữ chỗ, đặt cọc, tiền cọc, thế chấp, nộp tiền, chuyển khoản trước, mua đồng phục, mua tài liệu… | 60 | **Có** | Dấu hiệu lừa đảo việc làm phổ biến nhất: bắt ứng viên trả tiền trước. |
-| `OFF_PLATFORM_CONTACT` | Nhóm "kênh ngoài": zalo, telegram, inbox, nhắn tin riêng, kết bạn… | 25 | Không | Kéo ứng viên sang kênh hệ thống không kiểm soát. |
+| `OFF_PLATFORM_CONTACT` | Nhóm "kênh ngoài": zalo, telegram, inbox, nhắn tin riêng, kết bạn… | 55 (25 trước bước 3) | Không | Kéo ứng viên sang kênh hệ thống không kiểm soát. |
 | `TOO_GOOD_TO_BE_TRUE` | Nhóm "dụ dỗ": việc nhẹ lương cao, thu nhập khủng, không cần kinh nghiệm lương cao, kiếm tiền online, làm tại nhà thu nhập… | 25 | Không | Lời hứa quá mức thường gặp ở tin lừa đảo, đa cấp. |
-| `INTERN_SALARY_OUTLIER` | Tin `INTERNSHIP` có `salaryMax` (hoặc `salaryMin`) > 20.000.000 VND/tháng | 30 | Không | Lương thực tập cao bất thường, hay dùng để câu người. Ngưỡng chỉnh trong cấu hình sau bước hiệu chỉnh. |
+| `INTERN_SALARY_OUTLIER` | Tin `INTERNSHIP` có `salaryMax` (hoặc `salaryMin`) > 20.000.000 VND/tháng | 55 (30 trước bước 3) | Không | Lương thực tập cao bất thường, hay dùng để câu người. Ngưỡng chỉnh trong cấu hình sau bước hiệu chỉnh. |
 | `RESUBMITTED_UNCHANGED` | Lần gửi trước bị từ chối, và nội dung **không đổi** so với lần gửi đó (mã băm nội dung trùng) | 30 | Không | Gửi lại mà không sửa theo góp ý. **Gửi lại có sửa thì không bị trừ**: đó là quy trình mong muốn. |
 | `REJECTED_MANY_TIMES` | Tin đã bị từ chối ≥ 3 lần | 20 | Không | Lặp lại nhiều lần mà vẫn không đạt. |
 
@@ -127,26 +128,26 @@ Lỗi của tiêu chí 6 **không** đưa vào lý do từ chối gửi cho NTD 
 | Vùng | Điều kiện | Khi duyệt hàng loạt |
 |---|---|---|
 | `SUGGEST_APPROVE` — *Đề xuất duyệt* | Tổng ≥ 80, **không** cờ chặn, **không** tiêu chí nào < 50 | Chọn sẵn ở tab của vùng |
-| `SUGGEST_REJECT` — *Đề xuất từ chối* | Tổng < 50 **hoặc** có cờ chặn | Chọn sẵn ở tab của vùng |
+| `SUGGEST_REJECT` — *Đề xuất từ chối* | Tổng < 50 **hoặc** có cờ chặn **hoặc** tiêu chí 1–5 nào < 40 | Chọn sẵn ở tab của vùng |
 | `NEEDS_REVIEW` — *Cần xem kỹ* | Còn lại | Không chọn sẵn; Admin nên mở từng tin |
 
 Ngưỡng 80 / 50 được chọn để thận trọng ở vùng duyệt (đọc lý do ở tiêu chí 5). Hai ngưỡng được chốt lại sau bước hiệu chỉnh (bước 3).
 
 ### Ví dụ
 
-Tin thực tập "Thực tập sinh Backend NodeJS", mô tả 240 ký tự, có yêu cầu, không ghi quyền lợi, lương 3–5 triệu, chưa xác nhận yêu cầu bằng AI, công ty chưa có tin nào được duyệt:
+Tin thực tập "Thực tập sinh Backend NodeJS", mô tả 240 ký tự, có yêu cầu, không ghi quyền lợi, lương 3–5 triệu, công ty chưa có tin nào được duyệt:
 
 ```
 1 Độ đầy đủ       80  (− 20 NO_BENEFITS)                     × 0,20 = 16,0
 2 Chất lượng      90  (− 10 DESCRIPTION_SHORT)               × 0,20 = 18,0
 3 Minh bạch      100                                          × 0,15 = 15,0
-4 Thực tập        80  (− 20 REQUIREMENTS_NOT_CONFIRMED)      × 0,10 =  8,0
+4 Thực tập       100                                          × 0,10 = 10,0
 5 Rủi ro         100                                          × 0,25 = 25,0
 6 Uy tín          90  (− 10 COMPANY_NO_HISTORY)              × 0,10 =  9,0
-Tổng 91 · không cờ chặn · không tiêu chí < 50 → Đề xuất duyệt
+Tổng 93 · không cờ chặn · không tiêu chí < 50 → Đề xuất duyệt
 ```
 
-Cùng tin đó nhưng mô tả có câu "ứng viên nộp phí đào tạo 500k": tiêu chí 5 còn 40, có cờ `ASKS_FOR_MONEY` → **Đề xuất từ chối**, dù tổng vẫn là 76.
+Cùng tin đó nhưng mô tả có câu "ứng viên nộp phí đào tạo 500k": tiêu chí 5 còn 40, có cờ `ASKS_FOR_MONEY` → **Đề xuất từ chối**, dù tổng vẫn là 78.
 
 ### Lý do từ chối tự sinh
 
@@ -158,7 +159,7 @@ Mỗi mã lỗi của tiêu chí 1–5 gắn với một lý do chọn sẵn c�
 | Thông tin không hợp lệ | `SALARY_INVALID`, `SALARY_RANGE_WIDE`, `DEADLINE_TOO_SOON`, `INTERN_EXPERIENCE_HIGH`, `TOO_MANY_REQUIRED_SKILLS` |
 | Nội dung không phù hợp | `TITLE_LENGTH`, `TITLE_SHOUTING`, `SPAMMY_FORMAT`, `CONTACT_IN_CONTENT`, `OFF_PLATFORM_CONTACT`, `TOO_GOOD_TO_BE_TRUE`, `INTERN_SALARY_OUTLIER` |
 | Vi phạm chính sách | `ASKS_FOR_MONEY` |
-| (không đưa vào lý do) | `SALARY_NEGOTIABLE`, `SALARY_ONE_SIDED`, `INTERN_EXPERIENCE_SOME`, `REQUIREMENTS_NOT_CONFIRMED`, `PENDING_SKILLS`, `DESCRIPTION_SHORT`, `RESUBMITTED_UNCHANGED`, `REJECTED_MANY_TIMES`, tiêu chí 6 |
+| (không đưa vào lý do) | `SALARY_NEGOTIABLE`, `SALARY_ONE_SIDED`, `INTERN_EXPERIENCE_SOME`, `PENDING_SKILLS`, `DESCRIPTION_SHORT`, `RESUBMITTED_UNCHANGED`, `REJECTED_MANY_TIMES`, tiêu chí 6 |
 
 Chuỗi lý do có cùng dạng với chuỗi `RejectJobModal` đang ghép: `"<các lý do chọn sẵn>. <chi tiết từng lỗi>"`. Ví dụ: `"Thiếu thông tin, Vi phạm chính sách. Mô tả công việc quá ngắn (90/150 ký tự); nội dung yêu cầu ứng viên nộp tiền."`
 
@@ -235,7 +236,7 @@ approve / reject (một tin, bulk) ──► JobPostsService
 
 ### Bước 2 — Bộ chấm thuần và cấu hình
 
-- `job-posts/job-quality.config.ts`: `QUALITY_SCORE_VERSION = 1`, trọng số, mức trừ theo mã lỗi, ngưỡng (150 / 300 / 50 ký tự, 20 triệu, 7 ngày, 180 ngày…), ba nhóm từ khoá, ngưỡng vùng 80 / 50, điểm sàn 50, bảng mã lỗi → lý do chọn sẵn.
+- `job-posts/job-quality.config.ts`: `QUALITY_SCORE_VERSION = 1`, trọng số, mức trừ theo mã lỗi, ngưỡng (150 / 300 / 50 ký tự, 20 triệu, 7 ngày, 180 ngày…), ba nhóm từ khoá, ngưỡng vùng 80 / 50, điểm sàn 50, điểm sàn cứng 40 (trừ tiêu chí 6), bảng mã lỗi → lý do chọn sẵn.
 - `job-posts/job-quality.ts`:
   - `scoreJobPost(input: JobQualityInput, now: Date): JobQualityResult`.
   - `JobQualityResult = { score, band, version, criteria: [{ key, score, weight, issues: [{ code, penalty, message }] }], flags: string[], contentHash }`.
@@ -243,7 +244,7 @@ approve / reject (một tin, bulk) ──► JobPostsService
   - `contentHash(input)`, `foldText(s)` (bỏ dấu, chữ thường).
 - `JobQualityInput` gồm: các trường của tin, kỹ năng (mức + trạng thái), ngành, và tín hiệu đã nạp (`previousContentHash`, `lastModerationAction`, `rejectionCount`, `companyRetractions180d`, `companyConfirmedReports180d`, `companyOpenReports`, `companySubmitCount`, `companyRejectCount`, `companyApprovedCount`).
 
-- **Đã làm (2026-11-20):** `job-quality.config.ts`, `job-quality.ts`, `tests/unit/job-quality.test.ts` (18 test, gồm hai ví dụ 91 / 76 điểm của plan). Toàn bộ 683/683 unit test qua. Khác / bổ sung so với mô tả trên:
+- **Đã làm (2026-11-20):** `job-quality.config.ts`, `job-quality.ts`, `tests/unit/job-quality.test.ts` (18 test, gồm hai ví dụ của plan — nay là 93 / 78 điểm sau hiệu chỉnh bước 3). Toàn bộ 683/683 unit test qua. Khác / bổ sung so với mô tả trên:
   - **Tín hiệu "gửi lại không sửa"** là một cờ `signals.resubmittedUnchanged` do loader (bước 4) tính, thay cho cặp `previousContentHash` + `lastModerationAction`. Lý do: lúc chấm lại một tin `PENDING` (sự kiện công ty, nút Chấm lại), thao tác gần nhất đã là `SUBMITTED` và `submittedContentHash` đã là mã của lần gửi này, nên không còn gì để so; nếu tính lại từ hai giá trị đó thì lỗi `RESUBMITTED_UNCHANGED` sẽ biến mất sau lần chấm lại. Loader: lúc gửi duyệt so mã mới với `submittedContentHash` cũ khi thao tác trước là `REJECTED`; lúc chấm lại tin `PENDING` thì giữ cờ từ `qualityBreakdown` của lần chấm trước; tin ở trạng thái khác thì `false`.
   - **Phủ định trước từ khoá đòi tiền** không bị tính (`QUALITY_MONEY_NEGATION`): "miễn phí đào tạo", "không thu phí hồ sơ", "không cần nộp tiền hay đặt cọc" là quyền lợi. Phủ định ở câu khác ("Không cần kinh nghiệm. Đặt cọc 500k") vẫn bị bắt.
   - Từ khoá khớp theo ranh giới từ ("Zalora" không phải "zalo"); câu giải thích trích nguyên cụm từ gốc có dấu.
@@ -260,6 +261,14 @@ approve / reject (một tin, bulk) ──► JobPostsService
 - Thêm vài tin mẫu cố ý xấu (đòi phí, Zalo, mô tả 1 dòng, lương thực tập 30 triệu) vào **test**, không vào DB, để kiểm mỗi tin rơi đúng vùng.
 - Báo kết quả cho chủ dự án; chỉnh trọng số / ngưỡng nếu phân bố lệch (ví dụ > 90% tin demo vào *Đề xuất duyệt* hoặc tin xấu không vào *Đề xuất từ chối*). Chốt rồi mới làm bước 4.
 - Lưu ý: tin demo là dữ liệu sinh ra, nên con số chỉ để kiểm bộ chấm chạy hợp lý, không chứng minh độ chính xác.
+- **Đã chạy (2026-11-20):** `scripts/score-job-quality.ts` (chỉ `--dry-run`; chế độ ghi để bước 4) + `job-posts/job-quality-input.loader.ts` (nạp input theo lô, chỉ đọc; bước 4 dùng lại). 4 test tin mẫu xấu trong `job-quality.test.ts` (22 test, 687/687 toàn bộ). Kết quả trên Neon, 384 tin (trừ nháp):
+  - Vùng: duyệt 372 (96,9%), xem kỹ 12, từ chối 0; không tin nào có cờ chặn. Điểm 73–96, trung vị 93.
+  - Mã lỗi hay gặp: `REQUIREMENTS_NOT_CONFIRMED` 99,5%, `DESCRIPTION_SHORT` 94%, `NO_MAJOR` 35%, `SALARY_NEGOTIABLE` 31%.
+  - Thời gian: chấm 0,6 ms/tin; nạp dữ liệu 5,4 ms/tin khi nạp theo lô 200.
+  - Tin mẫu: đòi phí hồ sơ ⇒ từ chối (cờ chặn, 85 điểm); gộp nhiều dấu hiệu ⇒ từ chối (45); lương 30 triệu + "việc nhẹ lương cao" ⇒ xem kỹ (86, rủi ro 45 dưới sàn). **Lệch:** tin có "kết bạn Zalo + số điện thoại" ra 90 điểm, *đề xuất duyệt*; tin mô tả 1 dòng, không yêu cầu, không quyền lợi, không lương, không địa chỉ chỉ ra 75, *xem kỹ*.
+  - Nhận xét: rủi ro + công ty + phù hợp thực tập chiếm 45 điểm và hầu như luôn đầy, nên tin chỉ "thiếu thông tin" không bao giờ xuống dưới 50. Vùng từ chối hiện chỉ đạt được qua cờ chặn hoặc nhiều dấu hiệu rủi ro.
+  - **Chốt (Q5, 2026-11-20), chủ dự án đồng ý cả 3:** (1) bỏ `REQUIREMENTS_NOT_CONFIRMED` (cùng trường `requirementsConfirmedAt` khỏi input); (2) `OFF_PLATFORM_CONTACT` 25 → 55; (3) điểm sàn cứng 40 cho tiêu chí 1–5 ⇒ đề xuất từ chối (tiêu chí 6 không xét vì không đưa vào lý do gửi NTD). Thêm (4) `INTERN_SALARY_OUTLIER` 30 → 55, để tin thực tập lương > 20 triệu luôn qua người xem. Giữ `QUALITY_SCORE_VERSION = 1` vì chưa có điểm nào được lưu. 25 test bộ chấm (thêm Zalo ⇒ xem kỹ, mô tả 1 dòng ⇒ từ chối với lý do "Thiếu thông tin", sàn cứng bỏ qua tiêu chí 6), 690/690 toàn bộ.
+  - Chạy lại: duyệt 373 (97,1%), xem kỹ 9, từ chối 2 (hai tin hết hạn không có yêu cầu, mô tả quá ngắn, đòi ≥ 1 năm kinh nghiệm). Điểm 75–98, trung vị 95.
 
 ### Bước 4 — Nạp tín hiệu và lưu điểm
 
@@ -345,7 +354,7 @@ approve / reject (một tin, bulk) ──► JobPostsService
 Unit test (theo mẫu `tests/unit/job-post-*.test.ts`):
 
 - Bộ chấm: mỗi mã lỗi một case (đúng điều kiện thì trừ, sát ngưỡng thì không); từ khoá khớp cả có dấu / không dấu / viết hoa; mỗi nhóm từ khoá trừ một lần; điểm không âm; làm tròn tổng.
-- Vùng: tổng ≥ 80 nhưng có cờ chặn ⇒ `SUGGEST_REJECT`; tổng ≥ 80 nhưng một tiêu chí < 50 ⇒ `NEEDS_REVIEW`; < 50 ⇒ `SUGGEST_REJECT`.
+- Vùng: tổng ≥ 80 nhưng có cờ chặn ⇒ `SUGGEST_REJECT`; tổng ≥ 80 nhưng một tiêu chí < 50 ⇒ `NEEDS_REVIEW`; < 50, hoặc tiêu chí 1–5 < 40 ⇒ `SUGGEST_REJECT`.
 - Mã băm: gửi lại không sửa sau khi bị từ chối ⇒ `RESUBMITTED_UNCHANGED`; sửa một chữ ⇒ không trừ; lần gửi trước được duyệt rồi gửi lại ⇒ không trừ.
 - Lý do tự sinh: đúng nhóm, không chứa lỗi tiêu chí 6; không lỗi ⇒ `null`.
 - Đổi trạng thái có điều kiện: `updateMany` trả 0 ⇒ 409, không ghi moderation action / thông báo / audit.

@@ -43,13 +43,14 @@ export const QUALITY_PENALTIES = {
   INTERN_EXPERIENCE_HIGH: 40,
   INTERN_EXPERIENCE_SOME: 10,
   TOO_MANY_REQUIRED_SKILLS: 20,
-  REQUIREMENTS_NOT_CONFIRMED: 20,
   PENDING_SKILLS: 10,
   // Tiêu chí 5 — dấu hiệu rủi ro
   ASKS_FOR_MONEY: 60,
-  OFF_PLATFORM_CONTACT: 25,
+  // 55: một mình lỗi này đã kéo tiêu chí rủi ro xuống 45 < điểm sàn ⇒ ít nhất "cần xem kỹ".
+  OFF_PLATFORM_CONTACT: 55,
   TOO_GOOD_TO_BE_TRUE: 25,
-  INTERN_SALARY_OUTLIER: 30,
+  // 55 như OFF_PLATFORM_CONTACT: một mình lỗi này kéo tiêu chí rủi ro xuống 45 < điểm sàn.
+  INTERN_SALARY_OUTLIER: 55,
   RESUBMITTED_UNCHANGED: 30,
   REJECTED_MANY_TIMES: 20,
   // Tiêu chí 6 — uy tín công ty
@@ -97,12 +98,24 @@ export const QUALITY_THRESHOLDS = {
   companyHighRejectionRatio: 0.5,
 } as const;
 
-/** Ba vùng (Q3): ≥ approveMin, không cờ chặn, không tiêu chí < criterionFloor → đề xuất duyệt. */
+/**
+ * Ba vùng (Q3):
+ * - đề xuất từ chối: tổng < rejectBelow, hoặc có cờ chặn, hoặc một tiêu chí 1–5 < criterionHardFloor
+ *   (tiêu chí 6 — uy tín công ty — không tính, vì không đưa vào lý do từ chối gửi NTD);
+ * - đề xuất duyệt: tổng ≥ approveMin và không tiêu chí nào < criterionFloor;
+ * - còn lại: cần xem kỹ.
+ * Điểm sàn cứng cần có vì ba tiêu chí rủi ro / công ty / thực tập (45 điểm) hầu như luôn đầy,
+ * nên tin chỉ "thiếu thông tin" không bao giờ có tổng < 50 (hiệu chỉnh bước 3).
+ */
 export const QUALITY_BANDS = {
   approveMin: 80,
   rejectBelow: 50,
   criterionFloor: 50,
+  criterionHardFloor: 40,
 } as const;
+
+/** Tiêu chí không xét điểm sàn cứng. */
+export const QUALITY_HARD_FLOOR_EXEMPT: ReadonlySet<JobQualityCriterionKey> = new Set<JobQualityCriterionKey>(["COMPANY"]);
 
 /**
  * Từ khoá tiêu chí 5, viết KHÔNG DẤU, chữ thường (so trên văn bản đã `foldText`). Khớp theo

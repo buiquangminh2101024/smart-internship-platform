@@ -25,6 +25,7 @@
     "seed-large-demo": "dotenv -e ../../.env -- tsx scripts/seed-large-demo.ts",
     "eval-job-matching": "dotenv -e ../../.env -- tsx scripts/eval-job-matching.ts",
     "rescore-match-scores": "dotenv -e ../../.env -- tsx scripts/rescore-match-scores.ts",
+    "score-job-quality": "dotenv -e ../../.env -- tsx scripts/score-job-quality.ts",
     "process-applications": "dotenv -e ../../.env -- tsx scripts/process-applications.ts",
     "job-alerts": "dotenv -e ../../.env -- tsx scripts/job-alerts.ts",
     "simulate-inflow": "dotenv -e ../../.env -- tsx scripts/simulate-inflow.ts",
