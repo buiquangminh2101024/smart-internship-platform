@@ -406,6 +406,12 @@ approve / reject (một tin, bulk) ──► JobPostsService
   - Lỗi một tin chỉ ghi log, chạy tiếp tin sau. Server khởi động lại giữa chừng thì job đêm 3h30 (AD-24) và cron tự mời 15 phút là lưới an toàn.
 - Duyệt **một** tin vẫn gọi `matchScoreTrigger` + `autoOutreachTrigger` như cũ (không đổi hành vi).
 - Đo trên Neon: duyệt hàng loạt 20 tin, ghi thời gian đến khi chấm xong tin cuối và độ trễ request khác trong lúc chạy (mốc: duyệt một tin chấm xong ~4 giây theo backlog 0.3).
+- **Đã làm (2026-11-20):** `job-posts/publish-follow-up.service.ts` (`PublishFollowUpService`), đăng ký `asFunction(...).singleton()` trong `job-posts.routes.ts`; `rescoreJob` / `jobScoredListener` / `autoOutreachTrigger` resolve lúc gọi. Thêm `tests/unit/publish-follow-up.test.ts` (4 test), sửa 3 test của bước 7; 743/743, `tsc` sạch cho server (`src`, `tests`). Chi tiết:
+  - **Lúc enqueue:** khi lô duyệt **xong hẳn**, kể cả phần chạy nền (`BulkModerationBatches.run` thêm `onSettled`), chỉ tin trong `succeeded` (đã commit). Lô từ chối không enqueue. Duyệt một tin giữ nguyên `matchScoreTrigger` + `autoOutreachTrigger`.
+  - **Tự mời chỉ cho công ty có tin bật tự mời** (`autoOutreachEnabled`, đọc thêm trong `findForBulkModeration`), như duyệt một tin.
+  - Mỗi lượt lấy hết tin đang chờ, nhóm theo công ty theo thứ tự duyệt, gộp tin trùng. Lô tới giữa lượt thì vào lượt kế tiếp (không chạy chồng). `SKIPPED` / `GONE` không báo job alert, như `MatchScoreService.trigger`. Trigger ném lỗi ngay lúc gọi chỉ ghi log. Cuối lượt ghi log tóm tắt `Publish follow-ups done`.
+  - **Đo trên Neon** (20 tin đang hiển thị, 13 công ty; chính `MatchScoreService.rescoreJob`, transaction ghi điểm chạy thật rồi rollback, chặn lệnh đánh dấu lại ứng viên và việc tính embedding mới; DB không đổi): chấm xong tin cuối sau **41 s** (~2,1 s mỗi tin, p95 3,0 s). Trong lúc chạy, một câu đọc 20 tin kiểu trang danh sách: trung vị 150 → 177 ms, p95 160 → 190 ms; trễ event loop trung vị 12 ms, tối đa 42 ms. Duyệt 20 tin từng tin một thì 20 lượt chấm chạy chồng nhau cùng lúc; ở đây request khác hầu như không bị ảnh hưởng.
+  - **Dùng chung một cache hồ sơ cho cả lượt** (như lượt đêm, AD-24 mục 6; chủ dự án đồng ý 2026-11-20, đã áp dụng): đo lại ⇒ **29 s** (~1,5 s mỗi tin), request khác trung vị 148 ms, trễ event loop tối đa 23 ms. Hồ sơ sửa trong lúc chạy đã có Q2 (AD-27) đánh dấu lại theo mốc nạp đầu tiên của cache. Mỗi lượt một cache mới (`createProfileCache`); `MatchScoreService.createCache` chuyển thành public.
 
 ### Bước 9 — DTO và shared-types
 
@@ -414,6 +420,9 @@ approve / reject (một tin, bulk) ──► JobPostsService
 - `ModerationQueueQuery`, `BulkApproveRequest`, `BulkRejectRequest`, `BulkModerationResult`, `JobPostStats.pendingByBand`.
 - Payload thông báo `JOB_POST_QUALITY_DROPPED` trong `NotificationPayloadMap`.
 - Cập nhật `packages/shared-types`.
+- **Đã làm (2026-11-20):** `JobPost` (shared-types) thêm `submittedAt: string | null` và `quality: JobQualityDto | null`. Các type còn lại của mục này đã thêm dần ở bước 4–7. `toJobPostDto(row, { publicOnly?, withQuality? })`: chỉ `withQuality` mới điền `quality` (qua `toJobQualityDto`), và `publicOnly` luôn thắng (không `quality`, không `submittedAt`). `JobPostsService` truyền `withQuality` ở mọi API của Admin: hàng đợi, chi tiết, kết quả duyệt / từ chối / thu hồi. Employer và công khai luôn `quality: null`. Thêm `tests/unit/job-post-dto-quality.test.ts` (4 test); 747/747, `tsc` sạch cho server (`src`, `tests`) và web. Chi tiết:
+  - `toJobQualityDto` coi cả `undefined` là chưa chấm (`== null`): fixture dựng tay ở test cũ thiếu `qualityVersion` / `qualityScoredAt`. Prisma luôn trả `null`, nên không đổi hành vi thật.
+  - `submittedAt` vẫn có ở API của employer (trang "tin của tôi" hiện được lúc gửi duyệt). Lối "tin đã lưu" của ứng viên (`saved-jobs`) gọi mapper không kèm `publicOnly` từ trước, nên cũng nhận `submittedAt`; không có điểm. Chưa sửa vì ngoài phạm vi.
 
 ### Bước 10 — Test
 

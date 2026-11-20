@@ -20,7 +20,10 @@ import { JobPostsService } from "./job-posts.service";
 import { JobPostRequirementsService } from "./job-post-requirements.service";
 import { JobQualityInputLoader } from "./job-quality-input.loader";
 import { JobQualityService, type JobQualityCompanyTrigger } from "./job-quality.service";
+import { PublishFollowUpService } from "./publish-follow-up.service";
 import { RequirementExtractionRateLimitService } from "./requirement-extraction-rate-limit.service";
+import type { AutoOutreachTrigger } from "../candidate-outreach/auto-outreach.service";
+import type { JobScoredListener, MatchScoreService } from "../match-scores/match-score.service";
 import {
   bulkApproveSchema,
   bulkRejectSchema,
@@ -84,6 +87,20 @@ export function jobPostsRouter(container: AwilixContainer): Router {
     // AD-29 bước 7 — kết quả lô hàng loạt giữ trong bộ nhớ: singleton bắt buộc. asFunction vì
     // constructor nhận tuỳ chọn, không nhận cradle.
     bulkModerationBatches: asFunction(() => new BulkModerationBatches()).singleton(),
+    // AD-29 bước 8 — hàng đợi việc sau lô duyệt: singleton bắt buộc (một lượt tại một thời điểm).
+    // Các phụ thuộc resolve lúc gọi ⇒ không tạo vòng DI với match-scores / candidate-outreach /
+    // job-alerts (các module đó đăng ký sau trong main.ts).
+    publishFollowUpService: asFunction(
+      ({ logger }: { logger: Logger }) =>
+        new PublishFollowUpService({
+          rescoreJob: (jobPostId, cache) =>
+            container.resolve<MatchScoreService>("matchScoreService").rescoreJob(jobPostId, cache),
+          createProfileCache: () => container.resolve<MatchScoreService>("matchScoreService").createCache(),
+          jobScoredListener: (jobPostId) => container.resolve<JobScoredListener>("jobScoredListener")(jobPostId),
+          autoOutreachTrigger: (companyId) => container.resolve<AutoOutreachTrigger>("autoOutreachTrigger")(companyId),
+          logger,
+        }),
+    ).singleton(),
     jobPostsService: asClass(JobPostsService).singleton(),
     jobPostsController: asClass(JobPostsController).singleton(),
   });

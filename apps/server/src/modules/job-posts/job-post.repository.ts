@@ -171,6 +171,8 @@ export interface BulkModerationPost {
   companyId: string;
   company: { name: string };
   qualityBreakdown: Prisma.JsonValue | null;
+  /** Bước 8 — duyệt xong thì gọi tự mời cho công ty (như duyệt một tin). */
+  autoOutreachEnabled: boolean;
 }
 
 export interface PublicJobSearchFilter {
@@ -305,6 +307,7 @@ export class JobPostRepository {
         companyId: true,
         company: { select: { name: true } },
         qualityBreakdown: true,
+        autoOutreachEnabled: true,
       },
     });
   }

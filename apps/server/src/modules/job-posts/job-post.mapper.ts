@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import type { JobPost as JobPostDto, JobPostModerationActionDto } from "@sip/shared-types";
 import type { JobPostWithRelations } from "./job-post.repository";
+import { toJobQualityDto } from "./job-quality.mapper";
 
 type ModerationActionWithActor = JobPostWithRelations["moderationActions"][number];
 
@@ -41,7 +42,14 @@ function toModerationActionDto(action: ModerationActionWithActor): JobPostModera
  * duyệt, trong khi form sửa tin của chính Employer phải thấy đủ cả skill họ vừa
  * tự đề xuất (nếu không, lần lưu sau sẽ vô tình xoá mất).
  */
-export function toJobPostDto(jobPost: JobPostWithRelations, options?: { publicOnly?: boolean }): JobPostDto {
+/**
+ * `publicOnly`: API công khai (chỉ kỹ năng đã duyệt, không có `submittedAt`).
+ * `withQuality`: chỉ API của Admin (AD-29 Q1) — các lối khác luôn trả `quality: null`.
+ */
+export function toJobPostDto(
+  jobPost: JobPostWithRelations,
+  options?: { publicOnly?: boolean; withQuality?: boolean },
+): JobPostDto {
   const latest = jobPost.moderationActions[0];
   const skills = jobPost.skills
     .filter((link) => !options?.publicOnly || link.skill.status === "APPROVED")
@@ -99,6 +107,8 @@ export function toJobPostDto(jobPost: JobPostWithRelations, options?: { publicOn
     requirementsConfirmedAt: jobPost.requirementsConfirmedAt?.toISOString() ?? null,
     applicationCount: jobPost._count?.applications ?? 0,
     latestModerationAction: latest ? toModerationActionDto(latest) : null,
+    submittedAt: options?.publicOnly ? null : (jobPost.submittedAt?.toISOString() ?? null),
+    quality: options?.withQuality && !options.publicOnly ? toJobQualityDto(jobPost) : null,
     createdAt: jobPost.createdAt.toISOString(),
     updatedAt: jobPost.updatedAt.toISOString(),
   };

@@ -762,6 +762,10 @@ export interface JobPost {
   applicationCount: number;
   /** Hành động kiểm duyệt mới nhất — nguồn dữ liệu banner từ chối/thu hồi. */
   latestModerationAction: JobPostModerationActionDto | null;
+  /** AD-29 — lần gửi duyệt gần nhất. null = chưa gửi duyệt lần nào, hoặc API công khai. */
+  submittedAt: string | null;
+  /** AD-29 — điểm chất lượng tin. Chỉ API của Admin điền; API công khai và của employer luôn null (Q1). */
+  quality: JobQualityDto | null;
   createdAt: string;
   updatedAt: string;
   /**

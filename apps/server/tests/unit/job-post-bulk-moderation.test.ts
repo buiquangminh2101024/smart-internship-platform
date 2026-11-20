@@ -131,6 +131,7 @@ interface FakePost {
   qualityBreakdown: unknown;
   qualityScore: number | null;
   qualityBand: string | null;
+  autoOutreachEnabled: boolean;
 }
 
 function post(id: string, overrides: Partial<FakePost> = {}): FakePost {
@@ -143,6 +144,7 @@ function post(id: string, overrides: Partial<FakePost> = {}): FakePost {
     qualityBreakdown: REASON_BREAKDOWN,
     qualityScore: 85,
     qualityBand: "SUGGEST_APPROVE",
+    autoOutreachEnabled: false,
     ...overrides,
   };
 }
@@ -160,6 +162,7 @@ function buildService(options: {
 }) {
   const writes: { kind: string; id: string; data?: unknown }[] = [];
   const triggers: string[] = [];
+  const enqueued: { jobPostId: string; companyId: string; autoOutreachEnabled: boolean }[][] = [];
   let transactions = 0;
   let committed = 0;
   const byId = new Map(options.posts.map((p) => [p.id, p]));
@@ -221,13 +224,19 @@ function buildService(options: {
     matchScoreTrigger: (id: string) => triggers.push(`match:${id}`),
     autoOutreachTrigger: (id: string) => triggers.push(`outreach:${id}`),
     bulkModerationBatches: options.batches ?? new BulkModerationBatches({ syncMs: 1_000 }),
+    publishFollowUpService: { enqueue: (items: (typeof enqueued)[number]) => void enqueued.push(items) },
   } as unknown as ConstructorParameters<typeof JobPostsService>[0]);
-  return { service, writes, triggers, counts: () => ({ transactions, committed }) };
+  return { service, writes, triggers, enqueued, counts: () => ({ transactions, committed }) };
 }
 
-test("duyệt hàng loạt: đúng succeeded / skipped, mỗi tin chờ duyệt một transaction, chưa gọi bảng điểm / tự mời", async () => {
-  const { service, writes, triggers, counts } = buildService({
-    posts: [post("p1"), post("p2", { status: "PUBLISHED" }), post("p3", { companyId: "co-2" }), post("p4")],
+test("duyệt hàng loạt: đúng succeeded / skipped, mỗi tin chờ duyệt một transaction, việc sau duyệt qua hàng đợi (không gọi trigger)", async () => {
+  const { service, writes, triggers, enqueued, counts } = buildService({
+    posts: [
+      post("p1"),
+      post("p2", { status: "PUBLISHED" }),
+      post("p3", { companyId: "co-2", autoOutreachEnabled: true }),
+      post("p4"),
+    ],
     lostRace: ["p4"],
   });
   const result = await service.bulkApprove("admin-1", ["p1", "p2", "missing", "p3", "p4"]);
@@ -242,7 +251,14 @@ test("duyệt hàng loạt: đúng succeeded / skipped, mỗi tin chờ duyệt 
   assert.equal(result.action, "APPROVE");
   // p2 và "missing" bị bỏ qua từ bản đọc trước, không mở transaction.
   assert.equal(counts().transactions, 3);
+  // Bước 8: không gọi matchScoreTrigger / autoOutreachTrigger từng tin; một lần enqueue các tin đã duyệt.
   assert.deepEqual(triggers, []);
+  assert.deepEqual(enqueued, [
+    [
+      { jobPostId: "p1", companyId: "co-1", autoOutreachEnabled: false },
+      { jobPostId: "p3", companyId: "co-2", autoOutreachEnabled: true },
+    ],
+  ]);
 
   const p1 = writes.filter((w) => w.id === "p1").map((w) => w.kind);
   assert.deepEqual(p1, ["transition", "action", "notify:JOB_POST_APPROVED", "audit:JOB_POST_APPROVED"]);
@@ -268,12 +284,13 @@ test("duyệt hàng loạt: đúng succeeded / skipped, mỗi tin chờ duyệt 
 });
 
 test("từ chối hàng loạt không kèm lý do: lý do tự sinh từ điểm; tin chưa chấm ⇒ REASON_REQUIRED, không mở transaction", async () => {
-  const { service, writes, counts } = buildService({
+  const { service, writes, enqueued, counts } = buildService({
     posts: [post("p1"), post("p2", { qualityBreakdown: null, qualityScore: null, qualityBand: null })],
   });
   const result = await service.bulkReject("admin-1", ["p1", "p2"], undefined);
 
   assert.deepEqual(result.succeeded, ["p1"]);
+  assert.deepEqual(enqueued, []); // từ chối không có việc sau duyệt
   assert.deepEqual(result.skipped, [{ id: "p2", reason: "REASON_REQUIRED" }]);
   assert.equal(counts().transactions, 1);
   const action = writes.find((w) => w.kind === "action")?.data as { reason: string; bulk: boolean };
@@ -315,16 +332,21 @@ test("lỗi bất ngờ ở một tin ⇒ FAILED, các tin khác vẫn chạy", 
   assert.deepEqual(result.skipped, [{ id: "p2", reason: "FAILED" }]);
 });
 
-test("quá thời gian chờ ⇒ pending; bulkResult trả kết quả mới nhất, lô lạ ⇒ 404", async () => {
-  const { service } = buildService({
+test("quá thời gian chờ ⇒ pending; bulkResult trả kết quả mới nhất, lô lạ ⇒ 404; việc sau duyệt chờ cả phần chạy nền", async () => {
+  const { service, enqueued } = buildService({
     posts: [post("p1"), post("p2")],
     batches: new BulkModerationBatches({ concurrency: 1, syncMs: 5 }),
     txDelayMs: 15,
   });
   const first = await service.bulkApprove("admin-1", ["p1", "p2"]);
   assert.deepEqual(first.pending, ["p1", "p2"]);
+  assert.deepEqual(enqueued, []); // lô chưa xong ⇒ chưa enqueue
   await untilSettled(() => service.bulkResult("admin-1", first.batchId));
   assert.deepEqual(service.bulkResult("admin-1", first.batchId).succeeded, ["p1", "p2"]);
+  assert.deepEqual(
+    enqueued.map((items) => items.map((item) => item.jobPostId)),
+    [["p1", "p2"]],
+  );
   assert.throws(
     () => service.bulkResult("admin-2", first.batchId),
     (error: unknown) => error instanceof AppError && error.statusCode === 404,

@@ -56,6 +56,8 @@ export class BulkModerationBatches {
     action: BulkModerationResult["action"];
     ids: string[];
     worker: (id: string) => Promise<BulkItemOutcome>;
+    /** Gọi một lần khi mọi tin đã xong (kể cả phần chạy nền), với kết quả cuối. Lỗi bị nuốt. */
+    onSettled?: (result: BulkModerationResult) => void;
   }): Promise<BulkModerationResult> {
     this.purgeExpired();
     const state: BatchState = {
@@ -77,6 +79,11 @@ export class BulkModerationBatches {
     };
     const done = Promise.all(Array.from({ length: Math.min(this.concurrency, input.ids.length) }, lane)).then(() => {
       state.finishedAt = this.now();
+      try {
+        input.onSettled?.(this.snapshot(input.batchId, state));
+      } catch {
+        // Việc kéo theo không được làm hỏng kết quả lô (người gọi tự ghi log trong callback).
+      }
     });
 
     let timer: NodeJS.Timeout | undefined;

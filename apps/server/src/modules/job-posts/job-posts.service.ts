@@ -50,6 +50,7 @@ import {
 import { MODERATION_BATCH_LIMIT } from "./job-posts.dto";
 import { suggestedRejectReasonOf } from "./job-quality.mapper";
 import type { JobQualityCompanyTrigger, JobQualityService } from "./job-quality.service";
+import type { PublishFollowUpService } from "./publish-follow-up.service";
 
 // Employer tự chọn ngày hết hạn nhưng không quá 90 ngày kể từ lúc đặt —
 // quyết định chốt khi lên kế hoạch Phase 6 (xem
@@ -58,6 +59,9 @@ const MAX_EXPIRY_DAYS = 90;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 type CompanyQuotaTarget = Pick<Company, "id" | "verifiedAt">;
+
+/** AD-29 bước 9 — chỉ API của Admin kèm điểm chất lượng (Q1). */
+const ADMIN_DTO = { withQuality: true } as const;
 
 /** AD-29 bước 7 — số lô duyệt / từ chối hàng loạt mỗi Admin mỗi phút (chung hai loại). */
 export const BULK_MODERATION_PER_MINUTE = 10;
@@ -98,6 +102,7 @@ export class JobPostsService {
   private readonly logger: Logger;
   /** Kết quả các lô hàng loạt — service singleton nên mọi request dùng chung (bước 7). */
   private readonly bulkBatches: BulkModerationBatches;
+  private readonly publishFollowUpService: PublishFollowUpService;
 
   constructor({
     prisma,
@@ -117,6 +122,7 @@ export class JobPostsService {
     rateLimiter,
     logger,
     bulkModerationBatches,
+    publishFollowUpService,
   }: {
     prisma: PrismaClient;
     jobPostRepository: JobPostRepository;
@@ -136,6 +142,8 @@ export class JobPostsService {
     logger: Logger;
     /** Server đăng ký bản mặc định (job-posts.routes.ts); test truyền bản có thời gian chờ ngắn. */
     bulkModerationBatches?: BulkModerationBatches;
+    /** Bước 8 — chấm bảng điểm + tự mời sau lô duyệt, chạy lần lượt. */
+    publishFollowUpService: PublishFollowUpService;
   }) {
     this.prisma = prisma;
     this.jobPostRepository = jobPostRepository;
@@ -154,6 +162,7 @@ export class JobPostsService {
     this.rateLimiter = rateLimiter;
     this.logger = logger;
     this.bulkBatches = bulkModerationBatches ?? new BulkModerationBatches();
+    this.publishFollowUpService = publishFollowUpService;
   }
 
   // ─── Public (Guest) ──────────────────────────────────────────────────────
@@ -545,7 +554,7 @@ export class JobPostsService {
   ): Promise<PaginatedResponse<JobPostDto>> {
     const page = await this.jobPostRepository.findModerationQueue(filter, cursor);
     if (!page) throw new AppError(400, "Invalid cursor", "INVALID_CURSOR");
-    return { ...this.toPage(page), total: page.total };
+    return { ...this.toPage(page, ADMIN_DTO), total: page.total };
   }
 
   /** Id khớp bộ lọc hàng đợi (tối đa một lô hàng loạt) — nút "Chọn tất cả tin trong vùng". */
@@ -559,7 +568,7 @@ export class JobPostsService {
   }
 
   async getForModeration(id: string): Promise<JobPostDto> {
-    return toJobPostDto(await this.requireJobPost(id));
+    return toJobPostDto(await this.requireJobPost(id), ADMIN_DTO);
   }
 
   async approve(actorId: string, id: string): Promise<JobPostDto> {
@@ -593,7 +602,7 @@ export class JobPostsService {
     // AD-23 — như submitForApproval khi tự đăng: chạy sau khi transaction đã commit.
     if (updated.autoOutreachEnabled) this.autoOutreachTrigger(updated.companyId);
     this.matchScoreTrigger(updated.id);
-    return toJobPostDto(updated);
+    return toJobPostDto(updated, ADMIN_DTO);
   }
 
   /** PENDING → DRAFT kèm lý do, để Employer sửa lại rồi gửi duyệt lần nữa. */
@@ -625,7 +634,7 @@ export class JobPostsService {
       );
       return result;
     });
-    return toJobPostDto(updated);
+    return toJobPostDto(updated, ADMIN_DTO);
   }
 
   /**
@@ -669,7 +678,7 @@ export class JobPostsService {
     });
     // AD-29 Q4 — công ty vừa bị thu hồi tin ⇒ chấm lại các tin đang chờ duyệt của công ty.
     this.jobQualityCompanyTrigger(updated.companyId);
-    return toJobPostDto(updated);
+    return toJobPostDto(updated, ADMIN_DTO);
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -728,7 +737,9 @@ export class JobPostsService {
   /**
    * Mỗi tin một transaction riêng, tối đa `BULK_MODERATION_CONCURRENCY` tin cùng lúc. Chờ tối
    * đa `BULK_MODERATION_SYNC_MS`; quá thì trả phần đã xong, các tin còn lại nằm ở `pending`
-   * và chạy tiếp ở nền (hỏi lại bằng `bulkResult`). Chưa gọi chấm bảng điểm / tự mời: bước 8.
+   * và chạy tiếp ở nền (hỏi lại bằng `bulkResult`). Lô xong hẳn (kể cả phần chạy nền) ⇒ các tin
+   * đã duyệt vào `PublishFollowUpService` (bước 8): chấm bảng điểm lần lượt rồi tự mời mỗi công
+   * ty một lần, thay cho `matchScoreTrigger` / `autoOutreachTrigger` của duyệt một tin.
    */
   async bulkApprove(actorId: string, ids: string[]): Promise<BulkModerationResult> {
     return this.runBulk(actorId, "APPROVE", ids, undefined);
@@ -784,7 +795,25 @@ export class JobPostsService {
           return "FAILED";
         }
       },
+      ...(kind === "APPROVE" ? { onSettled: (result: BulkModerationResult) => this.enqueuePublishFollowUps(result, posts) } : {}),
     });
+  }
+
+  /** Bước 8 — chỉ tin duyệt thành công (đã commit); thứ tự theo id Admin gửi lên. */
+  private enqueuePublishFollowUps(result: BulkModerationResult, posts: Map<string, BulkModerationPost>): void {
+    const items = result.succeeded.flatMap((id) => {
+      const post = posts.get(id);
+      return post ? [{ jobPostId: id, companyId: post.companyId, autoOutreachEnabled: post.autoOutreachEnabled }] : [];
+    });
+    try {
+      this.publishFollowUpService.enqueue(items);
+    } catch (error) {
+      this.logger.error("Publish follow-up enqueue failed", {
+        batchId: result.batchId,
+        jobs: items.length,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   private async moderateBulkItem(
@@ -887,7 +916,7 @@ export class JobPostsService {
 
   private toPage(
     page: { items: JobPostWithRelations[]; hasMore: boolean; nextCursor?: string },
-    options?: { publicOnly?: boolean },
+    options?: Parameters<typeof toJobPostDto>[1],
   ) {
     return {
       items: page.items.map((item) => toJobPostDto(item, options)),

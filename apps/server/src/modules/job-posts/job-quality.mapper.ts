@@ -43,7 +43,8 @@ export function suggestedRejectReasonOf(breakdown: unknown): string | null {
 
 /** null = tin chưa được chấm (hoặc lần chấm lúc gửi duyệt bị lỗi). */
 export function toJobQualityDto(row: JobQualityColumnsRow): JobQualityDto | null {
-  if (row.qualityScore === null || row.qualityBand === null || row.qualityVersion === null || row.qualityScoredAt === null) {
+  // `== null` để nhận cả undefined (bản ghi dựng tay thiếu cột), không chỉ null của Prisma.
+  if (row.qualityScore == null || row.qualityBand == null || row.qualityVersion == null || row.qualityScoredAt == null) {
     return null;
   }
   const breakdown = asRecord(row.qualityBreakdown);
