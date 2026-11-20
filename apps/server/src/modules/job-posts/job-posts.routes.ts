@@ -13,6 +13,7 @@ import {
   type RequirementExtractorTier,
 } from "../../infrastructure/fallback-requirement-extractor";
 import type { Cradle } from "../../container";
+import { BulkModerationBatches } from "./bulk-moderation-batches";
 import { JobPostRepository } from "./job-post.repository";
 import { JobPostsController } from "./job-posts.controller";
 import { JobPostsService } from "./job-posts.service";
@@ -21,6 +22,8 @@ import { JobQualityInputLoader } from "./job-quality-input.loader";
 import { JobQualityService, type JobQualityCompanyTrigger } from "./job-quality.service";
 import { RequirementExtractionRateLimitService } from "./requirement-extraction-rate-limit.service";
 import {
+  bulkApproveSchema,
+  bulkRejectSchema,
   confirmRequirementsSchema,
   createJobPostSchema,
   employerJobPostListQuerySchema,
@@ -78,6 +81,9 @@ export function jobPostsRouter(container: AwilixContainer): Router {
     jobQualityCompanyTrigger: asValue<JobQualityCompanyTrigger>((companyId) => {
       void container.resolve<JobQualityService>("jobQualityService").triggerCompany(companyId);
     }),
+    // AD-29 bước 7 — kết quả lô hàng loạt giữ trong bộ nhớ: singleton bắt buộc. asFunction vì
+    // constructor nhận tuỳ chọn, không nhận cradle.
+    bulkModerationBatches: asFunction(() => new BulkModerationBatches()).singleton(),
     jobPostsService: asClass(JobPostsService).singleton(),
     jobPostsController: asClass(JobPostsController).singleton(),
   });
@@ -144,6 +150,16 @@ export function jobPostsRouter(container: AwilixContainer): Router {
   // Khai báo trước `/admin/job-posts/:id` để "ids" không bị hiểu là id tin.
   router.get("/admin/job-posts/ids", ...adminGuard, validate(moderationIdsQuerySchema, "query"), (req, res, next) => {
     void resolveController().moderationIds(req, res, next);
+  });
+  // AD-29 bước 7 — duyệt / từ chối hàng loạt (1–50 tin) và kết quả lô (khi lô chạy quá thời gian chờ).
+  router.post("/admin/job-posts/bulk-approve", ...adminGuard, validate(bulkApproveSchema), (req, res, next) => {
+    void resolveController().bulkApprove(req, res, next);
+  });
+  router.post("/admin/job-posts/bulk-reject", ...adminGuard, validate(bulkRejectSchema), (req, res, next) => {
+    void resolveController().bulkReject(req, res, next);
+  });
+  router.get("/admin/job-posts/bulk/:batchId", ...adminGuard, (req, res, next) => {
+    void resolveController().bulkResult(req, res, next);
   });
   router.get("/admin/job-posts/:id", ...adminGuard, (req, res, next) => {
     void resolveController().moderationDetail(req, res, next);

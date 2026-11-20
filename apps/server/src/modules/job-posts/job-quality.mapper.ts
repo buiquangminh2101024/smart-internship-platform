@@ -26,14 +26,28 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
+/** Tiêu chí trong `qualityBreakdown` đã lưu (rỗng nếu chưa chấm hoặc hình dạng lạ). */
+function storedCriteria(breakdown: unknown): JobQualityCriterionResult[] {
+  const criteria = asRecord(breakdown).criteria;
+  // Breakdown do chính JobQualityService ghi (`StoredJobQualityBreakdown`) ⇒ tin hình dạng sau khi kiểm là mảng.
+  return (Array.isArray(criteria) ? criteria : []) as JobQualityCriterionResult[];
+}
+
+/**
+ * Lý do từ chối tự sinh từ `qualityBreakdown` đã lưu — trang chi tiết và từ chối hàng loạt không
+ * kèm lý do (bước 7). null = tin chưa chấm, hoặc không có lỗi nào được phép đưa vào lý do.
+ */
+export function suggestedRejectReasonOf(breakdown: unknown): string | null {
+  return buildRejectReason({ criteria: storedCriteria(breakdown) });
+}
+
 /** null = tin chưa được chấm (hoặc lần chấm lúc gửi duyệt bị lỗi). */
 export function toJobQualityDto(row: JobQualityColumnsRow): JobQualityDto | null {
   if (row.qualityScore === null || row.qualityBand === null || row.qualityVersion === null || row.qualityScoredAt === null) {
     return null;
   }
   const breakdown = asRecord(row.qualityBreakdown);
-  // Breakdown do chính JobQualityService ghi (`StoredJobQualityBreakdown`) ⇒ tin hình dạng sau khi kiểm là mảng.
-  const criteria = (Array.isArray(breakdown.criteria) ? breakdown.criteria : []) as JobQualityCriterionResult[];
+  const criteria = storedCriteria(row.qualityBreakdown);
   const flags = Array.isArray(breakdown.flags) ? breakdown.flags.filter((flag): flag is string => typeof flag === "string") : [];
   const reason = typeof breakdown.reason === "string" && SCORED_REASONS.has(breakdown.reason) ? (breakdown.reason as JobQualityScoredReason) : null;
 

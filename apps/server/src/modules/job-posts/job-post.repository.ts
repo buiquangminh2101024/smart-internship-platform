@@ -156,6 +156,23 @@ export function moderationKeysetWhere(sort: ModerationQueueSort, anchor: Moderat
   }
 }
 
+/** Điểm / vùng / breakdown của tin, đọc ngay sau khi đổi trạng thái (bước 5, 7). */
+export interface JobPostQualitySnapshot {
+  qualityScore: number | null;
+  qualityBand: JobQualityBand | null;
+  qualityBreakdown: Prisma.JsonValue | null;
+}
+
+/** Một tin của lô duyệt / từ chối hàng loạt (AD-29 bước 7). */
+export interface BulkModerationPost {
+  id: string;
+  status: JobPostStatus;
+  title: string;
+  companyId: string;
+  company: { name: string };
+  qualityBreakdown: Prisma.JsonValue | null;
+}
+
 export interface PublicJobSearchFilter {
   q?: string;
   companyId?: string;
@@ -269,8 +286,27 @@ export class JobPostRepository {
    * `transitionIfStatus` thắng: dòng tin đang bị khoá nên lối chấm nền không ghi
    * xen vào được, giá trị đọc ra là điểm của tin đúng lúc được quyết định.
    */
-  findQuality(id: string, db: Db = this.prisma): Promise<{ qualityScore: number | null; qualityBand: JobQualityBand | null } | null> {
-    return db.jobPost.findUnique({ where: { id }, select: { qualityScore: true, qualityBand: true } });
+  findQuality(id: string, db: Db = this.prisma): Promise<JobPostQualitySnapshot | null> {
+    return db.jobPost.findUnique({ where: { id }, select: { qualityScore: true, qualityBand: true, qualityBreakdown: true } });
+  }
+
+  /**
+   * AD-29 bước 7 — đọc trước cả lô duyệt / từ chối bằng một câu: chỉ các cột lô cần
+   * (trạng thái để bỏ qua sớm, tiêu đề / tên công ty cho thông báo và audit, breakdown
+   * cho lý do tự sinh). Không kèm `jobPostInclude`: lô không trả DTO.
+   */
+  findForBulkModeration(ids: string[], db: Db = this.prisma): Promise<BulkModerationPost[]> {
+    return db.jobPost.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        status: true,
+        title: true,
+        companyId: true,
+        company: { select: { name: true } },
+        qualityBreakdown: true,
+      },
+    });
   }
 
   async delete(id: string, db: Db = this.prisma): Promise<void> {
@@ -553,6 +589,8 @@ export class JobPostRepository {
       // AD-29 — điểm / vùng của tin lúc Admin quyết định.
       qualityScore?: number | null;
       qualityBand?: JobQualityBand | null;
+      /** AD-29 bước 7 — quyết định qua duyệt / từ chối hàng loạt. */
+      bulk?: boolean;
     },
     db: Db = this.prisma,
   ): Promise<JobPostModerationAction> {

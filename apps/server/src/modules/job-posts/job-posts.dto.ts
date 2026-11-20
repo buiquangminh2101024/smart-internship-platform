@@ -81,6 +81,21 @@ export const moderationQueueQuerySchema = z.object({
 /** GET /admin/job-posts/ids — cùng bộ lọc với hàng đợi, không phân trang. */
 export const moderationIdsQuerySchema = z.object(moderationFilterFields);
 
+// AD-29 bước 7 — lô duyệt / từ chối: 1–50 id, không trùng.
+const bulkIds = z
+  .array(z.string().trim().min(1))
+  .min(1)
+  .max(MODERATION_BATCH_LIMIT)
+  .refine((ids) => new Set(ids).size === ids.length, "Duplicate job post id");
+
+export const bulkApproveSchema = z.object({ ids: bulkIds });
+
+export const bulkRejectSchema = z.object({
+  ids: bulkIds,
+  // Bỏ trống ⇒ mỗi tin dùng lý do tự sinh từ điểm chất lượng.
+  reason: z.string().trim().min(1).optional(),
+});
+
 export const jobPostSearchQuerySchema = z.object({
   q: optionalText,
   companyId: optionalText,

@@ -364,6 +364,40 @@ approve / reject (một tin, bulk) ──► JobPostsService
 - Thông báo: mỗi tin một thông báo cho employer của công ty, như hiện tại (Q3).
 - Rate limit nhẹ cho hai endpoint (dùng cơ chế Redis sẵn có), ví dụ 10 lần / phút / admin.
 
+**Chốt thêm trước khi làm (2026-11-20, chủ dự án đồng ý):**
+
+- **Đo trước trên Neon** (18 tin `PENDING` thật, 14 công ty, 1–3 NTD mỗi công ty; mỗi tin chạy đủ các câu của một lần duyệt trong transaction rồi rollback, DB không đổi). Một tin ~0,5–0,6 s. Ước 50 tin:
+
+  | Ghi thông báo | Chạy cùng lúc | 50 tin |
+  |---|---|---|
+  | Như duyệt một tin (mỗi NTD 3 câu: đọc email, thông báo, outbox) | 1 | ~29 s |
+  | Như duyệt một tin | 5 | ~8,7 s |
+  | Gọn | 1 | ~26 s |
+  | **Gọn** | **5** | **~5,9 s** |
+  | Gọn | 10 | ~3,3 s |
+
+  Chạy lần lượt như mô tả ban đầu thì quá xa mốc 7–8 s chủ dự án đặt cho trải nghiệm Admin, và sát timeout 60 s của nginx.
+- **Ghi thông báo gọn:** email NTD của mọi công ty trong lô đọc trước bằng một câu; trong transaction mỗi tin, thông báo ghi một câu (`createManyAndReturn`) và outbox một câu, thay vì 3 câu cho mỗi NTD. Nội dung, email, đẩy realtime giữ như `notifyMany`. Hàm mới `NotificationsService.notifyRecipients`.
+- **Bớt câu khác:** đọc trước cả lô tin bằng một câu (không đọc từng tin); trong transaction không đọc lại tin để trả DTO (lô chỉ trả id).
+- **Chạy tối đa 5 tin cùng lúc** (`BULK_MODERATION_CONCURRENCY`), mỗi tin vẫn một transaction riêng. Không chọn 10: mỗi transaction giữ một kết nối DB, Prisma mặc định mở (số nhân vật lý × 2 + 1) kết nối, máy dev 6 nhân ⇒ 13. Chạy 10 thì request khác chỉ còn 3 kết nối, hai Admin cùng chạy lô là vượt. Đổi lại 5 so với 10 chỉ chậm hơn ~2,6 s cho 50 tin, vẫn dưới mốc.
+- **Kết hợp đồng bộ và chạy nền:** server chờ tối đa 7 s (`BULK_MODERATION_SYNC_MS`). Xong trong 7 s ⇒ trả đủ kết quả. Quá 7 s ⇒ trả phần đã xong, `pending` là các tin chưa xong, phần còn lại chạy tiếp ở nền. Response luôn cùng một kiểu `{ batchId, succeeded, skipped, pending }`, nên frontend chỉ xử lý một dạng. `GET /admin/job-posts/bulk/:batchId` trả kết quả mới nhất của lô. Lý do làm luôn thay vì đợi số đo bước 11: tới bước 11 giao diện đã làm xong cho dạng "trả ngay", thêm sau thì phải sửa giao diện, shared-types và test lần hai.
+  - Kết quả lô giữ trong bộ nhớ (service singleton), 10 phút sau khi lô chạy xong. Chỉ Admin tạo lô mới đọc được; lô khác / hết hạn ⇒ 404 `BULK_BATCH_NOT_FOUND`.
+  - Server khởi động lại giữa chừng thì mất kết quả lô, nhưng tin nào đã duyệt / từ chối thì vẫn vậy (mỗi tin một transaction đã commit). Admin tải lại hàng đợi là thấy đúng.
+- **Lỗi bất ngờ ở một tin** (lỗi DB…) ⇒ ghi log, tin đó vào `skipped` với lý do `FAILED`, lô chạy tiếp. Thêm vào ba lý do của plan.
+- **Từ chối không kèm lý do:** lý do tự sinh tính từ `qualityBreakdown` (cùng cách `suggestedRejectReason` ở trang chi tiết). Tin chưa chấm, hoặc không có lỗi nào được đưa vào lý do ⇒ `REASON_REQUIRED` ngay khi đọc trước, không mở transaction. Trong transaction tính lại từ điểm đọc **sau khi** đổi trạng thái (như bước 5); lối chấm nền vừa ghi điểm mới làm mất lý do ⇒ rollback, `REASON_REQUIRED`.
+- **Chưa gọi chấm bảng điểm / tự mời sau khi duyệt hàng loạt:** để bước 8 (hàng đợi chạy lần lượt). Bước 7 và 8 commit cùng nhau.
+- Rate limit: 10 lô / phút / Admin, chung cho duyệt và từ chối. Redis lỗi thì vẫn cho chạy (giới hạn chỉ để đỡ tải, giống xuất nhật ký).
+
+- **Đã làm (2026-11-20):** `POST /admin/job-posts/bulk-approve`, `POST /admin/job-posts/bulk-reject`, `GET /admin/job-posts/bulk/:batchId` (khai báo trước `/:id`). `pending` khác rỗng ⇒ HTTP 202, xong hết ⇒ 200; body luôn `BulkModerationResult = { batchId, action, succeeded, skipped, pending }`. Thêm `tests/unit/job-post-bulk-moderation.test.ts` (12 test); 739/739, `tsc` sạch cho server (`src`, `tests`) và web. Chi tiết:
+  - `job-posts/bulk-moderation-batches.ts` (`BulkModerationBatches`): chạy lô với trần số tin cùng lúc, chờ có giới hạn, giữ kết quả theo `batchId`; kết quả giữ thứ tự id Admin gửi lên. Đăng ký `asFunction(...).singleton()` trong `job-posts.routes.ts`.
+  - `JobPostsService.transitionAndRecord`: lõi chung "đổi trạng thái có điều kiện → đọc điểm → ghi moderation action" cho cả một tin (`moderateTransition`, bước 5) và lô. `bulkApprove` / `bulkReject` / `bulkResult` cùng file; một tin trong lô là `moderateBulkItem`.
+  - Đọc trước: `JobPostRepository.findForBulkModeration` (chỉ các cột lô cần), `EmployerRepository.findRecipientsByCompanyIds` (NTD + email theo công ty). Tin không có / không còn `PENDING` / từ chối không lý do mà tin không sinh được lý do ⇒ bỏ qua ngay, không mở transaction.
+  - `findQuality` đọc thêm `qualityBreakdown` (lô từ chối tính lại lý do sau khi đổi trạng thái). Lý do tự sinh dùng `suggestedRejectReasonOf(breakdown)`, tách từ `toJobQualityDto` để trang chi tiết và lô ra cùng một chuỗi.
+  - `NotificationsService.notifyRecipients` + `NotificationsRepository.createManyAndReturn` + `OutboxRepository.createMany`: cùng nội dung / email / đẩy realtime với `notifyMany`.
+  - Moderation action `bulk = true` kèm điểm / vùng; audit `metadata = { bulk, batchId, qualityScore, qualityBand }` (từ chối thêm `reason`), `summary` như thao tác một tin.
+  - Hai Admin cùng chọn một tin: người chậm nhận `NOT_PENDING` cho tin đó, các tin khác của lô vẫn chạy.
+  - Probe trên Neon bằng **chính code này** (thay `$transaction` bằng bản chạy thật rồi rollback; DB không đổi, 0 lỗi): 18 tin `PENDING` + 1 tin đang hiển thị + 1 id không tồn tại ⇒ 18 transaction, `NOT_PENDING` 1, `NOT_FOUND` 1; `createManyAndReturn` chạy được qua pooler của Neon. Thời gian: duyệt 18 tin ~1,85 s khi kết nối đã mở (ước 50 tin ≈ 5,1 s), ~2,6–2,8 s khi là lô đầu sau khi khởi động (Prisma mở thêm kết nối tới Neon, ước ≈ 7,2–7,9 s, vẫn có phần chạy nền đỡ). Từ chối kèm lý do ~1,9 s. Từ chối lý do tự sinh: cả 18 tin trên Neon chưa chấm ⇒ đúng `REASON_REQUIRED`, không mở transaction nào.
+
 ### Bước 8 — Việc sau khi duyệt hàng loạt chạy lần lượt
 
 - `PublishFollowUpService.enqueue(jobIds)`: một hàng đợi trong bộ nhớ, chạy **một lượt tại một thời điểm**.

@@ -20,6 +20,11 @@ export class OutboxRepository {
     return db.outboxEvent.create({ data });
   }
 
+  async createMany(data: OutboxWriteData[], db: Db = this.prisma): Promise<void> {
+    if (data.length === 0) return;
+    await db.outboxEvent.createMany({ data });
+  }
+
   /**
    * Chuyển một lô PENDING đã tới hạn sang PROCESSING rồi trả về chính lô đó.
    * updateMany có điều kiện `status: PENDING` nên hai lần quét chồng nhau không

@@ -1484,6 +1484,38 @@ export interface ModerationQueueIdsResponse {
   total: number;
 }
 
+/** AD-29 bước 7 — POST /admin/job-posts/bulk-approve (1–50 id, không trùng). */
+export interface BulkApproveRequest {
+  ids: string[];
+}
+
+/**
+ * POST /admin/job-posts/bulk-reject. Có `reason` ⇒ dùng cho mọi tin; không có ⇒ mỗi tin
+ * dùng lý do tự sinh từ điểm chất lượng của chính nó.
+ */
+export interface BulkRejectRequest {
+  ids: string[];
+  reason?: string;
+}
+
+/**
+ * NOT_FOUND: không có tin. NOT_PENDING: tin không còn chờ duyệt (kể cả Admin khác vừa xử lý).
+ * REASON_REQUIRED: từ chối không kèm lý do mà tin không sinh được lý do. FAILED: lỗi bất ngờ.
+ */
+export type BulkModerationSkipReason = "NOT_FOUND" | "NOT_PENDING" | "REASON_REQUIRED" | "FAILED";
+
+/**
+ * Kết quả một lô duyệt / từ chối. `pending` khác rỗng ⇒ lô chưa xong trong thời gian chờ,
+ * phần còn lại chạy nền; hỏi lại bằng GET /admin/job-posts/bulk/:batchId.
+ */
+export interface BulkModerationResult {
+  batchId: string;
+  action: "APPROVE" | "REJECT";
+  succeeded: string[];
+  skipped: { id: string; reason: BulkModerationSkipReason }[];
+  pending: string[];
+}
+
 // ─── CV & Saved Jobs (Phase 7) ───────────────────────────────────────────
 
 export interface CvRecord {

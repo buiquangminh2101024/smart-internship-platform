@@ -1,6 +1,9 @@
 import type { NextFunction, Request, Response } from "express";
 import type {
   ApiResponse,
+  BulkApproveRequest,
+  BulkModerationResult,
+  BulkRejectRequest,
   ConfirmRequirementsRequest,
   CreateJobPostRequest,
   EmployerJobPostListQuery,
@@ -249,6 +252,38 @@ export class JobPostsController {
       next(error);
     }
   };
+
+  // AD-29 bước 7 — `pending` khác rỗng ⇒ lô còn chạy ở nền ⇒ 202.
+  bulkApprove = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { ids } = req.body as BulkApproveRequest;
+      this.sendBulk(res, await this.jobPostsService.bulkApprove(req.user!.id, ids));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  bulkReject = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { ids, reason } = req.body as BulkRejectRequest;
+      this.sendBulk(res, await this.jobPostsService.bulkReject(req.user!.id, ids, reason));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  bulkResult = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      this.sendBulk(res, this.jobPostsService.bulkResult(req.user!.id, req.params.batchId as string));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  private sendBulk(res: Response, result: BulkModerationResult): void {
+    const body: ApiResponse<BulkModerationResult> = { success: true, data: result };
+    res.status(result.pending.length > 0 ? 202 : 200).json(body);
+  }
 
   rescoreQuality = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
