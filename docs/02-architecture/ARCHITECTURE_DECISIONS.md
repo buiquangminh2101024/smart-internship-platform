@@ -1136,3 +1136,39 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 - `packages/shared-types`: request / response của `respond`, `ApplyFromInvitationRequest`, `CandidateOutreachInvitationDto.applicationId`, `EmployerApplicationListItem.invitation`.
 - Frontend: hộp thoại nhận lời, hộp lời mời, nhãn "Được mời".
 - FAQ trợ lý hỗ trợ: các câu nói "chấp nhận lời mời sẽ tạo hội thoại".
+
+## AD-29 — Chấm điểm chất lượng tin và duyệt / từ chối hàng loạt: điểm theo quy tắc có trọng số lưu trong `job_posts`, ba vùng gợi ý, đổi trạng thái có điều kiện (sửa một phần quy trình kiểm duyệt của `INITIAL_ARCHITECTURE_PLAN.md` §12)
+
+**Ngày:** 2026-11-20 · **Phase liên quan:** không thuộc phase đánh số. Dòng 📌 ở mục 2 của `docs/01-project/FEATURE_BACKLOG.md`. Kế hoạch chi tiết: `docs/06-backend/job-quality-moderation/PLAN.md`, `docs/05-frontend/phases/job-quality-moderation/PLAN.md`.
+
+> **Trạng thái: ĐỀ XUẤT, câu hỏi đã chốt (2026-11-20), chờ duyệt để code.** Chủ dự án chốt Q1–Q7 của plan backend. Chưa code, chưa có migration.
+
+**Bối cảnh:** Admin phải mở từng tin để duyệt hoặc từ chối. Hàng đợi chỉ xem được trang đầu, sắp theo ngày tạo tin thay vì ngày gửi duyệt. `approve` / `reject` / `retract` kiểm trạng thái ngoài transaction, nên hai admin xử lý cùng lúc có thể cùng thành công. Duyệt xong hệ thống tự gửi lời mời ngay (AD-23), nên duyệt nhầm tin kém hoặc tin lừa đảo ảnh hưởng tới ứng viên trước khi Admin kịp thu hồi.
+
+**Quyết định:**
+
+1. **Điểm chất lượng 0–100 theo quy tắc có trọng số**, không học máy (chưa có dữ liệu gán nhãn; EMSCAD không khớp ngôn ngữ, loại việc, schema). Sáu tiêu chí: độ đầy đủ 20%, chất lượng nội dung 20%, minh bạch 15%, phù hợp thực tập 10%, dấu hiệu rủi ro 25%, uy tín công ty 10%. Mỗi tiêu chí bắt đầu 100, mỗi lỗi trừ một mức cố định, có mã và câu giải thích. Số liệu nằm trong một file cấu hình có version.
+2. **Ba vùng gợi ý:** *Đề xuất duyệt* (tổng ≥ 80, không cờ chặn, không tiêu chí nào < 50), *Đề xuất từ chối* (tổng < 50 hoặc có cờ chặn), *Cần xem kỹ* (còn lại). **Cờ chặn** (ví dụ đòi ứng viên nộp tiền) không bao giờ cho tin vào vùng duyệt. Ngưỡng chốt sau bước hiệu chỉnh trên dữ liệu.
+3. **Điểm chỉ là gợi ý.** Hệ thống không tự duyệt, không tự từ chối; Admin luôn bấm xác nhận.
+4. **Lưu điểm vào cột của `job_posts`** (`qualityScore`, `qualityBand`, `qualityBreakdown`, `qualityVersion`, `qualityScoredAt`, `submittedContentHash`) và thêm `submittedAt`. **Chấm ngay theo sự kiện**, không theo giờ hay ban đêm: khi gửi duyệt (cả công ty được miễn kiểm duyệt); khi công ty có báo cáo vi phạm mới, báo cáo được xử lý bằng gỡ tin, hoặc bị thu hồi tin (chấm lại các tin `PENDING` của công ty đó); khi NTD sửa tin đang hiển thị; khi Admin bấm "Chấm lại"; bằng script khi đổi version. Lỗi chấm không chặn việc gửi duyệt hay sửa tin.
+5. **"Gửi lại mà không sửa"** nhận biết bằng mã băm nội dung lưu ở `submittedContentHash`, **chỉ ghi lúc gửi duyệt** (các lần chấm lại không ghi đè), không bằng `updatedAt`. Gửi lại có sửa thì không bị trừ.
+5b. **Tin đang hiển thị bị sửa** (sửa không cần duyệt lại) mà tụt xuống *Đề xuất từ chối* hoặc mới dính cờ chặn thì báo mọi Admin bằng thông báo mới `JOB_POST_QUALITY_DROPPED`, chỉ báo khi chuyển sang xấu. Hệ thống không tự gỡ tin.
+6. **Đổi trạng thái có điều kiện** (`updateMany where status = <trạng thái mong đợi>`) cho duyệt, từ chối, thu hồi; không khớp thì 409 và không ghi gì.
+7. **Duyệt / từ chối hàng loạt** tối đa 50 tin mỗi lần, mỗi tin một transaction riêng, trả danh sách thành công / bỏ qua. Từ chối không có lý do chung thì dùng lý do tự sinh từ lỗi của từng tin. Moderation action lưu điểm, vùng và cờ `bulk`, làm dữ liệu hiệu chỉnh về sau.
+8. **Việc sau khi duyệt hàng loạt chạy lần lượt:** chấm bảng điểm từng tin (AD-24) rồi tự mời một lần mỗi công ty (AD-23), không bắn song song. Duyệt một tin giữ hành vi cũ.
+9. **Điểm chỉ Admin thấy**; API công khai và của nhà tuyển dụng không trả điểm.
+
+**Phương án không chọn:**
+
+- *Học máy (hồi quy logistic, XGBoost) ngay từ đầu:* chưa có dữ liệu gán nhãn; ghi lại thành hướng phát triển khi đã lưu đủ quyết định thật của Admin.
+- *Tự duyệt tin điểm cao:* duyệt kéo theo tự gửi lời mời, sai một lần là ứng viên đã nhận lời mời của tin xấu.
+- *Bảng điểm riêng 1–1:* hàng đợi phải join để sắp / lọc theo điểm, không có lợi gì thêm.
+- *Tính điểm lúc xem, không lưu:* không lọc / sắp / chọn hàng loạt theo điểm trên server được, và không giữ được điểm lúc Admin quyết định.
+
+**Ảnh hưởng:**
+
+- `schema.prisma` + 1 migration viết tay (cột mới ở `job_posts`, `job_post_moderation_actions`, enum `JobQualityBand`, giá trị `JOB_POST_QUALITY_DROPPED` của `NotificationType`, backfill `submittedAt`).
+- `job-reports` (`createReport`, `executeAction` gỡ tin) và `retract` gọi trigger chấm lại theo công ty sau commit; `updateDraft` chấm lại tin đang hiển thị; `notifications` thêm template mới.
+- `job-posts`: bộ chấm thuần + cấu hình, `JobQualityService`, lõi duyệt / từ chối nhận `tx`, endpoint hàng loạt, hàng đợi có `band` / `sort` / `total`, `PublishFollowUpService`.
+- `packages/shared-types`: `JobQualityDto`, request / response hàng loạt, `submittedAt`, `pendingByBand`.
+- Frontend Admin: hàng đợi theo vùng có "Xem thêm", thanh chọn hàng loạt, thẻ điểm ở trang chi tiết thay cho phần kiểm tự động của `ReviewChecklist`.
