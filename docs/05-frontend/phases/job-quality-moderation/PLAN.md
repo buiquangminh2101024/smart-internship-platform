@@ -12,6 +12,34 @@
 
 ## Các bước
 
+### Thực hiện theo đợt (chốt 2026-11-20)
+
+Các bước F1–F6 bên dưới giữ nguyên nội dung, chỉ gộp lại khi code:
+
+| Đợt | Gồm | Ghi chú |
+| --- | --- | --- |
+| 1 | F1 + F4b | Type, hook, nhãn vùng, loại thông báo mới; thêm luôn component huy hiệu điểm dùng chung cho F2 và F4. |
+| 2 | F2 + F3 | Cùng trang `/admin/jobs`. Tách danh sách lý do từ chối chọn sẵn thành hằng số dùng chung ở đợt này (F3 và F4 cùng dùng). |
+| 3 | F4 + F5 | Trang chi tiết và hộp "Cách tính điểm"; gắn thêm nút này vào trang hàng đợi. |
+| 4 | F6 | Kiểm toàn bộ trên trình duyệt. Mỗi đợt trước vẫn chạy type check và kiểm nhanh phần vừa làm. |
+
+**Đợt 1 — đã làm (2026-11-20):**
+
+- Type đã có sẵn từ backend bước 9, không phải thêm.
+- `useJobPosts.ts`:
+  - `useAdminJobPosts({ status, band, sort })` dùng `useInfiniteQuery`; `total` nằm ở `pages[0].total`.
+  - Thêm `useAdminJobPostIds` (mutation, gọi khi bấm nút), `useBulkModerateJobPosts`, `fetchBulkModerationResult` (hỏi lại lô còn `pending`) và `useRescoreJobQuality`.
+  - Sau mỗi thao tác, invalidate `adminJobPosts`, `adminJobPostStats` và `adminJobPost`.
+  - `useAdminJobPostStats` không phải sửa, vì type đã có `pendingByBand`.
+- `job-post-display.ts`: thêm `JOB_QUALITY_BAND_LABEL`, `JOB_QUALITY_BAND_ORDER` và `topQualityIssues` (cờ chặn trước, rồi theo mức trừ).
+- Component mới `components/admin/JobQualityBadge.tsx`: hiện số điểm và nhãn vùng; tin chưa chấm hiện "Chưa chấm".
+- Trang `/admin/jobs` chỉ sửa tối thiểu cho khớp hook mới, giao diện giữ nguyên tới đợt 2.
+- F4b:
+  - Ánh xạ nhóm và nhãn nút "Kiểm tra tin" đã có từ backend; nội dung thông báo do server soạn.
+  - Thêm `JOB_POST_QUALITY_DROPPED` vào `WARNING_NOTIFICATION_TYPES`, nên thông báo hiện icon tam giác cảnh báo, nền và viền marigold.
+  - **Lệch so với F4b:** F4b ghi màu đỏ, nhưng sip-ui quy định mọi thông báo cảnh báo dùng marigold, kể cả tin bị hạ. Để đồng bộ, đợt này dùng marigold; nếu muốn đỏ thì `NotificationCenter` phải có thêm một tông màu mới.
+- Kiểm: `tsc` web sạch; eslint sạch trên các file đã sửa (28 lỗi còn lại đều có từ trước, ở file khác). Chưa kiểm trên trình duyệt: chuông thông báo kiểm ở đợt 4 (F6 bước 9), danh sách kiểm ở đợt 2.
+
 ### F1 — Type và hook
 
 - Type mới trong `packages/shared-types` (backend bước 9): `JobQualityDto`, `JobQualityBand`, `BulkModerationResult`, `JobPost.submittedAt`, `JobPost.quality`, `JobPostStats.pendingByBand`.

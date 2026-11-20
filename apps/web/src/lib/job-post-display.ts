@@ -1,4 +1,10 @@
-import type { JobPostStatus, JobPostType } from "@sip/shared-types";
+import type {
+  JobPostStatus,
+  JobPostType,
+  JobQualityBandFilter,
+  JobQualityDto,
+  JobQualityIssueDto,
+} from "@sip/shared-types";
 
 /**
  * Từ vựng trạng thái tin tuyển dụng — lấy nguyên từ
@@ -15,6 +21,33 @@ export const JOB_STATUS_LABEL: Record<JobPostStatus, { label: string; tone: Badg
   EXPIRED: { label: "Hết hạn", tone: "neutral" },
   TAKEN_DOWN: { label: "Đã hạ", tone: "danger" },
 };
+
+/**
+ * AD-29 — nhãn và màu ba vùng điểm chất lượng (+ "Chưa chấm"). Vùng do server tính; frontend
+ * không tự tính điểm (docs/05-frontend/phases/job-quality-moderation/PLAN.md, F1).
+ */
+export const JOB_QUALITY_BAND_LABEL: Record<JobQualityBandFilter, { label: string; tone: BadgeTone }> = {
+  SUGGEST_APPROVE: { label: "Đề xuất duyệt", tone: "success" },
+  NEEDS_REVIEW: { label: "Cần xem kỹ", tone: "warning" },
+  SUGGEST_REJECT: { label: "Đề xuất từ chối", tone: "danger" },
+  UNSCORED: { label: "Chưa chấm", tone: "neutral" },
+};
+
+/** Thứ tự tab vùng ở hàng đợi chờ duyệt. */
+export const JOB_QUALITY_BAND_ORDER: JobQualityBandFilter[] = ["SUGGEST_APPROVE", "NEEDS_REVIEW", "SUGGEST_REJECT", "UNSCORED"];
+
+/**
+ * Các lỗi nặng nhất của một tin (cờ chặn trước, rồi theo mức trừ giảm dần) — cho dòng tin ở
+ * hàng đợi. Trả `message` của server, không tự đặt câu.
+ */
+export function topQualityIssues(quality: JobQualityDto | null, limit = 2): JobQualityIssueDto[] {
+  if (!quality) return [];
+  const flags = new Set(quality.flags);
+  return quality.criteria
+    .flatMap((criterion) => criterion.issues)
+    .sort((a, b) => Number(flags.has(b.code)) - Number(flags.has(a.code)) || b.penalty - a.penalty)
+    .slice(0, limit);
+}
 
 export const JOB_TYPE_LABEL: Record<JobPostType, string> = {
   INTERNSHIP: "Thực tập sinh",

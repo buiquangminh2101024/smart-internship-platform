@@ -2,6 +2,9 @@
 
 import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  BulkApproveRequest,
+  BulkModerationResult,
+  BulkRejectRequest,
   ConfirmRequirementsRequest,
   EmployerJobPostListQuery,
   ExtractedJobRequirements,
@@ -9,6 +12,10 @@ import type {
   JobPostSearchQuery,
   JobPostStats,
   JobPostStatus,
+  JobQualityBandFilter,
+  JobQualityDto,
+  ModerationQueueIdsResponse,
+  ModerationQueueSort,
   PaginatedResponse,
   SimilarJobItem,
   UpdateJobPostRequest,
@@ -127,14 +134,86 @@ export function useConfirmJobRequirements(jobPostId: string) {
 
 // ─── Admin ─────────────────────────────────────────────────────────────────
 
-export function useAdminJobPosts(status: JobPostStatus | "ALL") {
-  return useQuery({
-    queryKey: ["adminJobPosts", status],
-    queryFn: () =>
+/** Bộ lọc hàng đợi Admin (AD-29). `status: "ALL"` = không lọc trạng thái. */
+export interface AdminJobPostsFilter {
+  status: JobPostStatus | "ALL";
+  band?: JobQualityBandFilter | undefined;
+  sort?: ModerationQueueSort | undefined;
+}
+
+function moderationQuery(filter: AdminJobPostsFilter) {
+  return {
+    status: filter.status === "ALL" ? undefined : filter.status,
+    band: filter.band,
+    sort: filter.sort,
+  };
+}
+
+/**
+ * Hàng đợi kiểm duyệt có "Xem thêm" (AD-29 F1, điểm 1): tải tiếp theo `nextCursor`.
+ * `total` (số tin khớp bộ lọc) lấy ở trang đầu: `pages[0].total`.
+ */
+export function useAdminJobPosts(filter: AdminJobPostsFilter) {
+  return useInfiniteQuery({
+    queryKey: ["adminJobPosts", filter.status, filter.band ?? null, filter.sort ?? null],
+    queryFn: ({ pageParam }) =>
       apiFetch<PaginatedResponse<JobPost>>(
         "admin",
-        `/admin/job-posts${toQueryString({ status: status === "ALL" ? undefined : status })}`,
+        `/admin/job-posts${toQueryString({ ...moderationQuery(filter), cursor: pageParam ?? undefined })}`,
       ),
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => (lastPage.hasMore && lastPage.nextCursor ? lastPage.nextCursor : null),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * Lấy tối đa 50 id khớp bộ lọc cho nút "Chọn tất cả tin trong vùng" (F3). Gọi khi bấm nút
+ * (không tự chạy), nên là mutation chứ không phải query.
+ */
+export function useAdminJobPostIds() {
+  return useMutation({
+    mutationFn: (filter: AdminJobPostsFilter) =>
+      apiFetch<ModerationQueueIdsResponse>("admin", `/admin/job-posts/ids${toQueryString(moderationQuery(filter))}`),
+  });
+}
+
+function invalidateAdminJobPosts(queryClient: ReturnType<typeof useQueryClient>) {
+  void queryClient.invalidateQueries({ queryKey: ["adminJobPosts"] });
+  void queryClient.invalidateQueries({ queryKey: ["adminJobPostStats"] });
+  void queryClient.invalidateQueries({ queryKey: ["adminJobPost"] });
+}
+
+/**
+ * Duyệt / từ chối hàng loạt (AD-29 bước 7). `reason` chỉ dùng khi từ chối; bỏ trống thì mỗi tin
+ * dùng lý do tự sinh của nó. Kết quả có thể còn `pending` (lô chạy tiếp ở nền).
+ */
+export function useBulkModerateJobPosts() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { action: "APPROVE" } & BulkApproveRequest | { action: "REJECT" } & BulkRejectRequest) => {
+      const { action, ...body } = input;
+      return apiFetch<BulkModerationResult>(
+        "admin",
+        `/admin/job-posts/${action === "APPROVE" ? "bulk-approve" : "bulk-reject"}`,
+        { method: "POST", body: JSON.stringify(body) },
+      );
+    },
+    onSettled: () => invalidateAdminJobPosts(queryClient),
+  });
+}
+
+/** Hỏi lại kết quả một lô chưa xong (`pending` khác rỗng). */
+export function fetchBulkModerationResult(batchId: string) {
+  return apiFetch<BulkModerationResult>("admin", `/admin/job-posts/bulk/${batchId}`);
+}
+
+/** Nút "Chấm lại" ở thẻ điểm (F4). */
+export function useRescoreJobQuality(jobPostId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiFetch<JobQualityDto>("admin", `/admin/job-posts/${jobPostId}/quality/rescore`, { method: "POST" }),
+    onSettled: () => invalidateAdminJobPosts(queryClient),
   });
 }
 

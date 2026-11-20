@@ -24,7 +24,13 @@ const FILTERS: { value: JobPostStatus | "ALL"; label: string }[] = [
  */
 export default function AdminJobPostsPage() {
   const [status, setStatus] = useState<JobPostStatus | "ALL">("PENDING");
-  const { data, isLoading } = useAdminJobPosts(status);
+  // Đợt 1 (AD-29 F1): hook đã chuyển sang tải theo trang; giao diện "Xem thêm", tab vùng và
+  // sắp xếp làm ở đợt 2 (F2). Tạm hiện các trang đã tải như trước.
+  const query = useAdminJobPosts({ status });
+  const isLoading = query.isLoading;
+  const data = query.data
+    ? { items: query.data.pages.flatMap((page) => page.items), hasMore: query.hasNextPage }
+    : undefined;
   const { data: stats } = useAdminJobPostStats();
 
   return (

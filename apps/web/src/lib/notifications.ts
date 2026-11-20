@@ -147,7 +147,7 @@ export const NOTIFICATION_ACTION_LABEL: Record<NotificationType, string> = {
 };
 
 /**
- * Loại cảnh báo (bị từ chối, bị gỡ, sắp hết hạn, hồ sơ tồn chờ xử lý): tô marigold thay màu
+ * Loại cảnh báo (bị từ chối, bị gỡ, sắp hết hạn, hồ sơ tồn chờ xử lý, tin tụt điểm): tô marigold thay màu
  * khu vực.
  */
 export const WARNING_NOTIFICATION_TYPES: ReadonlySet<NotificationType> = new Set<NotificationType>([
@@ -155,6 +155,8 @@ export const WARNING_NOTIFICATION_TYPES: ReadonlySet<NotificationType> = new Set
   "JOB_POST_REJECTED",
   "JOB_POST_TAKEN_DOWN",
   "JOB_POST_EXPIRING",
+  // AD-29 (Q7) — tin đang hiển thị bị sửa tụt xuống vùng đề xuất từ chối; icon tam giác cảnh báo.
+  "JOB_POST_QUALITY_DROPPED",
   "COMPANY_REJECTED",
   "SUBSCRIPTION_EXPIRING",
   "ACCOUNT_SUSPENDED",
