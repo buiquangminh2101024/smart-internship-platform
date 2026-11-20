@@ -37,6 +37,7 @@ import {
   type JobPostWithRelations,
   type JobPostWriteData,
 } from "./job-post.repository";
+import type { JobQualityCompanyTrigger, JobQualityService } from "./job-quality.service";
 
 // Employer tự chọn ngày hết hạn nhưng không quá 90 ngày kể từ lúc đặt —
 // quyết định chốt khi lên kế hoạch Phase 6 (xem
@@ -59,6 +60,8 @@ export class JobPostsService {
   private readonly autoOutreachTrigger: AutoOutreachTrigger;
   private readonly matchScoreTrigger: MatchScoreTrigger;
   private readonly matchScoreRepository: MatchScoreRepository;
+  private readonly jobQualityService: JobQualityService;
+  private readonly jobQualityCompanyTrigger: JobQualityCompanyTrigger;
 
   constructor({
     prisma,
@@ -73,6 +76,8 @@ export class JobPostsService {
     autoOutreachTrigger,
     matchScoreTrigger,
     matchScoreRepository,
+    jobQualityService,
+    jobQualityCompanyTrigger,
   }: {
     prisma: PrismaClient;
     jobPostRepository: JobPostRepository;
@@ -86,6 +91,8 @@ export class JobPostsService {
     autoOutreachTrigger: AutoOutreachTrigger;
     matchScoreTrigger: MatchScoreTrigger;
     matchScoreRepository: MatchScoreRepository;
+    jobQualityService: JobQualityService;
+    jobQualityCompanyTrigger: JobQualityCompanyTrigger;
   }) {
     this.prisma = prisma;
     this.jobPostRepository = jobPostRepository;
@@ -99,6 +106,8 @@ export class JobPostsService {
     this.autoOutreachTrigger = autoOutreachTrigger;
     this.matchScoreTrigger = matchScoreTrigger;
     this.matchScoreRepository = matchScoreRepository;
+    this.jobQualityService = jobQualityService;
+    this.jobQualityCompanyTrigger = jobQualityCompanyTrigger;
   }
 
   // ─── Public (Guest) ──────────────────────────────────────────────────────
@@ -342,6 +351,9 @@ export class JobPostsService {
 
     if (jobPost.status === "PUBLISHED") {
       this.matchScoreTrigger?.(id);
+      // AD-29 Q7 — chấm lại sau commit, chờ xong rồi mới trả (không ném lỗi). Tin nháp không
+      // chấm: sẽ chấm lúc gửi duyệt.
+      await this.jobQualityService.rescoreAfterPublishedEdit(jobPost);
     }
 
     if (dto.skillIds || dto.majors) {
@@ -410,13 +422,17 @@ export class JobPostsService {
     await this.requirePublishQuota(company);
 
     const autoPublished = !company.requiresApproval;
+    const now = new Date();
+    // AD-29 — chấm điểm chất lượng trước transaction, ghi cùng lệnh đổi trạng thái bên dưới.
+    // Không ném lỗi: chấm lỗi thì tin vẫn được gửi, ở vùng "chưa chấm".
+    const submission = await this.jobQualityService.submissionColumns(jobPost, { now, autoPublished });
     const updated = await this.prisma.$transaction(async (tx) => {
       // L28: đếm trước khi thêm dòng SUBMITTED mới. Tin bị từ chối quay về DRAFT
       // nên trạng thái không cho biết đây là lần gửi đầu hay gửi lại.
       const resubmit = (await this.jobPostRepository.countModerationActions(id, "SUBMITTED", tx)) > 0;
       await this.jobPostRepository.createModerationAction({ jobPostId: id, action: "SUBMITTED", actorId: userId }, tx);
       if (!autoPublished) {
-        const pending = await this.jobPostRepository.update(id, { status: "PENDING" }, tx);
+        const pending = await this.jobPostRepository.update(id, { status: "PENDING", ...submission }, tx);
         // AD-12 — company.requiresApproval=true: Admin cần biết có tin chờ duyệt.
         const adminIds = await this.userRepository.findAdminIds(tx);
         await this.notificationsService.notifyMany(
@@ -452,7 +468,7 @@ export class JobPostsService {
         },
         tx,
       );
-      return this.jobPostRepository.update(id, { status: "PUBLISHED", publishedAt: new Date() }, tx);
+      return this.jobPostRepository.update(id, { status: "PUBLISHED", publishedAt: now, ...submission }, tx);
     });
 
     // AD-23 — tin vừa hiển thị và đã bật tự mời (đặt lúc tạo tin) ⇒ mời ngay, không chờ.
@@ -588,6 +604,8 @@ export class JobPostsService {
       );
       return result;
     });
+    // AD-29 Q4 — công ty vừa bị thu hồi tin ⇒ chấm lại các tin đang chờ duyệt của công ty.
+    this.jobQualityCompanyTrigger(updated.companyId);
     return toJobPostDto(updated);
   }
 

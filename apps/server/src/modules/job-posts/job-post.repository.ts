@@ -3,6 +3,7 @@ import {
   type JobPost,
   type JobPostModerationAction,
   type JobPostStatus,
+  type JobQualityBand,
   type JobPostType,
   type MajorRelevance,
   type ModerationActionType,
@@ -68,6 +69,14 @@ export interface JobPostWriteData {
   status?: JobPostStatus;
   publishedAt?: Date | null;
   closedAt?: Date | null;
+  // AD-29 — lúc gửi duyệt + điểm chất lượng, do JobQualityService.submissionColumns tính.
+  submittedAt?: Date | null;
+  qualityScore?: number | null;
+  qualityBand?: JobQualityBand | null;
+  qualityBreakdown?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput;
+  qualityVersion?: number | null;
+  qualityScoredAt?: Date | null;
+  submittedContentHash?: string | null;
 }
 
 interface Page<T> {

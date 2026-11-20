@@ -782,6 +782,50 @@ export interface JobPost {
   viewer?: JobPostViewerInfo;
 }
 
+// ─── AD-29 — điểm chất lượng tin (chỉ Admin thấy) ───────────────────────────
+// docs/06-backend/job-quality-moderation/PLAN.md. Bước 4 dùng cho POST
+// /admin/job-posts/:id/quality/rescore; bước 9 gắn vào `JobPost.quality` (mapper Admin).
+
+export type JobQualityBand = "SUGGEST_APPROVE" | "NEEDS_REVIEW" | "SUGGEST_REJECT";
+
+/** Vì sao tin được chấm lần gần nhất. */
+export type JobQualityScoredReason = "SUBMITTED" | "COMPANY_EVENT" | "PUBLISHED_EDIT" | "MANUAL" | "SCRIPT";
+
+export type JobQualityCriterionKey = "COMPLETENESS" | "CONTENT" | "TRANSPARENCY" | "INTERNSHIP_FIT" | "RISK" | "COMPANY";
+
+export interface JobQualityIssueDto {
+  /** Mã lỗi trong `job-quality.config.ts` (ví dụ `ASKS_FOR_MONEY`). */
+  code: string;
+  message: string;
+  penalty: number;
+}
+
+export interface JobQualityCriterionDto {
+  key: JobQualityCriterionKey;
+  label: string;
+  /** Điểm của tiêu chí, thang 100. */
+  score: number;
+  /** Trọng số (tổng 100). */
+  weight: number;
+  issues: JobQualityIssueDto[];
+}
+
+export interface JobQualityDto {
+  score: number;
+  band: JobQualityBand;
+  version: number;
+  scoredAt: string;
+  /** null khi dữ liệu đã lưu không ghi lý do (không xảy ra với điểm do bước 4 trở đi ghi). */
+  scoredReason: JobQualityScoredReason | null;
+  criteria: JobQualityCriterionDto[];
+  /** Mã lỗi chặn (ví dụ đòi nộp tiền): có cờ thì luôn ở vùng đề xuất từ chối. */
+  flags: string[];
+  /** Lý do từ chối tự sinh; null = không có lỗi nào được đưa vào lý do. */
+  suggestedRejectReason: string | null;
+  /** `version` khác phiên bản bộ chấm hiện tại. */
+  outdated: boolean;
+}
+
 export interface JobPostViewerInfo {
   /**
    * Điểm phù hợp lưu trong bảng điểm (AD-24: chấm khi tin được đăng và mỗi đêm), không

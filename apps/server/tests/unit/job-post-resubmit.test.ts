@@ -71,6 +71,7 @@ function buildService(options: { requiresApproval: boolean; history: ModerationA
       },
     },
     matchScoreTrigger: () => {},
+    jobQualityService: { submissionColumns: async () => ({ submittedAt: new Date() }) },
   } as unknown as ConstructorParameters<typeof JobPostsService>[0]);
   return { service, audits };
 }

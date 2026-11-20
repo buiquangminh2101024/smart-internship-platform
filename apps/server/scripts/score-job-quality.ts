@@ -1,16 +1,22 @@
-import { PrismaClient, type JobPostStatus } from "@prisma/client";
+import { PrismaClient, type JobPostStatus, type Prisma } from "@prisma/client";
 import { QUALITY_CRITERIA, QUALITY_SCORE_VERSION } from "../src/modules/job-posts/job-quality.config";
 import { scoreJobPost, type JobQualityResult } from "../src/modules/job-posts/job-quality";
 import { JobQualityInputLoader } from "../src/modules/job-posts/job-quality-input.loader";
+import { JobQualityService } from "../src/modules/job-posts/job-quality.service";
+import { logger } from "../src/shared/logger";
 
-// AD-29 — chấm điểm chất lượng tin (docs/06-backend/job-quality-moderation/PLAN.md, bước 3).
+// AD-29 — chấm điểm chất lượng tin (docs/06-backend/job-quality-moderation/PLAN.md, bước 3–4).
 //
 //   npm run score-job-quality --workspace=apps/server -- --dry-run [--status PENDING] [--company <id>] [--worst 15]
+//   npm run score-job-quality --workspace=apps/server -- [--all | --status X] [--company <id>] [--outdated]
 //
 // - `--dry-run`: chấm mọi tin (trừ nháp) rồi in phân bố điểm, số tin mỗi vùng, mã lỗi hay gặp,
 //   các tin có cờ chặn và thời gian chấm. KHÔNG ghi DB. Dùng để hiệu chỉnh trọng số / ngưỡng.
-// - Chế độ ghi (bỏ `--dry-run`) làm ở bước 4, khi đã có `JobQualityService.scoreAndStore`.
+// - Không có `--dry-run`: chấm và GHI cột `quality*` (lý do `SCRIPT`, không đổi
+//   `submittedContentHash`, không đổi trạng thái tin). Mặc định chỉ tin PENDING; `--all` = mọi
+//   tin trừ nháp. Dùng sau khi áp migration và mỗi khi tăng `QUALITY_SCORE_VERSION`.
 // - `--status`: chỉ chấm tin ở trạng thái đó. `--company`: chỉ tin của công ty đó.
+// - `--outdated`: chỉ tin chưa có điểm hoặc có điểm của phiên bản bộ chấm khác bản hiện tại.
 // - `--worst N`: in N tin điểm thấp nhất (mặc định 15).
 // In id + tiêu đề tin (không phải dữ liệu cá nhân), không in tên người hay email.
 
@@ -32,12 +38,14 @@ function readFlag(name: string): string | undefined {
 }
 
 const dryRun = process.argv.includes("--dry-run");
+const allFlag = process.argv.includes("--all");
+const outdatedOnly = process.argv.includes("--outdated");
 const statusFlag = readFlag("--status")?.toUpperCase();
 const companyId = readFlag("--company");
 const worstCount = Number(readFlag("--worst") ?? 15);
 
-if (!dryRun) {
-  console.error("Chế độ ghi chưa có (bước 4). Chạy với --dry-run.");
+if (allFlag && statusFlag) {
+  console.error("Chỉ dùng một trong --all và --status.");
   process.exit(1);
 }
 if (statusFlag && !STATUSES.includes(statusFlag as JobPostStatus)) {
@@ -47,6 +55,9 @@ if (statusFlag && !STATUSES.includes(statusFlag as JobPostStatus)) {
 
 const prisma = new PrismaClient();
 const loader = new JobQualityInputLoader({ prisma });
+// Script chỉ dùng scoreAndStoreMany: không cần userRepository / notificationsService (chỉ lối sửa tin
+// đang hiển thị mới gửi thông báo).
+const service = new JobQualityService({ prisma, jobQualityInputLoader: loader, logger } as ConstructorParameters<typeof JobQualityService>[0]);
 
 interface Scored {
   id: string;
@@ -81,20 +92,37 @@ function printBands(label: string, rows: Scored[]): void {
 
 async function main(): Promise<void> {
   const now = new Date();
-  const where = {
-    status: statusFlag ? (statusFlag as JobPostStatus) : { not: "DRAFT" as JobPostStatus },
+  // Ghi mà không chỉ định ⇒ chỉ tin PENDING (hàng đợi). Dry-run giữ mặc định cũ: mọi tin trừ nháp.
+  const status: JobPostStatus | undefined = statusFlag ? (statusFlag as JobPostStatus) : !dryRun && !allFlag ? "PENDING" : undefined;
+  const where: Prisma.JobPostWhereInput = {
+    status: status ?? { not: "DRAFT" },
     ...(companyId ? { companyId } : {}),
+    ...(outdatedOnly ? { OR: [{ qualityVersion: null }, { qualityVersion: { not: QUALITY_SCORE_VERSION } }] } : {}),
   };
   const ids = (await prisma.jobPost.findMany({ where, select: { id: true }, orderBy: { createdAt: "asc" } })).map((row) => row.id);
-  console.log(`Bộ chấm v${QUALITY_SCORE_VERSION} — ${ids.length} tin${statusFlag ? ` ${statusFlag}` : " (trừ nháp)"}${companyId ? `, công ty ${companyId}` : ""}. Không ghi DB.\n`);
+  console.log(
+    `Bộ chấm v${QUALITY_SCORE_VERSION} — ${ids.length} tin${status ? ` ${status}` : " (trừ nháp)"}` +
+      `${companyId ? `, công ty ${companyId}` : ""}${outdatedOnly ? ", chỉ tin chưa chấm / khác phiên bản" : ""}. ` +
+      `${dryRun ? "Không ghi DB." : "GHI vào DB (lý do SCRIPT)."}\n`,
+  );
   if (ids.length === 0) return;
 
   const scored: Scored[] = [];
   let loadMs = 0;
   let scoreMs = 0;
   for (let offset = 0; offset < ids.length; offset += BATCH) {
+    const batch = ids.slice(offset, offset + BATCH);
+    if (!dryRun) {
+      // Chế độ ghi: nạp + chấm + ghi từng tin trong JobQualityService (cùng lối với nút "Chấm lại").
+      const start = performance.now();
+      const stored = await service.scoreAndStoreMany(batch, { reason: "SCRIPT", now });
+      scoreMs += performance.now() - start;
+      for (const row of stored) scored.push({ id: row.jobPostId, status: row.status, title: row.title, result: row.result });
+      console.log(`  đã ghi ${scored.length}/${ids.length}`);
+      continue;
+    }
     const loadStart = performance.now();
-    const loaded = await loader.loadMany(ids.slice(offset, offset + BATCH), now);
+    const loaded = await loader.loadMany(batch, now);
     loadMs += performance.now() - loadStart;
     for (const row of loaded) {
       const start = performance.now();
@@ -103,6 +131,7 @@ async function main(): Promise<void> {
       scored.push({ id: row.jobPostId, status: row.status, title: row.input.title, result });
     }
   }
+  if (scored.length === 0) return;
 
   // ── Vùng ──
   console.log("Vùng gợi ý:");
@@ -170,8 +199,11 @@ async function main(): Promise<void> {
   }
 
   console.log(
-    `\nThời gian: nạp dữ liệu ${loadMs.toFixed(0)} ms (${(loadMs / scored.length).toFixed(1)} ms/tin, theo lô ${BATCH}), ` +
-      `chấm ${scoreMs.toFixed(0)} ms (${(scoreMs / scored.length).toFixed(2)} ms/tin).`,
+    dryRun
+      ? `\nThời gian: nạp dữ liệu ${loadMs.toFixed(0)} ms (${(loadMs / scored.length).toFixed(1)} ms/tin, theo lô ${BATCH}), ` +
+          `chấm ${scoreMs.toFixed(0)} ms (${(scoreMs / scored.length).toFixed(2)} ms/tin).`
+      : `\nThời gian: nạp + chấm + ghi ${scoreMs.toFixed(0)} ms (${(scoreMs / scored.length).toFixed(1)} ms/tin, nạp theo lô ${BATCH}). ` +
+          `Đã ghi ${scored.length} tin.`,
   );
 }
 

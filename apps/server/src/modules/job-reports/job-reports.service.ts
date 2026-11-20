@@ -11,6 +11,7 @@ import type { MediaStorage } from "../../shared/ports/MediaStorage";
 import type { AuditLogService } from "../audit-log/audit-log.service";
 import type { JobPostRepository } from "../job-posts/job-post.repository";
 import type { JobPostsService } from "../job-posts/job-posts.service";
+import type { JobQualityCompanyTrigger } from "../job-posts/job-quality.service";
 import type { JobReportRepository } from "./job-report.repository";
 import type {
   AdminJobReportListQueryDto,
@@ -29,6 +30,7 @@ export class JobReportsService {
   private readonly mediaStorage: MediaStorage;
   private readonly prisma: PrismaClient;
   private readonly logger: Logger;
+  private readonly jobQualityCompanyTrigger: JobQualityCompanyTrigger;
 
   constructor({
     jobPostsService,
@@ -38,6 +40,7 @@ export class JobReportsService {
     mediaStorage,
     prisma,
     logger,
+    jobQualityCompanyTrigger,
   }: {
     jobPostsService: JobPostsService;
     jobReportRepository: JobReportRepository;
@@ -46,6 +49,7 @@ export class JobReportsService {
     mediaStorage: MediaStorage;
     prisma: PrismaClient;
     logger: Logger;
+    jobQualityCompanyTrigger: JobQualityCompanyTrigger;
   }) {
     this.jobPostsService = jobPostsService;
     this.jobReportRepository = jobReportRepository;
@@ -54,6 +58,7 @@ export class JobReportsService {
     this.mediaStorage = mediaStorage;
     this.prisma = prisma;
     this.logger = logger;
+    this.jobQualityCompanyTrigger = jobQualityCompanyTrigger;
   }
 
   async createReport(
@@ -84,6 +89,8 @@ export class JobReportsService {
       reason: dto.reason,
       description: dto.description ?? null,
     });
+    // AD-29 Q4 — báo cáo mới (đang chờ) trừ điểm uy tín công ty ⇒ chấm lại tin đang chờ duyệt.
+    this.jobQualityCompanyTrigger(job.companyId);
 
     return {
       id: report.id,
@@ -232,6 +239,11 @@ export class JobReportsService {
         },
       });
     }
+
+    // AD-29 Q4 — báo cáo vừa được xử lý (gỡ tin: thêm báo cáo đã xác nhận; bỏ qua: bớt báo cáo
+    // đang chờ) ⇒ chấm lại tin đang chờ duyệt của công ty. Gỡ tin thì `retract` cũng đã kích hoạt;
+    // JobQualityService gộp hai lần gọi, lượt sau thấy báo cáo đã ghi RESOLVED.
+    this.jobQualityCompanyTrigger(report.job.companyId);
 
     const fullUpdated = await this.jobReportRepository.findById(id);
     return this.mapToAdminItem(fullUpdated!);

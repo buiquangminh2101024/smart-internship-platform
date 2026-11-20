@@ -9,6 +9,7 @@ import type {
   JobPostSearchQuery,
   JobPostStats,
   JobPostStatus,
+  JobQualityDto,
   PaginatedResponse,
   RejectJobPostRequest,
   RetractJobPostRequest,
@@ -17,20 +18,25 @@ import type {
 } from "@sip/shared-types";
 import type { JobPostRequirementsService } from "./job-post-requirements.service";
 import type { JobPostsService } from "./job-posts.service";
+import type { JobQualityService } from "./job-quality.service";
 
 export class JobPostsController {
   private readonly jobPostsService: JobPostsService;
   private readonly jobPostRequirementsService: JobPostRequirementsService;
+  private readonly jobQualityService: JobQualityService;
 
   constructor({
     jobPostsService,
     jobPostRequirementsService,
+    jobQualityService,
   }: {
     jobPostsService: JobPostsService;
     jobPostRequirementsService: JobPostRequirementsService;
+    jobQualityService: JobQualityService;
   }) {
     this.jobPostsService = jobPostsService;
     this.jobPostRequirementsService = jobPostRequirementsService;
+    this.jobQualityService = jobQualityService;
   }
 
   // ─── Public ──────────────────────────────────────────────────────────────
@@ -225,6 +231,16 @@ export class JobPostsController {
       const { reason } = req.body as RetractJobPostRequest;
       const result = await this.jobPostsService.retract(req.user!.id, req.params.id as string, reason);
       const body: ApiResponse<JobPost> = { success: true, data: result };
+      res.json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  rescoreQuality = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await this.jobQualityService.rescore(req.params.id as string);
+      const body: ApiResponse<JobQualityDto> = { success: true, data: result };
       res.json(body);
     } catch (error) {
       next(error);

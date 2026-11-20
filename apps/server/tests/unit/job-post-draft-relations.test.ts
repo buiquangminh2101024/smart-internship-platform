@@ -83,6 +83,7 @@ function buildService(options: { failSetMajors?: boolean } = {}) {
     employerIdentityCache: { require: async () => EMPLOYER },
     companyRepository: { findById: async () => company },
     subscriptionsService: { getCompanySubscriptionAccess: async () => ({ mode: "SUBSCRIBED", publishRemaining: 5 }) },
+    jobQualityService: { rescoreAfterPublishedEdit: async () => {} },
   } as unknown as ConstructorParameters<typeof JobPostsService>[0]);
   return { service, committed };
 }

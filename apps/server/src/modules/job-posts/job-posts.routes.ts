@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { asClass, asFunction, type AwilixContainer } from "awilix";
+import { asClass, asFunction, asValue, type AwilixContainer } from "awilix";
 import { authenticate } from "../../shared/middleware/authenticate";
 import { authorize } from "../../shared/middleware/authorize";
 import { optionalAuthenticate } from "../../shared/middleware/optional-authenticate";
@@ -17,6 +17,8 @@ import { JobPostRepository } from "./job-post.repository";
 import { JobPostsController } from "./job-posts.controller";
 import { JobPostsService } from "./job-posts.service";
 import { JobPostRequirementsService } from "./job-post-requirements.service";
+import { JobQualityInputLoader } from "./job-quality-input.loader";
+import { JobQualityService, type JobQualityCompanyTrigger } from "./job-quality.service";
 import { RequirementExtractionRateLimitService } from "./requirement-extraction-rate-limit.service";
 import {
   confirmRequirementsSchema,
@@ -66,6 +68,15 @@ export function jobPostsRouter(container: AwilixContainer): Router {
     requirementExtractionRateLimitService: asClass(RequirementExtractionRateLimitService).singleton(),
     jobPostRequirementsService: asClass(JobPostRequirementsService).singleton(),
     jobPostRepository: asClass(JobPostRepository).singleton(),
+    // AD-29 — chấm điểm chất lượng tin.
+    jobQualityInputLoader: asClass(JobQualityInputLoader).singleton(),
+    // Singleton bắt buộc: Map công ty đang chấm lại phải dùng chung cho mọi lối gọi.
+    jobQualityService: asClass(JobQualityService).singleton(),
+    // Q4 — job-reports (báo cáo mới, xử lý báo cáo) và retract gọi sau commit. Resolve service
+    // lúc gọi ⇒ job-reports không phụ thuộc ngược vào job-posts khi dựng service.
+    jobQualityCompanyTrigger: asValue<JobQualityCompanyTrigger>((companyId) => {
+      void container.resolve<JobQualityService>("jobQualityService").triggerCompany(companyId);
+    }),
     jobPostsService: asClass(JobPostsService).singleton(),
     jobPostsController: asClass(JobPostsController).singleton(),
   });
@@ -139,6 +150,10 @@ export function jobPostsRouter(container: AwilixContainer): Router {
   });
   router.post("/admin/job-posts/:id/retract", ...adminGuard, validate(retractJobPostSchema), (req, res, next) => {
     void resolveController().retract(req, res, next);
+  });
+  // AD-29 — chấm lại điểm chất lượng một tin (mọi trạng thái); không đổi trạng thái tin.
+  router.post("/admin/job-posts/:id/quality/rescore", ...adminGuard, (req, res, next) => {
+    void resolveController().rescoreQuality(req, res, next);
   });
 
   // ─── Public (Guest) ────────────────────────────────────────────────────

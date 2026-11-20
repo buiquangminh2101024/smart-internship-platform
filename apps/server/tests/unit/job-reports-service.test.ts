@@ -7,6 +7,7 @@ function buildTestContext() {
   const auditLogs: any[] = [];
   const retractedJobs: any[] = [];
   const suspendedUsers: any[] = [];
+  const qualityTriggers: string[] = [];
 
   const mockJob = {
     id: "job-1",
@@ -131,6 +132,7 @@ function buildTestContext() {
     mediaStorage: mediaStorage as any,
     prisma: prisma as any,
     logger: logger as any,
+    jobQualityCompanyTrigger: (companyId: string) => qualityTriggers.push(companyId),
   });
 
   return {
@@ -140,6 +142,7 @@ function buildTestContext() {
     auditLogs,
     retractedJobs,
     suspendedUsers,
+    qualityTriggers,
   };
 }
 
@@ -162,7 +165,7 @@ test("createReport: ném 404 khi tin tuyển dụng không tồn tại", async (
 });
 
 test("createReport: ném 400 khi đã có báo cáo PENDING cho tin này", async () => {
-  const { service } = buildTestContext();
+  const { service, qualityTriggers } = buildTestContext();
   await service.createReport("user-cand-1", "job-1", {
     reason: "SCAM",
     description: "Lừa đảo thu tiền",
@@ -182,6 +185,8 @@ test("createReport: ném 400 khi đã có báo cáo PENDING cho tin này", async
       return true;
     },
   );
+  // AD-29 Q4: chỉ báo cáo tạo được mới kích hoạt chấm lại tin chờ duyệt của công ty.
+  assert.deepEqual(qualityTriggers, ["comp-1"]);
 });
 
 test("checkUserReport: kiểm tra chính xác trạng thái báo cáo đang chờ", async () => {
@@ -200,7 +205,7 @@ test("checkUserReport: kiểm tra chính xác trạng thái báo cáo đang ch�
 });
 
 test("executeAction: Admin chọn TAKE_DOWN thì gỡ tin, set RESOLVED và resolution = TAKE_DOWN", async () => {
-  const { service, retractedJobs, mockJob } = buildTestContext();
+  const { service, retractedJobs, mockJob, qualityTriggers } = buildTestContext();
   mockJob.status = "PUBLISHED";
 
   const created = await service.createReport("user-cand-1", "job-1", {
@@ -219,10 +224,12 @@ test("executeAction: Admin chọn TAKE_DOWN thì gỡ tin, set RESOLVED và reso
   assert.notEqual(result.resolvedAt, null);
   assert.equal(retractedJobs.length, 1);
   assert.equal(retractedJobs[0].id, "job-1");
+  // AD-29 Q4: một lần khi tạo báo cáo, một lần sau khi báo cáo được ghi RESOLVED.
+  assert.deepEqual(qualityTriggers, ["comp-1", "comp-1"]);
 });
 
 test("executeAction: Admin chọn DISMISS thì giữ nguyên tin, set RESOLVED và resolution = DISMISS", async () => {
-  const { service, retractedJobs, auditLogs, mockJob } = buildTestContext();
+  const { service, retractedJobs, auditLogs, mockJob, qualityTriggers } = buildTestContext();
   mockJob.status = "PUBLISHED";
 
   const created = await service.createReport("user-cand-1", "job-1", {
@@ -243,6 +250,8 @@ test("executeAction: Admin chọn DISMISS thì giữ nguyên tin, set RESOLVED v
   assert.equal(retractedJobs.length, 0);
   assert.equal(mockJob.status, "PUBLISHED");
   assert.equal(auditLogs.some((l) => l.action === "JOB_REPORT_RESOLVED"), true);
+  // Bỏ qua báo cáo cũng làm bớt một báo cáo đang chờ của công ty ⇒ chấm lại.
+  assert.deepEqual(qualityTriggers, ["comp-1", "comp-1"]);
 });
 
 test("executeAction: ném 400 REPORT_ALREADY_PROCESSED khi báo cáo đã được xử lý trước đó", async () => {

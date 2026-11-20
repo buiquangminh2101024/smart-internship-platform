@@ -526,6 +526,7 @@ test("tự đăng tin đã bật tự mời ⇒ kích hoạt; tin chưa bật ho
       auditLogService: { record: async () => {} },
       autoOutreachTrigger: (companyId: string) => triggered.push(companyId),
       matchScoreTrigger: (jobPostId: string) => rescored.push(jobPostId),
+      jobQualityService: { submissionColumns: async () => ({ submittedAt: new Date() }) },
     } as unknown as ConstructorParameters<typeof JobPostsService>[0]);
     await service.submitForApproval("user-emp-1", "job-1");
     assert.deepEqual(triggered, expected, `requiresApproval=${requiresApproval}, enabled=${autoOutreachEnabled}`);

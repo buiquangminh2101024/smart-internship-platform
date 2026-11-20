@@ -194,10 +194,13 @@ Sự kiện "Admin từ chối một tin khác của công ty" cũng làm đổi
 ## Phần 2 — Liên kết giữa các phần
 
 ```
-submitForApproval ──► JobQualityService.scoreAndStore(jobId, tx)
-                         ├─ JobQualitySignalsLoader (repository: lịch sử công ty, báo cáo, lần gửi trước)
+submitForApproval ──► JobQualityService.submissionColumns(jobPost)   (ngay trước transaction, không ném lỗi)
+                         ├─ JobQualityInputLoader (nội dung tin + lịch sử công ty, báo cáo, số lần bị từ chối)
                          └─ scoreJobPost(input)  ← job-quality.config.ts (trọng số, mức trừ, từ khoá, ngưỡng)
-                      ghi job_posts.quality* + submittedAt + submittedContentHash
+                   └─ trong transaction: update trạng thái + quality* + submittedAt + submittedContentHash
+
+nút Chấm lại / script / sự kiện ──► JobQualityService.scoreAndStore(Many)(ids, { reason })
+                                     ghi quality* (không ghi submittedContentHash)
 
 job-reports (createReport, executeAction TAKE_DOWN), JobPostsService.retract
    └─ sau commit: jobQualityCompanyTrigger(companyId) ──► chấm lại các tin PENDING của công ty
@@ -268,7 +271,7 @@ approve / reject (một tin, bulk) ──► JobPostsService
   - Tin mẫu: đòi phí hồ sơ ⇒ từ chối (cờ chặn, 85 điểm); gộp nhiều dấu hiệu ⇒ từ chối (45); lương 30 triệu + "việc nhẹ lương cao" ⇒ xem kỹ (86, rủi ro 45 dưới sàn). **Lệch:** tin có "kết bạn Zalo + số điện thoại" ra 90 điểm, *đề xuất duyệt*; tin mô tả 1 dòng, không yêu cầu, không quyền lợi, không lương, không địa chỉ chỉ ra 75, *xem kỹ*.
   - Nhận xét: rủi ro + công ty + phù hợp thực tập chiếm 45 điểm và hầu như luôn đầy, nên tin chỉ "thiếu thông tin" không bao giờ xuống dưới 50. Vùng từ chối hiện chỉ đạt được qua cờ chặn hoặc nhiều dấu hiệu rủi ro.
   - **Chốt (Q5, 2026-11-20), chủ dự án đồng ý cả 3:** (1) bỏ `REQUIREMENTS_NOT_CONFIRMED` (cùng trường `requirementsConfirmedAt` khỏi input); (2) `OFF_PLATFORM_CONTACT` 25 → 55; (3) điểm sàn cứng 40 cho tiêu chí 1–5 ⇒ đề xuất từ chối (tiêu chí 6 không xét vì không đưa vào lý do gửi NTD). Thêm (4) `INTERN_SALARY_OUTLIER` 30 → 55, để tin thực tập lương > 20 triệu luôn qua người xem. Giữ `QUALITY_SCORE_VERSION = 1` vì chưa có điểm nào được lưu. 25 test bộ chấm (thêm Zalo ⇒ xem kỹ, mô tả 1 dòng ⇒ từ chối với lý do "Thiếu thông tin", sàn cứng bỏ qua tiêu chí 6), 690/690 toàn bộ.
-  - Chạy lại: duyệt 373 (97,1%), xem kỹ 9, từ chối 2 (hai tin hết hạn không có yêu cầu, mô tả quá ngắn, đòi ≥ 1 năm kinh nghiệm). Điểm 75–98, trung vị 95.
+  - Chạy lại (sau cả 4 thay đổi): duyệt 372 (96,9%), xem kỹ 10, từ chối 2 (hai tin hết hạn không có yêu cầu, mô tả quá ngắn, đòi ≥ 1 năm kinh nghiệm). Điểm 75–98, trung vị 95. Tin duy nhất dính `INTERN_SALARY_OUTLIER` nằm ở *xem kỹ*.
 
 ### Bước 4 — Nạp tín hiệu và lưu điểm
 
@@ -278,6 +281,15 @@ approve / reject (một tin, bulk) ──► JobPostsService
 - `submitForApproval`: trong transaction hiện có, đặt `submittedAt = now` và gọi `scoreAndStore(..., { recordSubmission: true })`. Chấm **cả** khi công ty được miễn kiểm duyệt (tin tự đăng), để Admin lọc được tin đang hiển thị có điểm thấp (Q6). Lỗi khi chấm **không** chặn việc gửi duyệt: ghi log, để `qualityScore = null`, tin vẫn vào hàng đợi (vùng "chưa chấm").
 - `POST /admin/job-posts/:id/quality/rescore`: chấm lại một tin (mọi trạng thái), trả DTO.
 - Script `score-job-quality` (bỏ `--dry-run`): chấm và ghi cho tin `PENDING` (mặc định) hoặc `--all`; dùng sau khi áp migration và mỗi khi đổi version.
+- **Đã làm (2026-11-20):** `job-posts/job-quality.service.ts` (`JobQualityService`), `job-posts/job-quality.mapper.ts` (`toJobQualityDto`, bước 9 dùng lại), route `POST /admin/job-posts/:id/quality/rescore`, chế độ ghi của script, type `JobQualityDto` / `JobQualityBand` / `JobQualityScoredReason` trong `shared-types` (bước 9 sẽ gắn vào `JobPost`). 13 test trong `tests/unit/job-quality-service.test.ts`, 704/704 toàn bộ, `tsc` sạch. Probe trên Neon: ghi điểm 3 tin `PENDING` trong một transaction, đọc lại qua mapper đúng, rồi rollback (DB không đổi). Dry-run vẫn 372 / 10 / 2. **Chưa chạy chế độ ghi trên Neon** (bước 11, chờ chủ dự án). Khác / bổ sung so với mô tả trên:
+  - **Không có `JobQualitySignalsLoader` riêng:** dùng lại `JobQualityInputLoader` của bước 3 (nạp nội dung tin + tín hiệu theo lô, một tin cũng gọi cùng hàm).
+  - **Gửi duyệt chấm ngay trước transaction, không chấm bên trong:** `JobQualityService.submissionColumns(jobPost, { now, autoPublished })` trả các cột (`submittedAt`, `quality*`, `submittedContentHash`), `submitForApproval` trải chúng vào lệnh `update` đổi trạng thái (`PENDING` hoặc `PUBLISHED`) trong transaction. Lý do: một câu lỗi trong transaction Postgres làm hỏng cả transaction, nên chấm bên trong thì không thể "chấm lỗi vẫn gửi duyệt được". Hàm không ném lỗi: lỗi thì ghi log, trả cột điểm `null` (vùng "chưa chấm"), giữ `submittedContentHash` cũ.
+  - Tín hiệu lúc gửi tính như thể lần gửi này đã ghi: `companySubmitCount + 1`, và `companyApprovedCount + 1` khi tự đăng. Nhờ vậy điểm lúc gửi bằng điểm của một lần chấm lại ngay sau đó (bước 4b so vùng trước / sau sẽ không lệch vì chuyện này).
+  - "Gửi lại không sửa" lúc gửi: thao tác kiểm duyệt gần nhất (đã có trong `findById`) là `REJECTED` **và** mã băm mới bằng `submittedContentHash` cũ. Cờ lưu trong `qualityBreakdown.resubmittedUnchanged`, các lần chấm lại tin `PENDING` giữ cờ này.
+  - `qualityBreakdown = { criteria, flags, reason, resubmittedUnchanged }`.
+  - `scoreAndStore` / `scoreAndStoreMany(ids, { reason })` cho mọi lối chấm lại (nút Chấm lại = `MANUAL`, script = `SCRIPT`; bước 4b dùng `COMPANY_EVENT` / `PUBLISHED_EDIT`). **Không** có tuỳ chọn `recordSubmission`: chỉ lối gửi duyệt ghi `submittedContentHash`, và lối đó đi qua `submissionColumns`. Ghi bằng `updateMany` để tin nháp bị xoá giữa chừng không làm dừng cả lượt.
+  - API chấm lại trả `JobQualityDto`; tin không tồn tại ⇒ 404. Không ghi audit log (chấm lại không đổi gì ngoài điểm gợi ý).
+  - Script thêm `--outdated` (chỉ tin chưa có điểm hoặc điểm của phiên bản khác) để dùng khi tăng `QUALITY_SCORE_VERSION`. `--all` và `--status` không dùng cùng nhau.
 
 ### Bước 4b — Chấm lại theo sự kiện (Q4 và sửa tin đang hiển thị)
 
@@ -302,6 +314,13 @@ approve / reject (một tin, bulk) ──► JobPostsService
 - Không thêm audit log cho việc sửa tin: hiện sửa tin không ghi audit, đợt này giữ nguyên. Thông báo cho Admin đã đủ.
 - **Không** tự gỡ tin, không đổi trạng thái tin. Admin mở tin và quyết định có thu hồi không (giữ nguyên tắc "chỉ gợi ý").
 - Tin `DRAFT` sửa thì không chấm (sẽ chấm lúc gửi duyệt).
+- **Đã làm (2026-11-20):** `JobQualityService.triggerCompany` / `rescorePendingForCompany` / `rescoreAfterPublishedEdit`, hàm thuần `qualityTurnedBad`, `jobQualityCompanyTrigger` (`asValue` trong `job-posts.routes.ts`), gọi ở `JobReportsService.createReport`, `JobReportsService.executeAction`, `JobPostsService.retract` và `updateDraft` (tin `PUBLISHED`). Thêm 11 test vào `job-quality-service.test.ts` (24 test), kiểm trigger trong `job-reports-service.test.ts`; 713/713 toàn bộ, `tsc` sạch. Probe trên Neon trong một transaction rồi rollback: chấm lại 2 tin `PENDING` của một công ty (lý do `COMPANY_EVENT`); thêm "đóng phí hồ sơ" vào một tin đang hiển thị ⇒ 65 điểm, *Đề xuất từ chối*, cờ `ASKS_FOR_MONEY`, đúng một thông báo (bản giả, không gửi thật). Khác / bổ sung so với mô tả trên:
+  - **Gộp lần gọi trùng công ty:** `triggerCompany` giữ một Map công ty đang chấm (trong bộ nhớ, service singleton). Sự kiện tới giữa lượt chỉ bật cờ, lượt đang chạy chấm thêm đúng một vòng khi xong; không chạy chồng cho cùng công ty. Cần vì "gỡ tin theo báo cáo" gây hai sự kiện liền nhau: `retract` (commit trước) rồi báo cáo mới được ghi `RESOLVED / TAKE_DOWN`; vòng đầu có thể chưa thấy báo cáo đã xác nhận, vòng sau thấy.
+  - **`executeAction` kích hoạt với cả `DISMISS`**, không chỉ `TAKE_DOWN`: bỏ qua báo cáo làm bớt một báo cáo đang chờ (`COMPANY_OPEN_REPORTS`), không chấm lại thì tin chờ duyệt bị trừ điểm oan cho tới lần chấm sau.
+  - Payload thông báo là `{ jobPostId, jobPostTitle, companyName, score, blocked }` (đã khai báo ở bước 1; `blocked` thay cho danh sách `flags`, vì template chỉ cần biết có cờ chặn hay không).
+  - Tin đang hiển thị **chưa từng được chấm** (đăng trước khi có tính năng) mà sửa xong rơi vào *Đề xuất từ chối* thì cũng báo (vùng trước là `null`, khác `SUGGEST_REJECT`).
+  - `rescoreAfterPublishedEdit` nhận bản tin **trước khi sửa** (đã có từ `findById` đầu `updateDraft`), lấy vùng và cờ cũ từ đó, không đọc DB thêm. Hàm không ném lỗi; `updateDraft` chờ hàm này rồi mới trả response.
+  - Đo (probe, trong transaction nên các câu nạp chạy nối tiếp, là cận trên): chấm lại một tin ~0,7 giây từ máy dev tới Neon. Ngoài transaction, các câu nạp tín hiệu chạy song song nên nhanh hơn.
 
 ### Bước 5 — Đổi trạng thái có điều kiện (điểm 8)
 
