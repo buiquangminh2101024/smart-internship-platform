@@ -28,6 +28,10 @@ export function googleAuthErrorMessage(err: unknown, fallback: string): string {
   return err.message;
 }
 
+// Giới hạn `width` của nút Google Identity Services.
+const GOOGLE_BUTTON_MIN_WIDTH = 200;
+const GOOGLE_BUTTON_MAX_WIDTH = 400;
+
 export interface GoogleAuthButtonProps {
   onIdToken: (idToken: string) => void;
   disabled?: boolean;
@@ -54,10 +58,15 @@ export function GoogleAuthButton({ onIdToken, disabled }: GoogleAuthButtonProps)
         callback: (response) => onIdTokenRef.current(response.credential),
       });
       containerRef.current.innerHTML = "";
+      // Rộng theo khung chứa (đo lúc khung còn rỗng), trong khoảng Google cho phép 200–400 px.
+      // Trước đây cố định 320 px ⇒ trang đăng nhập / đăng ký tràn ngang ở màn hình 375 px.
+      const width = Math.round(
+        Math.min(GOOGLE_BUTTON_MAX_WIDTH, Math.max(GOOGLE_BUTTON_MIN_WIDTH, containerRef.current.clientWidth)),
+      );
       window.google.accounts.id.renderButton(containerRef.current, {
         theme: "outline",
         size: "large",
-        width: 320,
+        width,
         text: "continue_with",
         locale: "vi",
       });
@@ -77,5 +86,7 @@ export function GoogleAuthButton({ onIdToken, disabled }: GoogleAuthButtonProps)
 
   if (!clientId) return null;
 
-  return <div ref={containerRef} className={disabled ? "pointer-events-none opacity-50" : ""} />;
+  return (
+    <div ref={containerRef} className={`w-full min-w-0 overflow-hidden${disabled ? " pointer-events-none opacity-50" : ""}`} />
+  );
 }

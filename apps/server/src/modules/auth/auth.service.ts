@@ -294,6 +294,9 @@ export class AuthService {
       return this.sessionRevocationService.revokeInTx(user.id, tx);
     });
     await this.sessionRevocationService.propagate(user.id, revokedAtSec);
+    // Đã chứng minh sở hữu email bằng mã ⇒ gỡ chặn đăng nhập của cặp email + IP (D4), để
+    // người vừa đặt lại mật khẩu đăng nhập được ngay. Khoá theo IP vẫn để tự hết hạn.
+    await this.clearLoginFailures(loginLockKeys(user.email, context.ip));
   }
 
   async refresh(refreshToken: string): Promise<{ accessToken: string }> {

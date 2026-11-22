@@ -15,8 +15,11 @@ import { GoogleAuthButton, googleAuthErrorMessage } from "./GoogleAuthButton";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-const PENDING_NOTICE =
-  "Email này đã đăng ký nhưng chưa xác thực. Mã mới đã được gửi tới email. Mật khẩu là mật khẩu bạn đặt lần đăng ký trước; nếu quên, sau khi xác thực hãy dùng Quên mật khẩu.";
+const PENDING_PASSWORD_NOTE =
+  "Mật khẩu là mật khẩu bạn đặt lần đăng ký trước; nếu quên, sau khi xác thực hãy dùng Quên mật khẩu.";
+const PENDING_NOTICE = `Email này đã đăng ký nhưng chưa xác thực. Mã mới đã được gửi tới email. ${PENDING_PASSWORD_NOTE}`;
+// Gửi lại mã bị từ chối (vừa xin mã trong 60 giây, hoặc hết lượt trong giờ): không có mã mới.
+const PENDING_NO_NEW_CODE_NOTICE = `Email này đã đăng ký nhưng chưa xác thực. Bạn nhập mã đã gửi trước đó, hoặc bấm Gửi lại mã khi hết thời gian chờ. ${PENDING_PASSWORD_NOTE}`;
 
 export interface RegisterFormProps {
   role: RegistrableRole;
@@ -76,14 +79,16 @@ export function RegisterForm({ role }: RegisterFormProps) {
       setStep("otp");
     } catch (err) {
       if (hasAuthCode(err, "EMAIL_PENDING_VERIFICATION")) {
-        // Server không ghi đè mật khẩu cũ (AD-31 D5): gửi lại mã rồi cho nhập mã. Gửi lại bị 429
-        // (vừa xin mã) thì bỏ qua — mã cũ có thể còn hạn, OtpForm vẫn có nút "Gửi lại mã".
+        // Server không ghi đè mật khẩu cũ (AD-31 D5): gửi lại mã rồi cho nhập mã. Gửi lại lỗi
+        // (vd. 429 vì vừa xin mã) thì vẫn sang bước nhập mã — mã cũ có thể còn hạn, OtpForm có
+        // nút "Gửi lại mã" — nhưng ghi chú không được nói là đã gửi mã mới.
+        let resent = true;
         try {
           await publicFetch("/auth/resend-otp", { method: "POST", body: JSON.stringify({ email }) });
         } catch {
-          // Bỏ qua, xem trên.
+          resent = false;
         }
-        setOtpNotice(PENDING_NOTICE);
+        setOtpNotice(resent ? PENDING_NOTICE : PENDING_NO_NEW_CODE_NOTICE);
         setStep("otp");
         return;
       }

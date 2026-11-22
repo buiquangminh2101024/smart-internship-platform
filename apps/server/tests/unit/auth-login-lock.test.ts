@@ -2,7 +2,8 @@
 // AD-31 D4 (docs/06-backend/auth-hardening/PLAN.md bước 3): sai 5 lần / 15 phút với cùng
 // email + IP ⇒ chặn cặp đó (lần 5 trả 429 ngay, Q1); một IP sai 30 lần (mọi email) ⇒ chặn
 // IP. Email không tồn tại cũng đếm (Q2). Redis lỗi ⇒ cho qua (Q3). Đúng mật khẩu xoá bộ
-// đếm của cặp. Đang bị chặn thì không so mật khẩu.
+// đếm của cặp. Đang bị chặn thì không so mật khẩu. Đặt lại mật khẩu thành công cũng xoá bộ
+// đếm của cặp (gỡ chặn), không xoá bộ đếm theo IP.
 // RateLimiter là bản giả trong bộ nhớ, cửa sổ cố định, không hết hạn trong test.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -34,15 +35,19 @@ function buildService(options: { redisDown?: boolean } = {}) {
   ];
 
   const service = new AuthService({
-    prisma: {},
+    prisma: { $transaction: (fn: (tx: unknown) => Promise<unknown>) => fn({}) },
     userRepository: {
       findByEmail: async (email: string) => {
         findCalls++;
         return users.find((item) => item.email === email) ?? null;
       },
+      updatePassword: async (id: string, passwordHash: string) => {
+        const user = users.find((item) => item.id === id);
+        if (user) user.passwordHash = passwordHash;
+      },
     },
     jwtService: { signAccessToken: () => ({ token: "access" }), signRefreshToken: () => ({ token: "refresh" }) },
-    otpStore: {},
+    otpStore: { get: async () => "123456", delete: async () => {}, recordFailure: async () => 1 },
     rateLimiter: {
       consume: async (key: string, limit: number) => {
         down();
@@ -70,7 +75,7 @@ function buildService(options: { redisDown?: boolean } = {}) {
     emailSender: {},
     googleAuthClient: {},
     tokenBlacklist: {},
-    sessionRevocationService: {},
+    sessionRevocationService: { revokeInTx: async () => 0, propagate: async () => {} },
     auditLogService: { record: async () => {} },
     logger: { error: (message: string) => errors.push(message), info: () => {} },
     config: { OTP_HARDCODE: true, OTP_HARDCODE_VALUE: "123456" },
@@ -164,4 +169,21 @@ test("Redis lỗi ⇒ cho qua: đúng mật khẩu đăng nhập được, sai m
   for (let i = 0; i < 6; i++) await expectError(wrong(service), 401);
   assert.ok(errors.includes("Không đọc được bộ đếm chặn đăng nhập"));
   assert.ok(errors.includes("Không đếm được lần đăng nhập sai (chặn tạm thời)"));
+});
+
+test("đặt lại mật khẩu thành công ⇒ gỡ chặn cặp email + IP, đăng nhập bằng mật khẩu mới được ngay; khoá IP giữ nguyên", async () => {
+  const { service, counters } = buildService();
+  for (let i = 0; i < LOGIN_LOCK_THRESHOLD; i++) await wrong(service).catch(() => {});
+  await expectError(service.login(EMAIL, PASSWORD, IP), 429, "LOGIN_LOCKED", { retryAfterSeconds: 600 });
+  await service.resetPassword(EMAIL, "123456", "mat-khau-moi", { ip: IP, via: "reset" });
+  assert.equal(counters.has(`login-lock:${EMAIL}:${IP}`), false);
+  assert.equal(counters.get(`login-lock-ip:${IP}`), LOGIN_LOCK_THRESHOLD);
+  assert.deepEqual(await service.login(EMAIL, "mat-khau-moi", IP), { accessToken: "access", refreshToken: "refresh" });
+});
+
+test("đặt lại mật khẩu sai mã ⇒ vẫn bị chặn", async () => {
+  const { service } = buildService();
+  for (let i = 0; i < LOGIN_LOCK_THRESHOLD; i++) await wrong(service).catch(() => {});
+  await assert.rejects(service.resetPassword(EMAIL, "000000", "mat-khau-moi", { ip: IP, via: "reset" }));
+  await expectError(service.login(EMAIL, PASSWORD, IP), 429, "LOGIN_LOCKED", { retryAfterSeconds: 600 });
 });

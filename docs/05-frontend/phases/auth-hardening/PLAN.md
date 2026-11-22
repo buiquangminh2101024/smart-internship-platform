@@ -1,6 +1,6 @@
 # Đăng nhập, đăng ký bền và an toàn hơn — Frontend
 
-> **Trạng thái: ĐÃ DUYỆT (lập và duyệt 2026-11-22), ĐANG LÀM.** Chia 3 đợt (chốt 2026-11-23): đợt 1 = F1 (xong 2026-11-23, đã kiểm trên trình duyệt), đợt 2 = F2–F5 (code xong 2026-11-23, chưa kiểm trên trình duyệt), đợt 3 = F6 phần form. Xem "Ghi chú triển khai". Làm sau backend (`docs/06-backend/auth-hardening/PLAN.md`). Quyết định kiến trúc: AD-31 (bổ sung AD-22). Giao diện theo skill `sip-ui` (đọc trước khi code). Ước lượng ~0,5 ngày, kể cả kiểm trên trình duyệt.
+> **Trạng thái: ĐÃ DUYỆT (lập và duyệt 2026-11-22), XONG 2026-11-23.** Chia 3 đợt (chốt 2026-11-23): đợt 1 = F1 (xong 2026-11-23, đã kiểm trên trình duyệt), đợt 2 = F2–F5 (code xong 2026-11-23), đợt 3 = F6 phần form (kiểm xong 2026-11-23, sửa một lỗi ghi chú ở F4; đặt lại mật khẩu nay gỡ chặn đăng nhập, sửa nút Google tràn ngang ở 375 px). Xem "Ghi chú triển khai". Làm sau backend (`docs/06-backend/auth-hardening/PLAN.md`). Quyết định kiến trúc: AD-31 (bổ sung AD-22). Giao diện theo skill `sip-ui` (đọc trước khi code). Ước lượng ~0,5 ngày, kể cả kiểm trên trình duyệt.
 
 ## Mục tiêu
 
@@ -126,7 +126,7 @@ Qua `localhost:8080`, cửa sổ ẩn danh, dùng tài khoản thử (không dù
   - làm hỏng cả refresh token ⇒ refresh 401 ⇒ xoá phiên Ứng viên, về `/`, phiên Nhà tuyển dụng còn (nhánh `expired` như cũ).
 - **AD-22, chạy lại sau F1:** Test 1 đạt (đăng xuất rồi đăng nhập lại Ứng viên, sang tab Nhà tuyển dụng rồi quay về, menu tài khoản ⇒ vào `/profile`, cả hai khu vực còn phiên); Test 3 đạt bản rút gọn (làm hỏng access token thay vì chờ 20 phút ⇒ 401 ⇒ refresh 200 ⇒ gửi lại 200); Test 4 đạt (hai tab Ứng viên, đăng xuất tab 1 ⇒ tab 2 về `/`); Test 5 đạt (đăng xuất Ứng viên, F5 tab Nhà tuyển dụng ⇒ vẫn đăng nhập). **Test 2 chưa chạy**: phải đăng xuất phiên Nhà tuyển dụng đang dùng của chủ dự án; cùng đường code với Test 1, khác khu vực.
 
-### Đợt 2 — F2–F5 (2026-11-23, chưa kiểm trên trình duyệt)
+### Đợt 2 — F2–F5 (2026-11-23, kiểm ở đợt 3)
 
 - **F2** `lib/auth-errors.ts`:
   - `authErrorMessage(err, fallback)` theo bảng F2. Lỗi mạng, 5xx, `AUTH_STORE_UNAVAILABLE` ⇒ câu "Không kết nối được máy chủ…" của F1. Mã khác AD-31 (tài khoản bị khoá, Google) do form tự xử lý trước.
@@ -142,6 +142,20 @@ Qua `localhost:8080`, cửa sổ ẩn danh, dùng tài khoản thử (không dù
   - `OtpForm`, `ResetPasswordForm`: `OTP_INVALID` / `OTP_ATTEMPTS_EXCEEDED` ⇒ câu F2 (có "Còn N lần nhập"); `ResetPasswordForm` giữ câu cũ cho 400 khác. `OtpForm` gửi lại mã thành công thì xoá ô mã.
   - `/support` đọc thêm `?message=` (cắt 2.000 ký tự) ⇒ `SupportContactForm` prop `initialMessage`.
 - `tsc --noEmit` sạch; eslint các file đã sửa sạch (lỗi `react-hooks/set-state-in-effect` ở `app/jobs/[id]/apply/page.tsx` có từ trước, không thuộc đợt này).
+
+### Đợt 3 — F6, kiểm các form (2026-11-23)
+
+Chrome qua 8080, server chạy với Redis Cloud như thường, `OTP_HARDCODE=true`. Tài khoản thử `ad31-f6@example.invalid` (Ứng viên), kiểm xong đã xoá khỏi Neon cùng 2 dòng `audit_logs` của nó (`AUTH_LOGIN_FAILED_REPEATED`, `AUTH_PASSWORD_RESET`) và 5 khoá Redis (mã, bộ đếm sai, hạn mức theo email, khoá cặp email + IP, khoá IP). Không bấm gửi form hỗ trợ.
+
+- **OTP đăng ký (F2, F5):** sai lần 1 ⇒ "Còn 4 lần nhập"; sai lần 3 ⇒ "Còn 2 lần nhập" và hiện gợi ý hỗ trợ; sai lần 5 ⇒ "Bạn đã nhập sai 5 lần, mã này đã bị huỷ…"; nhập đúng sau đó ⇒ "Mã không đúng hoặc đã hết hạn." (mã đã bị huỷ). Link gợi ý ⇒ `/support` điền sẵn email, "Vấn đề khác" và nội dung.
+- **Đăng ký lại email chờ xác thực (F4):** hiện ghi chú, sang bước nhập mã. **Lỗi tìm thấy và đã sửa:** đăng ký lại trong vòng 60 giây sau lần xin mã trước thì `resend-otp` bị 429, form bỏ qua lỗi nhưng ghi chú vẫn nói "Mã mới đã được gửi tới email" (nhập mã thì báo sai vì mã cũ đã bị huỷ). Nay `RegisterForm` chọn câu theo kết quả gửi lại: gửi được ⇒ câu của plan; không gửi được ⇒ "…Bạn nhập mã đã gửi trước đó, hoặc bấm Gửi lại mã khi hết thời gian chờ…". Kiểm lại cả hai trường hợp, nhập mã đúng ⇒ kích hoạt, vào trang chủ.
+- **Email đã kích hoạt (F4):** "Email này đã có tài khoản." kèm link Đăng nhập, Quên mật khẩu; link Đăng nhập dẫn đúng `/login`.
+- **Chặn đăng nhập (F3):** sai lần 3 ⇒ "…Còn 2 lần thử trước khi bị tạm khoá 15 phút."; sai lần 5 ⇒ "Bạn đã nhập sai quá nhiều lần. Thử lại sau 15 phút, hoặc dùng Quên mật khẩu." kèm link "Đặt lại mật khẩu"; đúng mật khẩu ngay sau vẫn bị chặn. Trang `/admin` với email đó ⇒ "…Thử lại sau 13 phút." (không có vế Quên mật khẩu).
+- **Quên mật khẩu (F5):** sai mã ⇒ "Còn 4 / 2 lần nhập"; sai lần 3 ⇒ gợi ý với vế "…hướng dẫn bạn lấy lại mật khẩu"; mã đúng ⇒ đổi mật khẩu, về `/login?reset=1`.
+- **Gỡ chặn sau khi đặt lại mật khẩu:** trước đây đặt lại xong vẫn bị chặn tới hết 15 phút, trong khi câu báo gợi ý dùng Quên mật khẩu. Chủ dự án chọn sửa ở server: đặt lại mật khẩu thành công thì xoá khoá cặp email + IP (ghi chú ở `docs/06-backend/auth-hardening/PLAN.md`, mục "Bổ sung sau khi kiểm frontend"). Web không đổi, câu báo giữ nguyên.
+- **375 px** (iframe rộng 375 px vì cửa sổ Chrome đang phóng to): câu chặn đăng nhập, ô mã, gợi ý hỗ trợ xuống dòng gọn. Trang `/login` tràn ngang 2 px (377 px) do nút "Continue with Google" rộng cố định 320 px (có từ trước). **Đã sửa** ở `GoogleAuthButton`: đo chiều rộng khung chứa lúc còn rỗng rồi vẽ nút với `width` trong khoảng 200–400 px Google cho phép; khung `w-full min-w-0`. Kiểm lại `/login`, `/register`, `/register?role=EMPLOYER` ở 375 px: không tràn; trên desktop nút rộng bằng các ô nhập. Form đặt lại mật khẩu không tràn.
+- Mục 1–2 của F6 (AD-22, Redis hỏng) đã chạy ở đợt 1.
+- `tsc --noEmit`, eslint `RegisterForm.tsx` sạch.
 
 ## Phần 4 — Ghi chú của chủ dự án
 

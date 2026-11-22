@@ -31,7 +31,7 @@
 | D1 | Lỗi hạ tầng (Redis) khi kiểm token ⇒ **503** `AUTH_STORE_UNAVAILABLE`, không phải 401. Chỉ token sai / hết hạn / bị thu hồi mới là 401. Áp cho `authenticate` và `/auth/refresh`. |
 | D2 | Redis client: `commandTimeout` 3 s, `keepAlive` 30 s, `maxRetriesPerRequest` 3 ⇒ lỗi nhanh thay vì treo. |
 | D3 | OTP: sai **5 lần** thì huỷ mã (cả `register` và `reset-password`). Sai thì 400 `OTP_INVALID` kèm `attemptsLeft`; lần thứ 5 thì 400 `OTP_ATTEMPTS_EXCEEDED`. Xin mã mới thì bộ đếm về 0. |
-| D4 | Đăng nhập: sai **5 lần trong 15 phút** với cùng cặp email + IP ⇒ chặn cặp đó 15 phút; một IP sai **30 lần trong 15 phút** (mọi email) ⇒ chặn IP đó 15 phút. Trả 429 `LOGIN_LOCKED` kèm `retryAfterSeconds`. Đăng nhập đúng thì xoá bộ đếm của cặp email + IP. Nhật ký `AUTH_LOGIN_FAILED_REPEATED` giữ nguyên. Google và Quên mật khẩu không bị ảnh hưởng. |
+| D4 | Đăng nhập: sai **5 lần trong 15 phút** với cùng cặp email + IP ⇒ chặn cặp đó 15 phút; một IP sai **30 lần trong 15 phút** (mọi email) ⇒ chặn IP đó 15 phút. Trả 429 `LOGIN_LOCKED` kèm `retryAfterSeconds`. Đăng nhập đúng, hoặc đặt lại mật khẩu thành công (bổ sung 2026-11-23), thì xoá bộ đếm của cặp email + IP. Nhật ký `AUTH_LOGIN_FAILED_REPEATED` giữ nguyên. Google và Quên mật khẩu không bị ảnh hưởng. |
 | D5 | Đăng ký: email đã kích hoạt (hoặc bị khoá) ⇒ 409 `EMAIL_TAKEN`; email chờ xác thực ⇒ 409 `EMAIL_PENDING_VERIFICATION`. **Không** ghi đè mật khẩu cũ (tránh kẻ xấu đặt trước mật khẩu cho email chờ xác thực). Web tự gọi `resend-otp`. `login` 403 chưa xác thực thêm code `EMAIL_NOT_VERIFIED`. |
 | D6 | Băm mật khẩu chạy trong `worker_threads` (hướng b của backlog), vẫn dùng `bcryptjs`, không thêm dependency. Hash cũ dùng được nguyên. |
 | D7 | Gợi ý gửi yêu cầu hỗ trợ khi nhập OTP mãi không được: chỉ làm ở frontend, dùng loại **"Vấn đề khác"** (`OTHER`) có sẵn của form `/support`. Server không đổi. |
@@ -303,6 +303,12 @@ Thêm vào `apps/server/tests/unit/` (`node:test` + `tsx`):
   - Đăng nhập sai chậm ~9 s khi Redis hỏng: chấp nhận (chỉ khi Redis đang hỏng, chỉ với người gõ sai mật khẩu, vẫn trả đúng 401). Có thể rút ngắn bằng cách chạy song song các lệnh Redis, ghi vào phần "Không làm".
   - Container tạm đã xoá; chủ dự án chạy lại server với `REDIS_URL` của `.env`.
 - **Tài liệu:** AD-31 (trạng thái), `FEATURE_BACKLOG.md` (ba dòng), `PROJECT_STATUS.md` (Phase 12, Phase 13, nhật ký), FAQ trợ lý (`content/support-faq/01-tai-khoan.md`: mục `account-otp` thêm "sai 5 lần thì mã bị huỷ", mục `account-forgot-password` thêm "sai mật khẩu 5 lần / 15 phút thì tạm chặn ~15 phút"; chạy lại `npm run support-chat:index`).
+
+### Bổ sung sau khi kiểm frontend (2026-11-23)
+
+- Kiểm đợt 3 của frontend thấy: đặt lại mật khẩu xong, đăng nhập bằng mật khẩu mới vẫn bị chặn tới hết 15 phút, trong khi câu báo gợi ý dùng Quên mật khẩu. Chủ dự án chọn gỡ chặn: `resetPassword` thành công (đã đúng mã, đã đổi mật khẩu, đã thu hồi phiên) ⇒ `clearLoginFailures` cho cặp email + IP của request đặt lại mật khẩu. Khoá theo IP không xoá. Áp cho cả `via: "change"` (thẻ Mật khẩu ở Cài đặt).
+- Không mở thêm đường dò mật khẩu: muốn gỡ phải có mã gửi tới email.
+- `auth-login-lock.test.ts` thêm 2 test (đặt lại thành công ⇒ gỡ chặn cặp, giữ khoá IP, đăng nhập bằng mật khẩu mới được; sai mã ⇒ vẫn bị chặn). `npm test` 800/800.
 
 ## Phần 4 — Ghi chú của chủ dự án
 
