@@ -1217,3 +1217,41 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 - `packages/shared-types`: kiểu lượt, số dư, sản phẩm, lần mua, thống kê; `JobPostDto` thêm `featuredUntil`, `urgentUntil`.
 - Frontend: khối nổi bật (trang chủ, `/jobs`), huy hiệu ở `JobCard`, bộ lọc tuyển gấp; Employer: "Tăng hiển thị" ở trang tin, số dư và mua lẻ ở `/employer/subscription`, thẻ hiệu quả; Admin: trang cấu hình gói / giá lẻ và số liệu tổng.
 - `docs/designs/SUBSCRIPTION_BILLING_DESIGN.md`, `docs/03-database/DATABASE_DESIGN.md` cập nhật khi làm bước schema.
+
+## AD-31 — Đăng nhập, đăng ký bền và an toàn hơn: lỗi hạ tầng không làm mất phiên, giới hạn nhập sai OTP và mật khẩu, băm mật khẩu trong worker (bổ sung AD-17, AD-18, AD-22)
+
+**Ngày:** 2026-11-22 · **Phase liên quan:** 12 (rà soát bảo mật). Plan: `docs/06-backend/auth-hardening/PLAN.md`, `docs/05-frontend/phases/auth-hardening/PLAN.md`.
+
+> **Trạng thái: ĐÃ DUYỆT, ĐANG TRIỂN KHAI (2026-11-22).** Chủ dự án đồng ý phạm vi, ngưỡng chặn đăng nhập, cách xử lý đăng ký dở dang, gộp worker băm mật khẩu, gợi ý hỗ trợ ở form OTP và Q1–Q4 trong plan backend.
+
+**Bối cảnh:** rà luồng đăng nhập / đăng ký ngày 2026-11-22 trước khi viết báo cáo, sau khi AD-22 đã sửa lỗi "văng tài khoản khi tab khác đăng nhập lại". Còn lại:
+
+- `authenticate` đổi mọi lỗi, kể cả lỗi Redis, thành 401. `/auth/refresh` gặp lỗi Redis trả 500, và web coi mọi lỗi refresh là hết phiên ⇒ xoá phiên dùng chung của mọi tab cùng khu vực. Client Redis không có timeout / keepAlive. Đây là đường văng tài khoản còn lại khi Redis Cloud hoặc server trục trặc.
+- Không giới hạn số lần nhập sai OTP ⇒ dò được mã 6 số của quên mật khẩu ⇒ chiếm tài khoản.
+- Đăng nhập sai chỉ được ghi nhật ký (AD-20, L4), không bị chặn.
+- Đăng ký lại email chờ xác thực ⇒ lỗi tiếng Anh "Email already registered", người dùng không biết đi tiếp.
+- `bcryptjs` cost 12 chạy trên luồng chính: 8 người đăng nhập cùng lúc làm request khác chờ ~0,8–1,2 s (đo 2026-11-14).
+
+**Quyết định:**
+
+1. **Lỗi hạ tầng là 503, không phải 401.** `authenticate` và `/auth/refresh` trả 503 `AUTH_STORE_UNAVAILABLE` khi không kiểm được token vì Redis / DB lỗi; 401 chỉ dành cho token sai, hết hạn, bị thu hồi, tài khoản không hoạt động. Web chỉ xoá phiên khi `/auth/refresh` trả 401 / 403; mất mạng, 5xx, 429 thì giữ phiên và báo lỗi tạm thời. Redis client đặt `commandTimeout` 3 s, `keepAlive` 30 s, `maxRetriesPerRequest` 3.
+2. **OTP sai 5 lần thì huỷ mã** (đăng ký và đặt lại mật khẩu). Bộ đếm sống cùng thời hạn với mã, về 0 khi xin mã mới. Trả `attemptsLeft` để web báo số lần còn lại.
+3. **Chặn đăng nhập sai:** 5 lần / 15 phút theo cặp email + IP, 30 lần / 15 phút theo IP; chặn 15 phút, trả 429 `LOGIN_LOCKED` kèm thời gian còn lại. Không khoá theo riêng tài khoản, để người khác không cố ý gõ sai mà khoá được tài khoản của chủ thật. Đếm cả email không tồn tại. Redis lỗi thì bộ đếm cho qua. Đăng nhập Google và Quên mật khẩu không bị chặn.
+4. **Đăng ký dở dang:** 409 tách `EMAIL_TAKEN` và `EMAIL_PENDING_VERIFICATION`; với mã sau, web gửi lại OTP và chuyển sang bước nhập mã. **Không** ghi đè mật khẩu cũ: nếu ghi đè, kẻ xấu đặt trước mật khẩu cho một email đang chờ xác thực, chủ email nhập OTP xong là tài khoản chạy bằng mật khẩu của kẻ xấu.
+5. **Băm mật khẩu trong `worker_threads`** (pool 2 worker), vẫn `bcryptjs` cost 12, qua port `PasswordHasher`. Không thêm dependency; hash cũ dùng nguyên. Script seed / tạo Admin vẫn gọi `bcryptjs` trực tiếp.
+6. **Nhập OTP mãi không được** ⇒ form gợi ý gửi yêu cầu ở `/support` (loại "Vấn đề khác", điền sẵn email và nội dung). Admin xử lý bằng "Kích hoạt thủ công" đã có (AD-18, E3). Chỉ sửa frontend.
+
+**Phương án không chọn:**
+
+- *Khoá theo riêng tài khoản* (5 lần sai là khoá, bất kể IP): dễ bị lợi dụng để khoá tài khoản người khác.
+- *Ghi đè mật khẩu khi đăng ký lại email chờ xác thực:* lý do ở mục 4.
+- *Thư viện băm native (`bcrypt`, `argon2`):* phải thêm dependency, kiểm cài trên Windows / Docker; worker đủ để gỡ chặn luồng chính.
+- *Giới hạn ở Nginx (`limit_req`):* không phân biệt được đúng / sai mật khẩu, không theo email; có thể thêm sau như lớp ngoài.
+- *Cookie httpOnly cho refresh token:* khối lượng lớn (thay AD-2 / AD-4), rủi ro làm hỏng đăng nhập trước buổi bảo vệ; để sau khoá luận.
+
+**Ảnh hưởng:**
+
+- Server: `shared/middleware/authenticate.ts`, `modules/auth/auth.service.ts`, `infrastructure/redis.ts`, `redis-rate-limiter.ts` (+ `peek`, `reset`), `redis-otp-store.ts` (+ `recordFailure`), port `PasswordHasher` + worker mới, `container.ts`. Không migration.
+- Web: `lib/api-client.ts` (refresh ba kết quả), `lib/support-chat-stream.ts`, `hooks/useSocket.ts` (kiểu trả về), `lib/auth-errors.ts` mới, `LoginForm`, `RegisterForm`, `OtpForm`, `ResetPasswordForm`, trang đăng nhập Admin, `app/support/page.tsx` + `SupportContactForm` (nội dung điền sẵn).
+- AD-22: sau khi làm, chạy lại 5 bước kiểm và đổi trạng thái thành đã kiểm.
+- Còn lại (không làm): gia hạn refresh token khi còn hoạt động (phiên luôn hết sau 7 ngày), thu hồi refresh token cũ khi đăng nhập tài khoản khác cùng vai trò, cân bằng thời gian trả lời theo email có / không có tài khoản.
