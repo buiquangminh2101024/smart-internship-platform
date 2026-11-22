@@ -1,6 +1,11 @@
 import { randomInt } from "node:crypto";
 import type { PrismaClient, Role, User } from "@prisma/client";
-import type { AuthTokensResponse } from "@sip/shared-types";
+import type {
+  AuthTokensResponse,
+  LoginFailedErrorData,
+  LoginLockedErrorData,
+  OtpInvalidErrorData,
+} from "@sip/shared-types";
 import { AppError, authStoreUnavailable } from "../../shared/errors/AppError";
 import type { Logger } from "../../shared/logger";
 import type { RateLimiter } from "../../shared/ports/RateLimiter";
@@ -370,7 +375,9 @@ export class AuthService {
     }
     if (state.retryAfterSeconds !== null) throw loginLocked(state.retryAfterSeconds);
     if (state.attemptsLeft <= LOGIN_WARN_ATTEMPTS_LEFT) {
-      throw new AppError(401, "Invalid email or password", undefined, { attemptsLeft: state.attemptsLeft });
+      throw new AppError(401, "Invalid email or password", undefined, {
+        attemptsLeft: state.attemptsLeft,
+      } satisfies LoginFailedErrorData);
     }
   }
 
@@ -494,7 +501,9 @@ export class AuthService {
         await this.otpStore.delete(purpose, email);
         throw new AppError(400, "Too many incorrect OTP attempts — please request a new code", "OTP_ATTEMPTS_EXCEEDED");
       }
-      throw new AppError(400, "Invalid or expired OTP", "OTP_INVALID", { attemptsLeft: OTP_MAX_ATTEMPTS - failures });
+      throw new AppError(400, "Invalid or expired OTP", "OTP_INVALID", {
+        attemptsLeft: OTP_MAX_ATTEMPTS - failures,
+      } satisfies OtpInvalidErrorData);
     }
     await this.otpStore.delete(purpose, email);
   }
@@ -508,7 +517,7 @@ function loginLockKeys(email: string, ip: string): LoginLockKeys {
 function loginLocked(retryAfterSeconds: number): AppError {
   return new AppError(429, "Too many failed login attempts — please try again later", "LOGIN_LOCKED", {
     retryAfterSeconds,
-  });
+  } satisfies LoginLockedErrorData);
 }
 
 function errorMessage(error: unknown): string {

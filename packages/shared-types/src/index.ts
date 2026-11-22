@@ -156,6 +156,41 @@ export interface RefreshResponse {
   accessToken: string;
 }
 
+/**
+ * Mã lỗi của luồng đăng nhập / đăng ký / OTP (AD-31), trả ở `code` của body lỗi.
+ * - `AUTH_STORE_UNAVAILABLE` (503): Redis / DB lỗi khi kiểm token hoặc refresh — lỗi tạm
+ *   thời, web giữ phiên, không đăng xuất.
+ * - `OTP_INVALID` (400): mã sai / hết hạn; sai mã còn hạn thì kèm `OtpInvalidErrorData`.
+ * - `OTP_ATTEMPTS_EXCEEDED` (400): sai 5 lần, mã đã bị huỷ — phải xin mã mới.
+ * - `LOGIN_LOCKED` (429): sai mật khẩu quá nhiều, kèm `LoginLockedErrorData`.
+ * - `EMAIL_TAKEN` (409), `EMAIL_PENDING_VERIFICATION` (409): đăng ký email đã có tài khoản
+ *   (đã kích hoạt / bị khoá, hoặc đang chờ xác thực).
+ * - `EMAIL_NOT_VERIFIED` (403): đăng nhập đúng mật khẩu nhưng chưa nhập mã xác thực.
+ */
+export type AuthErrorCode =
+  | "AUTH_STORE_UNAVAILABLE"
+  | "OTP_INVALID"
+  | "OTP_ATTEMPTS_EXCEEDED"
+  | "LOGIN_LOCKED"
+  | "EMAIL_TAKEN"
+  | "EMAIL_PENDING_VERIFICATION"
+  | "EMAIL_NOT_VERIFIED";
+
+/** `data` của 400 `OTP_INVALID` khi nhập sai mã còn hạn: số lần còn được thử (4 → 1). */
+export interface OtpInvalidErrorData {
+  attemptsLeft: number;
+}
+
+/** `data` của 401 sai mật khẩu khi còn ≤ 2 lần trước khi bị chặn (không có mã lỗi). */
+export interface LoginFailedErrorData {
+  attemptsLeft: number;
+}
+
+/** `data` của 429 `LOGIN_LOCKED`: số giây tới khi được thử lại. */
+export interface LoginLockedErrorData {
+  retryAfterSeconds: number;
+}
+
 export interface UserProfile {
   id: string;
   email: string;

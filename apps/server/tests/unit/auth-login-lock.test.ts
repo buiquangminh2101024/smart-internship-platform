@@ -24,6 +24,7 @@ function buildService(options: { redisDown?: boolean } = {}) {
   const counters = new Map<string, number>();
   const errors: string[] = [];
   let findCalls = 0;
+  let compareCalls = 0;
   const down = () => {
     if (options.redisDown) throw new Error("Command timed out");
   };
@@ -59,7 +60,13 @@ function buildService(options: { redisDown?: boolean } = {}) {
       },
     },
     // Bản giả của PasswordHasher (AD-31 D6): bcryptjs ngay trên luồng test.
-    passwordHasher: { hash: (password: string) => bcrypt.hash(password, 4), compare: bcrypt.compare },
+    passwordHasher: {
+      hash: (password: string) => bcrypt.hash(password, 4),
+      compare: (password: string, hash: string) => {
+        compareCalls++;
+        return bcrypt.compare(password, hash);
+      },
+    },
     emailSender: {},
     googleAuthClient: {},
     tokenBlacklist: {},
@@ -69,7 +76,7 @@ function buildService(options: { redisDown?: boolean } = {}) {
     config: { OTP_HARDCODE: true, OTP_HARDCODE_VALUE: "123456" },
   } as unknown as ConstructorParameters<typeof AuthService>[0]);
 
-  return { service, counters, errors, findCalls: () => findCalls };
+  return { service, counters, errors, findCalls: () => findCalls, compareCalls: () => compareCalls };
 }
 
 async function expectError(promise: Promise<unknown>, status: number, code?: string, data?: unknown) {
@@ -98,11 +105,11 @@ test("sai 1–2 lần ⇒ 401 thường; lần 3–4 ⇒ 401 kèm attemptsLeft 2
 });
 
 test("đang bị chặn: đúng mật khẩu vẫn 429, không tìm user, không so mật khẩu", async () => {
-  const { service, findCalls } = buildService();
+  const { service, findCalls, compareCalls } = buildService();
   for (let i = 0; i < LOGIN_LOCK_THRESHOLD; i++) await wrong(service).catch(() => {});
-  const before = findCalls();
+  const before = [findCalls(), compareCalls()];
   await expectError(service.login(EMAIL, PASSWORD, IP), 429, "LOGIN_LOCKED", { retryAfterSeconds: 600 });
-  assert.equal(findCalls(), before);
+  assert.deepEqual([findCalls(), compareCalls()], before);
 });
 
 test("cặp bị chặn: IP khác, hoặc email khác cùng IP, vẫn đăng nhập được", async () => {

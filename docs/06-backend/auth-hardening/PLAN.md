@@ -1,6 +1,6 @@
 # Đăng nhập, đăng ký bền và an toàn hơn — Backend
 
-> **Trạng thái: ĐÃ DUYỆT, ĐANG LÀM (lập và duyệt 2026-11-22).** Bước 0 (đo trước), bước 1 (lỗi hạ tầng không thành 401), bước 2 (giới hạn nhập sai OTP), bước 3 (chặn đăng nhập sai nhiều lần), bước 4 (đăng ký lại email chờ xác thực) và bước 5 (worker băm mật khẩu) xong 2026-11-22, xem "Ghi chú triển khai". Quyết định kiến trúc: AD-31. Frontend: `docs/05-frontend/phases/auth-hardening/PLAN.md`. Làm trước khi viết báo cáo (hạn nộp cho giáo viên hướng dẫn trước 06/12/2026). Ước lượng backend ~0,5–0,75 ngày.
+> **Trạng thái: BACKEND XONG (lập và duyệt 2026-11-22, làm xong bước 0–8 cùng ngày).** Xem "Ghi chú triển khai". Còn frontend F1–F6. Quyết định kiến trúc: AD-31. Frontend: `docs/05-frontend/phases/auth-hardening/PLAN.md`. Làm trước khi viết báo cáo (hạn nộp cho giáo viên hướng dẫn trước 06/12/2026). Ước lượng backend ~0,5–0,75 ngày.
 
 ## Mục tiêu
 
@@ -172,6 +172,7 @@ Thêm vào `apps/server/tests/unit/` (`node:test` + `tsx`):
 - Thu hồi refresh token cũ khi đăng nhập tài khoản khác cùng vai trò.
 - Cân bằng thời gian trả lời giữa email có / không có tài khoản ở `/auth/login`.
 - Loại yêu cầu hỗ trợ riêng "Không xác thực được email".
+- Rút ngắn đăng nhập sai lúc Redis hỏng (~9 s, vì ba lệnh Redis chạy nối tiếp, mỗi lệnh chờ hết `commandTimeout`); ghi nhận ở bước 8.
 
 ## Ghi chú triển khai
 
@@ -261,6 +262,47 @@ Thêm vào `apps/server/tests/unit/` (`node:test` + `tsx`):
 
   - So với bước 0 (pha đăng nhập 404 p99 1.736 ms, `/health` p50 973 ms, `/job-posts` p50 1.964 ms): request khác giờ như lúc nền. **Đạt mục tiêu của bước 8** (404 p99 < 100 ms, API không chậm quá 2 lần).
   - Bản thân đăng nhập cũng nhanh hơn: 200 lần trong 26,2 s thay vì 49,4 s, p50 1.025 ms thay vì 1.967 ms (2 luồng băm song song).
+
+### Bước 6 — test (2026-11-22)
+
+- Phần lớn test đã viết dần theo từng bước (bước 1–5), đối chiếu danh sách ở "Bước 6" đều có:
+  - `auth-store-unavailable.test.ts` (8): `authenticate` và `refresh`, Redis / DB lỗi ⇒ 503, token sai / bị thu hồi ⇒ 401.
+  - `auth-otp-attempts.test.ts` (8): OTP đăng ký và đặt lại mật khẩu, `attemptsLeft` 4 → 1, lần 5 huỷ mã, xin mã mới đếm lại.
+  - `auth-login-lock.test.ts` (10): khoá email + IP, khoá IP, xoá bộ đếm khi đúng, email không tồn tại, Redis lỗi cho qua.
+  - `auth-register-pending.test.ts` (7), `worker-password-hasher.test.ts` (8); `auth-security-log.test.ts` cũ vẫn qua.
+- Bổ sung: test "đang bị chặn" giờ đếm cả số lần gọi `passwordHasher.compare` (trước chỉ đếm `findByEmail`).
+- `apps/server/package.json`: `"test": "tsx --test \"tests/unit/*.test.ts\""`. Glob để trong ngoặc kép cho Node tự mở rộng (Node ≥ 21), vì trên Windows `npm` chạy script qua cmd.exe, không mở rộng `*`. Chạy `npm test` từ `apps/server` (hoặc `npm test -w server` từ gốc): **798 / 798 qua**, ~8 s.
+
+### Bước 7 — shared types (2026-11-22)
+
+- `packages/shared-types`: `AuthErrorCode` (7 mã của AD-31), `OtpInvalidErrorData`, `LoginFailedErrorData` (`attemptsLeft`), `LoginLockedErrorData` (`retryAfterSeconds`). Web dùng ở F1–F6 để đọc `ApiError.code` / `ApiError.data`.
+- `AuthService` tạo `data` của lỗi bằng `satisfies` các kiểu này, để server và web không lệch nhau.
+- Build lại `shared-types` (`dist/` không commit); `tsc --noEmit` của server và web đều sạch.
+
+### Bước 8 — kiểm thật và tài liệu (2026-11-22)
+
+- **Đo lại:** đã đạt ở bước 5 (404 p99 1.736 → 8 ms khi 8 người đăng nhập song song), không đo lại.
+- **Qua gateway 8080** (server dùng Redis Cloud):
+  - sai mật khẩu 6 lần với email không tồn tại ⇒ 401, 401, 401 `attemptsLeft: 2`, 401 `attemptsLeft: 1`, 429 `LOGIN_LOCKED` `retryAfterSeconds: 899`, 429; ngay sau đó Mây Xanh (cặp khác, cùng IP) đăng nhập được;
+  - đăng ký lại email Mây Xanh ⇒ 409 `EMAIL_TAKEN` (email chờ xác thực đã kiểm ở bước 4);
+  - quên mật khẩu Mây Xanh, sai OTP 5 lần ⇒ `attemptsLeft` 4 → 1 rồi `OTP_ATTEMPTS_EXCEEDED`; nhập đúng sau đó ⇒ `OTP_INVALID`; mật khẩu cũ vẫn đăng nhập được;
+  - đã xoá 4 khoá Redis sinh ra lúc kiểm; không ghi gì vào Neon.
+- **Giả lập Redis hỏng:** container tạm `redis:7-alpine` ở cổng 6379 (`docker run`, không sửa compose), chủ dự án chạy server với `$env:REDIS_URL="redis://localhost:6379"` (không sửa `.env`). Script tạm dừng / bật container. Kết quả:
+
+| Lúc | Gọi | Kết quả |
+|---|---|---|
+| Redis chạy | `GET /users/me`, `POST /auth/refresh` | 200, 200 |
+| Redis dừng | `GET /users/me` | **503 `AUTH_STORE_UNAVAILABLE`** sau ~3 s (`commandTimeout`); lần sau 0,2–3 s |
+| | `POST /auth/refresh` | **503 `AUTH_STORE_UNAVAILABLE`** |
+| | đăng nhập đúng mật khẩu | 200 (bộ đếm chặn cho qua, Q3) |
+| | đăng nhập sai mật khẩu | 401 thường, nhưng **~9,3 s** (đọc khoá, đếm sai, nhật ký đăng nhập sai, mỗi bước chờ hết `commandTimeout` 3 s) |
+| | `/health`, 404 | 200 (150 ms), 404 (10 ms): server không treo |
+| Redis bật lại | `GET /users/me` **bằng token cũ**, refresh bằng refresh token cũ | 200, 200 ⇒ phiên không mất |
+
+  - Trước AD-31 hai lệnh `/users/me`, refresh lúc Redis dừng trả 401 / 500 ⇒ web xoá phiên. Giờ là 503; phần web giữ phiên khi gặp 503 là F1 của plan frontend.
+  - Đăng nhập sai chậm ~9 s khi Redis hỏng: chấp nhận (chỉ khi Redis đang hỏng, chỉ với người gõ sai mật khẩu, vẫn trả đúng 401). Có thể rút ngắn bằng cách chạy song song các lệnh Redis, ghi vào phần "Không làm".
+  - Container tạm đã xoá; chủ dự án chạy lại server với `REDIS_URL` của `.env`.
+- **Tài liệu:** AD-31 (trạng thái), `FEATURE_BACKLOG.md` (ba dòng), `PROJECT_STATUS.md` (Phase 12, Phase 13, nhật ký), FAQ trợ lý (`content/support-faq/01-tai-khoan.md`: mục `account-otp` thêm "sai 5 lần thì mã bị huỷ", mục `account-forgot-password` thêm "sai mật khẩu 5 lần / 15 phút thì tạm chặn ~15 phút"; chạy lại `npm run support-chat:index`).
 
 ## Phần 4 — Ghi chú của chủ dự án
 

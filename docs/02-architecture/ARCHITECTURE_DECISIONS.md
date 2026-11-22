@@ -1222,7 +1222,7 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 
 **Ngày:** 2026-11-22 · **Phase liên quan:** 12 (rà soát bảo mật). Plan: `docs/06-backend/auth-hardening/PLAN.md`, `docs/05-frontend/phases/auth-hardening/PLAN.md`.
 
-> **Trạng thái: ĐÃ DUYỆT, ĐANG TRIỂN KHAI (2026-11-22).** Chủ dự án đồng ý phạm vi, ngưỡng chặn đăng nhập, cách xử lý đăng ký dở dang, gộp worker băm mật khẩu, gợi ý hỗ trợ ở form OTP và Q1–Q4 trong plan backend.
+> **Trạng thái: ĐÃ DUYỆT; BACKEND XONG 2026-11-22 (mục 1–5, đã kiểm qua gateway 8080 và giả lập Redis hỏng), FRONTEND ĐANG LÀM.** Chủ dự án đồng ý phạm vi, ngưỡng chặn đăng nhập, cách xử lý đăng ký dở dang, gộp worker băm mật khẩu, gợi ý hỗ trợ ở form OTP và Q1–Q4 trong plan backend.
 
 **Bối cảnh:** rà luồng đăng nhập / đăng ký ngày 2026-11-22 trước khi viết báo cáo, sau khi AD-22 đã sửa lỗi "văng tài khoản khi tab khác đăng nhập lại". Còn lại:
 
