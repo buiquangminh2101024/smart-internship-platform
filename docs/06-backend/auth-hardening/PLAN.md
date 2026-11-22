@@ -1,6 +1,6 @@
 # Đăng nhập, đăng ký bền và an toàn hơn — Backend
 
-> **Trạng thái: ĐÃ DUYỆT, ĐANG LÀM (lập và duyệt 2026-11-22).** Bước 0 (đo trước) xong 2026-11-22, kết quả ở "Ghi chú triển khai". Quyết định kiến trúc: AD-31. Frontend: `docs/05-frontend/phases/auth-hardening/PLAN.md`. Làm trước khi viết báo cáo (hạn nộp cho giáo viên hướng dẫn trước 06/12/2026). Ước lượng backend ~0,5–0,75 ngày.
+> **Trạng thái: ĐÃ DUYỆT, ĐANG LÀM (lập và duyệt 2026-11-22).** Bước 0 (đo trước), bước 1 (lỗi hạ tầng không thành 401), bước 2 (giới hạn nhập sai OTP) và bước 3 (chặn đăng nhập sai nhiều lần) xong 2026-11-22, xem "Ghi chú triển khai". Quyết định kiến trúc: AD-31. Frontend: `docs/05-frontend/phases/auth-hardening/PLAN.md`. Làm trước khi viết báo cáo (hạn nộp cho giáo viên hướng dẫn trước 06/12/2026). Ước lượng backend ~0,5–0,75 ngày.
 
 ## Mục tiêu
 
@@ -188,6 +188,46 @@ Thêm vào `apps/server/tests/unit/` (`node:test` + `tsx`):
 - Đăng nhập: p50 1.967 ms / p95 2.064 ms, không lỗi.
 - Khớp lần đo 2026-11-14 (`live-rescore` bước 10): khi 8 người đăng nhập cùng lúc, request không liên quan chờ 0,5–1,7 giây thay vì ~5 ms.
 - **Mục tiêu bước 8:** pha đăng nhập có 404 p99 < 100 ms, `/health` và `/job-posts` không chậm quá 2 lần lúc nền. Bản thân đăng nhập có thể vẫn chậm (2 worker xử lý 8 việc), không tính vào mục tiêu.
+
+### Bước 1 — lỗi hạ tầng không thành 401 (2026-11-22)
+
+- `shared/errors/AppError.ts`: thêm hằng `AUTH_STORE_UNAVAILABLE` và hàm `authStoreUnavailable()` (503), dùng chung cho `authenticate` và `refresh`.
+- `authenticate.ts`: bọc riêng `checkAccessTokenState`; lỗi ⇒ log + 503. `verifyAccessToken` lỗi, thiếu header, `TOKEN_REVOKED` / `ACCOUNT_SUSPENDED` / `SESSION_REVOKED` vẫn 401. `optionalAuthenticate` (chatbot) bọc `authenticate` nên có cùng hành vi.
+- `AuthService.refresh`: hàm riêng `readRefreshState` đọc blacklist (Redis) và user (DB) **song song** (trước đây tuần tự); lỗi ⇒ log + 503. Khác plan một chút: lỗi DB (Neon) cũng trả 503, vì cũng là lỗi tạm thời, không phải hết phiên.
+- `infrastructure/redis.ts`: `commandTimeout: 3000`, `keepAlive: 30000`, `maxRetriesPerRequest: 3`.
+- **Rà nơi dùng Redis:** không có lệnh chờ lâu (`BLPOP`, `subscribe`, `eval`, Socket.IO adapter Redis). Mọi chỗ còn lại (rate limit, OTP, blacklist, cờ khoá, mốc thu hồi, mã mời công ty, khoá lượt chạy nền, cache Gemini, hạn mức LLM) là lệnh ngắn `GET` / `SET` / `INCR` / `DEL`. Timeout 3 giây không ảnh hưởng.
+- Handshake Socket.IO giữ nguyên như plan (lỗi Redis ⇒ `connect_error`, web chỉ thử refresh).
+- **Test:** `tests/unit/auth-store-unavailable.test.ts`, 8 test (Redis lỗi ⇒ 503 ở `authenticate` và `refresh`, DB lỗi ⇒ 503 ở `refresh`, các trường hợp 401 giữ nguyên). Toàn bộ 765 / 765 qua, `tsc --noEmit` sạch.
+- `live-rescore-marker.test.ts` ("sửa liên tiếp cùng một ứng viên…") thỉnh thoảng trượt khi chạy cả bộ, 1 trong 4 lần. Test này dùng hẹn giờ thật, có từ trước, không liên quan bước này. Chưa sửa.
+- Kiểm qua 8080: đăng nhập, `/users/me` 200; token sai 401; refresh 200; refresh token sai 401. Kiểm 503 khi Redis hỏng để ở bước 8 (Redis local).
+
+### Bước 2 — giới hạn nhập sai OTP (2026-11-22)
+
+- `AppError` thêm tham số thứ tư `data` (tuỳ chọn); `errorHandler` trả ở `data` của body lỗi. Web (`ApiError.data`) đã đọc sẵn trường này, không cần đổi `api-client`.
+- `OtpStore.recordFailure` (port + `RedisOtpStore`): `INCR otp:fail:<purpose>:<email>`, đặt `EXPIRE` 5 phút ở lần sai đầu. `set` ghi mã và xoá bộ đếm trong một `MULTI`; `delete` xoá cả mã lẫn bộ đếm.
+- `AuthService.assertOtpMatches`, hằng `OTP_MAX_ATTEMPTS = 5`:
+  - không có mã ⇒ 400 `OTP_INVALID`, không `attemptsLeft`, không đếm;
+  - sai lần 1–4 ⇒ 400 `OTP_INVALID`, `data: { attemptsLeft: 4 → 1 }`;
+  - sai lần 5 ⇒ xoá mã, 400 `OTP_ATTEMPTS_EXCEEDED` (message "Too many incorrect OTP attempts — please request a new code").
+- `resetPassword` với email không tồn tại: thêm code `OTP_INVALID` vào lỗi sẵn có, vẫn không đếm (P2 của AD-18).
+- `verifyOtp` với email không tồn tại vẫn 404 "User not found" như cũ (ngoài phạm vi).
+- **Test:** `tests/unit/auth-otp-attempts.test.ts`, 8 test. Cả bộ 772 / 773, test trượt là `live-rescore-marker` (hẹn giờ thật, đã ghi ở bước 1). `tsc --noEmit` sạch.
+- **Kiểm qua 8080** (tài khoản ứng viên `@large-demo.local`, `OTP_HARDCODE=true`): `forgot-password` ⇒ 5 lần `reset-password` sai mã trả `attemptsLeft` 4, 3, 2, 1 rồi `OTP_ATTEMPTS_EXCEEDED`; lần 6 ⇒ `OTP_INVALID` không `attemptsLeft` (mã đã bị huỷ). Mật khẩu cũ vẫn đăng nhập được. Không thử nhập mã đúng sau khi bị huỷ trên tài khoản thật (nếu lỗi sẽ đổi mật khẩu tài khoản demo); unit test đã phủ trường hợp này.
+
+### Bước 3 — chặn đăng nhập sai nhiều lần (2026-11-22)
+
+- `RateLimiter` thêm `peek(key)` (`GET` + `TTL` trong một pipeline; khoá chưa có ⇒ `count` 0, `ttlSeconds` 0) và `reset(key)` (`DEL`). Khoá Redis vẫn có tiền tố `ratelimit:`.
+- `auth.service.ts`: hằng `LOGIN_LOCK_THRESHOLD = 5`, `LOGIN_IP_THRESHOLD = 30`, `LOGIN_LOCK_WINDOW_MINUTES = 15` (export cho test). Khoá `login-lock:<email>:<ip>` (email `trim` + chữ thường) và `login-lock-ip:<ip>`.
+- `login`:
+  1. `assertLoginNotLocked`: đọc hai khoá; khoá nào đạt ngưỡng ⇒ 429 `LOGIN_LOCKED`, `data: { retryAfterSeconds }` (TTL lớn hơn; TTL -1 thì coi còn đủ 15 phút). Không tìm user, không so mật khẩu.
+  2. Sai mật khẩu, email không tồn tại, hoặc tài khoản chỉ có Google ⇒ `trackFailedLogin` (nhật ký L4, chỉ khi có mật khẩu, như cũ) rồi `recordLoginFailure`: `consume` hai khoá, đọc lại; đạt ngưỡng ⇒ 429 ngay (Q1); còn ≤ 2 lần ⇒ 401 kèm `data: { attemptsLeft }` (lấy số nhỏ hơn giữa hai khoá); còn lại ⇒ 401 như cũ.
+  3. Đúng mật khẩu ⇒ `reset` khoá cặp, trước khi xét trạng thái chờ xác thực / bị khoá. Khoá IP để tự hết hạn.
+  4. Redis lỗi ở bất kỳ bước nào ⇒ log và cho qua (Q3).
+- `tests/unit/auth-security-log.test.ts` (test cũ của nhật ký L4): bản giả `RateLimiter` thêm `peek` / `reset`; `failLogin` chấp nhận 401 hoặc 429; test "email không có tài khoản" chỉ kiểm khoá `login-fail:*` không bị đếm (khoá chặn mới thì có, theo Q2); test "RateLimiter lỗi" kiểm có log của nhật ký thay vì đúng 1 log. Hành vi nhật ký không đổi.
+- **Test mới:** `tests/unit/auth-login-lock.test.ts`, 10 test. Cả bộ 783 / 783 qua, `tsc --noEmit` sạch.
+- **Kiểm qua 8080** (một ứng viên `@large-demo.local`): sai lần 1–2 ⇒ 401; lần 3, 4 ⇒ `attemptsLeft` 2, 1; lần 5 ⇒ 429 `retryAfterSeconds` 898; đúng mật khẩu ngay sau ⇒ vẫn 429. Sau đó xoá đúng hai khoá vừa tạo trong Redis; đăng nhập lại ⇒ 200.
+- **IP mà server thấy khi chạy dev là `172.19.0.1`** (cổng mạng Docker; request từ máy Windows vào Nginx trong Docker bị NAT). Vì vậy ở máy dev, mọi trình duyệt trên máy (và máy khác trong LAN nếu truy cập qua máy này) dùng chung một khoá IP: tổng 30 lần sai trong 15 phút thì chặn cả máy. Với demo trên một laptop thì không sao (cũng chỉ một IP thật). Khi deploy (Phase 14) phải kiểm IP thật đi tới Express, cùng mục `trust proxy` ở bước 3.
+- Lỡ tự khoá khi demo: chờ hết thời gian, hoặc xoá khoá `ratelimit:login-lock:*` / `ratelimit:login-lock-ip:*` trong Redis.
 
 ## Phần 4 — Ghi chú của chủ dự án
 

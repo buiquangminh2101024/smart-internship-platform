@@ -56,6 +56,13 @@ function buildService(users: FakeUser[], options: { rateLimiterFails?: boolean }
         counters.set(key, count);
         return count <= limit;
       },
+      peek: async (key: string) => {
+        if (options.rateLimiterFails) throw new Error("redis down");
+        return { count: counters.get(key) ?? 0, ttlSeconds: 900 };
+      },
+      reset: async (key: string) => {
+        counters.delete(key);
+      },
     },
     emailSender: { send: async () => {} },
     googleAuthClient: { verifyIdToken: async () => ({ googleId: "g-1", email: "a@example.com" }) },
@@ -76,7 +83,8 @@ function buildService(users: FakeUser[], options: { rateLimiterFails?: boolean }
 async function failLogin(service: AuthService, email: string): Promise<void> {
   await assert.rejects(
     service.login(email, "sai-mat-khau", "203.0.113.7"),
-    (error: unknown) => error instanceof AppError && error.statusCode === 401,
+    // AD-31 D4: từ lần sai thứ 5 cùng email + IP thì bị chặn (429), nhật ký L4 không đổi.
+    (error: unknown) => error instanceof AppError && (error.statusCode === 401 || error.statusCode === 429),
   );
 }
 
@@ -101,18 +109,18 @@ test("sai mật khẩu: lần 1–4 không ghi, lần 5 ghi một dòng, lần 6
   assert.equal(records.length, 1);
 });
 
-test("email không có tài khoản: không đếm, không ghi", async () => {
+test("email không có tài khoản: không đếm nhật ký, không ghi (khoá chặn AD-31 vẫn đếm)", async () => {
   const { service, records, counters } = buildService([user()]);
   for (let attempt = 1; attempt <= 6; attempt += 1) await failLogin(service, "la@example.com");
   assert.equal(records.length, 0);
-  assert.equal(counters.size, 0);
+  assert.equal([...counters.keys()].filter((key) => key.startsWith("login-fail")).length, 0);
 });
 
 test("RateLimiter lỗi: vẫn trả 401, chỉ log", async () => {
   const { service, records, errors } = buildService([user()], { rateLimiterFails: true });
   await failLogin(service, "a@example.com");
   assert.equal(records.length, 0);
-  assert.equal(errors.length, 1);
+  assert.ok(errors.includes("Không đếm được lần đăng nhập sai"));
 });
 
 test("đăng nhập đúng: Admin ghi AUTH_LOGIN_SUCCEEDED, ứng viên không ghi", async () => {

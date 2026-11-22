@@ -7,6 +7,7 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof AppError) {
     const body: ApiResponse = { success: false, error: err.message };
     if (err.code) body.code = err.code;
+    if (err.data) body.data = err.data;
     res.status(err.statusCode).json(body);
     return;
   }
