@@ -3,7 +3,8 @@
 import { use, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import type { AuthTokensResponse } from "@sip/shared-types";
-import { apiFetch, publicFetch, ApiError } from "@/lib/api-client";
+import { apiFetch, publicFetch } from "@/lib/api-client";
+import { authErrorMessage, hasAuthCode, loginLockedMinutes } from "@/lib/auth-errors";
 import { fetchProfileWithToken } from "@/lib/auth";
 import { useAdminAuthStore, useCurrentUser } from "@/stores/auth-store";
 import { Button } from "@/components/ui/Button";
@@ -54,7 +55,12 @@ export default function AdminLoginPage({ searchParams }: { searchParams: Promise
       useAdminAuthStore.getState().setSession(tokens, loggedInUser);
       router.push("/admin/dashboard");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Sai email hoặc mật khẩu");
+      // AD-31 D4: trang Admin không có link Quên mật khẩu nên câu bị chặn không nhắc tới nó.
+      setError(
+        hasAuthCode(err, "LOGIN_LOCKED")
+          ? `Bạn đã nhập sai quá nhiều lần. Thử lại sau ${loginLockedMinutes(err)} phút.`
+          : authErrorMessage(err, "Sai email hoặc mật khẩu"),
+      );
     } finally {
       setSubmitting(false);
     }
@@ -110,7 +116,11 @@ export default function AdminLoginPage({ searchParams }: { searchParams: Promise
           autoComplete="current-password"
           required
         />
-        {error ? <p className="text-sm text-red-600">{error}</p> : null}
+        {error ? (
+          <p role="alert" className="text-sm text-red-600">
+            {error}
+          </p>
+        ) : null}
         <Button type="submit" loading={submitting} fullWidth>
           Đăng nhập
         </Button>

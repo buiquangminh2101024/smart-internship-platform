@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { AuthTokensResponse, RegistrableRole } from "@sip/shared-types";
 import { publicFetch, ApiError } from "@/lib/api-client";
 import { completeAuth, navigateAfterAuth } from "@/lib/auth";
+import { authErrorMessage, hasAuthCode } from "@/lib/auth-errors";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { OtpForm } from "./OtpForm";
@@ -27,19 +28,32 @@ function isSuspendedError(err: unknown): boolean {
   return err instanceof ApiError && err.code === "ACCOUNT_SUSPENDED";
 }
 
+/** Đúng mật khẩu nhưng chưa nhập mã xác thực lúc đăng ký (403). Giữ so chuỗi cũ làm dự phòng. */
+function isNotVerifiedError(err: unknown): boolean {
+  return (
+    hasAuthCode(err, "EMAIL_NOT_VERIFIED") ||
+    (err instanceof ApiError && err.status === 403 && err.message.toLowerCase().includes("not verified"))
+  );
+}
+
 export function LoginForm({ role }: LoginFormProps) {
   const router = useRouter();
   const [step, setStep] = useState<"form" | "otp">("form");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  // 429 LOGIN_LOCKED (AD-31 D4): câu báo kèm link Quên mật khẩu nổi rõ.
+  const [locked, setLocked] = useState(false);
   // Có giá trị khi server trả ACCOUNT_SUSPENDED: hiện thông báo khoá kèm link hỗ trợ thay cho formError.
   const [suspendedHref, setSuspendedHref] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [googleSubmitting, setGoogleSubmitting] = useState(false);
 
+  const forgotHref = role === "EMPLOYER" ? "/forgot-password?role=EMPLOYER" : "/forgot-password";
+
   async function handleGoogle(idToken: string) {
     setFormError(null);
+    setLocked(false);
     setSuspendedHref(null);
     setGoogleSubmitting(true);
     try {
@@ -63,6 +77,7 @@ export function LoginForm({ role }: LoginFormProps) {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setFormError(null);
+    setLocked(false);
     setSuspendedHref(null);
     setSubmitting(true);
 
@@ -76,7 +91,7 @@ export function LoginForm({ role }: LoginFormProps) {
     } catch (err) {
       if (isSuspendedError(err)) {
         setSuspendedHref(suspendedSupportHref(email));
-      } else if (err instanceof ApiError && err.status === 403 && err.message.toLowerCase().includes("not verified")) {
+      } else if (isNotVerifiedError(err)) {
         // Tài khoản chưa xác thực OTP lúc đăng ký — gửi lại mã rồi chuyển sang bước OTP.
         try {
           await publicFetch("/auth/resend-otp", { method: "POST", body: JSON.stringify({ email }) });
@@ -85,7 +100,8 @@ export function LoginForm({ role }: LoginFormProps) {
         }
         setStep("otp");
       } else {
-        setFormError(err instanceof ApiError ? err.message : "Không đăng nhập được, vui lòng thử lại");
+        setLocked(hasAuthCode(err, "LOGIN_LOCKED"));
+        setFormError(authErrorMessage(err, "Không đăng nhập được, vui lòng thử lại"));
       }
     } finally {
       setSubmitting(false);
@@ -93,7 +109,13 @@ export function LoginForm({ role }: LoginFormProps) {
   }
 
   if (step === "otp") {
-    return <OtpForm email={email} onVerified={(user) => void navigateAfterAuth(router, user)} />;
+    return (
+      <OtpForm
+        email={email}
+        notice="Email này chưa được xác thực. Mã mới đã được gửi tới hộp thư, bạn nhập mã để hoàn tất đăng ký."
+        onVerified={(user) => void navigateAfterAuth(router, user)}
+      />
+    );
   }
 
   return (
@@ -115,12 +137,24 @@ export function LoginForm({ role }: LoginFormProps) {
         required
       />
       <Link
-        href={role === "EMPLOYER" ? "/forgot-password?role=EMPLOYER" : "/forgot-password"}
+        href={forgotHref}
         className="-mt-2 justify-self-end text-sm font-medium text-brand-700 hover:underline"
       >
         Quên mật khẩu?
       </Link>
-      {formError ? <p className="text-sm text-red-600">{formError}</p> : null}
+      {formError ? (
+        <p role="alert" className="text-sm text-red-600">
+          {formError}
+          {locked ? (
+            <>
+              {" "}
+              <Link href={forgotHref} className="font-semibold text-brand-700 hover:underline">
+                Đặt lại mật khẩu
+              </Link>
+            </>
+          ) : null}
+        </p>
+      ) : null}
       {suspendedHref ? (
         <p role="alert" className="text-sm text-red-600">
           Tài khoản của bạn đã bị khoá.{" "}

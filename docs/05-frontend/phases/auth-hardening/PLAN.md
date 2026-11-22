@@ -1,6 +1,6 @@
 # Đăng nhập, đăng ký bền và an toàn hơn — Frontend
 
-> **Trạng thái: ĐÃ DUYỆT (lập và duyệt 2026-11-22), ĐANG LÀM.** Chia 3 đợt (chốt 2026-11-23): đợt 1 = F1 (xong 2026-11-23, đã kiểm trên trình duyệt), đợt 2 = F2–F5, đợt 3 = F6 phần form. Xem "Ghi chú triển khai". Làm sau backend (`docs/06-backend/auth-hardening/PLAN.md`). Quyết định kiến trúc: AD-31 (bổ sung AD-22). Giao diện theo skill `sip-ui` (đọc trước khi code). Ước lượng ~0,5 ngày, kể cả kiểm trên trình duyệt.
+> **Trạng thái: ĐÃ DUYỆT (lập và duyệt 2026-11-22), ĐANG LÀM.** Chia 3 đợt (chốt 2026-11-23): đợt 1 = F1 (xong 2026-11-23, đã kiểm trên trình duyệt), đợt 2 = F2–F5 (code xong 2026-11-23, chưa kiểm trên trình duyệt), đợt 3 = F6 phần form. Xem "Ghi chú triển khai". Làm sau backend (`docs/06-backend/auth-hardening/PLAN.md`). Quyết định kiến trúc: AD-31 (bổ sung AD-22). Giao diện theo skill `sip-ui` (đọc trước khi code). Ước lượng ~0,5 ngày, kể cả kiểm trên trình duyệt.
 
 ## Mục tiêu
 
@@ -125,6 +125,23 @@ Qua `localhost:8080`, cửa sổ ẩn danh, dùng tài khoản thử (không dù
   - bật Redis lại, tải lại ⇒ dùng tiếp, không đăng nhập lại;
   - làm hỏng cả refresh token ⇒ refresh 401 ⇒ xoá phiên Ứng viên, về `/`, phiên Nhà tuyển dụng còn (nhánh `expired` như cũ).
 - **AD-22, chạy lại sau F1:** Test 1 đạt (đăng xuất rồi đăng nhập lại Ứng viên, sang tab Nhà tuyển dụng rồi quay về, menu tài khoản ⇒ vào `/profile`, cả hai khu vực còn phiên); Test 3 đạt bản rút gọn (làm hỏng access token thay vì chờ 20 phút ⇒ 401 ⇒ refresh 200 ⇒ gửi lại 200); Test 4 đạt (hai tab Ứng viên, đăng xuất tab 1 ⇒ tab 2 về `/`); Test 5 đạt (đăng xuất Ứng viên, F5 tab Nhà tuyển dụng ⇒ vẫn đăng nhập). **Test 2 chưa chạy**: phải đăng xuất phiên Nhà tuyển dụng đang dùng của chủ dự án; cùng đường code với Test 1, khác khu vực.
+
+### Đợt 2 — F2–F5 (2026-11-23, chưa kiểm trên trình duyệt)
+
+- **F2** `lib/auth-errors.ts`:
+  - `authErrorMessage(err, fallback)` theo bảng F2. Lỗi mạng, 5xx, `AUTH_STORE_UNAVAILABLE` ⇒ câu "Không kết nối được máy chủ…" của F1. Mã khác AD-31 (tài khoản bị khoá, Google) do form tự xử lý trước.
+  - Thêm `EMAIL_PENDING_VERIFICATION`, `EMAIL_NOT_VERIFIED` (bảng F2 không ghi, form thường không hiện vì đã chuyển bước).
+  - Hàm phụ: `hasAuthCode`, `isServerUnavailable`, `loginLockedMinutes` (làm tròn lên, ít nhất 1), `isHourlyCodeLimit` (429 hết lượt trong giờ, khác 429 "vừa xin mã"), `otpSupportHref`, `OTP_SUPPORT_HINT_AFTER = 3`.
+  - 429 khi xin / gửi lại mã dùng lại `requestCodeErrorMessage` có sẵn ở `lib/password-reset.ts` (đã tách ba loại hạn mức), không thêm câu mới.
+- **F3** `LoginForm`: nhận chưa xác thực bằng `EMAIL_NOT_VERIFIED` (giữ so chuỗi cũ làm dự phòng), sang bước nhập mã kèm ghi chú "Email này chưa được xác thực…"; `LOGIN_LOCKED` ⇒ câu F2 kèm link "Đặt lại mật khẩu" ngay trong câu báo; lỗi khác qua `authErrorMessage`. Câu báo có `role="alert"`. Trang `/admin`: cùng câu, riêng `LOGIN_LOCKED` bỏ vế "dùng Quên mật khẩu" vì trang này không có link đó.
+- **F4** `RegisterForm`: `EMAIL_PENDING_VERIFICATION` ⇒ gọi `resend-otp` (lỗi thì bỏ qua) ⇒ `OtpForm` kèm ghi chú của plan; `EMAIL_TAKEN` ⇒ "Email này đã có tài khoản." kèm link Đăng nhập và Quên mật khẩu (giữ `?role=EMPLOYER`). `OtpForm` thêm prop `notice` (khung `brand-50`, icon `info`, `role="status"`).
+- **F5**:
+  - component mới `components/auth/OtpSupportHint.tsx` (khung viền `border-subtle`, nền `surface-page`, icon `life-buoy`), dùng ở `OtpForm` và `ResetPasswordForm`. Hiện khi sai mã ≥ 3 lần trong form, server trả `OTP_ATTEMPTS_EXCEEDED`, hoặc gửi lại mã bị 429 hết lượt trong giờ.
+  - Vế sau đổi theo mục đích: đăng ký "…kích hoạt tài khoản giúp bạn", đặt lại mật khẩu "…hướng dẫn bạn lấy lại mật khẩu" (plan chỉ ghi câu đăng ký; Admin không "kích hoạt" người quên mật khẩu).
+  - Ở thẻ "Mật khẩu" của Cài đặt (`via="change"`) link mở tab mới.
+  - `OtpForm`, `ResetPasswordForm`: `OTP_INVALID` / `OTP_ATTEMPTS_EXCEEDED` ⇒ câu F2 (có "Còn N lần nhập"); `ResetPasswordForm` giữ câu cũ cho 400 khác. `OtpForm` gửi lại mã thành công thì xoá ô mã.
+  - `/support` đọc thêm `?message=` (cắt 2.000 ký tự) ⇒ `SupportContactForm` prop `initialMessage`.
+- `tsc --noEmit` sạch; eslint các file đã sửa sạch (lỗi `react-hooks/set-state-in-effect` ở `app/jobs/[id]/apply/page.tsx` có từ trước, không thuộc đợt này).
 
 ## Phần 4 — Ghi chú của chủ dự án
 

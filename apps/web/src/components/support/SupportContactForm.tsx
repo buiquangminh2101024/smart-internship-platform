@@ -64,14 +64,17 @@ function submitErrorMessage(err: unknown): string {
 export function SupportContactForm({
   initialEmail,
   initialCategory,
+  initialMessage = "",
 }: {
   initialEmail: string;
   initialCategory: SupportCategory;
+  /** Nội dung điền sẵn từ `?message=` (AD-31 D7). */
+  initialMessage?: string;
 }) {
   const submit = useSubmitSupportContact();
   const [email, setEmail] = useState(initialEmail);
   const [category, setCategory] = useState<SupportCategory>(initialCategory);
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(initialMessage);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [serverError, setServerError] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
