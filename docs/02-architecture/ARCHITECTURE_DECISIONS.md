@@ -1172,3 +1172,48 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 - `job-posts`: bộ chấm thuần + cấu hình, `JobQualityService`, lõi duyệt / từ chối nhận `tx`, endpoint hàng loạt, hàng đợi có `band` / `sort` / `total`, `PublishFollowUpService`.
 - `packages/shared-types`: `JobQualityDto`, request / response hàng loạt, `submittedAt`, `pendingByBand`.
 - Frontend Admin: hàng đợi theo vùng có "Xem thêm", thanh chọn hàng loạt, thẻ điểm ở trang chi tiết thay cho phần kiểm tự động của `ReviewChecklist`.
+
+---
+
+## AD-30 — Tăng hiển thị tin (nổi bật, tuyển gấp, làm mới): lượt theo gói + mua lẻ, một bảng lịch sử lượt dùng, khối nổi bật tách khỏi danh sách tìm kiếm, `Payment` không còn chỉ gắn với gói (sửa một phần AD-6)
+
+**Ngày:** 2026-11-22 · **Phase liên quan:** không thuộc phase đánh số. Dòng "Tin nổi bật / đẩy tin trả phí" ở mục 4 của `docs/01-project/FEATURE_BACKLOG.md`. Kế hoạch chi tiết: `docs/06-backend/job-promotions/PLAN.md`, `docs/05-frontend/phases/job-promotions/PLAN.md`.
+
+> **Trạng thái: HOÃN — hướng phát triển sau khoá luận (2026-11-22).** Chưa code, chưa migration. Chủ dự án đã chốt Q1–Q5 của plan backend (xem mục "Câu hỏi đã chốt" ở đó) nhưng quyết định hoãn vì hạn hoàn thành báo cáo với GVHD là trước 06/12/2026 (thông báo Khoa CNTT ngày 05/11/2026). Khi làm lại: duyệt lại AD này với code lúc đó rồi mới bắt đầu bước 1.
+
+**Bối cảnh:** Nhà tuyển dụng chỉ có một cách để tin được nhiều người thấy hơn: chờ tin mới được xếp đầu `/jobs`. Các trang tuyển dụng thực tế đều bán "tin nổi bật", "làm mới tin" và nhãn "tuyển gấp", thường gộp trong gói dịch vụ và có bán lẻ. Hệ thống đã có gói (`SubscriptionPlan`, `CompanySubscription`), thanh toán sandbox VNPay / Momo (AD-6), điểm chất lượng tin (AD-29) và lượt xem theo ngày (`job_post_daily_stats`, AD-16). Nhưng `Payment.companySubscriptionId` bắt buộc, nên mọi khoản thanh toán đều phải là mua gói.
+
+**Quyết định:**
+
+1. **Ba loại tăng hiển thị, một cơ chế.** `FEATURED` (nổi bật, có thời hạn), `URGENT` (nhãn tuyển gấp, có thời hạn), `REFRESH` (làm mới, xảy ra một lần). Mỗi lần dùng là một dòng trong bảng mới `job_promotions` (tin, công ty, gói, loại, nguồn lượt, bắt đầu, kết thúc). Đếm lượt đã dùng bằng cách đếm dòng, không lưu bộ đếm riêng (cùng tinh thần `SUBSCRIPTION_BILLING_DESIGN.md` §3.1).
+2. **Lượt có hai nguồn.**
+   - *Theo gói:* `SubscriptionPlan` thêm `featuredQuota`, `featuredDays`, `urgentQuota`, `urgentDays`, `refreshQuota` (mặc định 0 / 7). Lượt tính trong khoảng `startDate`–`endDate` của gói đang `ACTIVE`.
+   - *Mua lẻ:* bảng catalog `job_promotion_products` (một dòng mỗi loại: giá một lượt, số ngày mỗi lượt, đang bán hay không), Admin sửa. Mỗi lần mua là một dòng `job_promotion_purchases` (loại, số lượt, đơn giá và số ngày chụp lại lúc mua, trạng thái). Lượt mua lẻ **gắn với gói đang `ACTIVE` lúc mua** và hết hạn cùng gói; công ty đang dùng thử hoặc không có gói thì không mua được.
+   - Dùng lượt của gói trước, rồi tới lượt mua lẻ cũ nhất. Số ngày của một lượt lấy theo nguồn: lượt của gói dùng `featuredDays` / `urgentDays` của gói, lượt mua lẻ dùng số ngày đã chụp lúc mua.
+3. **`Payment` thanh toán được cho gói hoặc cho lượt mua lẻ.** `Payment.companySubscriptionId` thành không bắt buộc, thêm `Payment.promotionPurchaseId` (unique, không bắt buộc); ràng buộc CHECK trong migration: đúng một trong hai cột có giá trị. IPN thành công thì rẽ nhánh: gói thì kích hoạt gói như cũ, lượt lẻ thì chuyển dòng mua sang `ACTIVE`. Adapter VNPay / Momo, ký chữ ký, idempotency, log callback giữ nguyên. Không tạo bảng thanh toán thứ hai.
+4. **Điều kiện dùng lượt.** Tin phải `PUBLISHED`. `FEATURED` cần điểm chất lượng không ở vùng *Đề xuất từ chối* và không có cờ chặn (AD-29; tin chưa có điểm thì chấm ngay rồi xét). Không bật `FEATURED` / `URGENT` khi tin đang còn hiệu lực loại đó. `REFRESH` cách lần làm mới trước (hoặc lúc đăng) tối thiểu 24 giờ. Thời điểm kết thúc = `min(bắt đầu + số ngày, endDate của gói)`. Kiểm lượt và ghi dòng trong một transaction có khoá dòng `CompanySubscription` (`SELECT … FOR UPDATE`) để hai người bấm cùng lúc không vượt lượt.
+5. **Lượt đã dùng không hoàn.** Tin bị đóng, hết hạn, bị gỡ giữa chừng thì ngừng hiển thị vì điều kiện hiển thị luôn có `status = PUBLISHED`; không có job dọn. Mua gói mới giữa kỳ huỷ gói cũ (AD-6 §3.2), nên lượt mua lẻ chưa dùng của gói cũ mất: giao diện mua gói phải cảnh báo.
+6. **Cột phi chuẩn hoá trên `job_posts`:** `featuredUntil`, `urgentUntil`, `listedAt`. Bảng `job_promotions` là nguồn sự thật để đếm và thống kê; ba cột này chỉ để đọc nhanh ở danh sách (huy hiệu, bộ lọc, thứ tự) mà không phải join. Ghi cùng transaction với dòng `job_promotions`.
+7. **Khối nổi bật tách khỏi danh sách tìm kiếm.** API riêng `GET /job-posts/featured` (tin `PUBLISHED`, chưa hết hạn, `featuredUntil > now`, theo `cityId` / `industryId` nếu có, xáo ngẫu nhiên, tối đa vài tin). Trang chủ và đầu `/jobs` hiển thị khối này. Danh sách `/jobs` **không đổi** truy vấn, cursor hay đường `sort=match`; tin nổi bật vẫn xuất hiện bình thường trong danh sách.
+8. **Làm mới đổi thứ tự "mới nhất".** `SEARCH_ORDER` đổi từ `publishedAt desc, id desc` sang `listedAt desc, id desc`. `listedAt` = `publishedAt` khi đăng (mọi chỗ đang ghi `publishedAt`), = thời điểm làm mới khi làm mới; backfill bằng `publishedAt`. `publishedAt` giữ nguyên ý nghĩa: huy hiệu "Mới", job alert, gợi ý việc làm không coi tin làm mới là tin mới.
+9. **Tuyển gấp chỉ là huy hiệu và bộ lọc** (`urgent=1` trên `/jobs`), không đổi thứ tự.
+10. **Tăng hiển thị không ảnh hưởng điểm AI.** Không đổi điểm phù hợp, bảng điểm (AD-24), "Việc làm phù hợp", việc làm tương tự, tự mời (AD-23). Tin nổi bật luôn có nhãn "Nổi bật".
+11. **Thống kê đo ở server.** `job_post_daily_stats` thêm `featuredImpressions`, `featuredClicks`. Mỗi lần `GET /job-posts/featured` trả về một tin là một lượt xuất hiện; bấm từ khối nổi bật mở trang tin với `?src=featured`, API chi tiết tăng `featuredClicks` cùng lúc tăng lượt xem. Nhà tuyển dụng xem hiệu quả theo tin (trung bình mỗi ngày trước và trong lúc tăng hiển thị); Admin xem số liệu tổng.
+
+**Phương án không chọn:**
+
+- *Chen tin nổi bật vào danh sách `/jobs`:* phải đổi thứ tự và cursor, lo lặp / sót tin giữa các trang, và xung đột với `sort=match`.
+- *Chỉ một cột `isFeatured` trên `job_posts`:* không đếm được lượt đã dùng theo gói, không có lịch sử để thống kê.
+- *Bảng thanh toán riêng cho lượt lẻ:* lặp lại toàn bộ luồng IPN, idempotency và log callback của AD-6.
+- *"Quỹ ngày" nổi bật chia tuỳ ý:* linh hoạt hơn nhưng khó tính và khó hiển thị số dư.
+- *Lượt lẻ có hạn riêng, không gắn gói:* phải tính số dư độc lập với gói; trái với quy tắc "không có gói thì không đăng tin".
+- *Tính phí theo lượt bấm (như Indeed):* cần chống gian lận lượt bấm, quá phạm vi khoá luận.
+
+**Ảnh hưởng:**
+
+- `schema.prisma` + 1 migration viết tay: enum `JobPromotionType`, `JobPromotionSource`, `JobPromotionPurchaseStatus`; bảng `job_promotions`, `job_promotion_products`, `job_promotion_purchases`; cột mới ở `subscription_plans`, `job_posts`, `job_post_daily_stats`; `payments.companySubscriptionId` bỏ NOT NULL + cột `promotionPurchaseId` + CHECK; backfill `listedAt`; seed 3 dòng `job_promotion_products`.
+- Module mới `job-promotions` (awilix). `payments` rẽ nhánh kích hoạt; `subscriptions` thêm hạn mức vào DTO gói và trả số dư lượt; `job-posts` đổi `SEARCH_ORDER`, ghi `listedAt`, thêm `GET /job-posts/featured`, bộ lọc `urgent`, `src=featured`.
+- Doanh thu ở dashboard Admin (`revenueThisMonth`, `revenueWeekly`) đọc thẳng bảng `payments` (không join `company_subscriptions`, đã kiểm 2026-11-22) nên tự gồm tiền mua lẻ.
+- `packages/shared-types`: kiểu lượt, số dư, sản phẩm, lần mua, thống kê; `JobPostDto` thêm `featuredUntil`, `urgentUntil`.
+- Frontend: khối nổi bật (trang chủ, `/jobs`), huy hiệu ở `JobCard`, bộ lọc tuyển gấp; Employer: "Tăng hiển thị" ở trang tin, số dư và mua lẻ ở `/employer/subscription`, thẻ hiệu quả; Admin: trang cấu hình gói / giá lẻ và số liệu tổng.
+- `docs/designs/SUBSCRIPTION_BILLING_DESIGN.md`, `docs/03-database/DATABASE_DESIGN.md` cập nhật khi làm bước schema.
