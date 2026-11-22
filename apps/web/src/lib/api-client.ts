@@ -1,10 +1,17 @@
 import axios, { type Method } from "axios";
-import type { ApiResponse, RefreshResponse } from "@sip/shared-types";
+import type { ApiResponse, AuthErrorCode, RefreshResponse } from "@sip/shared-types";
 import type { AuthArea } from "./auth-area";
 import { AREA_HOME, areaForPath } from "./auth-area";
 import { authStoreForArea, latestRefreshToken } from "@/stores/auth-store";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api";
+
+/**
+ * Server không kiểm được phiên vì Redis / DB lỗi (503, AD-31 D1), hoặc `/auth/refresh` lỗi
+ * tạm thời (mất mạng, 5xx, 429). Phiên vẫn còn: báo lỗi, không đăng xuất.
+ */
+export const AUTH_STORE_UNAVAILABLE: AuthErrorCode = "AUTH_STORE_UNAVAILABLE";
+export const AUTH_UNAVAILABLE_MESSAGE = "Không kết nối được máy chủ, vui lòng thử lại sau ít phút";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -68,7 +75,11 @@ function parseBody<T>(res: RawResponse<T>): T {
     // 413 thường do gateway (nginx) trả về trang HTML, không có body JSON để đọc message.
     const fallback =
       res.status === 413 ? "Tệp tải lên quá lớn, vui lòng chọn tệp nhỏ hơn" : "Đã có lỗi xảy ra, vui lòng thử lại";
-    throw new ApiError(res.status, res.body?.error ?? res.body?.message ?? fallback, res.body?.data, res.body?.code);
+    const message =
+      res.body?.code === AUTH_STORE_UNAVAILABLE
+        ? AUTH_UNAVAILABLE_MESSAGE
+        : (res.body?.error ?? res.body?.message ?? fallback);
+    throw new ApiError(res.status, message, res.body?.data, res.body?.code);
   }
 
   return res.body.data as T;
@@ -88,15 +99,29 @@ export async function publicFetch<T = void>(path: string, init: RequestInit = {}
 // nhất, tránh gọi /auth/refresh nhiều lần cùng lúc khi nhiều request 401 song
 // song. Theo map để refresh của area này không chặn/lẫn với area khác (xem
 // AD-4, docs/02-architecture/ARCHITECTURE_DECISIONS.md).
-const refreshPromises = new Map<AuthArea, Promise<string | null>>();
+const refreshPromises = new Map<AuthArea, Promise<RefreshResult>>();
 
-async function requestAccessToken(refreshToken: string): Promise<string | null> {
+/**
+ * Kết quả làm mới access token (AD-31 D1):
+ * - `ok`: có token mới;
+ * - `expired`: phiên hết hẳn (refresh token sai, hết hạn, bị thu hồi, tài khoản bị khoá) ⇒ đăng xuất;
+ * - `unavailable`: mất mạng, server 5xx (kể cả 503 `AUTH_STORE_UNAVAILABLE`) hoặc 429 ⇒ giữ
+ *   phiên, báo lỗi tạm thời. Trước AD-31 mọi lỗi đều coi là hết phiên.
+ */
+export type RefreshResult = { kind: "ok"; accessToken: string } | { kind: "expired" } | { kind: "unavailable" };
+
+async function requestAccessToken(refreshToken: string): Promise<RefreshResult> {
   try {
     const res = await httpClient.post<ApiResponse<RefreshResponse>>("/auth/refresh", { refreshToken });
-    if (res.status < 200 || res.status >= 300 || !res.data.success || !res.data.data) return null;
-    return res.data.data.accessToken;
+    if (res.status >= 200 && res.status < 300) {
+      const accessToken = res.data?.success ? res.data.data?.accessToken : undefined;
+      return accessToken ? { kind: "ok", accessToken } : { kind: "unavailable" };
+    }
+    if (res.status === 429 || res.status >= 500) return { kind: "unavailable" };
+    // 401 / 403, và 400 (body sai — refresh token hỏng trong localStorage).
+    return { kind: "expired" };
   } catch {
-    return null;
+    return { kind: "unavailable" };
   }
 }
 
@@ -106,27 +131,26 @@ async function requestAccessToken(refreshToken: string): Promise<string | null> 
  * lại bằng phiên mới — không ghi access token của phiên cũ đè lên phiên mới,
  * và không trả null (khiến `endSession` xoá phiên mới dùng chung mọi tab).
  */
-async function refreshAccessToken(area: AuthArea): Promise<string | null> {
+async function refreshAccessToken(area: AuthArea): Promise<RefreshResult> {
   let refreshToken = latestRefreshToken(area);
   for (let attempt = 0; attempt < 2 && refreshToken; attempt++) {
-    const accessToken = await requestAccessToken(refreshToken);
+    const result = await requestAccessToken(refreshToken);
     const latest = latestRefreshToken(area);
     if (latest !== refreshToken) {
       refreshToken = latest;
       continue;
     }
-    if (accessToken) authStoreForArea(area).getState().setAccessToken(accessToken);
-    return accessToken;
+    if (result.kind === "ok") authStoreForArea(area).getState().setAccessToken(result.accessToken);
+    return result;
   }
-  return null;
+  return { kind: "expired" };
 }
 
 /**
  * Refresh access token của `area`, gộp các lệnh gọi đồng thời (REST 401 và
  * socket bị từ chối token cùng lúc chỉ gọi /auth/refresh một lần).
- * Trả null nếu không refresh được.
  */
-export function refreshAccessTokenShared(area: AuthArea): Promise<string | null> {
+export function refreshAccessTokenShared(area: AuthArea): Promise<RefreshResult> {
   let refreshPromise = refreshPromises.get(area);
   if (!refreshPromise) {
     refreshPromise = refreshAccessToken(area).finally(() => {
@@ -152,10 +176,25 @@ function endSession(area: AuthArea): void {
 }
 
 /**
+ * Request bị 401 ⇒ refresh. Trả token mới để gửi lại; phiên hết hẳn ⇒ `endSession`, trả null
+ * (bên gọi ném lỗi 401 như cũ); refresh lỗi tạm thời ⇒ ném 503, **giữ** phiên (AD-31 D1).
+ */
+async function tokenAfterUnauthorized(area: AuthArea): Promise<string | null> {
+  const result = await refreshAccessTokenShared(area);
+  if (result.kind === "ok") return result.accessToken;
+  if (result.kind === "unavailable") {
+    throw new ApiError(503, AUTH_UNAVAILABLE_MESSAGE, undefined, AUTH_STORE_UNAVAILABLE);
+  }
+  endSession(area);
+  return null;
+}
+
+/**
  * Fetch wrapper cho endpoint cần access token, đọc/ghi đúng store của
  * `area` được truyền vào — tự đính access token nếu có, refresh một lần khi
- * gặp 401 rồi thử lại; nếu vẫn thất bại thì clear đúng session của area đó
- * và điều hướng về homepage area đó nếu tab đang ở khu vực ấy (`endSession`).
+ * gặp 401 rồi thử lại; phiên hết hẳn thì clear đúng session của area đó và điều
+ * hướng về homepage area đó nếu tab đang ở khu vực ấy (`endSession`). Refresh lỗi
+ * tạm thời, hoặc server trả 503 `AUTH_STORE_UNAVAILABLE`, thì ném lỗi, giữ phiên.
  */
 export async function apiFetch<T = void>(area: AuthArea, path: string, init: RequestInit = {}): Promise<T> {
   const store = authStoreForArea(area);
@@ -163,13 +202,8 @@ export async function apiFetch<T = void>(area: AuthArea, path: string, init: Req
   let res = await doFetch<T>(path, initialToken, init);
 
   if (res.status === 401 && initialToken) {
-    const newToken = await refreshAccessTokenShared(area);
-
-    if (newToken) {
-      res = await doFetch<T>(path, newToken, init);
-    } else {
-      endSession(area);
-    }
+    const newToken = await tokenAfterUnauthorized(area);
+    if (newToken) res = await doFetch<T>(path, newToken, init);
   }
 
   return parseBody<T>(res);
@@ -221,13 +255,8 @@ export async function apiDownload(area: AuthArea, path: string): Promise<Downloa
   let res = await send(initialToken);
 
   if (res.status === 401 && initialToken) {
-    const newToken = await refreshAccessTokenShared(area);
-
-    if (newToken) {
-      res = await send(newToken);
-    } else {
-      endSession(area);
-    }
+    const newToken = await tokenAfterUnauthorized(area);
+    if (newToken) res = await send(newToken);
   }
 
   if (res.status >= 200 && res.status < 300 && res.data) {
@@ -277,13 +306,8 @@ export async function apiUpload<T = void>(
   let res = await send(initialToken);
 
   if (res.status === 401 && initialToken) {
-    const newToken = await refreshAccessTokenShared(area);
-
-    if (newToken) {
-      res = await send(newToken);
-    } else {
-      endSession(area);
-    }
+    const newToken = await tokenAfterUnauthorized(area);
+    if (newToken) res = await send(newToken);
   }
 
   return parseBody<T>(res);

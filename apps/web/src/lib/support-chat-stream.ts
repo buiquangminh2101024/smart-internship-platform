@@ -1,6 +1,6 @@
 import type { ApiResponse, SupportChatEvent, SupportChatRequest, SupportChatSuggestion } from "@sip/shared-types";
 import { authStoreForArea } from "@/stores/auth-store";
-import { httpClient, refreshAccessTokenShared } from "./api-client";
+import { AUTH_STORE_UNAVAILABLE, AUTH_UNAVAILABLE_MESSAGE, httpClient, refreshAccessTokenShared } from "./api-client";
 import type { AuthArea } from "./auth-area";
 
 // Gọi API trợ lý (docs/05-frontend/phases/support-chatbot/PLAN.md, quyết định 6 và mục
@@ -23,9 +23,10 @@ export class SupportChatHttpError extends Error {
 }
 
 /**
- * Gửi kèm access token của `area` nếu có. 401 ⇒ refresh một lần rồi gửi lại; vẫn không được
- * ⇒ gọi `onExpired` rồi gửi như khách. Không dùng `endSession` của api-client vì hàm đó
- * chuyển trang, làm mất câu hỏi đang gõ.
+ * Gửi kèm access token của `area` nếu có. 401 ⇒ refresh một lần rồi gửi lại; phiên hết hẳn
+ * ⇒ gọi `onExpired` rồi gửi như khách. Refresh lỗi tạm thời (AD-31 D1) ⇒ ném
+ * `SupportChatHttpError` 503 `AUTH_STORE_UNAVAILABLE`, giữ phiên. Không dùng `endSession`
+ * của api-client vì hàm đó chuyển trang, làm mất câu hỏi đang gõ.
  */
 async function sendWithSession(
   area: AuthArea,
@@ -36,9 +37,12 @@ async function sendWithSession(
   const first = await send(token);
   if (first.status !== 401 || !token) return first;
 
-  const freshToken = await refreshAccessTokenShared(area);
-  if (freshToken) {
-    const retried = await send(freshToken);
+  const refreshed = await refreshAccessTokenShared(area);
+  if (refreshed.kind === "unavailable") {
+    throw new SupportChatHttpError(503, AUTH_UNAVAILABLE_MESSAGE, AUTH_STORE_UNAVAILABLE);
+  }
+  if (refreshed.kind === "ok") {
+    const retried = await send(refreshed.accessToken);
     if (retried.status !== 401) return retried;
   }
   onExpired?.();
@@ -142,14 +146,33 @@ export async function openSupportChatStream(
   return readEvents(response.body);
 }
 
+/** 503 do server không kiểm được phiên (Redis / DB lỗi), khác 503 "chatbot đang tắt". */
+async function isAuthUnavailable(response: Response): Promise<boolean> {
+  if (response.status !== 503) return false;
+  try {
+    const body = (await response.clone().json()) as Partial<ApiResponse<unknown>>;
+    return body?.code === AUTH_STORE_UNAVAILABLE;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * GET /support/chat/suggestions. `null` khi chatbot đang tắt (503) ⇒ ẩn nút mở. Token hết hạn
- * thì lấy câu gợi ý của khách, không xoá phiên — việc đó để SessionSync lo.
+ * thì lấy câu gợi ý của khách, không xoá phiên — việc đó để SessionSync lo. Server tạm không
+ * kiểm được phiên (AD-31 D1) ⇒ cũng lấy câu gợi ý của khách, không ẩn nút.
  */
 export async function fetchSupportChatSuggestions(area: AuthArea): Promise<SupportChatSuggestion[] | null> {
-  const response = await sendWithSession(area, (token) =>
-    fetch(`${API_BASE_URL}/support/chat/suggestions`, { headers: authHeaders(token) }),
-  );
+  const fetchSuggestions = (token: string | null) =>
+    fetch(`${API_BASE_URL}/support/chat/suggestions`, { headers: authHeaders(token) });
+  let response: Response;
+  try {
+    response = await sendWithSession(area, fetchSuggestions);
+  } catch (error) {
+    if (!(error instanceof SupportChatHttpError && error.code === AUTH_STORE_UNAVAILABLE)) throw error;
+    response = await fetchSuggestions(null);
+  }
+  if (await isAuthUnavailable(response)) response = await fetchSuggestions(null);
   if (response.status === 503) return null;
   if (!response.ok) throw await httpErrorOf(response);
   const body = (await response.json()) as ApiResponse<SupportChatSuggestion[]>;

@@ -539,7 +539,7 @@ Kết quả có cache trùng hoàn toàn với không cache ở cả 3 trường
 
 **Ngày:** 2026-10-20 · **Phase liên quan:** sửa lỗi của 05-frontend Phase 2 (AD-4), phát hiện khi kiểm chatbot đợt D.
 
-> **Trạng thái: ĐÃ DUYỆT (2026-10-20), ĐÃ TRIỂN KHAI, CHỜ KIỂM LẠI TRÊN TRÌNH DUYỆT.** Chủ dự án duyệt hướng sửa 3 mục sau khi tự tái hiện được lỗi (Test 1, Test 2 bên dưới).
+> **Trạng thái: ĐÃ DUYỆT (2026-10-20), ĐÃ TRIỂN KHAI; ĐÃ KIỂM TRÊN TRÌNH DUYỆT 2026-11-23 (sau AD-31 F1): Test 1, 3 (bản rút gọn), 4, 5 đạt; Test 2 chưa chạy.** Chủ dự án duyệt hướng sửa 3 mục sau khi tự tái hiện được lỗi (Test 1, Test 2 bên dưới). Chi tiết lần kiểm: `docs/05-frontend/phases/auth-hardening/PLAN.md`, "Đợt 1 — F1".
 
 **Triệu chứng:** mở Candidate và Employer ở 2 tab cùng một Chrome. Sau một lúc (để máy tắt màn hình rồi quay lại), một tab vẫn hiện "đã đăng nhập" nhưng bấm menu quản lý hoặc sidebar thì không vào được, hoặc bị đưa về trang chủ của khu vực (`/` hoặc `/employer`). Chỉ nút Đăng xuất còn chạy. Đăng nhập lại thì hết. Tải lại tab kia thì thấy nó cũng đã bị đăng xuất. Console của tab bị kẹt cho `sip_session_<khu vực>` không còn và `localStorage["sip-auth-<khu vực>"]` rỗng, trong khi giao diện vẫn hiện tên người dùng.
 
@@ -587,7 +587,7 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 | 4 | Hai tab **cùng là Candidate**; đăng xuất ở tab 1 | Tab 2 vẫn hiện đã đăng nhập | Tab 2 tự về `/`, hiện chưa đăng nhập |
 | 5 | Tab 1 Candidate, tab 2 Employer; đăng xuất Candidate ở tab 1, rồi F5 tab 2 | — | Tab 2 vẫn đăng nhập Employer |
 
-**Ảnh hưởng:** chỉ frontend: `stores/auth-store.ts` (listener `storage`, `syncFromOtherTab`, `latestRefreshToken`; kiểu `AuthStore` thêm API `persist`), `lib/api-client.ts` (`refreshAccessToken`), `components/auth/SessionSync.tsx`. Server, `proxy.ts`, cách lưu token (AD-2/AD-4) không đổi. Không thêm dependency. Việc còn lại (chưa làm, ghi ở `docs/01-project/FEATURE_BACKLOG.md` §1): refresh thất bại vì **mất mạng/server lỗi 5xx** hiện vẫn bị coi như phiên hết hạn và xoá phiên; client Redis phía server chưa đặt timeout.
+**Ảnh hưởng:** chỉ frontend: `stores/auth-store.ts` (listener `storage`, `syncFromOtherTab`, `latestRefreshToken`; kiểu `AuthStore` thêm API `persist`), `lib/api-client.ts` (`refreshAccessToken`), `components/auth/SessionSync.tsx`. Server, `proxy.ts`, cách lưu token (AD-2/AD-4) không đổi. Không thêm dependency. Việc còn lại (chưa làm, ghi ở `docs/01-project/FEATURE_BACKLOG.md` §1): refresh thất bại vì **mất mạng/server lỗi 5xx** hiện vẫn bị coi như phiên hết hạn và xoá phiên; client Redis phía server chưa đặt timeout. *Cả hai đã sửa ở AD-31 (server 2026-11-22, web F1 2026-11-23).*
 
 ## Phần ghi chú của chủ dự án
 

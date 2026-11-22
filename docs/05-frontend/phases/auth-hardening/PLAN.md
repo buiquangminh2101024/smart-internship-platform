@@ -1,6 +1,6 @@
 # Đăng nhập, đăng ký bền và an toàn hơn — Frontend
 
-> **Trạng thái: ĐÃ DUYỆT (lập và duyệt 2026-11-22).** Chưa code. Làm sau backend (`docs/06-backend/auth-hardening/PLAN.md`). Quyết định kiến trúc: AD-31 (bổ sung AD-22). Giao diện theo skill `sip-ui` (đọc trước khi code). Ước lượng ~0,5 ngày, kể cả kiểm trên trình duyệt.
+> **Trạng thái: ĐÃ DUYỆT (lập và duyệt 2026-11-22), ĐANG LÀM.** Chia 3 đợt (chốt 2026-11-23): đợt 1 = F1 (xong 2026-11-23, đã kiểm trên trình duyệt), đợt 2 = F2–F5, đợt 3 = F6 phần form. Xem "Ghi chú triển khai". Làm sau backend (`docs/06-backend/auth-hardening/PLAN.md`). Quyết định kiến trúc: AD-31 (bổ sung AD-22). Giao diện theo skill `sip-ui` (đọc trước khi code). Ước lượng ~0,5 ngày, kể cả kiểm trên trình duyệt.
 
 ## Mục tiêu
 
@@ -102,6 +102,29 @@ Qua `localhost:8080`, cửa sổ ẩn danh, dùng tài khoản thử (không dù
 - Đổi cách lưu token (cookie httpOnly).
 - Loại yêu cầu hỗ trợ riêng cho xác thực email.
 - Thông báo cho chủ tài khoản khi tài khoản bị chặn đăng nhập.
+
+## Ghi chú triển khai
+
+### Đợt 1 — F1 (2026-11-23)
+
+- `lib/api-client.ts`:
+  - kiểu `RefreshResult` (`ok` / `expired` / `unavailable`). `requestAccessToken`: 2xx có token ⇒ `ok`; 401 / 403 / 400 ⇒ `expired`; 5xx, 429, mất mạng, 2xx thiếu token ⇒ `unavailable`.
+  - `refreshAccessToken` giữ logic AD-22 (đọc refresh token mới nhất, thử lại khi tab khác đổi phiên); vòng thử hết mà phiên vẫn đổi ⇒ `expired` như cũ.
+  - `apiFetch` / `apiDownload` / `apiUpload` dùng chung `tokenAfterUnauthorized`: `ok` ⇒ gửi lại; `expired` ⇒ `endSession`; `unavailable` ⇒ ném `ApiError(503, …, "AUTH_STORE_UNAVAILABLE")`, giữ phiên.
+  - `parseBody`: body lỗi có `code: AUTH_STORE_UNAVAILABLE` ⇒ câu "Không kết nối được máy chủ, vui lòng thử lại sau ít phút" thay câu tiếng Anh của server. Hằng `AUTH_STORE_UNAVAILABLE`, `AUTH_UNAVAILABLE_MESSAGE` xuất ra cho nơi khác dùng.
+- `lib/support-chat-stream.ts`: refresh `unavailable` ⇒ ném `SupportChatHttpError` 503 `AUTH_STORE_UNAVAILABLE`, không `onExpired` / `clear()`.
+- **Thêm ngoài plan:** trợ lý hỗ trợ coi mọi 503 là "chatbot đang tắt", nên khi Redis lỗi người đã đăng nhập mất nút trợ lý / thấy "Trợ lý đang tạm tắt". Sửa:
+  - `fetchSupportChatSuggestions`: 503 `AUTH_STORE_UNAVAILABLE` (ngay lần đầu hoặc sau refresh) ⇒ lấy câu gợi ý của khách, nút vẫn hiện;
+  - `useSupportChat` (`noticeForError`): mã đó ⇒ thông báo `failed` ("Đã có lỗi xảy ra. Bạn thử lại sau ít phút." kèm Thử lại), không phải `disabled`.
+- `useSocket.ts`, `SessionSync`: không đổi (không đọc kết quả refresh).
+- **Kiểm logic** (script tạm, adapter axios giả, 11 tình huống): refresh 200 ⇒ gửi lại; 401 / 403 ⇒ xoá phiên; 500 / 502 / 503 / 429 / mất mạng ⇒ giữ phiên, 503 câu tiếng Việt; request đầu 503 `AUTH_STORE_UNAVAILABLE` ⇒ không refresh; 503 khác giữ câu của server; 3 request 401 song song ⇒ 1 lần refresh. `tsc --noEmit`, eslint sạch.
+- **Kiểm trên trình duyệt** (Chrome qua 8080, server chạy với Redis local `redis:7-alpine` trong container tạm, `$env:REDIS_URL`; không đụng Redis Cloud; container đã xoá sau khi kiểm). Tài khoản `uv-backend-1`, hai tab Ứng viên:
+  - Redis dừng, bấm sang "Việc làm đã lưu" ⇒ "Không thể tải danh sách. Vui lòng thử lại." (sau các lần thử lại của TanStack Query, mỗi lần ~3 s), vẫn đăng nhập, không bị đưa về trang chủ;
+  - Redis dừng, làm hỏng access token rồi tải lại ⇒ `/users/me` 401 ⇒ `/auth/refresh` 503 (3 lần) ⇒ **phiên còn nguyên** (cùng refresh token), trang ở yên; tab thứ hai vẫn đăng nhập. Trước F1, lần refresh lỗi đầu tiên đã xoá phiên mọi tab;
+  - Redis dừng: nút trợ lý vẫn hiện (câu gợi ý của khách); gửi câu hỏi ⇒ "Đã có lỗi xảy ra…" kèm Thử lại, không xoá phiên;
+  - bật Redis lại, tải lại ⇒ dùng tiếp, không đăng nhập lại;
+  - làm hỏng cả refresh token ⇒ refresh 401 ⇒ xoá phiên Ứng viên, về `/`, phiên Nhà tuyển dụng còn (nhánh `expired` như cũ).
+- **AD-22, chạy lại sau F1:** Test 1 đạt (đăng xuất rồi đăng nhập lại Ứng viên, sang tab Nhà tuyển dụng rồi quay về, menu tài khoản ⇒ vào `/profile`, cả hai khu vực còn phiên); Test 3 đạt bản rút gọn (làm hỏng access token thay vì chờ 20 phút ⇒ 401 ⇒ refresh 200 ⇒ gửi lại 200); Test 4 đạt (hai tab Ứng viên, đăng xuất tab 1 ⇒ tab 2 về `/`); Test 5 đạt (đăng xuất Ứng viên, F5 tab Nhà tuyển dụng ⇒ vẫn đăng nhập). **Test 2 chưa chạy**: phải đăng xuất phiên Nhà tuyển dụng đang dùng của chủ dự án; cùng đường code với Test 1, khác khu vực.
 
 ## Phần 4 — Ghi chú của chủ dự án
 
