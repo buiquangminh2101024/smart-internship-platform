@@ -1,6 +1,6 @@
 # Đăng nhập, đăng ký bền và an toàn hơn — Backend
 
-> **Trạng thái: ĐÃ DUYỆT, ĐANG LÀM (lập và duyệt 2026-11-22).** Bước 0 (đo trước), bước 1 (lỗi hạ tầng không thành 401), bước 2 (giới hạn nhập sai OTP) và bước 3 (chặn đăng nhập sai nhiều lần) xong 2026-11-22, xem "Ghi chú triển khai". Quyết định kiến trúc: AD-31. Frontend: `docs/05-frontend/phases/auth-hardening/PLAN.md`. Làm trước khi viết báo cáo (hạn nộp cho giáo viên hướng dẫn trước 06/12/2026). Ước lượng backend ~0,5–0,75 ngày.
+> **Trạng thái: ĐÃ DUYỆT, ĐANG LÀM (lập và duyệt 2026-11-22).** Bước 0 (đo trước), bước 1 (lỗi hạ tầng không thành 401), bước 2 (giới hạn nhập sai OTP), bước 3 (chặn đăng nhập sai nhiều lần), bước 4 (đăng ký lại email chờ xác thực) và bước 5 (worker băm mật khẩu) xong 2026-11-22, xem "Ghi chú triển khai". Quyết định kiến trúc: AD-31. Frontend: `docs/05-frontend/phases/auth-hardening/PLAN.md`. Làm trước khi viết báo cáo (hạn nộp cho giáo viên hướng dẫn trước 06/12/2026). Ước lượng backend ~0,5–0,75 ngày.
 
 ## Mục tiêu
 
@@ -228,6 +228,39 @@ Thêm vào `apps/server/tests/unit/` (`node:test` + `tsx`):
 - **Kiểm qua 8080** (một ứng viên `@large-demo.local`): sai lần 1–2 ⇒ 401; lần 3, 4 ⇒ `attemptsLeft` 2, 1; lần 5 ⇒ 429 `retryAfterSeconds` 898; đúng mật khẩu ngay sau ⇒ vẫn 429. Sau đó xoá đúng hai khoá vừa tạo trong Redis; đăng nhập lại ⇒ 200.
 - **IP mà server thấy khi chạy dev là `172.19.0.1`** (cổng mạng Docker; request từ máy Windows vào Nginx trong Docker bị NAT). Vì vậy ở máy dev, mọi trình duyệt trên máy (và máy khác trong LAN nếu truy cập qua máy này) dùng chung một khoá IP: tổng 30 lần sai trong 15 phút thì chặn cả máy. Với demo trên một laptop thì không sao (cũng chỉ một IP thật). Khi deploy (Phase 14) phải kiểm IP thật đi tới Express, cùng mục `trust proxy` ở bước 3.
 - Lỡ tự khoá khi demo: chờ hết thời gian, hoặc xoá khoá `ratelimit:login-lock:*` / `ratelimit:login-lock-ip:*` trong Redis.
+
+### Bước 4 — đăng ký lại email chờ xác thực (2026-11-22)
+
+- `register`: email chờ xác thực ⇒ 409 `EMAIL_PENDING_VERIFICATION` ("Email already registered but not verified"); đã kích hoạt hoặc bị khoá ⇒ 409 `EMAIL_TAKEN` (message cũ "Email already registered"). Không đổi mật khẩu, vai trò, không tự gửi mã.
+- `login`: 403 chưa xác thực thêm code `EMAIL_NOT_VERIFIED`, message giữ nguyên (web hiện tại vẫn so chuỗi "not verified" nên chạy tiếp được tới khi làm frontend F3).
+- **Sửa thêm, ngoài plan — lỗ hổng có từ trước:** `resendOtp` chỉ chặn tài khoản `ACTIVE`, nên tài khoản bị Admin khoá (`SUSPENDED`) vẫn xin được mã đăng ký; `verifyOtp` rồi gọi `markVerified` đặt lại `ACTIVE` và cấp token, tức người bị khoá tự mở khoá được. Nay `resendOtp` và `verifyOtp` chỉ nhận tài khoản `PENDING_VERIFICATION`:
+  - `resendOtp` trạng thái khác ⇒ 400 "Email already verified" (cùng message cũ cho mọi trạng thái, không lộ tài khoản đang bị khoá);
+  - `verifyOtp` trạng thái khác ⇒ 400 `OTP_INVALID`, không đọc mã.
+- **Test:** `tests/unit/auth-register-pending.test.ts`, 7 test (gồm 2 test cho lỗ hổng trên). Cả bộ 790 / 790 qua, `tsc --noEmit` sạch.
+- **Kiểm qua 8080:** tạo tài khoản thử `auth-hardening-test@example.invalid` ⇒ 201; đăng ký lại với mật khẩu và vai trò khác ⇒ 409 `EMAIL_PENDING_VERIFICATION`; đăng nhập mật khẩu cũ ⇒ 403 `EMAIL_NOT_VERIFIED`; mật khẩu "mới" ⇒ 401 (không bị ghi đè); đăng ký email Mây Xanh ⇒ 409 `EMAIL_TAKEN`; `resend-otp` email Mây Xanh ⇒ 400. Sau đó xoá tài khoản thử trên Neon và 5 khoá Redis của nó (mã OTP, hạn mức gửi mã, bộ đếm đăng nhập sai); đếm lại còn 0.
+- Chưa kiểm thật trường hợp tài khoản bị khoá (cần khoá một tài khoản demo); unit test đã phủ.
+
+### Bước 5 — worker băm mật khẩu (2026-11-22)
+
+- Port `shared/ports/PasswordHasher.ts`: `hash(password, rounds)`, `compare(password, hash)`. Khác plan một chút: `hash` nhận `rounds` để `AuthService` giữ `SALT_ROUNDS = 12` ở một chỗ.
+- `infrastructure/password-hash-worker.ts`: nhận `{ id, op, … }`, chạy `bcryptjs` bản đồng bộ, trả `{ id, result }` hoặc `{ id, error }`.
+- `infrastructure/worker-password-hasher.ts` (`WorkerPasswordHasher`):
+  - pool **2 worker** (`PASSWORD_HASH_POOL_SIZE`), tạo lười, mỗi worker một việc một lúc, việc thừa xếp hàng;
+  - quá 10 giây (tính từ lúc giao việc) hoặc worker chết ⇒ việc đó **ném lỗi** (đăng nhập trả 500, không coi là sai mật khẩu), worker bị bỏ, lần sau tạo mới; việc đang xếp hàng chạy tiếp;
+  - `ref` khi có việc, `unref` khi rảnh; `close()` cho test.
+- `container.ts`: đăng ký bằng `asFunction` (chế độ PROXY của awilix sẽ báo lỗi nếu constructor đọc tuỳ chọn không đăng ký). `AuthService` nhận `passwordHasher`, không còn import `bcryptjs`. Các script seed / tạo admin vẫn dùng `bcryptjs` trực tiếp (không đổi).
+- **Test:** `tests/unit/worker-password-hasher.test.ts`, 8 test (3 với worker thật: hash / compare, hash cũ của bcryptjs, 8 việc song song; 5 với worker giả: xếp hàng, `ref` / `unref`, quá giờ, worker chết, lỗi việc, không tạo được worker). Ba test auth có băm mật khẩu thêm bản giả `passwordHasher` (bcryptjs cost 4 trên luồng test). Cả bộ 797 / 798, test trượt là `live-rescore-marker` đã ghi ở bước 1. `tsc --noEmit` sạch.
+- Build `.js` (tsc ra thư mục tạm, chạy bằng `node`): worker `.js` nạp được, hash / compare đúng.
+- **Đo lại ngay** (cùng script bước 0, nhãn `after-step5`), độ trễ tính bằng ms:
+
+| Pha | 404 (event loop) p50 / p95 / p99 / max | `/health` p50 / p95 | `/job-posts` p50 / p95 |
+|---|---|---|---|
+| Nền | 5 / 7 / 9 / 18 | 52 / 60 | 541 / 977 |
+| 200 đăng nhập (26,2 s) | **5 / 7 / 8 / 25** | 57 / 96 | 580 / 1.096 |
+| Nền | 5 / 8 / 10 / 12 | 56 / 62 | 582 / 609 |
+
+  - So với bước 0 (pha đăng nhập 404 p99 1.736 ms, `/health` p50 973 ms, `/job-posts` p50 1.964 ms): request khác giờ như lúc nền. **Đạt mục tiêu của bước 8** (404 p99 < 100 ms, API không chậm quá 2 lần).
+  - Bản thân đăng nhập cũng nhanh hơn: 200 lần trong 26,2 s thay vì 49,4 s, p50 1.025 ms thay vì 1.967 ms (2 luồng băm song song).
 
 ## Phần 4 — Ghi chú của chủ dự án
 

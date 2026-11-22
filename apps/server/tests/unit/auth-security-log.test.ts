@@ -64,6 +64,8 @@ function buildService(users: FakeUser[], options: { rateLimiterFails?: boolean }
         counters.delete(key);
       },
     },
+    // Bản giả của PasswordHasher (AD-31 D6): bcryptjs ngay trên luồng test.
+    passwordHasher: { hash: (password: string) => bcrypt.hash(password, 4), compare: bcrypt.compare },
     emailSender: { send: async () => {} },
     googleAuthClient: { verifyIdToken: async () => ({ googleId: "g-1", email: "a@example.com" }) },
     tokenBlacklist: {},

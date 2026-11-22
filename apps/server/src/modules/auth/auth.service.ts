@@ -1,10 +1,10 @@
-import bcrypt from "bcryptjs";
 import { randomInt } from "node:crypto";
 import type { PrismaClient, Role, User } from "@prisma/client";
 import type { AuthTokensResponse } from "@sip/shared-types";
 import { AppError, authStoreUnavailable } from "../../shared/errors/AppError";
 import type { Logger } from "../../shared/logger";
 import type { RateLimiter } from "../../shared/ports/RateLimiter";
+import type { PasswordHasher } from "../../shared/ports/PasswordHasher";
 import type { TokenBlacklist } from "../../shared/ports/TokenBlacklist";
 import type { OtpStore, OtpPurpose } from "../../shared/ports/OtpStore";
 import type { EmailSender } from "../../shared/ports/EmailSender";
@@ -55,6 +55,7 @@ export class AuthService {
   private readonly jwtService: JwtService;
   private readonly otpStore: OtpStore;
   private readonly rateLimiter: RateLimiter;
+  private readonly passwordHasher: PasswordHasher;
   private readonly emailSender: EmailSender;
   private readonly googleAuthClient: GoogleAuthClient;
   private readonly tokenBlacklist: TokenBlacklist;
@@ -69,6 +70,7 @@ export class AuthService {
     jwtService,
     otpStore,
     rateLimiter,
+    passwordHasher,
     emailSender,
     googleAuthClient,
     tokenBlacklist,
@@ -82,6 +84,7 @@ export class AuthService {
     jwtService: JwtService;
     otpStore: OtpStore;
     rateLimiter: RateLimiter;
+    passwordHasher: PasswordHasher;
     emailSender: EmailSender;
     googleAuthClient: GoogleAuthClient;
     tokenBlacklist: TokenBlacklist;
@@ -95,6 +98,7 @@ export class AuthService {
     this.jwtService = jwtService;
     this.otpStore = otpStore;
     this.rateLimiter = rateLimiter;
+    this.passwordHasher = passwordHasher;
     this.emailSender = emailSender;
     this.googleAuthClient = googleAuthClient;
     this.tokenBlacklist = tokenBlacklist;
@@ -107,10 +111,16 @@ export class AuthService {
   async register(params: { email: string; password: string; role: "CANDIDATE" | "EMPLOYER"; ip: string }): Promise<void> {
     const existing = await this.userRepository.findByEmail(params.email);
     if (existing) {
-      throw new AppError(409, "Email already registered");
+      // AD-31 D5: email chờ xác thực ⇒ mã riêng để web gửi lại mã và chuyển sang bước
+      // nhập mã. Không ghi đè mật khẩu / vai trò cũ: kẻ xấu không đặt trước mật khẩu
+      // được cho email của người khác. Đã kích hoạt hoặc bị khoá ⇒ EMAIL_TAKEN.
+      if (existing.status === "PENDING_VERIFICATION") {
+        throw new AppError(409, "Email already registered but not verified", "EMAIL_PENDING_VERIFICATION");
+      }
+      throw new AppError(409, "Email already registered", "EMAIL_TAKEN");
     }
 
-    const passwordHash = await bcrypt.hash(params.password, SALT_ROUNDS);
+    const passwordHash = await this.passwordHasher.hash(params.password, SALT_ROUNDS);
     const user = await this.userRepository.createWithPassword({
       email: params.email,
       passwordHash,
@@ -122,7 +132,10 @@ export class AuthService {
 
   async resendOtp(email: string, ip: string): Promise<void> {
     const user = await this.requireUserByEmail(email);
-    if (user.status === "ACTIVE") {
+    // Chỉ tài khoản chờ xác thực. Trước đây chặn riêng ACTIVE nên tài khoản bị khoá
+    // (SUSPENDED) xin được mã rồi verifyOtp đặt lại ACTIVE (tự mở khoá). Cùng message
+    // cho mọi trạng thái khác để không lộ tài khoản đang bị khoá.
+    if (user.status !== "PENDING_VERIFICATION") {
       throw new AppError(400, "Email already verified");
     }
 
@@ -131,6 +144,10 @@ export class AuthService {
 
   async verifyOtp(email: string, otp: string): Promise<AuthTokens> {
     const user = await this.requireUserByEmail(email);
+    // markVerified đặt ACTIVE ⇒ chỉ cho tài khoản chờ xác thực (xem resendOtp).
+    if (user.status !== "PENDING_VERIFICATION") {
+      throw new AppError(400, "Invalid or expired OTP", "OTP_INVALID");
+    }
     await this.assertOtpMatches("register", user.email, otp);
 
     const verified = await this.userRepository.markVerified(user.id);
@@ -143,7 +160,7 @@ export class AuthService {
     await this.assertLoginNotLocked(lockKeys);
 
     const user = await this.userRepository.findByEmail(email);
-    const matches = user?.passwordHash ? await bcrypt.compare(password, user.passwordHash) : false;
+    const matches = user?.passwordHash ? await this.passwordHasher.compare(password, user.passwordHash) : false;
     if (!user?.passwordHash || !matches) {
       // Nhật ký L4 chỉ cho tài khoản có mật khẩu (như cũ). Bộ đếm chặn thì đếm cả
       // email không tồn tại, để phản hồi giống nhau, không lộ email nào có tài khoản (Q2).
@@ -155,7 +172,7 @@ export class AuthService {
     await this.clearLoginFailures(lockKeys);
 
     if (user.status === "PENDING_VERIFICATION") {
-      throw new AppError(403, "Email not verified — please verify the OTP sent at registration");
+      throw new AppError(403, "Email not verified — please verify the OTP sent at registration", "EMAIL_NOT_VERIFIED");
     }
     if (user.status === "SUSPENDED") {
       throw new AppError(403, "Account is suspended", "ACCOUNT_SUSPENDED");
@@ -252,7 +269,7 @@ export class AuthService {
     }
     await this.assertOtpMatches("reset-password", user.email, otp);
 
-    const passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+    const passwordHash = await this.passwordHasher.hash(newPassword, SALT_ROUNDS);
     // Đổi mật khẩu ⇒ đăng xuất mọi thiết bị (AD-18): nếu mật khẩu cũ bị lộ thì
     // phiên của kẻ gian cũng mất. Mật khẩu và mốc thu hồi ghi cùng transaction.
     const revokedAtSec = await this.prisma.$transaction(async (tx) => {

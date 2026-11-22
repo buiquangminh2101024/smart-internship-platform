@@ -8,6 +8,7 @@ import { RedisTokenBlacklist } from "./infrastructure/redis-token-blacklist";
 import { RedisAccountSuspensionStore } from "./infrastructure/redis-account-suspension-store";
 import { RedisSessionRevocationStore } from "./infrastructure/redis-session-revocation-store";
 import { RedisOtpStore } from "./infrastructure/redis-otp-store";
+import { WorkerPasswordHasher } from "./infrastructure/worker-password-hasher";
 import { ResendEmailSender } from "./infrastructure/resend-email-sender";
 import { ConsoleEmailSender } from "./infrastructure/console-email-sender";
 import { NoopRealtimeNotifier } from "./infrastructure/noop-realtime-notifier";
@@ -32,6 +33,7 @@ import type { TokenBlacklist } from "./shared/ports/TokenBlacklist";
 import type { AccountSuspensionStore } from "./shared/ports/AccountSuspensionStore";
 import type { SessionRevocationStore } from "./shared/ports/SessionRevocationStore";
 import type { OtpStore } from "./shared/ports/OtpStore";
+import type { PasswordHasher } from "./shared/ports/PasswordHasher";
 import type { EmailSender } from "./shared/ports/EmailSender";
 import type { RealtimeNotifier } from "./shared/ports/RealtimeNotifier";
 import type { CompanyInviteCodeStore } from "./shared/ports/CompanyInviteCodeStore";
@@ -59,6 +61,7 @@ export interface Cradle {
   // Dùng chung bởi auth (đặt lại mật khẩu) và users (nút Admin "Buộc đăng xuất").
   sessionRevocationService: SessionRevocationService;
   otpStore: OtpStore;
+  passwordHasher: PasswordHasher;
   emailSender: EmailSender;
   // Bản Socket.IO khi gateway khởi tạo được, fallback no-op nếu lỗi —
   // NotificationsService/messaging chỉ phụ thuộc interface.
@@ -104,6 +107,10 @@ export function buildContainer(): AwilixContainer<Cradle> {
     // lúc có request nên không phụ thuộc thứ tự đăng ký.
     sessionRevocationService: asClass(SessionRevocationService).singleton(),
     otpStore: asClass(RedisOtpStore).singleton(),
+    // AD-31 D6: bcrypt chạy trong 2 worker_threads, không chặn luồng chính.
+    // asFunction: chế độ PROXY của awilix sẽ báo lỗi nếu constructor đọc các tuỳ chọn
+    // không đăng ký (createWorker, poolSize, timeoutMs).
+    passwordHasher: asFunction((cradle: Cradle) => new WorkerPasswordHasher({ logger: cradle.logger })).singleton(),
     emailSender: config.DEV_SKIP_EMAIL_SENDING
       ? asClass(ConsoleEmailSender).singleton()
       : asClass(ResendEmailSender).singleton(),

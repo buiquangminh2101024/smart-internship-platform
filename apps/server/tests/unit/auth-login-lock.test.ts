@@ -58,6 +58,8 @@ function buildService(options: { redisDown?: boolean } = {}) {
         counters.delete(key);
       },
     },
+    // Bản giả của PasswordHasher (AD-31 D6): bcryptjs ngay trên luồng test.
+    passwordHasher: { hash: (password: string) => bcrypt.hash(password, 4), compare: bcrypt.compare },
     emailSender: {},
     googleAuthClient: {},
     tokenBlacklist: {},
