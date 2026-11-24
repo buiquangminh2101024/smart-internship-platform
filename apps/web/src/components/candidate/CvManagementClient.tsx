@@ -75,14 +75,6 @@ interface CvCardProps {
 // Badge theo extractionStatus (docs/05-frontend/phases/cv-ai-extraction-phase1/PLAN.md
 // Quyết định #2). NOT_STARTED không có badge.
 function ExtractionBadge({ cv, isExtracting }: { cv: CandidateCvRecord; isExtracting: boolean }) {
-  if (cv.isBuilder) {
-    return (
-      <Badge tone="brand" icon="wand-2">
-        CV Builder
-      </Badge>
-    );
-  }
-
   if (isExtracting || cv.extractionStatus === "PROCESSING") {
     return (
       <Badge tone="info">

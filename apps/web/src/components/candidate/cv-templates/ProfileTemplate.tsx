@@ -83,7 +83,7 @@ export function ProfileTemplate({ data, config }: { data: CvBuilderData; config:
               <View key={`${section}-${index}`}>
                 <Text style={{ ...styles.sectionTitle, color: primaryColor }}>Kinh nghiệm làm việc</Text>
                 {experiences.map((exp) => (
-                  <View key={exp.id} style={{ marginBottom: 8 }}>
+                  <View key={exp.id} wrap={false} style={{ marginBottom: 8 }}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 2 }}>
                       <Text style={commonStyles.itemTitle}>{exp.position}</Text>
                       <Text style={commonStyles.itemSubtitle}>
@@ -103,7 +103,7 @@ export function ProfileTemplate({ data, config }: { data: CvBuilderData; config:
               <View key={`${section}-${index}`}>
                 <Text style={{ ...styles.sectionTitle, color: primaryColor }}>Học vấn</Text>
                 {educations.map((edu) => (
-                  <View key={edu.id} style={{ marginBottom: 8 }}>
+                  <View key={edu.id} wrap={false} style={{ marginBottom: 8 }}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 2 }}>
                       <Text style={commonStyles.itemTitle}>{edu.school}</Text>
                       <Text style={commonStyles.itemSubtitle}>
@@ -123,7 +123,7 @@ export function ProfileTemplate({ data, config }: { data: CvBuilderData; config:
               <View key={`${section}-${index}`}>
                 <Text style={{ ...styles.sectionTitle, color: primaryColor }}>Dự án</Text>
                 {projects.map((proj) => (
-                  <View key={proj.id} style={{ marginBottom: 8 }}>
+                  <View key={proj.id} wrap={false} style={{ marginBottom: 8 }}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 2 }}>
                       <Text style={commonStyles.itemTitle}>{proj.name}</Text>
                       <Text style={commonStyles.itemSubtitle}>
@@ -153,7 +153,7 @@ export function ProfileTemplate({ data, config }: { data: CvBuilderData; config:
               <View key={`${section}-${index}`}>
                 <Text style={{ ...styles.sectionTitle, color: primaryColor }}>Chứng chỉ</Text>
                 {certificates.map((cert) => (
-                  <View key={cert.id} style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
+                  <View key={cert.id} wrap={false} style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
                     <Text style={commonStyles.itemTitle}>{cert.name}</Text>
                     <Text style={commonStyles.itemSubtitle}>{cert.issuer} {cert.date ? `(${cert.date.slice(0, 10)})` : ""}</Text>
                   </View>

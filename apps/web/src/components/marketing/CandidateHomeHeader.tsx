@@ -17,7 +17,7 @@ const NAV_LINKS = [
 ];
 
 const ACCOUNT_LINKS = [
-  { label: "Tổng quan", href: "/", icon: "layout-dashboard" },
+  { label: "Tổng quan", href: "/dashboard", icon: "layout-dashboard" },
   { label: "Quản lý hồ sơ", href: "/profile", icon: "user-round" },
   { label: "Quản lý CV", href: "/cv", icon: "file-text" },
   { label: "Việc làm phù hợp", href: "/recommended-jobs", icon: "sparkles" },

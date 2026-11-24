@@ -95,7 +95,7 @@ export function ProfessionalTemplate({ data, config }: { data: CvBuilderData; co
             <View>
               <Text style={{ ...styles.sectionTitleLeft, color: primaryColor }}>Chứng chỉ</Text>
               {certificates.map(c => (
-                <View key={c.id} style={{ marginBottom: 6 }}>
+                <View key={c.id} wrap={false} style={{ marginBottom: 6 }}>
                   <Text style={{ fontSize: 10, fontWeight: "bold" }}>{c.name}</Text>
                   <Text style={{ fontSize: 9 }}>{c.issuer}</Text>
                 </View>
@@ -122,7 +122,7 @@ export function ProfessionalTemplate({ data, config }: { data: CvBuilderData; co
                 <View key={`${section}-${index}`}>
                   <Text style={{ ...styles.sectionTitleRight, color: primaryColor }}>Kinh nghiệm làm việc</Text>
                   {experiences.map((exp) => (
-                    <View key={exp.id} style={{ marginBottom: 10 }}>
+                    <View key={exp.id} wrap={false} style={{ marginBottom: 10 }}>
                       <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 2 }}>
                         <Text style={commonStyles.itemTitle}>{exp.position}</Text>
                         <Text style={commonStyles.itemSubtitle}>
@@ -142,7 +142,7 @@ export function ProfessionalTemplate({ data, config }: { data: CvBuilderData; co
                 <View key={`${section}-${index}`}>
                   <Text style={{ ...styles.sectionTitleRight, color: primaryColor }}>Học vấn</Text>
                   {educations.map((edu) => (
-                    <View key={edu.id} style={{ marginBottom: 10 }}>
+                    <View key={edu.id} wrap={false} style={{ marginBottom: 10 }}>
                       <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 2 }}>
                         <Text style={commonStyles.itemTitle}>{edu.school}</Text>
                         <Text style={commonStyles.itemSubtitle}>
@@ -162,7 +162,7 @@ export function ProfessionalTemplate({ data, config }: { data: CvBuilderData; co
                 <View key={`${section}-${index}`}>
                   <Text style={{ ...styles.sectionTitleRight, color: primaryColor }}>Dự án</Text>
                   {projects.map((proj) => (
-                    <View key={proj.id} style={{ marginBottom: 10 }}>
+                    <View key={proj.id} wrap={false} style={{ marginBottom: 10 }}>
                       <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 2 }}>
                         <Text style={commonStyles.itemTitle}>{proj.name}</Text>
                         <Text style={commonStyles.itemSubtitle}>
