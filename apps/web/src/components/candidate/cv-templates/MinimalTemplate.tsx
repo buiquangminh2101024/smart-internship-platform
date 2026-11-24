@@ -69,10 +69,10 @@ export function MinimalTemplate({ data, config }: { data: CvBuilderData; config:
           if (section === "experiences" && experiences.length > 0) {
             return (
               <View key={`${section}-${index}`}>
-                <Text style={styles.sectionTitle}>Experience</Text>
+                <Text style={styles.sectionTitle}>Kinh nghiệm làm việc</Text>
                 <View style={styles.divider} />
                 {experiences.map((exp) => (
-                  <View key={exp.id} style={{ marginBottom: 12 }}>
+                  <View key={exp.id} wrap={false} style={{ marginBottom: 12 }}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                       <Text style={commonStyles.itemTitle}>{exp.position}</Text>
                       <Text style={{ fontSize: 9 }}>
@@ -90,17 +90,17 @@ export function MinimalTemplate({ data, config }: { data: CvBuilderData; config:
           if (section === "educations" && educations.length > 0) {
             return (
               <View key={`${section}-${index}`}>
-                <Text style={styles.sectionTitle}>Education</Text>
+                <Text style={styles.sectionTitle}>Học vấn</Text>
                 <View style={styles.divider} />
                 {educations.map((edu) => (
-                  <View key={edu.id} style={{ marginBottom: 8 }}>
+                  <View key={edu.id} wrap={false} style={{ marginBottom: 8 }}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                       <Text style={commonStyles.itemTitle}>{edu.school}</Text>
                       <Text style={{ fontSize: 9 }}>
                         {edu.startYear} - {edu.isCurrent ? "Hiện tại" : edu.endYear}
                       </Text>
                     </View>
-                    <Text style={{ fontSize: 10 }}>{edu.degree ? `${edu.degree} in ` : ""}{edu.major}</Text>
+                    <Text style={{ fontSize: 10 }}>{edu.degree ? `${edu.degree} - ` : ""}{edu.major}</Text>
                   </View>
                 ))}
               </View>
@@ -110,10 +110,10 @@ export function MinimalTemplate({ data, config }: { data: CvBuilderData; config:
           if (section === "projects" && projects.length > 0) {
             return (
               <View key={`${section}-${index}`}>
-                <Text style={styles.sectionTitle}>Projects</Text>
+                <Text style={styles.sectionTitle}>Dự án</Text>
                 <View style={styles.divider} />
                 {projects.map((proj) => (
-                  <View key={proj.id} style={{ marginBottom: 8 }}>
+                  <View key={proj.id} wrap={false} style={{ marginBottom: 8 }}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                       <Text style={commonStyles.itemTitle}>{proj.name}</Text>
                       <Text style={{ fontSize: 9 }}>
@@ -130,7 +130,7 @@ export function MinimalTemplate({ data, config }: { data: CvBuilderData; config:
           if (section === "skills" && skills.length > 0) {
             return (
               <View key={`${section}-${index}`}>
-                <Text style={styles.sectionTitle}>Skills</Text>
+                <Text style={styles.sectionTitle}>Kỹ năng</Text>
                 <View style={styles.divider} />
                 <Text style={commonStyles.text}>
                   {skills.map(s => s.name).join(", ")}
@@ -142,10 +142,10 @@ export function MinimalTemplate({ data, config }: { data: CvBuilderData; config:
           if (section === "certificates" && certificates.length > 0) {
             return (
               <View key={`${section}-${index}`}>
-                <Text style={styles.sectionTitle}>Certificates</Text>
+                <Text style={styles.sectionTitle}>Chứng chỉ</Text>
                 <View style={styles.divider} />
                 {certificates.map((cert) => (
-                  <View key={cert.id} style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
+                  <View key={cert.id} wrap={false} style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
                     <Text style={commonStyles.itemTitle}>{cert.name}</Text>
                     <Text style={commonStyles.itemSubtitle}>{cert.issuer} {cert.date ? `(${cert.date.slice(0, 10)})` : ""}</Text>
                   </View>

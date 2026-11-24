@@ -29,6 +29,8 @@ interface ButtonAsButton extends CommonProps {
 interface ButtonAsLink extends CommonProps {
   as: "a";
   href: string;
+  target?: string;
+  rel?: string;
 }
 
 export type ButtonProps = ButtonAsButton | ButtonAsLink;
@@ -95,7 +97,7 @@ export function Button(props: ButtonProps) {
 
   if (props.as === "a") {
     return (
-      <Link href={props.href} className={classes} aria-disabled={disabled}>
+      <Link href={props.href} target={props.target} rel={props.rel} className={classes} aria-disabled={disabled}>
         {content}
       </Link>
     );

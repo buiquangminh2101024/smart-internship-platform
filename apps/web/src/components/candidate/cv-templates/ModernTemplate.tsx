@@ -105,7 +105,7 @@ export function ModernTemplate({ data, config }: { data: CvBuilderData; config: 
                 <View key={`${section}-${index}`}>
                   <Text style={styles.sectionTitleLeft}>Chứng chỉ</Text>
                   {certificates.map((cert) => (
-                    <View key={cert.id} style={{ marginBottom: 8 }}>
+                    <View key={cert.id} wrap={false} style={{ marginBottom: 8 }}>
                       <Text style={{ fontSize: 10, fontWeight: "bold" }}>{cert.name}</Text>
                       <Text style={{ fontSize: 9, opacity: 0.8 }}>{cert.issuer} {cert.date ? `(${cert.date.slice(0,10)})` : ""}</Text>
                     </View>
@@ -133,7 +133,7 @@ export function ModernTemplate({ data, config }: { data: CvBuilderData; config: 
                 <View key={`${section}-${index}`}>
                   <Text style={{ ...styles.sectionTitleRight, color: primaryColor, borderBottomColor: primaryColor }}>Kinh nghiệm làm việc</Text>
                   {experiences.map((exp) => (
-                    <View key={exp.id} style={{ marginBottom: 10 }}>
+                    <View key={exp.id} wrap={false} style={{ marginBottom: 10 }}>
                       <Text style={commonStyles.itemTitle}>{exp.position} - {exp.company}</Text>
                       <Text style={commonStyles.itemSubtitle}>
                         {exp.startDate?.slice(0, 10) || "?"} đến {exp.isCurrent ? "Hiện tại" : exp.endDate?.slice(0, 10) || "?"}
@@ -150,7 +150,7 @@ export function ModernTemplate({ data, config }: { data: CvBuilderData; config: 
                 <View key={`${section}-${index}`}>
                   <Text style={{ ...styles.sectionTitleRight, color: primaryColor, borderBottomColor: primaryColor }}>Học vấn</Text>
                   {educations.map((edu) => (
-                    <View key={edu.id} style={{ marginBottom: 10 }}>
+                    <View key={edu.id} wrap={false} style={{ marginBottom: 10 }}>
                       <Text style={commonStyles.itemTitle}>{edu.school}</Text>
                       <Text style={commonStyles.itemSubtitle}>
                         {edu.major} {edu.degree ? `(${edu.degree})` : ""}
@@ -170,7 +170,7 @@ export function ModernTemplate({ data, config }: { data: CvBuilderData; config: 
                 <View key={`${section}-${index}`}>
                   <Text style={{ ...styles.sectionTitleRight, color: primaryColor, borderBottomColor: primaryColor }}>Dự án nổi bật</Text>
                   {projects.map((proj) => (
-                    <View key={proj.id} style={{ marginBottom: 10 }}>
+                    <View key={proj.id} wrap={false} style={{ marginBottom: 10 }}>
                       <Text style={commonStyles.itemTitle}>{proj.name}</Text>
                       <Text style={commonStyles.itemSubtitle}>
                         {proj.startDate?.slice(0, 10) || "?"} - {proj.isWorkingOn ? "Đang thực hiện" : proj.endDate?.slice(0, 10) || "?"}

@@ -14,6 +14,7 @@ import { SiteFooter } from "@/components/marketing/SiteFooter";
 // Applications (Phase 8) vẫn để `soon`. Pine là màu brand mặc định (data-role
 // không đặt thì alias brand-* về Pine — xem AD-7).
 const NAV_ITEMS: SideNavItem[] = [
+  { label: "Tổng quan", icon: "layout-dashboard", href: "/dashboard" },
   { label: "Hồ sơ ứng viên", icon: "user-round", href: "/profile" },
   { label: "Quản lý CV", icon: "file-text", href: "/cv" },
   { label: "Việc làm phù hợp", icon: "sparkles", href: "/recommended-jobs" },

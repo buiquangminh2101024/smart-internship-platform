@@ -34,6 +34,7 @@ export function CvEditorClient() {
   const [cvName, setCvName] = useState<string>("CV chưa đặt tên");
   
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [isDirty, setIsDirty] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
@@ -43,6 +44,7 @@ export function CvEditorClient() {
   const TemplateComponent = activeTemplate.component;
 
   const debouncedBuilderData = useDebounce(builderData, 800);
+  const isSyncing = builderData !== debouncedBuilderData;
 
   const pdfDocument = useMemo(() => {
     const pdfData = debouncedBuilderData || builderData;
@@ -138,6 +140,31 @@ export function CvEditorClient() {
     }
   };
 
+  async function handleDownloadPdf() {
+    if (!builderData || !templateConfig) return;
+    setIsDownloading(true);
+    setErrorMsg("");
+    const finalFileName = `${cvName.trim() || 'CV'}.pdf`;
+
+    try {
+      const { pdf } = await import("@react-pdf/renderer");
+      const blob = await pdf(<TemplateComponent data={builderData} config={templateConfig} />).toBlob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = finalFileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      setErrorMsg(err instanceof Error ? err.message : "Đã xảy ra lỗi khi tải file PDF.");
+    } finally {
+      setIsDownloading(false);
+    }
+  }
+
   async function handleSaveCv() {
     setIsGenerating(true);
     setErrorMsg("");
@@ -203,14 +230,25 @@ export function CvEditorClient() {
             {isDirty && <span className="w-2 h-2 rounded-full bg-yellow-500 ml-1" title="Có thay đổi chưa lưu" />}
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          {errorMsg && <span className="text-sm text-red-600 font-medium">{errorMsg}</span>}
+        <div className="flex items-center gap-2">
+          {errorMsg && <span className="text-sm text-red-600 font-medium mr-2">{errorMsg}</span>}
+          <Button 
+            variant="secondary" 
+            size="sm"
+            icon="download" 
+            onClick={handleDownloadPdf} 
+            loading={isDownloading}
+            disabled={isGenerating || saveMutation.isPending}
+          >
+            Tải PDF
+          </Button>
           <Button 
             variant="primary" 
             size="sm"
             icon="save" 
             onClick={handleSaveCv} 
             loading={isGenerating || saveMutation.isPending}
+            disabled={isDownloading}
           >
             Lưu CV
           </Button>
@@ -258,9 +296,18 @@ export function CvEditorClient() {
 
         {/* PDF Preview */}
         <div className="flex-1 bg-neutral-200/50 flex flex-col h-full overflow-hidden relative">
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-green-100 text-green-700 px-4 py-2 rounded-full text-xs font-medium flex items-center gap-2 shadow-sm z-10 pointer-events-none opacity-80">
-            <Icon name="info" size={14} />
-            Gợi ý: Trực tiếp thay đổi thông tin tại thanh menu bên trái
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-2 z-10 pointer-events-none">
+            {isSyncing ? (
+              <div className="bg-amber-100 text-amber-800 px-4 py-1.5 rounded-full text-xs font-medium flex items-center gap-2 shadow-sm animate-pulse border border-amber-200">
+                <Icon name="loader-circle" size={13} className="animate-spin" />
+                Đang cập nhật xem trước...
+              </div>
+            ) : (
+              <div className="bg-white/90 text-text-muted px-4 py-1.5 rounded-full text-xs font-medium flex items-center gap-2 shadow-sm border border-border-subtle backdrop-blur-sm opacity-90">
+                <Icon name="check-circle" size={13} className="text-pine-600" />
+                Đã cập nhật
+              </div>
+            )}
           </div>
           {pdfDocument}
         </div>
