@@ -145,10 +145,23 @@ infra/
 
 ```text
 apps/server/tests/
-├── unit/          # Test theo module (service/logic thuần)
-├── integration/   # Test API + DB thật/test container
-└── load/          # Script load test cơ bản (Phase 12)
+├── unit/          # Test theo module (service/logic thuần), chia thư mục con theo nhóm nghiệp vụ
+│   ├── auth/          # đăng nhập, OTP, token, băm mật khẩu
+│   ├── job-posts/     # tin tuyển dụng, kiểm duyệt, chất lượng tin, báo cáo tin
+│   ├── matching/      # job-matching, match-scores, live-rescore, embedding
+│   ├── outreach/      # candidate-outreach, tự động mời
+│   ├── applications/  # đơn ứng tuyển, tự động xử lý đơn, tiến trình tuyển, phỏng vấn
+│   ├── candidates/    # hồ sơ ứng viên, CV
+│   ├── audit-log/
+│   ├── dashboard/
+│   ├── job-alerts/
+│   ├── catalog/       # danh mục kỹ năng, ngành học
+│   └── demo-data/     # script sinh dữ liệu demo (scripts/lib)
+├── integration/   # Test API + DB thật/test container (chia nhóm cùng kiểu unit/)
+└── load/          # Script load test cơ bản (Phase 13)
 ```
+
+`npm test` (trong `apps/server`) chạy `tests/unit/**/*.test.ts`. Test mới đặt vào nhóm của module nó kiểm; tests đi sâu 3 cấp nên import dùng `../../../src/...`.
 
 Frontend testing structure sẽ được bổ sung khi Phase 12 tới gần (chưa quyết định framework — cân nhắc Playwright/RTL tuỳ nhu cầu thực tế lúc đó).
 
