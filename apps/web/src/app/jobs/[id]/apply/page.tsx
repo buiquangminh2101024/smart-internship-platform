@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useApplyJob } from "@/hooks/useApplications";
+import { useOutreachInvitations } from "@/hooks/useCandidateOutreach";
+import { useCandidateAuthStore } from "@/stores/auth-store";
 import { useCvList } from "@/hooks/useCvs";
 import { apiUpload } from "@/lib/api-client";
 import { CandidateHomeHeader } from "@/components/marketing/CandidateHomeHeader";
@@ -10,6 +12,7 @@ import { SiteFooter } from "@/components/marketing/SiteFooter";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Icon } from "@/components/ui/Icon";
 
 export default function ApplyJobPage() {
   const params = useParams();
@@ -17,6 +20,10 @@ export default function ApplyJobPage() {
   const jobId = params.id as string;
   const { data: cvs, isLoading } = useCvList();
   const applyMutation = useApplyJob();
+  // AD-28 (Q4): có lời mời đang chờ cho tin này ⇒ nộp đơn = nhận lời, đơn vào thẳng Đang xem xét.
+  const isCandidate = useCandidateAuthStore((state) => !!state.accessToken && state.user?.role === "CANDIDATE");
+  const { data: invitations } = useOutreachInvitations(isCandidate);
+  const pendingInvitation = invitations?.find((item) => item.jobPost.id === jobId && item.status === "PENDING") ?? null;
 
   const [selectedCvId, setSelectedCvId] = useState<string>("");
   const [localCvFile, setLocalCvFile] = useState<File | null>(null);
@@ -58,7 +65,7 @@ export default function ApplyJobPage() {
         setIsUploadingCv(false);
       }
 
-      await applyMutation.mutateAsync({
+      const created = await applyMutation.mutateAsync({
         jobPostId: jobId,
         cvId: finalCvId,
         ...(coverLetter ? { coverLetter } : {}),
@@ -66,7 +73,7 @@ export default function ApplyJobPage() {
       setDialog({ 
         isOpen: true, 
         title: "Thành công", 
-        message: "Ứng tuyển thành công!", 
+        message: created.invitationId ? "Đã nhận lời mời, hồ sơ của bạn đang được nhà tuyển dụng xem xét." : "Ứng tuyển thành công!", 
         type: "success",
         onConfirm: () => router.push("/applications")
       });
@@ -83,6 +90,16 @@ export default function ApplyJobPage() {
 
       <main className="mx-auto grid w-full max-w-3xl flex-1 gap-4 px-6 py-10">
         <h1 className="text-2xl font-bold">Nộp đơn ứng tuyển</h1>
+
+        {pendingInvitation ? (
+          <Card padding="sm" tone="brand" className="flex items-start gap-2 text-sm text-text-body" role="note">
+            <Icon name="mail-check" size={16} className="mt-0.5 shrink-0 text-brand-700" />
+            <span>
+              Bạn đang có lời mời từ <strong>{pendingInvitation.company.name}</strong> cho tin này. Nộp đơn sẽ được tính
+              là <strong>nhận lời mời</strong>, hồ sơ chuyển thẳng sang <strong>Đang xem xét</strong> và không thể huỷ.
+            </span>
+          </Card>
+        ) : null}
 
         <Card padding="lg">
           <form onSubmit={handleSubmit} className="space-y-6">

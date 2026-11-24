@@ -282,6 +282,16 @@ const templates: { [T in NotificationType]: Renderer<T> } = {
     email: null,
   }),
 
+  // AD-29 Q7 — cho Admin, chỉ trong app. Không tự gỡ tin; Admin mở tin để quyết định thu hồi.
+  JOB_POST_QUALITY_DROPPED: (data) => ({
+    title: "Tin đang hiển thị bị tụt điểm",
+    body: data.blocked
+      ? `Tin "${data.jobPostTitle}" của ${data.companyName} vừa được sửa và có dấu hiệu rủi ro (${data.score} điểm).`
+      : `Tin "${data.jobPostTitle}" của ${data.companyName} vừa được sửa và tụt xuống vùng đề xuất từ chối (${data.score} điểm).`,
+    link: `/admin/jobs/${data.jobPostId}`,
+    email: null,
+  }),
+
   // B3, AD-15. Hộp lời mời của Candidate nằm ở trang hồ sơ (frontend PLAN CO-3).
   CANDIDATE_OUTREACH_INVITATION_RECEIVED: (data, ctx) => {
     const title = "Bạn nhận được lời mời ứng tuyển";
@@ -293,7 +303,7 @@ const templates: { [T in NotificationType]: Renderer<T> } = {
       link,
       email: {
         subject: `[${data.companyName}] Lời mời ứng tuyển: ${data.jobPostTitle}`,
-        html: emailHtml(title, [body, "Chấp nhận lời mời để bắt đầu trò chuyện với nhà tuyển dụng."], {
+        html: emailHtml(title, [body, "Nhận lời để ứng tuyển bằng CV của bạn và trò chuyện với nhà tuyển dụng."], {
           label: "Xem lời mời",
           url: absolute(ctx, link),
         }),
@@ -302,8 +312,18 @@ const templates: { [T in NotificationType]: Renderer<T> } = {
   },
 
   // Cố ý không gửi email: NTD theo dõi phản hồi trên danh sách "Đã mời" của tin.
+  // AD-28 — có applicationId ⇒ thông báo gộp thay cho APPLICATION_RECEIVED, gửi người mời
+  // + người đăng tin; link sang hồ sơ.
   CANDIDATE_OUTREACH_INVITATION_RESPONDED: (data) => {
     const name = data.candidateName ?? "Ứng viên";
+    if (data.accepted && data.applicationId) {
+      return {
+        title: "Ứng viên đã nhận lời và ứng tuyển",
+        body: `${name} đã nhận lời mời và ứng tuyển vị trí "${data.jobPostTitle}". Hồ sơ đang ở trạng thái Đang xem xét.`,
+        link: `/employer/applications/${data.applicationId}`,
+        email: null,
+      };
+    }
     return {
       title: data.accepted ? "Ứng viên đã chấp nhận lời mời" : "Ứng viên đã từ chối lời mời",
       body: data.accepted

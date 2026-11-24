@@ -35,6 +35,7 @@ questions:
 - Bấm gửi lại mã mà không được
 - Không thấy email xác nhận trong hộp thư
 - Mỗi giờ được gửi lại mã bao nhiêu lần?
+- Nhập sai mã OTP nhiều lần thì sao?
 
 Nếu chưa thấy email chứa mã OTP:
 
@@ -43,6 +44,8 @@ Nếu chưa thấy email chứa mã OTP:
 - Bấm **Gửi lại mã**. Mỗi lần gửi lại cách nhau ít nhất 60 giây, và mỗi email nhận tối đa 20 mã mỗi giờ.
 
 Mã OTP chỉ có hiệu lực trong **5 phút**. Nếu mã báo không hợp lệ hoặc đã hết hạn, hãy yêu cầu mã mới và dùng mã mới nhất.
+
+Mỗi mã chỉ được nhập sai tối đa **5 lần**. Sai lần thứ 5 thì mã bị huỷ, kể cả khi sau đó nhập đúng; khi đó hãy bấm **Gửi lại mã** để nhận mã mới.
 
 Vẫn không nhận được thì bạn gửi yêu cầu ở trang Liên hệ hỗ trợ /support.
 
@@ -73,6 +76,8 @@ questions:
 - Khôi phục tài khoản khi quên mật khẩu
 - Tài khoản đăng nhập bằng Google thì lấy lại mật khẩu kiểu gì?
 - Nhập mật khẩu mãi không đúng, không vào được tài khoản
+- Đăng nhập sai nhiều lần bị chặn thì làm sao?
+- Bao lâu thì được đăng nhập lại sau khi nhập sai nhiều lần?
 
 Vào trang Quên mật khẩu /forgot-password:
 
@@ -81,6 +86,8 @@ Vào trang Quên mật khẩu /forgot-password:
 - Đặt mật khẩu mới (tối thiểu 8 ký tự).
 
 Tài khoản chỉ đăng nhập bằng Google thì không có mật khẩu nên sẽ không có mã gửi về. Hãy dùng nút **Google** ở trang đăng nhập.
+
+Nhập sai mật khẩu **5 lần trong 15 phút** thì việc đăng nhập bằng email đó trên thiết bị / mạng đang dùng bị tạm chặn khoảng **15 phút**. Trong lúc chờ, bạn vẫn đặt lại mật khẩu ở /forgot-password hoặc đăng nhập bằng **Google** được.
 
 ## account-change-password
 audience: all

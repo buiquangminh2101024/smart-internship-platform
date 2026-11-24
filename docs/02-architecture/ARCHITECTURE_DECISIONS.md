@@ -539,7 +539,7 @@ Kết quả có cache trùng hoàn toàn với không cache ở cả 3 trường
 
 **Ngày:** 2026-10-20 · **Phase liên quan:** sửa lỗi của 05-frontend Phase 2 (AD-4), phát hiện khi kiểm chatbot đợt D.
 
-> **Trạng thái: ĐÃ DUYỆT (2026-10-20), ĐÃ TRIỂN KHAI, CHỜ KIỂM LẠI TRÊN TRÌNH DUYỆT.** Chủ dự án duyệt hướng sửa 3 mục sau khi tự tái hiện được lỗi (Test 1, Test 2 bên dưới).
+> **Trạng thái: ĐÃ DUYỆT (2026-10-20), ĐÃ TRIỂN KHAI; ĐÃ KIỂM TRÊN TRÌNH DUYỆT 2026-11-23 (sau AD-31 F1): Test 1, 3 (bản rút gọn), 4, 5 đạt; Test 2 chưa chạy.** Chủ dự án duyệt hướng sửa 3 mục sau khi tự tái hiện được lỗi (Test 1, Test 2 bên dưới). Chi tiết lần kiểm: `docs/05-frontend/phases/auth-hardening/PLAN.md`, "Đợt 1 — F1".
 
 **Triệu chứng:** mở Candidate và Employer ở 2 tab cùng một Chrome. Sau một lúc (để máy tắt màn hình rồi quay lại), một tab vẫn hiện "đã đăng nhập" nhưng bấm menu quản lý hoặc sidebar thì không vào được, hoặc bị đưa về trang chủ của khu vực (`/` hoặc `/employer`). Chỉ nút Đăng xuất còn chạy. Đăng nhập lại thì hết. Tải lại tab kia thì thấy nó cũng đã bị đăng xuất. Console của tab bị kẹt cho `sip_session_<khu vực>` không còn và `localStorage["sip-auth-<khu vực>"]` rỗng, trong khi giao diện vẫn hiện tên người dùng.
 
@@ -587,7 +587,7 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 | 4 | Hai tab **cùng là Candidate**; đăng xuất ở tab 1 | Tab 2 vẫn hiện đã đăng nhập | Tab 2 tự về `/`, hiện chưa đăng nhập |
 | 5 | Tab 1 Candidate, tab 2 Employer; đăng xuất Candidate ở tab 1, rồi F5 tab 2 | — | Tab 2 vẫn đăng nhập Employer |
 
-**Ảnh hưởng:** chỉ frontend: `stores/auth-store.ts` (listener `storage`, `syncFromOtherTab`, `latestRefreshToken`; kiểu `AuthStore` thêm API `persist`), `lib/api-client.ts` (`refreshAccessToken`), `components/auth/SessionSync.tsx`. Server, `proxy.ts`, cách lưu token (AD-2/AD-4) không đổi. Không thêm dependency. Việc còn lại (chưa làm, ghi ở `docs/01-project/FEATURE_BACKLOG.md` §1): refresh thất bại vì **mất mạng/server lỗi 5xx** hiện vẫn bị coi như phiên hết hạn và xoá phiên; client Redis phía server chưa đặt timeout.
+**Ảnh hưởng:** chỉ frontend: `stores/auth-store.ts` (listener `storage`, `syncFromOtherTab`, `latestRefreshToken`; kiểu `AuthStore` thêm API `persist`), `lib/api-client.ts` (`refreshAccessToken`), `components/auth/SessionSync.tsx`. Server, `proxy.ts`, cách lưu token (AD-2/AD-4) không đổi. Không thêm dependency. Việc còn lại (chưa làm, ghi ở `docs/01-project/FEATURE_BACKLOG.md` §1): refresh thất bại vì **mất mạng/server lỗi 5xx** hiện vẫn bị coi như phiên hết hạn và xoá phiên; client Redis phía server chưa đặt timeout. *Cả hai đã sửa ở AD-31 (server 2026-11-22, web F1 2026-11-23).*
 
 ## Phần ghi chú của chủ dự án
 
@@ -1100,3 +1100,158 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 - Script mới `simulate-inflow`.
 - `packages/shared-types`: trạng thái thẻ tự mời khi tỉ lệ 0%, DTO thẻ "Hệ thống tự động", payload sự kiện realtime.
 - Frontend: dòng chú thích ở `/jobs`, thẻ tự mời, làm mới số "Phù hợp" theo realtime, thẻ "Hệ thống tự động" của Admin, FAQ chatbot.
+
+---
+
+## AD-28 — Nhận lời mời là ứng tuyển vào tin (0.7): tạo đơn "Đang xem xét" gắn với lời mời (sửa một phần AD-15)
+
+**Ngày:** 2026-11-17 · **Phase liên quan:** không thuộc phase đánh số. Mục 0.7 của `docs/01-project/FEATURE_BACKLOG.md`. Kế hoạch chi tiết: `docs/06-backend/invitation-apply/PLAN.md`, `docs/05-frontend/phases/invitation-apply/PLAN.md`.
+
+> **Trạng thái: ĐÃ TRIỂN KHAI (2026-11-17).** Chủ dự án duyệt từng điểm, gồm Q1–Q4 của plan backend. Migration `20261117120000_add_application_invitation` đã áp lên Neon; backend và frontend đã kiểm trên trình duyệt.
+
+**Bối cảnh:** theo AD-15 mục 6, ứng viên chấp nhận lời mời thì hệ thống chỉ mở hội thoại. Ứng viên không có trong danh sách ứng viên của tin, nên nhà tuyển dụng không xét duyệt, hẹn phỏng vấn hay tuyển được theo luồng chuẩn; muốn vậy ứng viên phải tự vào tin nộp đơn lần nữa.
+
+**Quyết định:**
+
+1. **Nhận lời = ứng tuyển.** Nút "Nhận lời & ứng tuyển" mở hộp thoại chọn CV (chọn sẵn CV mặc định) và thư giới thiệu không bắt buộc. Lời mời chuyển `ACCEPTED` và đơn được tạo trong **một transaction**; hội thoại vẫn mở sau đó như AD-15 mục 6. Bỏ lối "nhận lời mà chưa nộp đơn".
+2. **Cột mới `Application.invitationId`** (nullable, unique, `ON DELETE SET NULL`) gắn đơn với lời mời. Dùng cho nhãn "Được mời" ở danh sách ứng viên và tỉ lệ mời → đơn.
+3. **Đơn từ lời mời vào thẳng `REVIEWING`**, không phụ thuộc điểm hay công tắc `autoReviewEnabled` của AD-25: nhà tuyển dụng đã chủ động chọn người này. Lịch sử trạng thái ghi dòng khởi tạo `null → REVIEWING` (hoặc `CANCELLED → REVIEWING` khi mở lại đơn đã huỷ), `actorId` là ứng viên; không bị đếm là "hệ thống tự chuyển".
+4. **Một thông báo gộp** "X đã nhận lời và ứng tuyển", dùng lại loại `CANDIDATE_OUTREACH_INVITATION_RESPONDED` với payload thêm `applicationId`; không gửi thêm `APPLICATION_RECEIVED`. Người nhận là **người mời và người đăng tin** (bỏ trùng; lời mời tự động đứng tên người đăng tin nên chỉ một người). Hệ thống không có người phụ trách đơn, mọi employer của công ty vẫn thấy và xử lý được đơn; nhắc tuần của AD-25 là lưới an toàn cho cả công ty.
+5. **Lời mời đã `ACCEPTED` trước thay đổi này** không được tạo đơn tự động (cần CV và sự đồng ý của ứng viên). Ứng viên có nút "Ứng tuyển ngay" (endpoint `POST /candidate/outreach-invitations/:id/apply`) khi tin còn tuyển.
+6. **Kiểm lại tin trong transaction**: tin không còn `PUBLISHED` hoặc đã quá hạn thì trả 409 và không ghi gì.
+7. **Lời mời và đơn tự nộp trùng tin:** ứng viên có lời mời `PENDING` mà nộp đơn thường thì coi như nhận lời (đơn `REVIEWING`, gắn lời mời); ứng viên đã có đơn mà nhận lời thì chỉ gắn lời mời vào đơn, không đổi trạng thái đơn. Ứng viên luôn được báo trước và sau rằng hồ sơ vào thẳng "Đang xem xét".
+8. **Đơn từ lời mời không huỷ được** (giữ quy tắc chỉ huỷ đơn `PENDING`); hộp thoại nhận lời ghi rõ.
+9. Logic tạo đơn nằm ở `ApplicationsService` (hàm lõi nhận `tx`); `candidate-outreach` gọi qua DI, không tự ghi bảng `applications`. Nộp đơn thường không đổi hành vi.
+
+**Phương án không chọn:**
+
+- *Nhận lời thì tự tạo đơn bằng CV mặc định:* ứng viên không chọn được CV, không biết mình đã nộp đơn; lỗi khi chưa có CV mặc định.
+- *Giữ nhận lời = chat, thêm nút dẫn sang trang ứng tuyển:* hai bước nên dễ bỏ dở, và hệ thống không biết đơn đến từ lời mời.
+- *Đơn từ lời mời để `PENDING` rồi để AD-25 tự chuyển:* với lời mời tự động gần như luôn lên `REVIEWING` ngay (cùng ngưỡng `autoOutreachMinScore`), nhưng lời mời thủ công dưới ngưỡng hoặc tin tắt công tắc sẽ để đơn nằm "Chờ duyệt" dù nhà tuyển dụng đã chủ động mời.
+
+**Ảnh hưởng:**
+
+- `schema.prisma` + 1 migration viết tay (cột `applications."invitationId"`).
+- `applications` (tách hàm lõi tạo đơn), `candidate-outreach` (`respond` nhận `cvId`, endpoint `apply`, DTO lời mời có `applicationId`), `notifications` (template gộp), DTO danh sách / chi tiết đơn phía employer có `invitation`.
+- `packages/shared-types`: request / response của `respond`, `ApplyFromInvitationRequest`, `CandidateOutreachInvitationDto.applicationId`, `EmployerApplicationListItem.invitation`.
+- Frontend: hộp thoại nhận lời, hộp lời mời, nhãn "Được mời".
+- FAQ trợ lý hỗ trợ: các câu nói "chấp nhận lời mời sẽ tạo hội thoại".
+
+## AD-29 — Chấm điểm chất lượng tin và duyệt / từ chối hàng loạt: điểm theo quy tắc có trọng số lưu trong `job_posts`, ba vùng gợi ý, đổi trạng thái có điều kiện (sửa một phần quy trình kiểm duyệt của `INITIAL_ARCHITECTURE_PLAN.md` §12)
+
+**Ngày:** 2026-11-20 · **Phase liên quan:** không thuộc phase đánh số. Dòng 📌 ở mục 2 của `docs/01-project/FEATURE_BACKLOG.md`. Kế hoạch chi tiết: `docs/06-backend/job-quality-moderation/PLAN.md`, `docs/05-frontend/phases/job-quality-moderation/PLAN.md`.
+
+> **Trạng thái: ĐÃ DUYỆT, đang triển khai (2026-11-20).** Chủ dự án chốt Q1–Q7 của plan backend và duyệt code. Migration `20261120120000_add_job_quality_score` đã áp lên Neon; bộ chấm thuần (bước 2), hiệu chỉnh (bước 3), lưu điểm khi gửi duyệt + API / script chấm lại (bước 4), chấm lại theo sự kiện công ty / sửa tin đang hiển thị (bước 4b), đổi trạng thái có điều kiện cho duyệt / từ chối / thu hồi (bước 5) và hàng đợi lọc theo vùng / sắp theo điểm hoặc ngày gửi, phân trang theo khoá (bước 6), duyệt / từ chối hàng loạt (bước 7: mỗi tin một transaction, tối đa 5 tin cùng lúc, chờ tối đa 7 s rồi chạy tiếp ở nền, kết quả lô giữ trong bộ nhớ) và việc sau lô duyệt (bước 8: `PublishFollowUpService`, hàng đợi trong bộ nhớ chạy một lượt tại một thời điểm, chấm bảng điểm lần lượt với một cache hồ sơ cho cả lượt, rồi tự mời mỗi công ty một lần) và DTO (bước 9: `JobPost.submittedAt`, `JobPost.quality` chỉ API của Admin điền) đã có. Bước 10 đã đối chiếu danh sách test với plan và bổ sung các case sát ngưỡng / mép vùng (757/757). Bước 11 đã kiểm qua gateway 8080 bằng API trên Neon (2026-11-20): vùng gợi ý, 409 khi duyệt trùng, duyệt / từ chối hàng loạt, bảng điểm sau duyệt, Q4, báo Admin khi sửa tin đang hiển thị đều đúng. Script đã ghi điểm cho 18 tin đang chờ duyệt trên Neon. **Backend AD-29 xong**; còn giao diện (plan frontend riêng).
+
+**Bối cảnh:** Admin phải mở từng tin để duyệt hoặc từ chối. Hàng đợi chỉ xem được trang đầu, sắp theo ngày tạo tin thay vì ngày gửi duyệt. `approve` / `reject` / `retract` kiểm trạng thái ngoài transaction, nên hai admin xử lý cùng lúc có thể cùng thành công. Duyệt xong hệ thống tự gửi lời mời ngay (AD-23), nên duyệt nhầm tin kém hoặc tin lừa đảo ảnh hưởng tới ứng viên trước khi Admin kịp thu hồi.
+
+**Quyết định:**
+
+1. **Điểm chất lượng 0–100 theo quy tắc có trọng số**, không học máy (chưa có dữ liệu gán nhãn; EMSCAD không khớp ngôn ngữ, loại việc, schema). Sáu tiêu chí: độ đầy đủ 20%, chất lượng nội dung 20%, minh bạch 15%, phù hợp thực tập 10%, dấu hiệu rủi ro 25%, uy tín công ty 10%. Mỗi tiêu chí bắt đầu 100, mỗi lỗi trừ một mức cố định, có mã và câu giải thích. Số liệu nằm trong một file cấu hình có version.
+2. **Ba vùng gợi ý:** *Đề xuất duyệt* (tổng ≥ 80, không cờ chặn, không tiêu chí nào < 50), *Đề xuất từ chối* (tổng < 50, hoặc có cờ chặn, hoặc tiêu chí 1–5 nào < 40), *Cần xem kỹ* (còn lại). **Cờ chặn** (ví dụ đòi ứng viên nộp tiền) không bao giờ cho tin vào vùng duyệt. Ngưỡng đã chốt sau bước hiệu chỉnh trên dữ liệu (2026-11-20): thêm điểm sàn cứng 40 vì tin chỉ thiếu thông tin không bao giờ có tổng < 50.
+3. **Điểm chỉ là gợi ý.** Hệ thống không tự duyệt, không tự từ chối; Admin luôn bấm xác nhận.
+4. **Lưu điểm vào cột của `job_posts`** (`qualityScore`, `qualityBand`, `qualityBreakdown`, `qualityVersion`, `qualityScoredAt`, `submittedContentHash`) và thêm `submittedAt`. **Chấm ngay theo sự kiện**, không theo giờ hay ban đêm: khi gửi duyệt (cả công ty được miễn kiểm duyệt); khi công ty có báo cáo vi phạm mới, báo cáo được xử lý bằng gỡ tin, hoặc bị thu hồi tin (chấm lại các tin `PENDING` của công ty đó); khi NTD sửa tin đang hiển thị; khi Admin bấm "Chấm lại"; bằng script khi đổi version. Lỗi chấm không chặn việc gửi duyệt hay sửa tin. *Chính xác hoá khi làm bước 4 (2026-11-20):* lúc gửi duyệt, điểm được chấm **ngay trước** transaction gửi duyệt và ghi vào cùng lệnh đổi trạng thái trong transaction; không chấm bên trong, vì một câu lỗi trong transaction Postgres làm hỏng cả transaction nên không thể bắt lỗi rồi gửi duyệt tiếp. Tín hiệu lịch sử được tính như thể lần gửi này đã ghi, nên điểm lúc gửi bằng điểm của một lần chấm lại ngay sau đó.
+5. **"Gửi lại mà không sửa"** nhận biết bằng mã băm nội dung lưu ở `submittedContentHash`, **chỉ ghi lúc gửi duyệt** (các lần chấm lại không ghi đè), không bằng `updatedAt`. Gửi lại có sửa thì không bị trừ.
+5b. **Tin đang hiển thị bị sửa** (sửa không cần duyệt lại) mà tụt xuống *Đề xuất từ chối* hoặc mới dính cờ chặn thì báo mọi Admin bằng thông báo mới `JOB_POST_QUALITY_DROPPED`, chỉ báo khi chuyển sang xấu. Hệ thống không tự gỡ tin.
+6. **Đổi trạng thái có điều kiện** (`updateMany where status = <trạng thái mong đợi>`) cho duyệt, từ chối, thu hồi; không khớp thì 409 và không ghi gì.
+7. **Duyệt / từ chối hàng loạt** tối đa 50 tin mỗi lần, mỗi tin một transaction riêng, trả danh sách thành công / bỏ qua. Từ chối không có lý do chung thì dùng lý do tự sinh từ lỗi của từng tin. Moderation action lưu điểm, vùng và cờ `bulk`, làm dữ liệu hiệu chỉnh về sau.
+8. **Việc sau khi duyệt hàng loạt chạy lần lượt:** chấm bảng điểm từng tin (AD-24) rồi tự mời một lần mỗi công ty (AD-23), không bắn song song. Duyệt một tin giữ hành vi cũ.
+9. **Điểm chỉ Admin thấy**; API công khai và của nhà tuyển dụng không trả điểm.
+
+**Phương án không chọn:**
+
+- *Học máy (hồi quy logistic, XGBoost) ngay từ đầu:* chưa có dữ liệu gán nhãn; ghi lại thành hướng phát triển khi đã lưu đủ quyết định thật của Admin.
+- *Tự duyệt tin điểm cao:* duyệt kéo theo tự gửi lời mời, sai một lần là ứng viên đã nhận lời mời của tin xấu.
+- *Bảng điểm riêng 1–1:* hàng đợi phải join để sắp / lọc theo điểm, không có lợi gì thêm.
+- *Tính điểm lúc xem, không lưu:* không lọc / sắp / chọn hàng loạt theo điểm trên server được, và không giữ được điểm lúc Admin quyết định.
+
+**Ảnh hưởng:**
+
+- `schema.prisma` + 1 migration viết tay (cột mới ở `job_posts`, `job_post_moderation_actions`, enum `JobQualityBand`, giá trị `JOB_POST_QUALITY_DROPPED` của `NotificationType`, backfill `submittedAt`).
+- `job-reports` (`createReport`, `executeAction` gỡ tin) và `retract` gọi trigger chấm lại theo công ty sau commit; `updateDraft` chấm lại tin đang hiển thị; `notifications` thêm template mới.
+- `job-posts`: bộ chấm thuần + cấu hình, `JobQualityService`, lõi duyệt / từ chối nhận `tx`, endpoint hàng loạt, hàng đợi có `band` / `sort` / `total`, `PublishFollowUpService`.
+- `packages/shared-types`: `JobQualityDto`, request / response hàng loạt, `submittedAt`, `pendingByBand`.
+- Frontend Admin: hàng đợi theo vùng có "Xem thêm", thanh chọn hàng loạt, thẻ điểm ở trang chi tiết thay cho phần kiểm tự động của `ReviewChecklist`.
+
+---
+
+## AD-30 — Tăng hiển thị tin (nổi bật, tuyển gấp, làm mới): lượt theo gói + mua lẻ, một bảng lịch sử lượt dùng, khối nổi bật tách khỏi danh sách tìm kiếm, `Payment` không còn chỉ gắn với gói (sửa một phần AD-6)
+
+**Ngày:** 2026-11-22 · **Phase liên quan:** không thuộc phase đánh số. Dòng "Tin nổi bật / đẩy tin trả phí" ở mục 4 của `docs/01-project/FEATURE_BACKLOG.md`. Kế hoạch chi tiết: `docs/06-backend/job-promotions/PLAN.md`, `docs/05-frontend/phases/job-promotions/PLAN.md`.
+
+> **Trạng thái: HOÃN — hướng phát triển sau khoá luận (2026-11-22).** Chưa code, chưa migration. Chủ dự án đã chốt Q1–Q5 của plan backend (xem mục "Câu hỏi đã chốt" ở đó) nhưng quyết định hoãn vì hạn hoàn thành báo cáo với GVHD là trước 06/12/2026 (thông báo Khoa CNTT ngày 05/11/2026). Khi làm lại: duyệt lại AD này với code lúc đó rồi mới bắt đầu bước 1.
+
+**Bối cảnh:** Nhà tuyển dụng chỉ có một cách để tin được nhiều người thấy hơn: chờ tin mới được xếp đầu `/jobs`. Các trang tuyển dụng thực tế đều bán "tin nổi bật", "làm mới tin" và nhãn "tuyển gấp", thường gộp trong gói dịch vụ và có bán lẻ. Hệ thống đã có gói (`SubscriptionPlan`, `CompanySubscription`), thanh toán sandbox VNPay / Momo (AD-6), điểm chất lượng tin (AD-29) và lượt xem theo ngày (`job_post_daily_stats`, AD-16). Nhưng `Payment.companySubscriptionId` bắt buộc, nên mọi khoản thanh toán đều phải là mua gói.
+
+**Quyết định:**
+
+1. **Ba loại tăng hiển thị, một cơ chế.** `FEATURED` (nổi bật, có thời hạn), `URGENT` (nhãn tuyển gấp, có thời hạn), `REFRESH` (làm mới, xảy ra một lần). Mỗi lần dùng là một dòng trong bảng mới `job_promotions` (tin, công ty, gói, loại, nguồn lượt, bắt đầu, kết thúc). Đếm lượt đã dùng bằng cách đếm dòng, không lưu bộ đếm riêng (cùng tinh thần `SUBSCRIPTION_BILLING_DESIGN.md` §3.1).
+2. **Lượt có hai nguồn.**
+   - *Theo gói:* `SubscriptionPlan` thêm `featuredQuota`, `featuredDays`, `urgentQuota`, `urgentDays`, `refreshQuota` (mặc định 0 / 7). Lượt tính trong khoảng `startDate`–`endDate` của gói đang `ACTIVE`.
+   - *Mua lẻ:* bảng catalog `job_promotion_products` (một dòng mỗi loại: giá một lượt, số ngày mỗi lượt, đang bán hay không), Admin sửa. Mỗi lần mua là một dòng `job_promotion_purchases` (loại, số lượt, đơn giá và số ngày chụp lại lúc mua, trạng thái). Lượt mua lẻ **gắn với gói đang `ACTIVE` lúc mua** và hết hạn cùng gói; công ty đang dùng thử hoặc không có gói thì không mua được.
+   - Dùng lượt của gói trước, rồi tới lượt mua lẻ cũ nhất. Số ngày của một lượt lấy theo nguồn: lượt của gói dùng `featuredDays` / `urgentDays` của gói, lượt mua lẻ dùng số ngày đã chụp lúc mua.
+3. **`Payment` thanh toán được cho gói hoặc cho lượt mua lẻ.** `Payment.companySubscriptionId` thành không bắt buộc, thêm `Payment.promotionPurchaseId` (unique, không bắt buộc); ràng buộc CHECK trong migration: đúng một trong hai cột có giá trị. IPN thành công thì rẽ nhánh: gói thì kích hoạt gói như cũ, lượt lẻ thì chuyển dòng mua sang `ACTIVE`. Adapter VNPay / Momo, ký chữ ký, idempotency, log callback giữ nguyên. Không tạo bảng thanh toán thứ hai.
+4. **Điều kiện dùng lượt.** Tin phải `PUBLISHED`. `FEATURED` cần điểm chất lượng không ở vùng *Đề xuất từ chối* và không có cờ chặn (AD-29; tin chưa có điểm thì chấm ngay rồi xét). Không bật `FEATURED` / `URGENT` khi tin đang còn hiệu lực loại đó. `REFRESH` cách lần làm mới trước (hoặc lúc đăng) tối thiểu 24 giờ. Thời điểm kết thúc = `min(bắt đầu + số ngày, endDate của gói)`. Kiểm lượt và ghi dòng trong một transaction có khoá dòng `CompanySubscription` (`SELECT … FOR UPDATE`) để hai người bấm cùng lúc không vượt lượt.
+5. **Lượt đã dùng không hoàn.** Tin bị đóng, hết hạn, bị gỡ giữa chừng thì ngừng hiển thị vì điều kiện hiển thị luôn có `status = PUBLISHED`; không có job dọn. Mua gói mới giữa kỳ huỷ gói cũ (AD-6 §3.2), nên lượt mua lẻ chưa dùng của gói cũ mất: giao diện mua gói phải cảnh báo.
+6. **Cột phi chuẩn hoá trên `job_posts`:** `featuredUntil`, `urgentUntil`, `listedAt`. Bảng `job_promotions` là nguồn sự thật để đếm và thống kê; ba cột này chỉ để đọc nhanh ở danh sách (huy hiệu, bộ lọc, thứ tự) mà không phải join. Ghi cùng transaction với dòng `job_promotions`.
+7. **Khối nổi bật tách khỏi danh sách tìm kiếm.** API riêng `GET /job-posts/featured` (tin `PUBLISHED`, chưa hết hạn, `featuredUntil > now`, theo `cityId` / `industryId` nếu có, xáo ngẫu nhiên, tối đa vài tin). Trang chủ và đầu `/jobs` hiển thị khối này. Danh sách `/jobs` **không đổi** truy vấn, cursor hay đường `sort=match`; tin nổi bật vẫn xuất hiện bình thường trong danh sách.
+8. **Làm mới đổi thứ tự "mới nhất".** `SEARCH_ORDER` đổi từ `publishedAt desc, id desc` sang `listedAt desc, id desc`. `listedAt` = `publishedAt` khi đăng (mọi chỗ đang ghi `publishedAt`), = thời điểm làm mới khi làm mới; backfill bằng `publishedAt`. `publishedAt` giữ nguyên ý nghĩa: huy hiệu "Mới", job alert, gợi ý việc làm không coi tin làm mới là tin mới.
+9. **Tuyển gấp chỉ là huy hiệu và bộ lọc** (`urgent=1` trên `/jobs`), không đổi thứ tự.
+10. **Tăng hiển thị không ảnh hưởng điểm AI.** Không đổi điểm phù hợp, bảng điểm (AD-24), "Việc làm phù hợp", việc làm tương tự, tự mời (AD-23). Tin nổi bật luôn có nhãn "Nổi bật".
+11. **Thống kê đo ở server.** `job_post_daily_stats` thêm `featuredImpressions`, `featuredClicks`. Mỗi lần `GET /job-posts/featured` trả về một tin là một lượt xuất hiện; bấm từ khối nổi bật mở trang tin với `?src=featured`, API chi tiết tăng `featuredClicks` cùng lúc tăng lượt xem. Nhà tuyển dụng xem hiệu quả theo tin (trung bình mỗi ngày trước và trong lúc tăng hiển thị); Admin xem số liệu tổng.
+
+**Phương án không chọn:**
+
+- *Chen tin nổi bật vào danh sách `/jobs`:* phải đổi thứ tự và cursor, lo lặp / sót tin giữa các trang, và xung đột với `sort=match`.
+- *Chỉ một cột `isFeatured` trên `job_posts`:* không đếm được lượt đã dùng theo gói, không có lịch sử để thống kê.
+- *Bảng thanh toán riêng cho lượt lẻ:* lặp lại toàn bộ luồng IPN, idempotency và log callback của AD-6.
+- *"Quỹ ngày" nổi bật chia tuỳ ý:* linh hoạt hơn nhưng khó tính và khó hiển thị số dư.
+- *Lượt lẻ có hạn riêng, không gắn gói:* phải tính số dư độc lập với gói; trái với quy tắc "không có gói thì không đăng tin".
+- *Tính phí theo lượt bấm (như Indeed):* cần chống gian lận lượt bấm, quá phạm vi khoá luận.
+
+**Ảnh hưởng:**
+
+- `schema.prisma` + 1 migration viết tay: enum `JobPromotionType`, `JobPromotionSource`, `JobPromotionPurchaseStatus`; bảng `job_promotions`, `job_promotion_products`, `job_promotion_purchases`; cột mới ở `subscription_plans`, `job_posts`, `job_post_daily_stats`; `payments.companySubscriptionId` bỏ NOT NULL + cột `promotionPurchaseId` + CHECK; backfill `listedAt`; seed 3 dòng `job_promotion_products`.
+- Module mới `job-promotions` (awilix). `payments` rẽ nhánh kích hoạt; `subscriptions` thêm hạn mức vào DTO gói và trả số dư lượt; `job-posts` đổi `SEARCH_ORDER`, ghi `listedAt`, thêm `GET /job-posts/featured`, bộ lọc `urgent`, `src=featured`.
+- Doanh thu ở dashboard Admin (`revenueThisMonth`, `revenueWeekly`) đọc thẳng bảng `payments` (không join `company_subscriptions`, đã kiểm 2026-11-22) nên tự gồm tiền mua lẻ.
+- `packages/shared-types`: kiểu lượt, số dư, sản phẩm, lần mua, thống kê; `JobPostDto` thêm `featuredUntil`, `urgentUntil`.
+- Frontend: khối nổi bật (trang chủ, `/jobs`), huy hiệu ở `JobCard`, bộ lọc tuyển gấp; Employer: "Tăng hiển thị" ở trang tin, số dư và mua lẻ ở `/employer/subscription`, thẻ hiệu quả; Admin: trang cấu hình gói / giá lẻ và số liệu tổng.
+- `docs/designs/SUBSCRIPTION_BILLING_DESIGN.md`, `docs/03-database/DATABASE_DESIGN.md` cập nhật khi làm bước schema.
+
+## AD-31 — Đăng nhập, đăng ký bền và an toàn hơn: lỗi hạ tầng không làm mất phiên, giới hạn nhập sai OTP và mật khẩu, băm mật khẩu trong worker (bổ sung AD-17, AD-18, AD-22)
+
+**Ngày:** 2026-11-22 · **Phase liên quan:** 12 (rà soát bảo mật). Plan: `docs/06-backend/auth-hardening/PLAN.md`, `docs/05-frontend/phases/auth-hardening/PLAN.md`.
+
+> **Trạng thái: ĐÃ DUYỆT; ĐÃ TRIỂN KHAI. Backend xong 2026-11-22 (mục 1–5, đã kiểm qua gateway 8080 và giả lập Redis hỏng); frontend xong 2026-11-23 (F1–F6, đã kiểm trên trình duyệt). Bổ sung 2026-11-23: đặt lại mật khẩu thành công thì gỡ chặn đăng nhập của cặp email + IP (mục "Bổ sung sau khi kiểm frontend" của plan backend).** Chủ dự án đồng ý phạm vi, ngưỡng chặn đăng nhập, cách xử lý đăng ký dở dang, gộp worker băm mật khẩu, gợi ý hỗ trợ ở form OTP và Q1–Q4 trong plan backend.
+
+**Bối cảnh:** rà luồng đăng nhập / đăng ký ngày 2026-11-22 trước khi viết báo cáo, sau khi AD-22 đã sửa lỗi "văng tài khoản khi tab khác đăng nhập lại". Còn lại:
+
+- `authenticate` đổi mọi lỗi, kể cả lỗi Redis, thành 401. `/auth/refresh` gặp lỗi Redis trả 500, và web coi mọi lỗi refresh là hết phiên ⇒ xoá phiên dùng chung của mọi tab cùng khu vực. Client Redis không có timeout / keepAlive. Đây là đường văng tài khoản còn lại khi Redis Cloud hoặc server trục trặc.
+- Không giới hạn số lần nhập sai OTP ⇒ dò được mã 6 số của quên mật khẩu ⇒ chiếm tài khoản.
+- Đăng nhập sai chỉ được ghi nhật ký (AD-20, L4), không bị chặn.
+- Đăng ký lại email chờ xác thực ⇒ lỗi tiếng Anh "Email already registered", người dùng không biết đi tiếp.
+- `bcryptjs` cost 12 chạy trên luồng chính: 8 người đăng nhập cùng lúc làm request khác chờ ~0,8–1,2 s (đo 2026-11-14).
+
+**Quyết định:**
+
+1. **Lỗi hạ tầng là 503, không phải 401.** `authenticate` và `/auth/refresh` trả 503 `AUTH_STORE_UNAVAILABLE` khi không kiểm được token vì Redis / DB lỗi; 401 chỉ dành cho token sai, hết hạn, bị thu hồi, tài khoản không hoạt động. Web chỉ xoá phiên khi `/auth/refresh` trả 401 / 403; mất mạng, 5xx, 429 thì giữ phiên và báo lỗi tạm thời. Redis client đặt `commandTimeout` 3 s, `keepAlive` 30 s, `maxRetriesPerRequest` 3.
+2. **OTP sai 5 lần thì huỷ mã** (đăng ký và đặt lại mật khẩu). Bộ đếm sống cùng thời hạn với mã, về 0 khi xin mã mới. Trả `attemptsLeft` để web báo số lần còn lại.
+3. **Chặn đăng nhập sai:** 5 lần / 15 phút theo cặp email + IP, 30 lần / 15 phút theo IP; chặn 15 phút, trả 429 `LOGIN_LOCKED` kèm thời gian còn lại. Không khoá theo riêng tài khoản, để người khác không cố ý gõ sai mà khoá được tài khoản của chủ thật. Đếm cả email không tồn tại. Redis lỗi thì bộ đếm cho qua. Đăng nhập Google và Quên mật khẩu không bị chặn.
+4. **Đăng ký dở dang:** 409 tách `EMAIL_TAKEN` và `EMAIL_PENDING_VERIFICATION`; với mã sau, web gửi lại OTP và chuyển sang bước nhập mã. **Không** ghi đè mật khẩu cũ: nếu ghi đè, kẻ xấu đặt trước mật khẩu cho một email đang chờ xác thực, chủ email nhập OTP xong là tài khoản chạy bằng mật khẩu của kẻ xấu.
+5. **Băm mật khẩu trong `worker_threads`** (pool 2 worker), vẫn `bcryptjs` cost 12, qua port `PasswordHasher`. Không thêm dependency; hash cũ dùng nguyên. Script seed / tạo Admin vẫn gọi `bcryptjs` trực tiếp.
+6. **Nhập OTP mãi không được** ⇒ form gợi ý gửi yêu cầu ở `/support` (loại "Vấn đề khác", điền sẵn email và nội dung). Admin xử lý bằng "Kích hoạt thủ công" đã có (AD-18, E3). Chỉ sửa frontend.
+
+**Phương án không chọn:**
+
+- *Khoá theo riêng tài khoản* (5 lần sai là khoá, bất kể IP): dễ bị lợi dụng để khoá tài khoản người khác.
+- *Ghi đè mật khẩu khi đăng ký lại email chờ xác thực:* lý do ở mục 4.
+- *Thư viện băm native (`bcrypt`, `argon2`):* phải thêm dependency, kiểm cài trên Windows / Docker; worker đủ để gỡ chặn luồng chính.
+- *Giới hạn ở Nginx (`limit_req`):* không phân biệt được đúng / sai mật khẩu, không theo email; có thể thêm sau như lớp ngoài.
+- *Cookie httpOnly cho refresh token:* khối lượng lớn (thay AD-2 / AD-4), rủi ro làm hỏng đăng nhập trước buổi bảo vệ; để sau khoá luận.
+
+**Ảnh hưởng:**
+
+- Server: `shared/middleware/authenticate.ts`, `modules/auth/auth.service.ts`, `infrastructure/redis.ts`, `redis-rate-limiter.ts` (+ `peek`, `reset`), `redis-otp-store.ts` (+ `recordFailure`), port `PasswordHasher` + worker mới, `container.ts`. Không migration.
+- Web: `lib/api-client.ts` (refresh ba kết quả), `lib/support-chat-stream.ts`, `hooks/useSocket.ts` (kiểu trả về), `lib/auth-errors.ts` mới, `LoginForm`, `RegisterForm`, `OtpForm`, `ResetPasswordForm`, trang đăng nhập Admin, `app/support/page.tsx` + `SupportContactForm` (nội dung điền sẵn).
+- AD-22: sau khi làm, chạy lại 5 bước kiểm và đổi trạng thái thành đã kiểm.
+- Còn lại (không làm): gia hạn refresh token khi còn hoạt động (phiên luôn hết sau 7 ngày), thu hồi refresh token cũ khi đăng nhập tài khoản khác cùng vai trò, cân bằng thời gian trả lời theo email có / không có tài khoản.

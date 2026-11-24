@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
+import { JobQualityCard } from "@/components/admin/JobQualityCard";
 
 const REVIEW_STEPS = ["Tạo tin", "Gửi duyệt", "Admin kiểm tra", "Đã duyệt", "Công khai"];
 const REJECT_STEPS = ["Tạo tin", "Gửi duyệt", "Admin kiểm tra", "Từ chối"];
@@ -80,53 +81,21 @@ function ModerationResult({ outcome }: { outcome: Outcome }) {
   );
 }
 
-/** Ngưỡng độ dài "có nội dung thật" — chỉ để nhắc Admin, không chặn duyệt. */
-const MIN_DESCRIPTION_LENGTH = 150;
-const MIN_REQUIREMENTS_LENGTH = 50;
-
 const MANUAL_CHECKS = ["Mô tả công việc cụ thể, không chung chung?", "Yêu cầu ứng viên rõ ràng, đo lường được?"];
 
 /**
- * Checklist khi duyệt (docs/05-frontend/phases/job-matcher-phase3/PLAN.md Quyết
- * định #6): auto-check tính từ dữ liệu tin đã tải, checklist thủ công chỉ là
- * state cục bộ để nhắc Admin — không gửi server, không ràng buộc nút Duyệt/Từ chối.
+ * Checklist khi duyệt (docs/05-frontend/phases/job-matcher-phase3/PLAN.md Quyết định #6). Phần kiểm
+ * tự động tính trên client đã thay bằng thẻ "Điểm chất lượng" do server chấm (AD-29 F4); còn lại
+ * kinh nghiệm / ngành phù hợp và checklist thủ công (state cục bộ, không gửi server).
  */
 function ReviewChecklist({ job }: { job: JobPost }) {
   const [checked, setChecked] = useState<string[]>([]);
-  const descriptionLength = job.description.trim().length;
-  const requirementsLength = job.requirements?.trim().length ?? 0;
-  const requiredSkills = job.skills.filter((skill) => skill.importance === "REQUIRED").length;
-  const autoChecks = [
-    {
-      ok: descriptionLength >= MIN_DESCRIPTION_LENGTH,
-      label: `Mô tả công việc đủ chi tiết (${descriptionLength}/${MIN_DESCRIPTION_LENGTH} ký tự)`,
-    },
-    {
-      ok: requirementsLength >= MIN_REQUIREMENTS_LENGTH,
-      label: `Có phần yêu cầu ứng viên (${requirementsLength}/${MIN_REQUIREMENTS_LENGTH} ký tự)`,
-    },
-    { ok: requiredSkills > 0, label: `Có kỹ năng bắt buộc (${requiredSkills})` },
-    {
-      ok: job.requirementsConfirmedAt !== null,
-      label: job.requirementsConfirmedAt
-        ? `Nhà tuyển dụng đã xác nhận yêu cầu (${formatDate(job.requirementsConfirmedAt)})`
-        : "Nhà tuyển dụng chưa xác nhận yêu cầu bằng AI",
-    },
-  ];
 
   return (
     <Card padding="md" className="grid gap-3">
       <h2 className="text-xs font-semibold tracking-wide text-text-subtle uppercase">Checklist duyệt tin</h2>
-      <ul className="grid gap-1.5 text-sm">
-        {autoChecks.map((item) => (
-          <li key={item.label} className={`flex items-start gap-2 ${item.ok ? "text-success-700" : "text-marigold-700"}`}>
-            <Icon name={item.ok ? "circle-check" : "circle-alert"} size={15} className="mt-0.5 shrink-0" />
-            {item.label}
-          </li>
-        ))}
-      </ul>
       {job.majors.length > 0 || job.minExperienceYears ? (
-        <dl className="grid gap-1 border-t border-border-subtle pt-3 text-sm">
+        <dl className="grid gap-1 text-sm">
           {job.minExperienceYears ? (
             <div className="flex justify-between gap-3">
               <dt className="text-text-muted">Kinh nghiệm tối thiểu</dt>
@@ -145,7 +114,7 @@ function ReviewChecklist({ job }: { job: JobPost }) {
           ) : null}
         </dl>
       ) : null}
-      <fieldset className="grid gap-1.5 border-t border-border-subtle pt-3">
+      <fieldset className={`grid gap-1.5 ${job.majors.length > 0 || job.minExperienceYears ? "border-t border-border-subtle pt-3" : ""}`}>
         <legend className="mb-1.5 text-sm text-text-muted">Admin tự đánh giá</legend>
         {MANUAL_CHECKS.map((label) => (
           <label key={label} className="flex items-start gap-2 text-sm text-text-body">
@@ -174,7 +143,7 @@ export default function AdminJobPostReviewPage({ params }: { params: Promise<{ i
   const { id } = use(params);
   const queryClient = useQueryClient();
 
-  const { data: job, isLoading } = useAdminJobPost(id);
+  const { data: job, isLoading, refetch } = useAdminJobPost(id);
   const [modal, setModal] = useState<"reject" | "retract" | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -194,6 +163,15 @@ export default function AdminJobPostReviewPage({ params }: { params: Promise<{ i
       await queryClient.invalidateQueries({ queryKey: ["adminJobPostStats"] });
       await queryClient.invalidateQueries({ queryKey: ["adminJobPost", id] });
     } catch (err) {
+      if (err instanceof ApiError && err.status === 409) {
+        // Admin khác vừa xử lý tin (AD-29 bước 5): đóng hộp, báo và tải lại tin.
+        setModal(null);
+        setError("Tin đã được xử lý bởi quản trị viên khác. Trang đã tải lại trạng thái mới nhất.");
+        await refetch();
+        void queryClient.invalidateQueries({ queryKey: ["adminJobPosts"] });
+        void queryClient.invalidateQueries({ queryKey: ["adminJobPostStats"] });
+        return;
+      }
       setError(err instanceof ApiError ? err.message : "Không thực hiện được, vui lòng thử lại");
     } finally {
       setBusy(false);
@@ -213,6 +191,8 @@ export default function AdminJobPostReviewPage({ params }: { params: Promise<{ i
   }
 
   const status = JOB_STATUS_LABEL[job.status];
+  const publishedAtRisk =
+    job.status === "PUBLISHED" && !!job.quality && (job.quality.band === "SUGGEST_REJECT" || job.quality.flags.length > 0);
 
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-4 px-6 py-12">
@@ -230,12 +210,20 @@ export default function AdminJobPostReviewPage({ params }: { params: Promise<{ i
         action={
           <div className="grid justify-items-end gap-1">
             <Badge tone={status.tone}>{status.label}</Badge>
-            <span className="text-sm text-text-muted">Ngày gửi: {formatDate(job.createdAt)}</span>
+            <span className="text-sm text-text-muted">
+              {job.submittedAt ? "Ngày gửi duyệt" : "Ngày tạo"}: {formatDate(job.submittedAt ?? job.createdAt)}
+            </span>
           </div>
         }
       />
 
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? (
+        <p role="alert" className="text-sm text-red-600">
+          {error}
+        </p>
+      ) : null}
+
+      <JobQualityCard job={job} />
 
       <JobPostContent
         job={job}
@@ -269,6 +257,12 @@ export default function AdminJobPostReviewPage({ params }: { params: Promise<{ i
 
               {job.status === "PUBLISHED" ? (
                 <>
+                  {publishedAtRisk ? (
+                    <p className="flex items-start gap-2 rounded-lg border-l-[3px] border-red-500 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+                      <Icon name="triangle-alert" size={16} className="mt-0.5 shrink-0" />
+                      Tin được sửa sau khi duyệt và hiện bị đề xuất từ chối.
+                    </p>
+                  ) : null}
                   <p className="text-sm text-text-muted">
                     Tin đang hiển thị công khai. Thu hồi sẽ được ghi vào lịch sử vi phạm của công ty.
                   </p>
@@ -308,6 +302,7 @@ export default function AdminJobPostReviewPage({ params }: { params: Promise<{ i
           confirmLabel="Xác nhận từ chối"
           submitting={busy}
           error={error}
+          initialReason={job.quality?.suggestedRejectReason ?? null}
           onCancel={() => setModal(null)}
           onConfirm={(reason) => void run("rejected", "reject", { reason })}
         />

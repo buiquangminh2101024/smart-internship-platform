@@ -9,6 +9,7 @@ import { ApplicationInterviewsCard } from "@/components/interviews/ApplicationIn
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
+import { InvitedBadge } from "@/components/applications/ApplicationRow";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import type { ApplicationStatus } from "@sip/shared-types";
 import { APPLICATION_STATUS_LABEL, isFinalApplicationStatus } from "@/lib/application-status";
@@ -66,6 +67,7 @@ export default function EmployerApplicationDetailPage() {
         <Badge tone={APPLICATION_STATUS_LABEL[application.status].tone}>
           {APPLICATION_STATUS_LABEL[application.status].label}
         </Badge>
+        <InvitedBadge invitation={application.invitation} />
       </div>
       {application.status === "JOB_CLOSED" ? (
         <p className="text-sm text-text-muted">Tin đã ngừng nhận hồ sơ. Hồ sơ này không đổi trạng thái được nữa.</p>

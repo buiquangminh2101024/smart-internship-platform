@@ -139,6 +139,68 @@ export class NotificationsService {
   }
 
   /**
+   * Như `notifyMany` nhưng người nhận (kèm email) đã được đọc trước, và thông báo / outbox
+   * ghi mỗi loại một câu — AD-29 bước 7: duyệt hàng loạt 50 tin, mỗi tin ghi trong
+   * transaction riêng nên số câu mỗi tin quyết định thời gian cả lô. Nội dung, email và đẩy
+   * realtime giống hệt `notify`.
+   */
+  async notifyRecipients<T extends NotificationType>(
+    type: T,
+    recipients: { userId: string; email: string }[],
+    data: NotificationPayloadMap[T],
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    if (recipients.length === 0) return;
+    const db = tx ?? this.prisma;
+    const rendered = renderNotification(type, data, { webBaseUrl: this.webBaseUrl });
+    const notifications = await this.notificationsRepository.createManyAndReturn(
+      recipients.map((recipient) => ({
+        userId: recipient.userId,
+        type,
+        title: rendered.title,
+        body: rendered.body,
+        link: rendered.link,
+        dedupeKey: null,
+      })),
+      db,
+    );
+
+    const emailOf = new Map(recipients.map((recipient) => [recipient.userId, recipient.email]));
+    const email = rendered.email;
+    if (email) {
+      await this.outboxRepository.createMany(
+        notifications.map((notification) => {
+          const payload: NotificationEmailPayload = {
+            to: emailOf.get(notification.userId) ?? "",
+            subject: email.subject,
+            html: email.html,
+            notificationType: type,
+          };
+          return {
+            eventType: OUTBOX_EVENT_NOTIFICATION_EMAIL,
+            aggregateType: OUTBOX_AGGREGATE_NOTIFICATION,
+            aggregateId: notification.id,
+            payload: { ...payload },
+          };
+        }),
+        db,
+      );
+    }
+
+    // Như `notify`: đẩy realtime nằm ngoài đảm bảo của transaction.
+    for (const notification of notifications) {
+      await this.realtimeNotifier.pushToUser(notification.userId, {
+        id: notification.id,
+        type: notification.type,
+        title: notification.title,
+        body: notification.body,
+        link: notification.link,
+        createdAt: notification.createdAt,
+      });
+    }
+  }
+
+  /**
    * Cho cron quét định kỳ (AD-16): mỗi `dedupeKey` chỉ sinh một thông báo dù job
    * chạy lại bao nhiêu lần. Tự mở transaction riêng cho từng người nhận (thông
    * báo + outbox email) để một bản ghi trùng không làm hỏng cả lượt quét: vi

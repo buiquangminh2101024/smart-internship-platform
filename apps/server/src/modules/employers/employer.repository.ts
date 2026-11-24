@@ -42,6 +42,27 @@ export class EmployerRepository {
     return db.employer.findMany({ where: { companyId }, select: { id: true, userId: true } });
   }
 
+  /**
+   * AD-29 bước 7 — NTD (kèm email) của nhiều công ty trong một câu, đọc trước cả lô duyệt /
+   * từ chối hàng loạt để mỗi tin không phải đọc lại NTD và email từng người.
+   */
+  async findRecipientsByCompanyIds(
+    companyIds: string[],
+    db: Db = this.prisma,
+  ): Promise<Map<string, { userId: string; email: string }[]>> {
+    const rows = await db.employer.findMany({
+      where: { companyId: { in: companyIds } },
+      select: { companyId: true, userId: true, user: { select: { email: true } } },
+    });
+    const byCompany = new Map<string, { userId: string; email: string }[]>();
+    for (const row of rows) {
+      const list = byCompany.get(row.companyId) ?? [];
+      list.push({ userId: row.userId, email: row.user.email });
+      byCompany.set(row.companyId, list);
+    }
+    return byCompany;
+  }
+
   // AD-16: thông báo gói sắp hết hạn chỉ gửi company admin — người duy nhất
   // được mua/gia hạn gói (subscriptions.service.ts#checkout).
   findCompanyAdminsByCompanyId(companyId: string, db: Db = this.prisma): Promise<Pick<Employer, "id" | "userId">[]> {

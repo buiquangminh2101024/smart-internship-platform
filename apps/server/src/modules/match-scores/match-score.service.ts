@@ -323,7 +323,8 @@ export class MatchScoreService {
     }
   }
 
-  private createCache(): CandidateProfileCache {
+  /** Public cho lượt việc sau duyệt hàng loạt (AD-29 bước 8): một cache cho cả lượt, như `rescoreAll`. */
+  createCache(): CandidateProfileCache {
     return new CandidateProfileCache(this.profileLoader);
   }
 }

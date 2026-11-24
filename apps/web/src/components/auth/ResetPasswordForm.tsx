@@ -2,10 +2,19 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ApiError } from "@/lib/api-client";
+import {
+  authErrorMessage,
+  hasAuthCode,
+  isHourlyCodeLimit,
+  isServerUnavailable,
+  OTP_SUPPORT_HINT_AFTER,
+  otpSupportHref,
+} from "@/lib/auth-errors";
 import { PASSWORD_MIN_LENGTH, RESEND_CODE_SECONDS, requestCodeErrorMessage } from "@/lib/password-reset";
 import { useForgotPassword, useResetPassword } from "@/hooks/usePasswordReset";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { OtpSupportHint } from "./OtpSupportHint";
 
 export interface ResetPasswordFormProps {
   /** Email đã xin mã. */
@@ -39,6 +48,9 @@ export function ResetPasswordForm({ email, onSuccess, onChangeEmail, via = "rese
   const [formError, setFormError] = useState<string | null>(null);
   const [resentNote, setResentNote] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(RESEND_CODE_SECONDS);
+  // Gợi ý gửi yêu cầu hỗ trợ (AD-31 D7): sai mã ≥ 3 lần, mã bị huỷ, hoặc hết lượt xin mã trong giờ.
+  const [wrongCount, setWrongCount] = useState(0);
+  const [needsSupport, setNeedsSupport] = useState(false);
   const otpRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const confirmRef = useRef<HTMLInputElement>(null);
@@ -78,12 +90,23 @@ export function ResetPasswordForm({ email, onSuccess, onChangeEmail, via = "rese
       await reset.mutateAsync({ email, otp, newPassword: password, via });
       onSuccess();
     } catch (err) {
+      if (hasAuthCode(err, "OTP_INVALID") || hasAuthCode(err, "OTP_ATTEMPTS_EXCEEDED")) {
+        setWrongCount((count) => count + 1);
+        if (hasAuthCode(err, "OTP_ATTEMPTS_EXCEEDED")) setNeedsSupport(true);
+        setErrors({ otp: authErrorMessage(err, "Mã không đúng hoặc đã hết hạn.") });
+        otpRef.current?.focus();
+        return;
+      }
       if (err instanceof ApiError && err.status === 400) {
         setErrors({ otp: "Mã không đúng hoặc đã hết hạn. Bạn kiểm tra lại hoặc bấm Gửi lại mã." });
         otpRef.current?.focus();
         return;
       }
-      setFormError("Không đổi được mật khẩu. Kiểm tra kết nối rồi thử lại.");
+      setFormError(
+        isServerUnavailable(err)
+          ? authErrorMessage(err, "")
+          : "Không đổi được mật khẩu. Kiểm tra kết nối rồi thử lại.",
+      );
     }
   }
 
@@ -98,6 +121,8 @@ export function ResetPasswordForm({ email, onSuccess, onChangeEmail, via = "rese
       setResentNote(`Đã gửi mã mới tới ${email}. Mã cũ không dùng được nữa.`);
       otpRef.current?.focus();
     } catch (err) {
+      // 429 vì hết lượt trong giờ (không phải vì vừa xin mã) ⇒ hiện gợi ý hỗ trợ.
+      if (isHourlyCodeLimit(err)) setNeedsSupport(true);
       setFormError(requestCodeErrorMessage(err));
     }
   }
@@ -174,6 +199,9 @@ export function ResetPasswordForm({ email, onSuccess, onChangeEmail, via = "rese
           </Button>
         ) : null}
       </div>
+      {needsSupport || wrongCount >= OTP_SUPPORT_HINT_AFTER ? (
+        <OtpSupportHint href={otpSupportHref(email, "reset")} purpose="reset" newTab={via === "change"} />
+      ) : null}
     </form>
   );
 }

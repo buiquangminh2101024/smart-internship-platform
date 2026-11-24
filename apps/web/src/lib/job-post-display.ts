@@ -1,4 +1,11 @@
-import type { JobPostStatus, JobPostType } from "@sip/shared-types";
+import type {
+  BulkModerationSkipReason,
+  JobPostStatus,
+  JobPostType,
+  JobQualityBandFilter,
+  JobQualityDto,
+  JobQualityIssueDto,
+} from "@sip/shared-types";
 
 /**
  * Từ vựng trạng thái tin tuyển dụng — lấy nguyên từ
@@ -15,6 +22,77 @@ export const JOB_STATUS_LABEL: Record<JobPostStatus, { label: string; tone: Badg
   EXPIRED: { label: "Hết hạn", tone: "neutral" },
   TAKEN_DOWN: { label: "Đã hạ", tone: "danger" },
 };
+
+/**
+ * AD-29 — nhãn và màu ba vùng điểm chất lượng (+ "Chưa chấm"). Vùng do server tính; frontend
+ * không tự tính điểm (docs/05-frontend/phases/job-quality-moderation/PLAN.md, F1).
+ */
+export const JOB_QUALITY_BAND_LABEL: Record<JobQualityBandFilter, { label: string; tone: BadgeTone }> = {
+  SUGGEST_APPROVE: { label: "Đề xuất duyệt", tone: "success" },
+  NEEDS_REVIEW: { label: "Cần xem kỹ", tone: "warning" },
+  SUGGEST_REJECT: { label: "Đề xuất từ chối", tone: "danger" },
+  UNSCORED: { label: "Chưa chấm", tone: "neutral" },
+};
+
+/** Thứ tự tab vùng ở hàng đợi chờ duyệt. */
+export const JOB_QUALITY_BAND_ORDER: JobQualityBandFilter[] = ["SUGGEST_APPROVE", "NEEDS_REVIEW", "SUGGEST_REJECT", "UNSCORED"];
+
+/**
+ * Các lỗi nặng nhất của một tin (cờ chặn trước, rồi theo mức trừ giảm dần) — cho dòng tin ở
+ * hàng đợi. Trả `message` của server, không tự đặt câu.
+ */
+export function topQualityIssues(quality: JobQualityDto | null, limit = 2): JobQualityIssueDto[] {
+  if (!quality) return [];
+  const flags = new Set(quality.flags);
+  return quality.criteria
+    .flatMap((criterion) => criterion.issues)
+    .sort((a, b) => Number(flags.has(b.code)) - Number(flags.has(a.code)) || b.penalty - a.penalty)
+    .slice(0, limit);
+}
+
+/** Trần số tin mỗi lần duyệt / từ chối hàng loạt — khớp `MODERATION_BATCH_LIMIT` phía server (Q2). */
+export const BULK_MODERATION_LIMIT = 50;
+
+/** Vì sao một tin bị bỏ qua trong lô (F3). */
+export const BULK_SKIP_REASON_LABEL: Record<BulkModerationSkipReason, string> = {
+  NOT_PENDING: "Đã được người khác xử lý",
+  REASON_REQUIRED: "Chưa có lý do từ chối",
+  NOT_FOUND: "Không còn tồn tại",
+  FAILED: "Lỗi khi xử lý, thử lại sau",
+};
+
+/**
+ * Lý do từ chối / thu hồi chọn sẵn (ảnh mẫu `Screenshot 2026-09-12 134745.png`). Dùng chung cho
+ * `RejectJobModal` và hộp từ chối hàng loạt.
+ */
+export const JOB_REJECT_PRESET_REASONS = [
+  "Thiếu thông tin",
+  "Nội dung không phù hợp",
+  "Thông tin không hợp lệ",
+  "Vi phạm chính sách",
+  "Khác",
+];
+
+/** Ghép lý do chọn sẵn + phần nhập tự do thành một chuỗi `reason`; "" khi không có gì. */
+export function composeRejectReason(checked: string[], detail: string): string {
+  return [checked.join(", "), detail.trim()].filter(Boolean).join(". ");
+}
+
+/**
+ * Tách lý do tự sinh của server ("Thiếu thông tin, Vi phạm chính sách. Chi tiết…") thành các lý do
+ * chọn sẵn + phần chi tiết, để điền sẵn vào `RejectJobModal` (F4). Phần đầu không khớp lý do chọn
+ * sẵn nào thì đưa cả chuỗi vào phần chi tiết. Ngược với `composeRejectReason`.
+ */
+export function splitRejectReason(reason: string): { checked: string[]; detail: string } {
+  const cut = reason.indexOf(". ");
+  if (cut > 0) {
+    const head = reason.slice(0, cut).split(", ");
+    if (head.every((part) => JOB_REJECT_PRESET_REASONS.includes(part))) {
+      return { checked: head, detail: reason.slice(cut + 2).trim() };
+    }
+  }
+  return { checked: [], detail: reason.trim() };
+}
 
 export const JOB_TYPE_LABEL: Record<JobPostType, string> = {
   INTERNSHIP: "Thực tập sinh",

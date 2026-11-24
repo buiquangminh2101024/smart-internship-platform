@@ -4,15 +4,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/Icon";
 import { Textarea } from "@/components/ui/Textarea";
+import { JOB_REJECT_PRESET_REASONS, composeRejectReason, splitRejectReason } from "@/lib/job-post-display";
 
-/** Lý do dựng sẵn trong ảnh mẫu `Screenshot 2026-09-12 134745.png`. */
-const PRESET_REASONS = [
-  "Thiếu thông tin",
-  "Nội dung không phù hợp",
-  "Thông tin không hợp lệ",
-  "Vi phạm chính sách",
-  "Khác",
-];
 
 export interface RejectJobModalProps {
   title: string;
@@ -20,6 +13,11 @@ export interface RejectJobModalProps {
   confirmLabel: string;
   submitting?: boolean;
   error?: string | null;
+  /**
+   * Lý do điền sẵn (AD-29 F4: lý do tự sinh từ điểm chất lượng). Tách thành ô chọn sẵn + phần chi
+   * tiết; Admin sửa được. Không truyền thì hộp trống như cũ (vd. thu hồi tin).
+   */
+  initialReason?: string | null;
   onCancel: () => void;
   /** Nhận chuỗi lý do đã ghép (checkbox + mô tả chi tiết). */
   onConfirm: (reason: string) => void;
@@ -36,11 +34,13 @@ export function RejectJobModal({
   confirmLabel,
   submitting = false,
   error,
+  initialReason,
   onCancel,
   onConfirm,
 }: RejectJobModalProps) {
-  const [checked, setChecked] = useState<string[]>([]);
-  const [detail, setDetail] = useState("");
+  const [initial] = useState(() => (initialReason ? splitRejectReason(initialReason) : { checked: [], detail: "" }));
+  const [checked, setChecked] = useState<string[]>(initial.checked);
+  const [detail, setDetail] = useState(initial.detail);
   const [localError, setLocalError] = useState<string | null>(null);
 
   function toggle(reason: string) {
@@ -48,13 +48,13 @@ export function RejectJobModal({
   }
 
   function handleConfirm() {
-    const parts = [checked.join(", "), detail.trim()].filter(Boolean);
-    if (parts.length === 0) {
+    const reason = composeRejectReason(checked, detail);
+    if (!reason) {
       setLocalError("Vui lòng chọn ít nhất một lý do hoặc nhập lý do cụ thể");
       return;
     }
     setLocalError(null);
-    onConfirm(parts.join(". "));
+    onConfirm(reason);
   }
 
   const message = localError ?? error;
@@ -80,7 +80,7 @@ export function RejectJobModal({
         <div className="grid gap-4 px-5 py-4">
           <fieldset className="grid gap-2">
             <legend className="text-sm font-medium text-text-strong">{description}</legend>
-            {PRESET_REASONS.map((reason) => (
+            {JOB_REJECT_PRESET_REASONS.map((reason) => (
               <label key={reason} className="flex items-center gap-2 text-sm text-text-body">
                 <input type="checkbox" checked={checked.includes(reason)} onChange={() => toggle(reason)} />
                 {reason}

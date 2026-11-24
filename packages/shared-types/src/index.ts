@@ -58,7 +58,9 @@ export type NotificationType =
   | "APPLICATIONS_NEED_ATTENTION"
   // AD-26 — tin mới phù hợp (gộp 1 thông báo/ứng viên/ngày); nhắc một lần thêm kỹ năng
   | "JOB_ALERT"
-  | "PROFILE_SKILLS_REMINDER";
+  | "PROFILE_SKILLS_REMINDER"
+  // AD-29 — Admin: tin đang hiển thị được sửa và tụt xuống vùng đề xuất từ chối / mới có cờ chặn
+  | "JOB_POST_QUALITY_DROPPED";
 
 /** Loại vấn đề của form /support (AD-17). */
 export type SupportCategory = "ACCOUNT_SUSPENDED" | "OTHER";
@@ -152,6 +154,41 @@ export interface AuthTokensResponse {
 
 export interface RefreshResponse {
   accessToken: string;
+}
+
+/**
+ * Mã lỗi của luồng đăng nhập / đăng ký / OTP (AD-31), trả ở `code` của body lỗi.
+ * - `AUTH_STORE_UNAVAILABLE` (503): Redis / DB lỗi khi kiểm token hoặc refresh — lỗi tạm
+ *   thời, web giữ phiên, không đăng xuất.
+ * - `OTP_INVALID` (400): mã sai / hết hạn; sai mã còn hạn thì kèm `OtpInvalidErrorData`.
+ * - `OTP_ATTEMPTS_EXCEEDED` (400): sai 5 lần, mã đã bị huỷ — phải xin mã mới.
+ * - `LOGIN_LOCKED` (429): sai mật khẩu quá nhiều, kèm `LoginLockedErrorData`.
+ * - `EMAIL_TAKEN` (409), `EMAIL_PENDING_VERIFICATION` (409): đăng ký email đã có tài khoản
+ *   (đã kích hoạt / bị khoá, hoặc đang chờ xác thực).
+ * - `EMAIL_NOT_VERIFIED` (403): đăng nhập đúng mật khẩu nhưng chưa nhập mã xác thực.
+ */
+export type AuthErrorCode =
+  | "AUTH_STORE_UNAVAILABLE"
+  | "OTP_INVALID"
+  | "OTP_ATTEMPTS_EXCEEDED"
+  | "LOGIN_LOCKED"
+  | "EMAIL_TAKEN"
+  | "EMAIL_PENDING_VERIFICATION"
+  | "EMAIL_NOT_VERIFIED";
+
+/** `data` của 400 `OTP_INVALID` khi nhập sai mã còn hạn: số lần còn được thử (4 → 1). */
+export interface OtpInvalidErrorData {
+  attemptsLeft: number;
+}
+
+/** `data` của 401 sai mật khẩu khi còn ≤ 2 lần trước khi bị chặn (không có mã lỗi). */
+export interface LoginFailedErrorData {
+  attemptsLeft: number;
+}
+
+/** `data` của 429 `LOGIN_LOCKED`: số giây tới khi được thử lại. */
+export interface LoginLockedErrorData {
+  retryAfterSeconds: number;
 }
 
 export interface UserProfile {
@@ -760,6 +797,10 @@ export interface JobPost {
   applicationCount: number;
   /** Hành động kiểm duyệt mới nhất — nguồn dữ liệu banner từ chối/thu hồi. */
   latestModerationAction: JobPostModerationActionDto | null;
+  /** AD-29 — lần gửi duyệt gần nhất. null = chưa gửi duyệt lần nào, hoặc API công khai. */
+  submittedAt: string | null;
+  /** AD-29 — điểm chất lượng tin. Chỉ API của Admin điền; API công khai và của employer luôn null (Q1). */
+  quality: JobQualityDto | null;
   createdAt: string;
   updatedAt: string;
   /**
@@ -778,6 +819,50 @@ export interface JobPost {
    * Khách và vai trò khác không có trường này.
    */
   viewer?: JobPostViewerInfo;
+}
+
+// ─── AD-29 — điểm chất lượng tin (chỉ Admin thấy) ───────────────────────────
+// docs/06-backend/job-quality-moderation/PLAN.md. Bước 4 dùng cho POST
+// /admin/job-posts/:id/quality/rescore; bước 9 gắn vào `JobPost.quality` (mapper Admin).
+
+export type JobQualityBand = "SUGGEST_APPROVE" | "NEEDS_REVIEW" | "SUGGEST_REJECT";
+
+/** Vì sao tin được chấm lần gần nhất. */
+export type JobQualityScoredReason = "SUBMITTED" | "COMPANY_EVENT" | "PUBLISHED_EDIT" | "MANUAL" | "SCRIPT";
+
+export type JobQualityCriterionKey = "COMPLETENESS" | "CONTENT" | "TRANSPARENCY" | "INTERNSHIP_FIT" | "RISK" | "COMPANY";
+
+export interface JobQualityIssueDto {
+  /** Mã lỗi trong `job-quality.config.ts` (ví dụ `ASKS_FOR_MONEY`). */
+  code: string;
+  message: string;
+  penalty: number;
+}
+
+export interface JobQualityCriterionDto {
+  key: JobQualityCriterionKey;
+  label: string;
+  /** Điểm của tiêu chí, thang 100. */
+  score: number;
+  /** Trọng số (tổng 100). */
+  weight: number;
+  issues: JobQualityIssueDto[];
+}
+
+export interface JobQualityDto {
+  score: number;
+  band: JobQualityBand;
+  version: number;
+  scoredAt: string;
+  /** null khi dữ liệu đã lưu không ghi lý do (không xảy ra với điểm do bước 4 trở đi ghi). */
+  scoredReason: JobQualityScoredReason | null;
+  criteria: JobQualityCriterionDto[];
+  /** Mã lỗi chặn (ví dụ đòi nộp tiền): có cờ thì luôn ở vùng đề xuất từ chối. */
+  flags: string[];
+  /** Lý do từ chối tự sinh; null = không có lỗi nào được đưa vào lý do. */
+  suggestedRejectReason: string | null;
+  /** `version` khác phiên bản bộ chấm hiện tại. */
+  outdated: boolean;
 }
 
 export interface JobPostViewerInfo {
@@ -1166,17 +1251,37 @@ export interface CandidateOutreachInvitationDto {
   company: { id: string; name: string; logoUrl: string | null };
   /** Chỉ có khi ACCEPTED và hội thoại đã được tạo. */
   conversationId: string | null;
+  /**
+   * AD-28 — đơn (khác CANCELLED) của ứng viên vào tin này, nếu có. Lời mời ACCEPTED mà
+   * null ⇒ nhận lời theo kiểu cũ, chưa có đơn: frontend hiện "Ứng tuyển ngay".
+   */
+  applicationId: string | null;
 }
 
 export type OutreachInvitationAction = "ACCEPT" | "DECLINE";
 
-export interface RespondOutreachInvitationRequest {
-  action: OutreachInvitationAction;
-}
+/** AD-28 — nhận lời = ứng tuyển, nên ACCEPT phải kèm CV. */
+export type RespondOutreachInvitationRequest =
+  | { action: "DECLINE" }
+  | { action: "ACCEPT"; cvId: string; coverLetter?: string };
 
 export interface RespondOutreachInvitationResponse {
   status: OutreachInvitationStatus;
   conversationId: string | null;
+  /** AD-28 — đơn vừa tạo, hoặc đơn có sẵn được gắn lời mời; null khi DECLINE. */
+  applicationId: string | null;
+  /** true ⇒ ứng viên đã có đơn từ trước: chỉ gắn lời mời, trạng thái đơn không đổi. */
+  linkedExisting: boolean;
+}
+
+/** AD-28 — POST /candidate/outreach-invitations/:id/apply (lời mời ACCEPTED chưa có đơn). */
+export interface ApplyFromInvitationRequest {
+  cvId: string;
+  coverLetter?: string;
+}
+
+export interface ApplyFromInvitationResponse {
+  applicationId: string;
 }
 
 export interface OutreachSettings {
@@ -1387,6 +1492,67 @@ export interface JobPostStats {
   pending: number;
   draft: number;
   closed: number;
+  /** AD-29 — số tin PENDING theo vùng chất lượng; chỉ GET /admin/job-posts/stats có. */
+  pendingByBand?: Record<JobQualityBandFilter, number>;
+}
+
+/** AD-29 — bộ lọc vùng của hàng đợi Admin; `UNSCORED` = tin chưa có điểm. */
+export type JobQualityBandFilter = JobQualityBand | "UNSCORED";
+
+/**
+ * AD-29 — thứ tự hàng đợi Admin. Mặc định `submitted_asc` khi lọc PENDING (gửi trước
+ * xử lý trước), `created_desc` cho trạng thái khác. Tin chưa có giá trị luôn xếp cuối.
+ */
+export type ModerationQueueSort = "submitted_asc" | "score_desc" | "score_asc" | "created_desc";
+
+/** Query của GET /admin/job-posts (có `cursor`) và GET /admin/job-posts/ids (không có). */
+export interface ModerationQueueQuery {
+  status?: JobPostStatus;
+  band?: JobQualityBandFilter;
+  sort?: ModerationQueueSort;
+  cursor?: string;
+}
+
+/**
+ * GET /admin/job-posts/ids — tối đa 50 id (trần một lần thao tác hàng loạt, Q2)
+ * khớp bộ lọc, theo đúng sort.
+ */
+export interface ModerationQueueIdsResponse {
+  ids: string[];
+  /** Số tin khớp bộ lọc; lớn hơn `ids.length` nghĩa là danh sách đã bị cắt. */
+  total: number;
+}
+
+/** AD-29 bước 7 — POST /admin/job-posts/bulk-approve (1–50 id, không trùng). */
+export interface BulkApproveRequest {
+  ids: string[];
+}
+
+/**
+ * POST /admin/job-posts/bulk-reject. Có `reason` ⇒ dùng cho mọi tin; không có ⇒ mỗi tin
+ * dùng lý do tự sinh từ điểm chất lượng của chính nó.
+ */
+export interface BulkRejectRequest {
+  ids: string[];
+  reason?: string;
+}
+
+/**
+ * NOT_FOUND: không có tin. NOT_PENDING: tin không còn chờ duyệt (kể cả Admin khác vừa xử lý).
+ * REASON_REQUIRED: từ chối không kèm lý do mà tin không sinh được lý do. FAILED: lỗi bất ngờ.
+ */
+export type BulkModerationSkipReason = "NOT_FOUND" | "NOT_PENDING" | "REASON_REQUIRED" | "FAILED";
+
+/**
+ * Kết quả một lô duyệt / từ chối. `pending` khác rỗng ⇒ lô chưa xong trong thời gian chờ,
+ * phần còn lại chạy nền; hỏi lại bằng GET /admin/job-posts/bulk/:batchId.
+ */
+export interface BulkModerationResult {
+  batchId: string;
+  action: "APPROVE" | "REJECT";
+  succeeded: string[];
+  skipped: { id: string; reason: BulkModerationSkipReason }[];
+  pending: string[];
 }
 
 // ─── CV & Saved Jobs (Phase 7) ───────────────────────────────────────────
@@ -1561,8 +1727,16 @@ export interface Application {
   coverLetter: string | null;
   employerNotes?: string | null;
   rating?: number | null;
+  /** AD-28 — đơn đến từ lời mời (nhận lời = ứng tuyển); null = ứng viên tự nộp. */
+  invitationId: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** AD-28 — lời mời sinh ra đơn, cho nhãn "Được mời" / "Được mời · Tự động". */
+export interface ApplicationInvitationInfo {
+  id: string;
+  source: OutreachInvitationSource;
 }
 
 export interface CreateApplicationRequest {
@@ -1589,6 +1763,7 @@ export interface EmployerApplicationDetail extends Application {
   jobPost: JobPost;
   cv: CvRecord;
   candidate: any;
+  invitation: ApplicationInvitationInfo | null;
 }
 
 /** GET /employer/applications/:id — chi tiết hồ sơ kèm mọi lịch phỏng vấn, sớm nhất trước. */
@@ -1645,6 +1820,8 @@ export interface EmployerApplicationListItem {
   jobPost: { id: string; title: string; status: JobPostStatus };
   /** SHORTLISTED, hoặc INTERVIEWING chưa có lịch SCHEDULED — cùng định nghĩa với `AwaitingScheduleApplication`. */
   awaitingSchedule: boolean;
+  /** AD-28 — đơn đến từ lời mời. */
+  invitation: ApplicationInvitationInfo | null;
   /** Lịch SCHEDULED gần nhất còn ở tương lai, nếu có. */
   nextInterviewAt: string | null;
   /** Buổi phỏng vấn (SCHEDULED) gần nhất đã diễn ra, nếu có — cho "phỏng vấn N ngày trước". */

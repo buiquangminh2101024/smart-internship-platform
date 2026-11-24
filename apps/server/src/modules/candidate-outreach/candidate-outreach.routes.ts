@@ -9,6 +9,7 @@ import { AutoOutreachRunStore } from "./auto-outreach-run-store";
 import { AutoOutreachService, type AutoOutreachTrigger } from "./auto-outreach.service";
 import { CandidateOutreachController } from "./candidate-outreach.controller";
 import {
+  applyFromInvitationSchema,
   bulkInviteSchema,
   listCompanyInvitationsQuerySchema,
   respondOutreachInvitationSchema,
@@ -19,6 +20,7 @@ import {
 import { CandidateOutreachRateLimitService } from "./candidate-outreach-rate-limit.service";
 import { CandidateOutreachRepository } from "./candidate-outreach.repository";
 import { CandidateOutreachService } from "./candidate-outreach.service";
+import { InvitationApplicationService } from "./invitation-application.service";
 
 /**
  * Tìm & mời ứng viên (B3, AD-15). Mount sau jobMatchingRouter trong main.ts:
@@ -31,6 +33,8 @@ export function candidateOutreachRouter(container: AwilixContainer): Router {
     candidateOutreachRepository: asClass(CandidateOutreachRepository).singleton(),
     candidateOutreachRateLimitService: asClass(CandidateOutreachRateLimitService).singleton(),
     candidateOutreachService: asClass(CandidateOutreachService).singleton(),
+    // AD-28 — nhận lời = ứng tuyển; ApplicationsService cũng dùng (nộp đơn khi có lời mời đang chờ).
+    invitationApplicationService: asClass(InvitationApplicationService).singleton(),
     candidateOutreachController: asClass(CandidateOutreachController).singleton(),
     // AD-23 — tự động mời theo tin (phụ thuộc candidateOutreachService, không ngược lại).
     autoOutreachRepository: asClass(AutoOutreachRepository).singleton(),
@@ -121,6 +125,15 @@ export function candidateOutreachRouter(container: AwilixContainer): Router {
     validate(respondOutreachInvitationSchema),
     (req, res, next) => {
       void resolveController().respond(req, res, next);
+    },
+  );
+
+  router.post(
+    "/candidate/outreach-invitations/:id/apply",
+    ...candidateGuard,
+    validate(applyFromInvitationSchema),
+    (req, res, next) => {
+      void resolveController().applyFromInvitation(req, res, next);
     },
   );
 

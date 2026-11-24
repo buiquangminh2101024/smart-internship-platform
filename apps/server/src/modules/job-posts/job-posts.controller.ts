@@ -1,6 +1,9 @@
 import type { NextFunction, Request, Response } from "express";
 import type {
   ApiResponse,
+  BulkApproveRequest,
+  BulkModerationResult,
+  BulkRejectRequest,
   ConfirmRequirementsRequest,
   CreateJobPostRequest,
   EmployerJobPostListQuery,
@@ -8,7 +11,9 @@ import type {
   JobPost,
   JobPostSearchQuery,
   JobPostStats,
-  JobPostStatus,
+  JobQualityDto,
+  ModerationQueueIdsResponse,
+  ModerationQueueQuery,
   PaginatedResponse,
   RejectJobPostRequest,
   RetractJobPostRequest,
@@ -17,20 +22,25 @@ import type {
 } from "@sip/shared-types";
 import type { JobPostRequirementsService } from "./job-post-requirements.service";
 import type { JobPostsService } from "./job-posts.service";
+import type { JobQualityService } from "./job-quality.service";
 
 export class JobPostsController {
   private readonly jobPostsService: JobPostsService;
   private readonly jobPostRequirementsService: JobPostRequirementsService;
+  private readonly jobQualityService: JobQualityService;
 
   constructor({
     jobPostsService,
     jobPostRequirementsService,
+    jobQualityService,
   }: {
     jobPostsService: JobPostsService;
     jobPostRequirementsService: JobPostRequirementsService;
+    jobQualityService: JobQualityService;
   }) {
     this.jobPostsService = jobPostsService;
     this.jobPostRequirementsService = jobPostRequirementsService;
+    this.jobQualityService = jobQualityService;
   }
 
   // ─── Public ──────────────────────────────────────────────────────────────
@@ -170,9 +180,21 @@ export class JobPostsController {
 
   listForModeration = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { status, cursor } = req.query as { status?: JobPostStatus; cursor?: string };
-      const result = await this.jobPostsService.listForModeration(status, cursor);
+      const { cursor, ...filter } = req.query as ModerationQueueQuery;
+      const result = await this.jobPostsService.listForModeration(filter, cursor);
       const body: ApiResponse<PaginatedResponse<JobPost>> = { success: true, data: result };
+      res.json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  moderationIds = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      // moderationIdsQuerySchema đã bỏ mọi khoá lạ (kể cả `cursor`).
+      const filter = req.query as Omit<ModerationQueueQuery, "cursor">;
+      const result = await this.jobPostsService.moderationIds(filter);
+      const body: ApiResponse<ModerationQueueIdsResponse> = { success: true, data: result };
       res.json(body);
     } catch (error) {
       next(error);
@@ -225,6 +247,48 @@ export class JobPostsController {
       const { reason } = req.body as RetractJobPostRequest;
       const result = await this.jobPostsService.retract(req.user!.id, req.params.id as string, reason);
       const body: ApiResponse<JobPost> = { success: true, data: result };
+      res.json(body);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  // AD-29 bước 7 — `pending` khác rỗng ⇒ lô còn chạy ở nền ⇒ 202.
+  bulkApprove = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { ids } = req.body as BulkApproveRequest;
+      this.sendBulk(res, await this.jobPostsService.bulkApprove(req.user!.id, ids));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  bulkReject = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { ids, reason } = req.body as BulkRejectRequest;
+      this.sendBulk(res, await this.jobPostsService.bulkReject(req.user!.id, ids, reason));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  bulkResult = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      this.sendBulk(res, this.jobPostsService.bulkResult(req.user!.id, req.params.batchId as string));
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  private sendBulk(res: Response, result: BulkModerationResult): void {
+    const body: ApiResponse<BulkModerationResult> = { success: true, data: result };
+    res.status(result.pending.length > 0 ? 202 : 200).json(body);
+  }
+
+  rescoreQuality = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const result = await this.jobQualityService.rescore(req.params.id as string);
+      const body: ApiResponse<JobQualityDto> = { success: true, data: result };
       res.json(body);
     } catch (error) {
       next(error);

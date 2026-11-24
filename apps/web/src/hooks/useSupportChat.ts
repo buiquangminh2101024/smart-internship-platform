@@ -11,6 +11,7 @@ import {
   type StoredSupportChatMessage,
   type StoredSupportChatStatus,
 } from "@/lib/support-chat-storage";
+import { AUTH_STORE_UNAVAILABLE } from "@/lib/api-client";
 import { openSupportChatStream, SupportChatHttpError } from "@/lib/support-chat-stream";
 
 // State hội thoại của widget trợ lý (docs/05-frontend/phases/support-chatbot/PLAN.md, mục
@@ -76,6 +77,8 @@ function noticeOf(notice: SupportChatNotice): SupportChatUiMessage {
 function noticeForError(error: unknown): SupportChatNotice {
   if (error instanceof SupportChatHttpError) {
     if (error.status === 429) return "rate_limited";
+    // 503 vì server tạm không kiểm được phiên (AD-31 D1) ⇒ lỗi tạm thời, có nút Thử lại.
+    if (error.code === AUTH_STORE_UNAVAILABLE) return "failed";
     if (error.status === 503) return "disabled";
     return "failed";
   }

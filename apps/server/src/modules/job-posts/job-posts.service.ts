@@ -6,18 +6,24 @@ import type {
   Prisma,
   PrismaClient,
 } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 import type {
+  BulkModerationResult,
+  BulkModerationSkipReason,
   CreateJobPostRequest,
   EmployerJobPostListQuery,
   JobPost as JobPostDto,
   JobPostAttentionSummary,
   JobPostSearchQuery,
   JobPostStats,
+  ModerationQueueIdsResponse,
   PaginatedResponse,
   SubmitJobPostResponse,
   UpdateJobPostRequest,
 } from "@sip/shared-types";
 import { AppError } from "../../shared/errors/AppError";
+import type { Logger } from "../../shared/logger";
+import type { RateLimiter } from "../../shared/ports/RateLimiter";
 import { parseOffsetCursor } from "../../shared/utils/offset-cursor";
 import type { AuditLogService } from "../audit-log/audit-log.service";
 import type { AutoOutreachTrigger } from "../candidate-outreach/auto-outreach.service";
@@ -30,13 +36,21 @@ import type { NotificationPayloadMap } from "../notifications/notification.types
 import type { NotificationsService } from "../notifications/notifications.service";
 import type { SubscriptionsService } from "../subscriptions/subscriptions.service";
 import type { UserRepository } from "../users/user.repository";
+import { BulkModerationBatches, type BulkItemOutcome } from "./bulk-moderation-batches";
 import { toJobPostDto } from "./job-post.mapper";
 import {
   JOB_POST_PAGE_SIZE,
+  type BulkModerationPost,
+  type JobPostQualitySnapshot,
   type JobPostRepository,
   type JobPostWithRelations,
   type JobPostWriteData,
+  type ModerationQueueFilter,
 } from "./job-post.repository";
+import { MODERATION_BATCH_LIMIT } from "./job-posts.dto";
+import { suggestedRejectReasonOf } from "./job-quality.mapper";
+import type { JobQualityCompanyTrigger, JobQualityService } from "./job-quality.service";
+import type { PublishFollowUpService } from "./publish-follow-up.service";
 
 // Employer tự chọn ngày hết hạn nhưng không quá 90 ngày kể từ lúc đặt —
 // quyết định chốt khi lên kế hoạch Phase 6 (xem
@@ -45,6 +59,29 @@ const MAX_EXPIRY_DAYS = 90;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 type CompanyQuotaTarget = Pick<Company, "id" | "verifiedAt">;
+
+/** AD-29 bước 9 — chỉ API của Admin kèm điểm chất lượng (Q1). */
+const ADMIN_DTO = { withQuality: true } as const;
+
+/** AD-29 bước 7 — số lô duyệt / từ chối hàng loạt mỗi Admin mỗi phút (chung hai loại). */
+export const BULK_MODERATION_PER_MINUTE = 10;
+
+type ModerationActionInput = {
+  action: "APPROVED" | "REJECTED" | "RETRACTED";
+  actorId: string;
+  reason?: string;
+  bulk?: boolean;
+};
+
+/** Ném trong transaction của một tin trong lô ⇒ rollback, tin vào `skipped` với lý do này. */
+class BulkItemSkip extends Error {
+  readonly reason: BulkModerationSkipReason;
+
+  constructor(reason: BulkModerationSkipReason) {
+    super(reason);
+    this.reason = reason;
+  }
+}
 
 export class JobPostsService {
   private readonly prisma: PrismaClient;
@@ -59,6 +96,13 @@ export class JobPostsService {
   private readonly autoOutreachTrigger: AutoOutreachTrigger;
   private readonly matchScoreTrigger: MatchScoreTrigger;
   private readonly matchScoreRepository: MatchScoreRepository;
+  private readonly jobQualityService: JobQualityService;
+  private readonly jobQualityCompanyTrigger: JobQualityCompanyTrigger;
+  private readonly rateLimiter: RateLimiter;
+  private readonly logger: Logger;
+  /** Kết quả các lô hàng loạt — service singleton nên mọi request dùng chung (bước 7). */
+  private readonly bulkBatches: BulkModerationBatches;
+  private readonly publishFollowUpService: PublishFollowUpService;
 
   constructor({
     prisma,
@@ -73,6 +117,12 @@ export class JobPostsService {
     autoOutreachTrigger,
     matchScoreTrigger,
     matchScoreRepository,
+    jobQualityService,
+    jobQualityCompanyTrigger,
+    rateLimiter,
+    logger,
+    bulkModerationBatches,
+    publishFollowUpService,
   }: {
     prisma: PrismaClient;
     jobPostRepository: JobPostRepository;
@@ -86,6 +136,14 @@ export class JobPostsService {
     autoOutreachTrigger: AutoOutreachTrigger;
     matchScoreTrigger: MatchScoreTrigger;
     matchScoreRepository: MatchScoreRepository;
+    jobQualityService: JobQualityService;
+    jobQualityCompanyTrigger: JobQualityCompanyTrigger;
+    rateLimiter: RateLimiter;
+    logger: Logger;
+    /** Server đăng ký bản mặc định (job-posts.routes.ts); test truyền bản có thời gian chờ ngắn. */
+    bulkModerationBatches?: BulkModerationBatches;
+    /** Bước 8 — chấm bảng điểm + tự mời sau lô duyệt, chạy lần lượt. */
+    publishFollowUpService: PublishFollowUpService;
   }) {
     this.prisma = prisma;
     this.jobPostRepository = jobPostRepository;
@@ -99,6 +157,12 @@ export class JobPostsService {
     this.autoOutreachTrigger = autoOutreachTrigger;
     this.matchScoreTrigger = matchScoreTrigger;
     this.matchScoreRepository = matchScoreRepository;
+    this.jobQualityService = jobQualityService;
+    this.jobQualityCompanyTrigger = jobQualityCompanyTrigger;
+    this.rateLimiter = rateLimiter;
+    this.logger = logger;
+    this.bulkBatches = bulkModerationBatches ?? new BulkModerationBatches();
+    this.publishFollowUpService = publishFollowUpService;
   }
 
   // ─── Public (Guest) ──────────────────────────────────────────────────────
@@ -342,6 +406,9 @@ export class JobPostsService {
 
     if (jobPost.status === "PUBLISHED") {
       this.matchScoreTrigger?.(id);
+      // AD-29 Q7 — chấm lại sau commit, chờ xong rồi mới trả (không ném lỗi). Tin nháp không
+      // chấm: sẽ chấm lúc gửi duyệt.
+      await this.jobQualityService.rescoreAfterPublishedEdit(jobPost);
     }
 
     if (dto.skillIds || dto.majors) {
@@ -410,13 +477,17 @@ export class JobPostsService {
     await this.requirePublishQuota(company);
 
     const autoPublished = !company.requiresApproval;
+    const now = new Date();
+    // AD-29 — chấm điểm chất lượng trước transaction, ghi cùng lệnh đổi trạng thái bên dưới.
+    // Không ném lỗi: chấm lỗi thì tin vẫn được gửi, ở vùng "chưa chấm".
+    const submission = await this.jobQualityService.submissionColumns(jobPost, { now, autoPublished });
     const updated = await this.prisma.$transaction(async (tx) => {
       // L28: đếm trước khi thêm dòng SUBMITTED mới. Tin bị từ chối quay về DRAFT
       // nên trạng thái không cho biết đây là lần gửi đầu hay gửi lại.
       const resubmit = (await this.jobPostRepository.countModerationActions(id, "SUBMITTED", tx)) > 0;
       await this.jobPostRepository.createModerationAction({ jobPostId: id, action: "SUBMITTED", actorId: userId }, tx);
       if (!autoPublished) {
-        const pending = await this.jobPostRepository.update(id, { status: "PENDING" }, tx);
+        const pending = await this.jobPostRepository.update(id, { status: "PENDING", ...submission }, tx);
         // AD-12 — company.requiresApproval=true: Admin cần biết có tin chờ duyệt.
         const adminIds = await this.userRepository.findAdminIds(tx);
         await this.notificationsService.notifyMany(
@@ -452,7 +523,7 @@ export class JobPostsService {
         },
         tx,
       );
-      return this.jobPostRepository.update(id, { status: "PUBLISHED", publishedAt: new Date() }, tx);
+      return this.jobPostRepository.update(id, { status: "PUBLISHED", publishedAt: now, ...submission }, tx);
     });
 
     // AD-23 — tin vừa hiển thị và đã bật tự mời (đặt lúc tạo tin) ⇒ mời ngay, không chờ.
@@ -476,20 +547,28 @@ export class JobPostsService {
 
   // ─── Admin ───────────────────────────────────────────────────────────────
 
+  /** AD-29 bước 6 — hàng đợi lọc theo trạng thái / vùng, sắp theo `filter.sort`, kèm `total`. */
   async listForModeration(
-    status: JobPostStatus | undefined,
+    filter: ModerationQueueFilter,
     cursor: string | undefined,
   ): Promise<PaginatedResponse<JobPostDto>> {
-    const page = await this.jobPostRepository.findModerationQueue(status, cursor);
-    return this.toPage(page);
+    const page = await this.jobPostRepository.findModerationQueue(filter, cursor);
+    if (!page) throw new AppError(400, "Invalid cursor", "INVALID_CURSOR");
+    return { ...this.toPage(page, ADMIN_DTO), total: page.total };
+  }
+
+  /** Id khớp bộ lọc hàng đợi (tối đa một lô hàng loạt) — nút "Chọn tất cả tin trong vùng". */
+  async moderationIds(filter: ModerationQueueFilter): Promise<ModerationQueueIdsResponse> {
+    return this.jobPostRepository.findModerationIds(filter, MODERATION_BATCH_LIMIT);
   }
 
   async moderationStats(): Promise<JobPostStats> {
-    return this.countStats({});
+    const [stats, pendingByBand] = await Promise.all([this.countStats({}), this.jobPostRepository.countPendingByBand()]);
+    return { ...stats, pendingByBand };
   }
 
   async getForModeration(id: string): Promise<JobPostDto> {
-    return toJobPostDto(await this.requireJobPost(id));
+    return toJobPostDto(await this.requireJobPost(id), ADMIN_DTO);
   }
 
   async approve(actorId: string, id: string): Promise<JobPostDto> {
@@ -499,8 +578,13 @@ export class JobPostsService {
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
-      await this.jobPostRepository.createModerationAction({ jobPostId: id, action: "APPROVED", actorId }, tx);
-      const result = await this.jobPostRepository.update(id, { status: "PUBLISHED", publishedAt: new Date() }, tx);
+      const result = await this.moderateTransition(
+        tx,
+        jobPost,
+        "PENDING",
+        { status: "PUBLISHED", publishedAt: new Date() },
+        { action: "APPROVED", actorId },
+      );
       await this.notifyCompanyEmployers(jobPost.companyId, "JOB_POST_APPROVED", { jobPostId: id, jobPostTitle: jobPost.title }, tx);
       await this.auditLogService.record(
         {
@@ -518,7 +602,7 @@ export class JobPostsService {
     // AD-23 — như submitForApproval khi tự đăng: chạy sau khi transaction đã commit.
     if (updated.autoOutreachEnabled) this.autoOutreachTrigger(updated.companyId);
     this.matchScoreTrigger(updated.id);
-    return toJobPostDto(updated);
+    return toJobPostDto(updated, ADMIN_DTO);
   }
 
   /** PENDING → DRAFT kèm lý do, để Employer sửa lại rồi gửi duyệt lần nữa. */
@@ -529,8 +613,7 @@ export class JobPostsService {
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
-      await this.jobPostRepository.createModerationAction({ jobPostId: id, action: "REJECTED", actorId, reason }, tx);
-      const result = await this.jobPostRepository.update(id, { status: "DRAFT" }, tx);
+      const result = await this.moderateTransition(tx, jobPost, "PENDING", { status: "DRAFT" }, { action: "REJECTED", actorId, reason });
       await this.notifyCompanyEmployers(
         jobPost.companyId,
         "JOB_POST_REJECTED",
@@ -551,7 +634,7 @@ export class JobPostsService {
       );
       return result;
     });
-    return toJobPostDto(updated);
+    return toJobPostDto(updated, ADMIN_DTO);
   }
 
   /**
@@ -566,8 +649,13 @@ export class JobPostsService {
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
-      await this.jobPostRepository.createModerationAction({ jobPostId: id, action: "RETRACTED", actorId, reason }, tx);
-      const result = await this.jobPostRepository.update(id, { status: "TAKEN_DOWN" }, tx);
+      const result = await this.moderateTransition(
+        tx,
+        jobPost,
+        "PUBLISHED",
+        { status: "TAKEN_DOWN" },
+        { action: "RETRACTED", actorId, reason },
+      );
       await this.notifyCompanyEmployers(
         jobPost.companyId,
         "JOB_POST_TAKEN_DOWN",
@@ -588,10 +676,232 @@ export class JobPostsService {
       );
       return result;
     });
-    return toJobPostDto(updated);
+    // AD-29 Q4 — công ty vừa bị thu hồi tin ⇒ chấm lại các tin đang chờ duyệt của công ty.
+    this.jobQualityCompanyTrigger(updated.companyId);
+    return toJobPostDto(updated, ADMIN_DTO);
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────────────
+
+  /**
+   * AD-29 (điểm 8) — bước đầu tiên của approve / reject / retract trong transaction:
+   * đổi trạng thái chỉ khi tin còn `from`. Admin khác đã xử lý trước ⇒ ném 409 ngay,
+   * transaction rollback, không ghi moderation action / thông báo / audit nào.
+   * Moderation action ghi kèm điểm và vùng của tin lúc quyết định: đọc lại SAU khi đổi
+   * trạng thái (dòng tin đang bị khoá), không dùng bản đọc đầu hàm vì lối chấm nền
+   * (bước 4b) có thể đã ghi điểm mới xen giữa.
+   * Đọc lại tin sau khi ghi action để DTO trả về có action mới nhất (banner lý do).
+   */
+  private async moderateTransition(
+    tx: Prisma.TransactionClient,
+    jobPost: JobPostWithRelations,
+    from: JobPostStatus,
+    data: JobPostWriteData,
+    action: ModerationActionInput,
+  ): Promise<JobPostWithRelations> {
+    const quality = await this.transitionAndRecord(tx, jobPost.id, from, data, () => action);
+    if (!quality) {
+      throw new AppError(409, "Tin đã được xử lý bởi người khác");
+    }
+    const result = await this.jobPostRepository.findById(jobPost.id, tx);
+    if (!result) throw new AppError(404, "Job post not found");
+    return result;
+  }
+
+  /**
+   * Lõi chung của duyệt / từ chối / thu hồi một tin và của lô hàng loạt (bước 5, 7): đổi
+   * trạng thái có điều kiện, đọc điểm SAU khi đổi (dòng tin đang bị khoá), rồi ghi moderation
+   * action kèm điểm / vùng. `buildAction` nhận điểm vừa đọc (lô từ chối tự sinh lý do từ đó).
+   * null ⇒ tin không còn ở `from`, chưa ghi gì.
+   */
+  private async transitionAndRecord(
+    tx: Prisma.TransactionClient,
+    jobPostId: string,
+    from: JobPostStatus,
+    data: JobPostWriteData,
+    buildAction: (quality: JobPostQualitySnapshot | null) => ModerationActionInput,
+  ): Promise<JobPostQualitySnapshot | null> {
+    const moved = await this.jobPostRepository.transitionIfStatus(jobPostId, from, data, tx);
+    if (!moved) return null;
+    const quality = await this.jobPostRepository.findQuality(jobPostId, tx);
+    const action = buildAction(quality);
+    await this.jobPostRepository.createModerationAction(
+      { jobPostId, ...action, qualityScore: quality?.qualityScore ?? null, qualityBand: quality?.qualityBand ?? null },
+      tx,
+    );
+    return quality ?? { qualityScore: null, qualityBand: null, qualityBreakdown: null };
+  }
+
+  // ─── Admin: duyệt / từ chối hàng loạt (AD-29 bước 7) ─────────────────────
+
+  /**
+   * Mỗi tin một transaction riêng, tối đa `BULK_MODERATION_CONCURRENCY` tin cùng lúc. Chờ tối
+   * đa `BULK_MODERATION_SYNC_MS`; quá thì trả phần đã xong, các tin còn lại nằm ở `pending`
+   * và chạy tiếp ở nền (hỏi lại bằng `bulkResult`). Lô xong hẳn (kể cả phần chạy nền) ⇒ các tin
+   * đã duyệt vào `PublishFollowUpService` (bước 8): chấm bảng điểm lần lượt rồi tự mời mỗi công
+   * ty một lần, thay cho `matchScoreTrigger` / `autoOutreachTrigger` của duyệt một tin.
+   */
+  async bulkApprove(actorId: string, ids: string[]): Promise<BulkModerationResult> {
+    return this.runBulk(actorId, "APPROVE", ids, undefined);
+  }
+
+  /** `reason` bỏ trống ⇒ mỗi tin dùng lý do tự sinh từ điểm chất lượng của chính nó. */
+  async bulkReject(actorId: string, ids: string[], reason: string | undefined): Promise<BulkModerationResult> {
+    return this.runBulk(actorId, "REJECT", ids, reason);
+  }
+
+  bulkResult(actorId: string, batchId: string): BulkModerationResult {
+    const result = this.bulkBatches.get(batchId, actorId);
+    if (!result) throw new AppError(404, "Bulk moderation batch not found", "BULK_BATCH_NOT_FOUND");
+    return result;
+  }
+
+  private async runBulk(
+    actorId: string,
+    kind: BulkModerationResult["action"],
+    ids: string[],
+    reason: string | undefined,
+  ): Promise<BulkModerationResult> {
+    await this.assertBulkRateLimit(actorId);
+    // Đọc trước cả lô: tin và NTD (kèm email) của các công ty, mỗi thứ một câu.
+    const posts = new Map((await this.jobPostRepository.findForBulkModeration(ids)).map((post) => [post.id, post]));
+    const companyIds = [...new Set([...posts.values()].filter((post) => post.status === "PENDING").map((post) => post.companyId))];
+    const recipients = companyIds.length > 0 ? await this.employerRepository.findRecipientsByCompanyIds(companyIds) : new Map();
+    const batchId = randomUUID();
+
+    return this.bulkBatches.run({
+      batchId,
+      adminId: actorId,
+      action: kind,
+      ids,
+      worker: async (id) => {
+        const post = posts.get(id);
+        if (!post) return "NOT_FOUND";
+        if (post.status !== "PENDING") return "NOT_PENDING";
+        // Bỏ qua sớm, không mở transaction: tin chưa chấm / không có lỗi nào đưa vào lý do.
+        if (kind === "REJECT" && !reason && !suggestedRejectReasonOf(post.qualityBreakdown)) return "REASON_REQUIRED";
+        try {
+          return await this.prisma.$transaction((tx) =>
+            this.moderateBulkItem(tx, { actorId, kind, post, reason, batchId, recipients: recipients.get(post.companyId) ?? [] }),
+          );
+        } catch (error) {
+          if (error instanceof BulkItemSkip) return error.reason;
+          this.logger.error("Bulk moderation item failed", {
+            batchId,
+            jobPostId: id,
+            action: kind,
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return "FAILED";
+        }
+      },
+      ...(kind === "APPROVE" ? { onSettled: (result: BulkModerationResult) => this.enqueuePublishFollowUps(result, posts) } : {}),
+    });
+  }
+
+  /** Bước 8 — chỉ tin duyệt thành công (đã commit); thứ tự theo id Admin gửi lên. */
+  private enqueuePublishFollowUps(result: BulkModerationResult, posts: Map<string, BulkModerationPost>): void {
+    const items = result.succeeded.flatMap((id) => {
+      const post = posts.get(id);
+      return post ? [{ jobPostId: id, companyId: post.companyId, autoOutreachEnabled: post.autoOutreachEnabled }] : [];
+    });
+    try {
+      this.publishFollowUpService.enqueue(items);
+    } catch (error) {
+      this.logger.error("Publish follow-up enqueue failed", {
+        batchId: result.batchId,
+        jobs: items.length,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  private async moderateBulkItem(
+    tx: Prisma.TransactionClient,
+    input: {
+      actorId: string;
+      kind: BulkModerationResult["action"];
+      post: BulkModerationPost;
+      reason: string | undefined;
+      batchId: string;
+      recipients: { userId: string; email: string }[];
+    },
+  ): Promise<BulkItemOutcome> {
+    const { actorId, kind, post, batchId } = input;
+    let finalReason: string | undefined;
+    const quality = await this.transitionAndRecord(
+      tx,
+      post.id,
+      "PENDING",
+      kind === "APPROVE" ? { status: "PUBLISHED", publishedAt: new Date() } : { status: "DRAFT" },
+      (fresh) => {
+        if (kind === "APPROVE") return { action: "APPROVED", actorId, bulk: true };
+        // Lý do tự sinh tính lại từ điểm đọc SAU khi đổi trạng thái (lối chấm nền có thể vừa ghi).
+        finalReason = input.reason ?? suggestedRejectReasonOf(fresh?.qualityBreakdown) ?? undefined;
+        // Ném ⇒ rollback cả việc đổi trạng thái.
+        if (!finalReason) throw new BulkItemSkip("REASON_REQUIRED");
+        return { action: "REJECTED", actorId, reason: finalReason, bulk: true };
+      },
+    );
+    if (!quality) return "NOT_PENDING";
+
+    const metadata = { bulk: true, batchId, qualityScore: quality.qualityScore, qualityBand: quality.qualityBand };
+    if (kind === "APPROVE") {
+      await this.notificationsService.notifyRecipients(
+        "JOB_POST_APPROVED",
+        input.recipients,
+        { jobPostId: post.id, jobPostTitle: post.title },
+        tx,
+      );
+      await this.auditLogService.record(
+        {
+          actorId,
+          actorRole: "ADMIN",
+          action: "JOB_POST_APPROVED",
+          entityType: "JobPost",
+          entityId: post.id,
+          summary: `Duyệt tin "${post.title}" của ${post.company.name}`,
+          metadata,
+        },
+        tx,
+      );
+      return "OK";
+    }
+
+    const reason = finalReason!;
+    await this.notificationsService.notifyRecipients(
+      "JOB_POST_REJECTED",
+      input.recipients,
+      { jobPostId: post.id, jobPostTitle: post.title, reason },
+      tx,
+    );
+    await this.auditLogService.record(
+      {
+        actorId,
+        actorRole: "ADMIN",
+        action: "JOB_POST_REJECTED",
+        entityType: "JobPost",
+        entityId: post.id,
+        summary: `Từ chối tin "${post.title}" của ${post.company.name}`,
+        metadata: { reason, ...metadata },
+      },
+      tx,
+    );
+    return "OK";
+  }
+
+  private async assertBulkRateLimit(actorId: string): Promise<void> {
+    let allowed = true;
+    try {
+      allowed = await this.rateLimiter.consume(`job-post-bulk:${actorId}`, BULK_MODERATION_PER_MINUTE, 60);
+    } catch (error) {
+      // Redis lỗi thì vẫn cho chạy: giới hạn chỉ để đỡ tải, không phải chốt bảo mật.
+      this.logger.error("Không kiểm được giới hạn duyệt hàng loạt", { error });
+    }
+    if (!allowed) {
+      throw new AppError(429, `At most ${BULK_MODERATION_PER_MINUTE} bulk moderations per minute`, "BULK_MODERATION_RATE_LIMITED");
+    }
+  }
 
   private async notifyCompanyEmployers<T extends "JOB_POST_APPROVED" | "JOB_POST_REJECTED" | "JOB_POST_TAKEN_DOWN">(
     companyId: string,
@@ -606,7 +916,7 @@ export class JobPostsService {
 
   private toPage(
     page: { items: JobPostWithRelations[]; hasMore: boolean; nextCursor?: string },
-    options?: { publicOnly?: boolean },
+    options?: Parameters<typeof toJobPostDto>[1],
   ) {
     return {
       items: page.items.map((item) => toJobPostDto(item, options)),

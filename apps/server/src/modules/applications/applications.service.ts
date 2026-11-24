@@ -11,11 +11,13 @@ import type {
 import { AppError } from "../../shared/errors/AppError";
 import type { CloseReason } from "../application-automation/application-automation.policy";
 import type { AutoReviewTrigger } from "../application-automation/application-automation.service";
+import type { InvitationApplicationService } from "../candidate-outreach/invitation-application.service";
 import type { EmployerRepository } from "../employers/employer.repository";
 import type { EmployerIdentityCache } from "../employers/employer-identity-cache";
 import type { InterviewsRepository } from "../interviews/interviews.repository";
 import type { NotificationsService } from "../notifications/notifications.service";
 import { toEmployerApplicationListItem } from "./application.mapper";
+import { submitApplicationInTx } from "./application-submit";
 import type { BulkUpdateApplicationStatusDto, ListCompanyApplicationsQuery } from "./applications.dto";
 import type { ApplicationsRepository, StatusChangeTarget } from "./applications.repository";
 import type { PrismaClient, Prisma, ApplicationStatus } from "@prisma/client";
@@ -96,6 +98,7 @@ export class ApplicationsService {
   private readonly notificationsService: NotificationsService;
   private readonly interviewsRepository: InterviewsRepository;
   private readonly autoReviewTrigger: AutoReviewTrigger;
+  private readonly invitationApplicationService: InvitationApplicationService;
 
   constructor({
     prisma,
@@ -105,6 +108,7 @@ export class ApplicationsService {
     notificationsService,
     interviewsRepository,
     autoReviewTrigger,
+    invitationApplicationService,
   }: {
     prisma: PrismaClient;
     applicationsRepository: ApplicationsRepository;
@@ -114,6 +118,8 @@ export class ApplicationsService {
     interviewsRepository: InterviewsRepository;
     /** AD-25 — resolve ApplicationAutomationService lúc gọi, không tạo vòng phụ thuộc. */
     autoReviewTrigger: AutoReviewTrigger;
+    /** AD-28 — nộp đơn khi có lời mời đang chờ ⇒ coi như nhận lời (Q4). */
+    invitationApplicationService: InvitationApplicationService;
   }) {
     this.prisma = prisma;
     this.applicationsRepository = applicationsRepository;
@@ -122,6 +128,7 @@ export class ApplicationsService {
     this.notificationsService = notificationsService;
     this.interviewsRepository = interviewsRepository;
     this.autoReviewTrigger = autoReviewTrigger;
+    this.invitationApplicationService = invitationApplicationService;
   }
 
   async createApplication(userId: string, dto: CreateApplicationRequest) {
@@ -153,34 +160,26 @@ export class ApplicationsService {
 
     // Hồ sơ + lịch sử trạng thái + thông báo cho employer ghi chung một
     // transaction (AD-16), cùng lý do với updateApplicationStatus bên dưới.
-    const applicationId = await this.prisma.$transaction(async (tx) => {
-      let id: string;
-      if (existing) {
-        // Đơn đã huỷ (CANCELLED) → cho phép ứng tuyển lại trên chính bản ghi cũ.
-        await this.applicationsRepository.update(
-          existing.id,
-          { status: "PENDING", cvId: dto.cvId, coverLetter: dto.coverLetter ?? null, reappliedAt: new Date() },
-          tx,
-        );
-        id = existing.id;
-      } else {
-        const created = await this.applicationsRepository.create(
-          {
-            jobPostId: dto.jobPostId,
-            candidateId: candidate.id,
-            cvId: dto.cvId,
-            ...(dto.coverLetter ? { coverLetter: dto.coverLetter } : {}),
-            status: "PENDING",
-          },
-          tx,
-        );
-        id = created.id;
+    const result = await this.prisma.$transaction(async (tx) => {
+      // AD-28 Q4 — có lời mời đang chờ cho đúng tin ⇒ nộp đơn = nhận lời: đơn vào thẳng
+      // "Đang xem xét", gắn lời mời, thông báo gộp thay cho APPLICATION_RECEIVED.
+      const invitation = await this.invitationApplicationService.findOpenPendingForJob(candidate.id, jobPost.id, tx);
+      if (invitation) {
+        const accepted = await this.invitationApplicationService.acceptInTx(tx, invitation, userId, {
+          cvId: dto.cvId,
+          coverLetter: dto.coverLetter,
+        });
+        return { applicationId: accepted.applicationId, invitationId: invitation.id };
       }
 
-      await this.applicationsRepository.createStatusHistory(
-        { applicationId: id, fromStatus: existing ? existing.status : null, toStatus: "PENDING", actorId: userId },
-        tx,
-      );
+      const id = await submitApplicationInTx(this.applicationsRepository, tx, {
+        candidateId: candidate.id,
+        actorUserId: userId,
+        jobPostId: jobPost.id,
+        cvId: dto.cvId,
+        coverLetter: dto.coverLetter,
+        initialStatus: "PENDING",
+      });
       const employers = await this.employerRepository.findManyByCompanyId(jobPost.companyId, tx);
       await this.notificationsService.notifyMany(
         "APPLICATION_RECEIVED",
@@ -188,12 +187,18 @@ export class ApplicationsService {
         { applicationId: id, jobPostId: jobPost.id, jobPostTitle: jobPost.title, candidateName: candidate.fullName },
         tx,
       );
-      return id;
+      return { applicationId: id, invitationId: null };
     });
+    const { applicationId } = result;
 
-    // AD-25 lối 2: hồ sơ đã có điểm ≥ X thì tự chuyển "Đang xem xét" ngay; chưa có điểm thì
-    // chờ lượt hằng ngày. Sau commit, không chờ: đơn trả về vẫn là "Chờ duyệt".
-    this.autoReviewTrigger({ applicationId });
+    if (result.invitationId) {
+      // Như nhận lời ở hộp lời mời: mở hội thoại sau commit (AD-15 mục 6).
+      await this.invitationApplicationService.openConversation(userId, jobPost.id, result.invitationId);
+    } else {
+      // AD-25 lối 2: hồ sơ đã có điểm ≥ X thì tự chuyển "Đang xem xét" ngay; chưa có điểm thì
+      // chờ lượt hằng ngày. Sau commit, không chờ: đơn trả về vẫn là "Chờ duyệt".
+      this.autoReviewTrigger({ applicationId });
+    }
 
     return this.applicationsRepository.findCandidateApplicationById(applicationId, candidate.id);
   }

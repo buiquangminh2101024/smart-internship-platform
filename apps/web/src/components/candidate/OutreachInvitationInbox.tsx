@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import type { CandidateOutreachInvitationDto, OutreachInvitationAction, OutreachInvitationStatus } from "@sip/shared-types";
+import type { CandidateOutreachInvitationDto, OutreachInvitationStatus } from "@sip/shared-types";
 import {
+  useApplyFromInvitation,
   useOutreachInvitations,
   useOutreachSetting,
   useRespondOutreachInvitation,
@@ -16,10 +17,12 @@ import { Card } from "@/components/ui/Card";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Icon } from "@/components/ui/Icon";
 import { ToastViewport, type ToastData } from "@/components/ui/Toast";
+import { AcceptInvitationDialog, type AcceptInvitationInput } from "./AcceptInvitationDialog";
 
 // Hộp "Lời mời ứng tuyển" (B3, AD-15) — docs/05-frontend/phases/candidate-outreach/PLAN.md
-// (quyết định 4). Accept xong chỉ đổi trạng thái tại chỗ + hiện "Xem hội thoại",
-// không tự điều hướng.
+// (quyết định 4). Từ AD-28 (docs/05-frontend/phases/invitation-apply/PLAN.md): nhận lời =
+// ứng tuyển qua hộp thoại chọn CV; lời mời đã nhận mà chưa có đơn có "Ứng tuyển ngay".
+// Xong chỉ đổi trạng thái tại chỗ, không tự điều hướng.
 
 // ─── Toast helper (cùng khuôn SavedJobsClient) ─────────────────────────────
 
@@ -55,14 +58,31 @@ function expiryText(expiresAt: string): string {
 function InvitationItem({
   invitation,
   busy,
-  onRespond,
+  onDecline,
+  onAccept,
+  onApply,
 }: {
   invitation: CandidateOutreachInvitationDto;
   busy: boolean;
-  onRespond: (invitation: CandidateOutreachInvitationDto, action: OutreachInvitationAction) => void;
+  onDecline: (invitation: CandidateOutreachInvitationDto) => void;
+  onAccept: (invitation: CandidateOutreachInvitationDto) => void;
+  onApply: (invitation: CandidateOutreachInvitationDto) => void;
 }) {
   const status = STATUS_LABEL[invitation.status];
   const isPending = invitation.status === "PENDING";
+  const isAccepted = invitation.status === "ACCEPTED";
+  const jobOpen = invitation.jobPost.status === "PUBLISHED";
+  const conversationLink = invitation.conversationId ? (
+    <Button
+      as="a"
+      href={`/messages?conversationId=${encodeURIComponent(invitation.conversationId)}`}
+      variant="secondary"
+      size="sm"
+      iconAfter="arrow-right"
+    >
+      Xem hội thoại
+    </Button>
+  ) : null;
 
   return (
     <Card padding="md" className="grid gap-3">
@@ -101,30 +121,27 @@ function InvitationItem({
               : `Hết hạn ngày ${formatDate(invitation.expiresAt)}`}
         </span>
         {isPending ? (
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={busy}
-              onClick={() => onRespond(invitation, "DECLINE")}
-            >
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="secondary" size="sm" disabled={busy} onClick={() => onDecline(invitation)}>
               Từ chối
             </Button>
-            <Button type="button" size="sm" disabled={busy} onClick={() => onRespond(invitation, "ACCEPT")}>
-              Chấp nhận
+            <Button type="button" size="sm" disabled={busy} onClick={() => onAccept(invitation)}>
+              Nhận lời &amp; ứng tuyển
             </Button>
           </div>
-        ) : invitation.status === "ACCEPTED" && invitation.conversationId ? (
-          <Button
-            as="a"
-            href={`/messages?conversationId=${encodeURIComponent(invitation.conversationId)}`}
-            variant="secondary"
-            size="sm"
-            iconAfter="arrow-right"
-          >
-            Xem hội thoại
-          </Button>
+        ) : isAccepted ? (
+          <div className="flex flex-wrap gap-2">
+            {invitation.applicationId ? (
+              <Button as="a" href="/applications" variant="secondary" size="sm">
+                Xem đơn ứng tuyển
+              </Button>
+            ) : jobOpen ? (
+              <Button type="button" size="sm" disabled={busy} onClick={() => onApply(invitation)}>
+                Ứng tuyển ngay
+              </Button>
+            ) : null}
+            {conversationLink}
+          </div>
         ) : null}
       </div>
     </Card>
@@ -157,30 +174,69 @@ export function OutreachInvitationInbox() {
   const { data, isError } = useOutreachInvitations(isCandidate);
   const { data: setting } = useOutreachSetting(isCandidate);
   const respond = useRespondOutreachInvitation();
+  const applyFromInvitation = useApplyFromInvitation();
   const { toasts, push, dismiss } = useToast();
-  const [pending, setPending] = useState<{ invitation: CandidateOutreachInvitationDto; action: OutreachInvitationAction } | null>(
+  const [declining, setDeclining] = useState<CandidateOutreachInvitationDto | null>(null);
+  const [applying, setApplying] = useState<{ invitation: CandidateOutreachInvitationDto; mode: "accept" | "apply" } | null>(
     null,
   );
+  const busy = respond.isPending || applyFromInvitation.isPending;
 
-  function confirmRespond() {
-    if (!pending) return;
-    const { invitation, action } = pending;
+  function showError(cause: unknown) {
+    push("danger", cause instanceof ApiError ? cause.message : "Không gửi được phản hồi, vui lòng thử lại.");
+  }
+
+  function confirmDecline() {
+    if (!declining) return;
     respond.mutate(
-      { invitationId: invitation.invitationId, action },
+      { invitationId: declining.invitationId, body: { action: "DECLINE" } },
       {
         onSuccess: () => {
-          setPending(null);
-          push(
-            "success",
-            action === "ACCEPT"
-              ? `Đã chấp nhận lời mời của ${invitation.company.name}. Bạn có thể nhắn tin với nhà tuyển dụng.`
-              : "Đã từ chối lời mời.",
-          );
+          setDeclining(null);
+          push("success", "Đã từ chối lời mời.");
         },
         onError: (cause) => {
-          setPending(null);
-          push("danger", cause instanceof ApiError ? cause.message : "Không gửi được phản hồi, vui lòng thử lại.");
+          setDeclining(null);
+          showError(cause);
         },
+      },
+    );
+  }
+
+  function submitApplication(input: AcceptInvitationInput) {
+    if (!applying) return;
+    const { invitation, mode } = applying;
+    // Lỗi (409 — lời mời hết hạn, tin đã đóng): đóng hộp thoại, danh sách tự tải lại.
+    const onError = (cause: unknown) => {
+      setApplying(null);
+      showError(cause);
+    };
+    if (mode === "apply") {
+      applyFromInvitation.mutate(
+        { invitationId: invitation.invitationId, body: input },
+        {
+          onSuccess: () => {
+            setApplying(null);
+            push("success", "Đã ứng tuyển. Hồ sơ của bạn đang được nhà tuyển dụng xem xét.");
+          },
+          onError,
+        },
+      );
+      return;
+    }
+    respond.mutate(
+      { invitationId: invitation.invitationId, body: { action: "ACCEPT", ...input } },
+      {
+        onSuccess: (result) => {
+          setApplying(null);
+          push(
+            "success",
+            result.linkedExisting
+              ? "Bạn đã có đơn cho tin này. Lời mời đã được gắn vào đơn."
+              : "Đã nhận lời. Hồ sơ của bạn đang được nhà tuyển dụng xem xét.",
+          );
+        },
+        onError,
       },
     );
   }
@@ -192,7 +248,7 @@ export function OutreachInvitationInbox() {
       <div className="mb-6">
         <h1 className="text-2xl font-semibold text-text-strong">Lời mời ứng tuyển</h1>
         <p className="mt-1 text-sm text-text-muted">
-          Nhà tuyển dụng thấy hồ sơ của bạn phù hợp và mời bạn ứng tuyển. Chấp nhận để bắt đầu trò chuyện với họ.
+          Nhà tuyển dụng thấy hồ sơ của bạn phù hợp và mời bạn ứng tuyển. Nhận lời để ứng tuyển bằng CV của bạn và trò chuyện với nhà tuyển dụng.
         </p>
       </div>
 
@@ -231,26 +287,32 @@ export function OutreachInvitationInbox() {
             <InvitationItem
               key={invitation.invitationId}
               invitation={invitation}
-              busy={respond.isPending}
-              onRespond={(target, action) => setPending({ invitation: target, action })}
+              busy={busy}
+              onDecline={setDeclining}
+              onAccept={(target) => setApplying({ invitation: target, mode: "accept" })}
+              onApply={(target) => setApplying({ invitation: target, mode: "apply" })}
             />
           ))}
         </div>
       )}
 
       <ConfirmDialog
-        isOpen={pending !== null}
-        title={pending?.action === "ACCEPT" ? "Chấp nhận lời mời?" : "Từ chối lời mời?"}
-        message={
-          pending?.action === "ACCEPT"
-            ? `Một cuộc hội thoại với ${pending.invitation.company.name} sẽ được tạo để hai bên trao đổi. Nhà tuyển dụng sẽ thấy email của bạn trong hội thoại.`
-            : "Nhà tuyển dụng sẽ được báo là bạn đã từ chối. Không thể hoàn tác."
-        }
-        confirmLabel={pending?.action === "ACCEPT" ? "Chấp nhận" : "Từ chối"}
-        isDestructive={pending?.action === "DECLINE"}
+        isOpen={declining !== null}
+        title="Từ chối lời mời?"
+        message="Nhà tuyển dụng sẽ được báo là bạn đã từ chối. Không thể hoàn tác."
+        confirmLabel="Từ chối"
+        isDestructive
         isConfirming={respond.isPending}
-        onConfirm={confirmRespond}
-        onCancel={() => setPending(null)}
+        onConfirm={confirmDecline}
+        onCancel={() => setDeclining(null)}
+      />
+      <AcceptInvitationDialog
+        key={applying?.invitation.invitationId ?? "closed"}
+        invitation={applying?.invitation ?? null}
+        mode={applying?.mode ?? "accept"}
+        submitting={busy}
+        onSubmit={submitApplication}
+        onClose={() => setApplying(null)}
       />
       <ToastViewport toasts={toasts} onDismiss={dismiss} />
     </div>

@@ -14,8 +14,16 @@ export class RedisOtpStore implements OtpStore {
     return `otp:${purpose}:${email.toLowerCase()}`;
   }
 
+  private failKey(purpose: OtpPurpose, email: string): string {
+    return `otp:fail:${purpose}:${email.toLowerCase()}`;
+  }
+
   async set(purpose: OtpPurpose, email: string, code: string): Promise<void> {
-    await this.redis.set(this.key(purpose, email), code, "EX", OTP_TTL_SECONDS);
+    await this.redis
+      .multi()
+      .set(this.key(purpose, email), code, "EX", OTP_TTL_SECONDS)
+      .del(this.failKey(purpose, email))
+      .exec();
   }
 
   async get(purpose: OtpPurpose, email: string): Promise<string | null> {
@@ -23,6 +31,13 @@ export class RedisOtpStore implements OtpStore {
   }
 
   async delete(purpose: OtpPurpose, email: string): Promise<void> {
-    await this.redis.del(this.key(purpose, email));
+    await this.redis.del(this.key(purpose, email), this.failKey(purpose, email));
+  }
+
+  async recordFailure(purpose: OtpPurpose, email: string): Promise<number> {
+    const key = this.failKey(purpose, email);
+    const count = await this.redis.incr(key);
+    if (count === 1) await this.redis.expire(key, OTP_TTL_SECONDS);
+    return count;
   }
 }

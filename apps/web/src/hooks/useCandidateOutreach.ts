@@ -1,15 +1,17 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  ApplyFromInvitationRequest,
+  ApplyFromInvitationResponse,
   BulkInviteResponse,
   CandidateOutreachInvitationDto,
   CompanyOutreachSettings,
   CandidateSearchResultDto,
   CompanyOutreachInvitationDto,
   EmployerOutreachSummary,
-  OutreachInvitationAction,
   OutreachInvitationStatus,
   OutreachSettings,
   PaginatedResponse,
+  RespondOutreachInvitationRequest,
   RespondOutreachInvitationResponse,
   SentOutreachInvitationDto,
 } from "@sip/shared-types";
@@ -23,6 +25,8 @@ const sentKey = (jobId: string) => ["employer", "job-posts", jobId, "outreach-in
 export const OUTREACH_KEY = ["employer", "outreach"] as const;
 const INBOX_KEY = ["candidate", "outreach-invitations"] as const;
 const SETTINGS_KEY = ["candidate", "outreach-settings"] as const;
+/** Key danh sách đơn của ứng viên (useCandidateApplications). */
+const CANDIDATE_APPLICATIONS_KEY = ["candidate", "applications"] as const;
 
 // ─── Employer ──────────────────────────────────────────────────────────────
 
@@ -205,14 +209,32 @@ export function useOutreachInvitations(enabled: boolean) {
 export function useRespondOutreachInvitation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ invitationId, action }: { invitationId: string; action: OutreachInvitationAction }) =>
+    mutationFn: ({ invitationId, body }: { invitationId: string; body: RespondOutreachInvitationRequest }) =>
       apiFetch<RespondOutreachInvitationResponse>("candidate", `/candidate/outreach-invitations/${invitationId}/respond`, {
         method: "POST",
-        body: JSON.stringify({ action }),
+        body: JSON.stringify(body),
       }),
     // Cả khi lỗi (409 — lời mời vừa hết hạn) cũng tải lại để hiện đúng trạng thái.
+    // Nhận lời = ứng tuyển (AD-28) ⇒ danh sách đơn của ứng viên cũng đổi.
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: INBOX_KEY });
+      void queryClient.invalidateQueries({ queryKey: CANDIDATE_APPLICATIONS_KEY });
+    },
+  });
+}
+
+/** Lời mời đã nhận theo kiểu cũ (chỉ mở hội thoại) mà chưa có đơn ⇒ "Ứng tuyển ngay" (AD-28 mục 5). */
+export function useApplyFromInvitation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ invitationId, body }: { invitationId: string; body: ApplyFromInvitationRequest }) =>
+      apiFetch<ApplyFromInvitationResponse>("candidate", `/candidate/outreach-invitations/${invitationId}/apply`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: INBOX_KEY });
+      void queryClient.invalidateQueries({ queryKey: CANDIDATE_APPLICATIONS_KEY });
     },
   });
 }

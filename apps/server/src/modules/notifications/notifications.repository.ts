@@ -25,6 +25,11 @@ export class NotificationsRepository {
     return db.notification.create({ data });
   }
 
+  /** Nhiều thông báo trong một câu, trả lại các dòng vừa tạo (AD-29 bước 7). */
+  createManyAndReturn(data: NotificationWriteData[], db: Db = this.prisma): Promise<Notification[]> {
+    return db.notification.createManyAndReturn({ data });
+  }
+
   async existsByDedupeKey(dedupeKey: string): Promise<boolean> {
     const row = await this.prisma.notification.findUnique({ where: { dedupeKey }, select: { id: true } });
     return row !== null;

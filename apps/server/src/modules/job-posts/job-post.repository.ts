@@ -3,6 +3,7 @@ import {
   type JobPost,
   type JobPostModerationAction,
   type JobPostStatus,
+  type JobQualityBand,
   type JobPostType,
   type MajorRelevance,
   type ModerationActionType,
@@ -68,6 +69,14 @@ export interface JobPostWriteData {
   status?: JobPostStatus;
   publishedAt?: Date | null;
   closedAt?: Date | null;
+  // AD-29 — lúc gửi duyệt + điểm chất lượng, do JobQualityService.submissionColumns tính.
+  submittedAt?: Date | null;
+  qualityScore?: number | null;
+  qualityBand?: JobQualityBand | null;
+  qualityBreakdown?: Prisma.InputJsonValue | Prisma.NullableJsonNullValueInput;
+  qualityVersion?: number | null;
+  qualityScoredAt?: Date | null;
+  submittedContentHash?: string | null;
 }
 
 interface Page<T> {
@@ -81,6 +90,89 @@ function paginate<T extends { id: string }>(rows: T[]): Page<T> {
   const items = hasMore ? rows.slice(0, PAGE_SIZE) : rows;
   const nextCursor = hasMore ? items[items.length - 1]?.id : undefined;
   return { items, hasMore, ...(nextCursor ? { nextCursor } : {}) };
+}
+
+// ─── Hàng đợi kiểm duyệt (AD-29 bước 6) ─────────────────────────────────────
+
+export type ModerationQueueSort = "submitted_asc" | "score_desc" | "score_asc" | "created_desc";
+
+export interface ModerationQueueFilter {
+  status?: JobPostStatus;
+  /** `UNSCORED` = tin chưa có điểm (`qualityBand` null). */
+  band?: JobQualityBand | "UNSCORED";
+  sort?: ModerationQueueSort;
+}
+
+/** Mặc định: tin chờ duyệt gửi trước xử lý trước; trạng thái khác mới tạo trước (như cũ). */
+export function resolveModerationSort(filter: ModerationQueueFilter): ModerationQueueSort {
+  return filter.sort ?? (filter.status === "PENDING" ? "submitted_asc" : "created_desc");
+}
+
+export function moderationWhere(filter: ModerationQueueFilter): Prisma.JobPostWhereInput {
+  return {
+    ...(filter.status ? { status: filter.status } : {}),
+    ...(filter.band === "UNSCORED" ? { qualityBand: null } : filter.band ? { qualityBand: filter.band } : {}),
+  };
+}
+
+export function moderationOrderBy(sort: ModerationQueueSort): Prisma.JobPostOrderByWithRelationInput[] {
+  switch (sort) {
+    case "submitted_asc":
+      return [{ submittedAt: { sort: "asc", nulls: "last" } }, { id: "asc" }];
+    case "score_desc":
+      return [{ qualityScore: { sort: "desc", nulls: "last" } }, { id: "asc" }];
+    case "score_asc":
+      return [{ qualityScore: { sort: "asc", nulls: "last" } }, { id: "asc" }];
+    case "created_desc":
+      return [{ createdAt: "desc" }, { id: "asc" }];
+  }
+}
+
+type ModerationAnchor = { id: string; submittedAt: Date | null; qualityScore: number | null; createdAt: Date };
+
+/**
+ * Điều kiện "đứng sau tin mốc" theo đúng `moderationOrderBy(sort)` (giá trị null xếp cuối,
+ * hoà thì `id` tăng dần):
+ * - mốc có giá trị v ⇒ (giá trị đứng sau v) HOẶC (= v VÀ id > mốc) HOẶC (giá trị null);
+ * - mốc null ⇒ (null VÀ id > mốc).
+ */
+export function moderationKeysetWhere(sort: ModerationQueueSort, anchor: ModerationAnchor): Prisma.JobPostWhereInput {
+  const afterId = { id: { gt: anchor.id } };
+  switch (sort) {
+    case "submitted_asc": {
+      const value = anchor.submittedAt;
+      if (value === null) return { submittedAt: null, ...afterId };
+      return { OR: [{ submittedAt: { gt: value } }, { submittedAt: value, ...afterId }, { submittedAt: null }] };
+    }
+    case "score_desc":
+    case "score_asc": {
+      const value = anchor.qualityScore;
+      if (value === null) return { qualityScore: null, ...afterId };
+      const beyond = sort === "score_desc" ? { lt: value } : { gt: value };
+      return { OR: [{ qualityScore: beyond }, { qualityScore: value, ...afterId }, { qualityScore: null }] };
+    }
+    case "created_desc":
+      return { OR: [{ createdAt: { lt: anchor.createdAt } }, { createdAt: anchor.createdAt, ...afterId }] };
+  }
+}
+
+/** Điểm / vùng / breakdown của tin, đọc ngay sau khi đổi trạng thái (bước 5, 7). */
+export interface JobPostQualitySnapshot {
+  qualityScore: number | null;
+  qualityBand: JobQualityBand | null;
+  qualityBreakdown: Prisma.JsonValue | null;
+}
+
+/** Một tin của lô duyệt / từ chối hàng loạt (AD-29 bước 7). */
+export interface BulkModerationPost {
+  id: string;
+  status: JobPostStatus;
+  title: string;
+  companyId: string;
+  company: { name: string };
+  qualityBreakdown: Prisma.JsonValue | null;
+  /** Bước 8 — duyệt xong thì gọi tự mời cho công ty (như duyệt một tin). */
+  autoOutreachEnabled: boolean;
 }
 
 export interface PublicJobSearchFilter {
@@ -181,6 +273,45 @@ export class JobPostRepository {
     return db.jobPost.update({ where: { id }, data, include: jobPostInclude });
   }
 
+  /**
+   * AD-29 (điểm 8) — đổi trạng thái chỉ khi tin còn đúng `from`, trong một câu
+   * `UPDATE … WHERE id AND status`. `false` ⇒ tin đã bị người khác chuyển trạng thái
+   * (hoặc đã bị xoá): hai Admin bấm cùng lúc chỉ một người thắng.
+   */
+  async transitionIfStatus(id: string, from: JobPostStatus, data: JobPostWriteData, db: Db = this.prisma): Promise<boolean> {
+    const { count } = await db.jobPost.updateMany({ where: { id, status: from }, data });
+    return count === 1;
+  }
+
+  /**
+   * AD-29 — điểm / vùng hiện tại của tin. Gọi trong transaction ngay sau
+   * `transitionIfStatus` thắng: dòng tin đang bị khoá nên lối chấm nền không ghi
+   * xen vào được, giá trị đọc ra là điểm của tin đúng lúc được quyết định.
+   */
+  findQuality(id: string, db: Db = this.prisma): Promise<JobPostQualitySnapshot | null> {
+    return db.jobPost.findUnique({ where: { id }, select: { qualityScore: true, qualityBand: true, qualityBreakdown: true } });
+  }
+
+  /**
+   * AD-29 bước 7 — đọc trước cả lô duyệt / từ chối bằng một câu: chỉ các cột lô cần
+   * (trạng thái để bỏ qua sớm, tiêu đề / tên công ty cho thông báo và audit, breakdown
+   * cho lý do tự sinh). Không kèm `jobPostInclude`: lô không trả DTO.
+   */
+  findForBulkModeration(ids: string[], db: Db = this.prisma): Promise<BulkModerationPost[]> {
+    return db.jobPost.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        status: true,
+        title: true,
+        companyId: true,
+        company: { select: { name: true } },
+        qualityBreakdown: true,
+        autoOutreachEnabled: true,
+      },
+    });
+  }
+
   async delete(id: string, db: Db = this.prisma): Promise<void> {
     await db.jobPost.delete({ where: { id } });
   }
@@ -249,19 +380,66 @@ export class JobPostRepository {
     return rows.map((row) => row.id);
   }
 
-  /** Hàng đợi kiểm duyệt của Admin — mặc định PENDING, cho phép lọc trạng thái khác. */
+  /**
+   * Hàng đợi kiểm duyệt của Admin (AD-29 bước 6): lọc trạng thái / vùng chất lượng,
+   * sắp theo `filter.sort`, luôn kèm `id` tăng dần làm khoá phụ. Phân trang theo khoá
+   * (xem `moderationKeysetWhere`), không dùng `cursor` của Prisma vì cột điểm và
+   * `submittedAt` cho phép null. `cursor` là id tin cuối của trang trước; tin đó đã được
+   * duyệt / từ chối (rời bộ lọc) vẫn dùng làm mốc được, nên trang sau không bị nhảy.
+   * Trả `null` khi cursor không trỏ tới tin nào (đã bị xoá / gõ sai).
+   */
   async findModerationQueue(
-    status: JobPostStatus | undefined,
+    filter: ModerationQueueFilter,
     cursor: string | undefined,
-  ): Promise<Page<JobPostWithRelations>> {
-    const rows = await this.prisma.jobPost.findMany({
-      where: status ? { status } : {},
-      include: jobPostInclude,
-      orderBy: { createdAt: "desc" },
-      take: PAGE_SIZE + 1,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+  ): Promise<(Page<JobPostWithRelations> & { total: number }) | null> {
+    const sort = resolveModerationSort(filter);
+    const base = moderationWhere(filter);
+    let after: Prisma.JobPostWhereInput | null = null;
+    if (cursor) {
+      const anchor = await this.prisma.jobPost.findUnique({
+        where: { id: cursor },
+        select: { id: true, submittedAt: true, qualityScore: true, createdAt: true },
+      });
+      if (!anchor) return null;
+      after = moderationKeysetWhere(sort, anchor);
+    }
+    const [rows, total] = await Promise.all([
+      this.prisma.jobPost.findMany({
+        where: after ? { AND: [base, after] } : base,
+        include: jobPostInclude,
+        orderBy: moderationOrderBy(sort),
+        take: PAGE_SIZE + 1,
+      }),
+      this.prisma.jobPost.count({ where: base }),
+    ]);
+    return { ...paginate(rows), total };
+  }
+
+  /** Id tin khớp bộ lọc hàng đợi theo đúng thứ tự, tối đa `limit`, kèm tổng số khớp. */
+  async findModerationIds(filter: ModerationQueueFilter, limit: number): Promise<{ ids: string[]; total: number }> {
+    const where = moderationWhere(filter);
+    const [rows, total] = await Promise.all([
+      this.prisma.jobPost.findMany({
+        where,
+        select: { id: true },
+        orderBy: moderationOrderBy(resolveModerationSort(filter)),
+        take: limit,
+      }),
+      this.prisma.jobPost.count({ where }),
+    ]);
+    return { ids: rows.map((row) => row.id), total };
+  }
+
+  /** Số tin PENDING theo vùng chất lượng; `null` (chưa chấm) gom vào UNSCORED. */
+  async countPendingByBand(): Promise<Record<JobQualityBand | "UNSCORED", number>> {
+    const groups = await this.prisma.jobPost.groupBy({
+      by: ["qualityBand"],
+      where: { status: "PENDING" },
+      _count: { _all: true },
     });
-    return paginate(rows);
+    const counts = { SUGGEST_APPROVE: 0, NEEDS_REVIEW: 0, SUGGEST_REJECT: 0, UNSCORED: 0 };
+    for (const group of groups) counts[group.qualityBand ?? "UNSCORED"] = group._count._all;
+    return counts;
   }
 
   /**
@@ -406,7 +584,17 @@ export class JobPostRepository {
   }
 
   createModerationAction(
-    data: { jobPostId: string; action: ModerationActionType; actorId?: string | null; reason?: string | null },
+    data: {
+      jobPostId: string;
+      action: ModerationActionType;
+      actorId?: string | null;
+      reason?: string | null;
+      // AD-29 — điểm / vùng của tin lúc Admin quyết định.
+      qualityScore?: number | null;
+      qualityBand?: JobQualityBand | null;
+      /** AD-29 bước 7 — quyết định qua duyệt / từ chối hàng loạt. */
+      bulk?: boolean;
+    },
     db: Db = this.prisma,
   ): Promise<JobPostModerationAction> {
     return db.jobPostModerationAction.create({ data });

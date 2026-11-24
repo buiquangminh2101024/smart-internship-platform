@@ -25,12 +25,12 @@ import { MAX_NEW_EMBEDDINGS_PER_REQUEST } from "../job-matching/job-matching.con
 import type { JobMatcherMode } from "../job-matching/job-matching.service";
 import type { MatchEmbeddingService, PairSimilarities } from "../job-matching/match-embedding.service";
 import { markSemanticPending } from "../job-matching/scoring-job-matcher";
-import type { MessagingService } from "../messaging/messaging.service";
 import type { NotificationsService } from "../notifications/notifications.service";
 import type { CompanySubscriptionRepository } from "../subscriptions/company-subscription.repository";
 import type { SubscriptionsService } from "../subscriptions/subscriptions.service";
 import type { AutoOutreachRepository } from "./auto-outreach.repository";
 import type { AutoOutreachTrigger } from "./auto-outreach.service";
+import type { AcceptApplicationInput, InvitationApplicationService } from "./invitation-application.service";
 import {
   autoDailyLimit,
   hasDailyRoom,
@@ -118,11 +118,11 @@ export class CandidateOutreachService {
   private readonly matchEmbeddingService: MatchEmbeddingService;
   private readonly candidateMatchProfileLoader: CandidateMatchProfileLoader;
   private readonly jobMatchProfileLoader: JobMatchProfileLoader;
-  private readonly messagingService: MessagingService;
   private readonly notificationsService: NotificationsService;
   private readonly logger: Logger;
   private readonly autoOutreachTrigger: AutoOutreachTrigger;
   private readonly autoOutreachRepository: AutoOutreachRepository;
+  private readonly invitationApplicationService: InvitationApplicationService;
   private readonly mode: JobMatcherMode;
 
   constructor({
@@ -137,11 +137,11 @@ export class CandidateOutreachService {
     matchEmbeddingService,
     candidateMatchProfileLoader,
     jobMatchProfileLoader,
-    messagingService,
     notificationsService,
     logger,
     autoOutreachTrigger,
     autoOutreachRepository,
+    invitationApplicationService,
     config,
   }: {
     prisma: PrismaClient;
@@ -155,11 +155,12 @@ export class CandidateOutreachService {
     matchEmbeddingService: MatchEmbeddingService;
     candidateMatchProfileLoader: CandidateMatchProfileLoader;
     jobMatchProfileLoader: JobMatchProfileLoader;
-    messagingService: MessagingService;
     notificationsService: NotificationsService;
     logger: Logger;
     autoOutreachTrigger: AutoOutreachTrigger;
     autoOutreachRepository: AutoOutreachRepository;
+    /** AD-28 — nhận lời = ứng tuyển. */
+    invitationApplicationService: InvitationApplicationService;
     config: { JOB_MATCHER_MODE: JobMatcherMode };
   }) {
     this.prisma = prisma;
@@ -173,11 +174,11 @@ export class CandidateOutreachService {
     this.matchEmbeddingService = matchEmbeddingService;
     this.candidateMatchProfileLoader = candidateMatchProfileLoader;
     this.jobMatchProfileLoader = jobMatchProfileLoader;
-    this.messagingService = messagingService;
     this.notificationsService = notificationsService;
     this.logger = logger;
     this.autoOutreachTrigger = autoOutreachTrigger;
     this.autoOutreachRepository = autoOutreachRepository;
+    this.invitationApplicationService = invitationApplicationService;
     this.mode = config.JOB_MATCHER_MODE;
   }
 
@@ -486,17 +487,32 @@ export class CandidateOutreachService {
     const acceptedJobPostIds = invitations
       .filter((invitation) => invitation.status === "ACCEPTED")
       .map((invitation) => invitation.jobPostId);
-    const conversations = await this.repository.findConversationIdsByJobPost(candidateId, acceptedJobPostIds);
+    const [conversations, applications] = await Promise.all([
+      this.repository.findConversationIdsByJobPost(candidateId, acceptedJobPostIds),
+      this.repository.findActiveApplicationIdsByJobPost(candidateId, [...new Set(invitations.map((i) => i.jobPostId))]),
+    ]);
     const now = new Date();
     return invitations.map((invitation) =>
-      toCandidateOutreachInvitationDto(invitation, conversations.get(invitation.jobPostId) ?? null, now),
+      toCandidateOutreachInvitationDto(
+        invitation,
+        conversations.get(invitation.jobPostId) ?? null,
+        applications.get(invitation.jobPostId) ?? null,
+        now,
+      ),
     );
   }
 
+  /** AD-28 — "Ứng tuyển ngay" cho lời mời đã nhận theo kiểu cũ (chưa có đơn). */
+  applyFromInvitation(userId: string, invitationId: string, input: AcceptApplicationInput): Promise<{ applicationId: string }> {
+    return this.invitationApplicationService.applyFromAccepted(userId, invitationId, input);
+  }
+
+  /** AD-28 — ACCEPT kèm CV: nhận lời = ứng tuyển (docs/06-backend/invitation-apply/PLAN.md bước 3). */
   async respond(
     userId: string,
     invitationId: string,
     action: OutreachInvitationAction,
+    application?: AcceptApplicationInput,
   ): Promise<RespondOutreachInvitationResponse> {
     const candidateId = await this.requireCandidateId(userId);
     const invitation = await this.repository.findById(invitationId);
@@ -508,10 +524,22 @@ export class CandidateOutreachService {
       throw new AppError(409, "Lời mời không còn hiệu lực.");
     }
 
-    const status = action === "ACCEPT" ? "ACCEPTED" : "DECLINED";
+    if (action === "ACCEPT") {
+      if (!application) throw new AppError(400, "Cần chọn CV để nhận lời mời.");
+      const accepted = await this.prisma.$transaction((tx) =>
+        this.invitationApplicationService.acceptInTx(tx, invitation, userId, application),
+      );
+      const conversationId = await this.invitationApplicationService.openConversation(
+        userId,
+        invitation.jobPostId,
+        invitation.id,
+      );
+      return { status: "ACCEPTED", conversationId, ...accepted };
+    }
+
     await this.prisma.$transaction(async (tx) => {
       // Điều kiện PENDING + chưa quá hạn nằm trong câu UPDATE ⇒ an toàn khi trả lời đồng thời.
-      const updated = await this.repository.respondIfPending(invitation.id, status, tx);
+      const updated = await this.repository.respondIfPending(invitation.id, "DECLINED", tx);
       if (!updated) throw new AppError(409, "Lời mời không còn hiệu lực.");
       await this.notificationsService.notify(
         "CANDIDATE_OUTREACH_INVITATION_RESPONDED",
@@ -521,31 +549,16 @@ export class CandidateOutreachService {
           jobPostId: invitation.jobPostId,
           jobPostTitle: invitation.jobPost.title,
           candidateName: invitation.candidate.fullName,
-          accepted: status === "ACCEPTED",
+          accepted: false,
         },
         tx,
       );
     });
 
-    if (status === "DECLINED") {
-      // AD-23 — tin vừa trống một chỗ ⇒ mời bù ngay (không chờ). Công ty không có tin
-      // nào đang bật tự mời thì lượt chạy dừng ở câu lọc rẻ.
-      this.autoOutreachTrigger(invitation.companyId);
-      return { status, conversationId: null };
-    }
-
-    // Ngoài transaction: createConversation dùng client riêng và tự trả hội thoại cũ nếu
-    // đã có. Lỗi ở đây không hoàn tác Accept — Candidate vẫn tự mở hội thoại được từ tin.
-    try {
-      const conversation = await this.messagingService.createConversation(userId, "CANDIDATE", invitation.jobPostId);
-      return { status, conversationId: conversation.id };
-    } catch (error) {
-      this.logger.error("Accept outreach invitation: create conversation failed", {
-        invitationId: invitation.id,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return { status, conversationId: null };
-    }
+    // AD-23 — tin vừa trống một chỗ ⇒ mời bù ngay (không chờ). Công ty không có tin
+    // nào đang bật tự mời thì lượt chạy dừng ở câu lọc rẻ.
+    this.autoOutreachTrigger(invitation.companyId);
+    return { status: "DECLINED", conversationId: null, applicationId: null, linkedExisting: false };
   }
 
   async updateSettings(userId: string, settings: OutreachSettings): Promise<OutreachSettings> {

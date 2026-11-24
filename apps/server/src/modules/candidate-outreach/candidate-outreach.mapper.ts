@@ -73,6 +73,7 @@ export function toCompanyOutreachInvitationDto(
 export function toCandidateOutreachInvitationDto(
   invitation: InvitationWithRelations,
   conversationId: string | null,
+  applicationId: string | null,
   now: Date = new Date(),
 ): CandidateOutreachInvitationDto {
   const status = effectiveStatus(invitation, now);
@@ -85,6 +86,7 @@ export function toCandidateOutreachInvitationDto(
     jobPost: { id: invitation.jobPost.id, title: invitation.jobPost.title, status: invitation.jobPost.status },
     company: { id: invitation.company.id, name: invitation.company.name, logoUrl: invitation.company.logoUrl },
     conversationId: status === "ACCEPTED" ? conversationId : null,
+    applicationId,
   };
 }
 

@@ -1,7 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import type { ApplicationSkillMatch, EmployerApplicationListItem, EmployerApplicationsFocus } from "@sip/shared-types";
+import type {
+  ApplicationInvitationInfo,
+  ApplicationSkillMatch,
+  EmployerApplicationListItem,
+  EmployerApplicationsFocus,
+} from "@sip/shared-types";
 import { APPLICATION_STATUS_LABEL, isFinalApplicationStatus } from "@/lib/application-status";
 import { JOB_STATUS_LABEL } from "@/lib/job-post-display";
 import { formatVnDayMonth, formatVnTime, formatWaited, initialsOf, waitedOverDays } from "@/lib/dashboard-format";
@@ -92,6 +97,16 @@ export function SkillMatchText({ match }: { match: ApplicationSkillMatch }) {
       kỹ năng bắt buộc
       {optional}
     </span>
+  );
+}
+
+/** Hồ sơ đến từ lời mời (AD-28): vào thẳng Đang xem xét nên ghi rõ nguồn. */
+export function InvitedBadge({ invitation }: { invitation: ApplicationInvitationInfo | null }) {
+  if (!invitation) return null;
+  return (
+    <Badge tone="brand" icon="mail-check">
+      {invitation.source === "AUTO" ? "Được mời · Tự động" : "Được mời"}
+    </Badge>
   );
 }
 
@@ -189,6 +204,7 @@ function Status({
     // Không xuống dòng trong nhãn: cột Trạng thái lấy đủ bề rộng của nhãn dài nhất, các cột chữ co lại.
     <div className="flex flex-col items-start gap-1 whitespace-nowrap">
       <Badge tone={status.tone}>{status.label}</Badge>
+      <InvitedBadge invitation={item.invitation} />
       {item.changedBySystem ? (
         // Lần đổi gần nhất do hệ thống làm (AD-25): tự chuyển Đang xem xét hoặc tự đóng khi tin ngừng tuyển.
         <TaskBadge tone="neutral">

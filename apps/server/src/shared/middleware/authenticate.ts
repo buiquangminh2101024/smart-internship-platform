@@ -1,7 +1,8 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import type { AwilixContainer } from "awilix";
 import type { Role } from "@prisma/client";
-import { AppError } from "../errors/AppError";
+import { AppError, authStoreUnavailable } from "../errors/AppError";
+import { logger } from "../logger";
 import type { JwtService } from "../../modules/auth/jwt.service";
 import type { TokenBlacklist } from "../ports/TokenBlacklist";
 import type { AccountSuspensionStore } from "../ports/AccountSuspensionStore";
@@ -46,10 +47,20 @@ export function authenticate(container: AwilixContainer): RequestHandler {
         // Blacklist jti → Admin khoá tài khoản (AD-17) → "đăng xuất mọi thiết
         // bị" (AD-18; không có mốc trong Redis ⇒ không hỏi lại DB). 3 khoá hỏi
         // cùng lúc, xét theo đúng thứ tự này.
-        const rejection = await checkAccessTokenState(
-          { tokenBlacklist, accountSuspensionStore, sessionRevocationStore },
-          payload,
-        );
+        // AD-31 D1: Redis lỗi ⇒ 503, không phải 401. 401 khiến web refresh rồi
+        // xoá phiên dùng chung của mọi tab, dù token vẫn hợp lệ.
+        let rejection: Awaited<ReturnType<typeof checkAccessTokenState>>;
+        try {
+          rejection = await checkAccessTokenState(
+            { tokenBlacklist, accountSuspensionStore, sessionRevocationStore },
+            payload,
+          );
+        } catch (error) {
+          logger.error("authenticate: không kiểm được trạng thái token", {
+            message: error instanceof Error ? error.message : String(error),
+          });
+          throw authStoreUnavailable();
+        }
         if (rejection === "TOKEN_REVOKED") {
           throw new AppError(401, "Token has been revoked");
         }

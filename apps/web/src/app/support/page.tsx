@@ -7,7 +7,7 @@ import { SupportContactForm } from "@/components/support/SupportContactForm";
 export const metadata: Metadata = { title: "Liên hệ hỗ trợ — InternHub" };
 
 interface SupportPageProps {
-  searchParams: Promise<{ category?: string | string[]; email?: string | string[] }>;
+  searchParams: Promise<{ category?: string | string[]; email?: string | string[]; message?: string | string[] }>;
 }
 
 function firstParam(value: string | string[] | undefined): string {
@@ -16,12 +16,15 @@ function firstParam(value: string | string[] | undefined): string {
 
 /**
  * Trang hỗ trợ bản A (AD-17): công khai, người bị khoá tài khoản vẫn gửi được.
- * `LoginForm` dẫn tới đây với `?category=ACCOUNT_SUSPENDED&email=…` để điền sẵn.
+ * `LoginForm` dẫn tới đây với `?category=ACCOUNT_SUSPENDED&email=…` để điền sẵn. Form nhập OTP
+ * mãi không được (AD-31 D7) dẫn tới với `?category=OTHER&email=…&message=…`.
  */
 export default async function SupportPage({ searchParams }: SupportPageProps) {
   const params = await searchParams;
   const category: SupportCategory = firstParam(params.category) === "ACCOUNT_SUSPENDED" ? "ACCOUNT_SUSPENDED" : "OTHER";
   const email = firstParam(params.email).trim().slice(0, 254);
+  // Khớp giới hạn 2.000 ký tự của server; người dùng vẫn sửa được trước khi gửi.
+  const message = firstParam(params.message).trim().slice(0, 2000);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -34,7 +37,7 @@ export default async function SupportPage({ searchParams }: SupportPageProps) {
             Gửi câu hỏi hoặc yêu cầu tới quản trị viên InternHub. Bạn nhận phản hồi qua email.
           </p>
         </div>
-        <SupportContactForm initialEmail={email} initialCategory={category} />
+        <SupportContactForm initialEmail={email} initialCategory={category} initialMessage={message} />
       </main>
 
       <SiteFooter />

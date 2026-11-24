@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { asClass, asFunction, type AwilixContainer } from "awilix";
+import { asClass, asFunction, asValue, type AwilixContainer } from "awilix";
 import { authenticate } from "../../shared/middleware/authenticate";
 import { authorize } from "../../shared/middleware/authorize";
 import { optionalAuthenticate } from "../../shared/middleware/optional-authenticate";
@@ -13,16 +13,25 @@ import {
   type RequirementExtractorTier,
 } from "../../infrastructure/fallback-requirement-extractor";
 import type { Cradle } from "../../container";
+import { BulkModerationBatches } from "./bulk-moderation-batches";
 import { JobPostRepository } from "./job-post.repository";
 import { JobPostsController } from "./job-posts.controller";
 import { JobPostsService } from "./job-posts.service";
 import { JobPostRequirementsService } from "./job-post-requirements.service";
+import { JobQualityInputLoader } from "./job-quality-input.loader";
+import { JobQualityService, type JobQualityCompanyTrigger } from "./job-quality.service";
+import { PublishFollowUpService } from "./publish-follow-up.service";
 import { RequirementExtractionRateLimitService } from "./requirement-extraction-rate-limit.service";
+import type { AutoOutreachTrigger } from "../candidate-outreach/auto-outreach.service";
+import type { JobScoredListener, MatchScoreService } from "../match-scores/match-score.service";
 import {
+  bulkApproveSchema,
+  bulkRejectSchema,
   confirmRequirementsSchema,
   createJobPostSchema,
   employerJobPostListQuerySchema,
   jobPostSearchQuerySchema,
+  moderationIdsQuerySchema,
   moderationQueueQuerySchema,
   rejectJobPostSchema,
   retractJobPostSchema,
@@ -66,6 +75,32 @@ export function jobPostsRouter(container: AwilixContainer): Router {
     requirementExtractionRateLimitService: asClass(RequirementExtractionRateLimitService).singleton(),
     jobPostRequirementsService: asClass(JobPostRequirementsService).singleton(),
     jobPostRepository: asClass(JobPostRepository).singleton(),
+    // AD-29 — chấm điểm chất lượng tin.
+    jobQualityInputLoader: asClass(JobQualityInputLoader).singleton(),
+    // Singleton bắt buộc: Map công ty đang chấm lại phải dùng chung cho mọi lối gọi.
+    jobQualityService: asClass(JobQualityService).singleton(),
+    // Q4 — job-reports (báo cáo mới, xử lý báo cáo) và retract gọi sau commit. Resolve service
+    // lúc gọi ⇒ job-reports không phụ thuộc ngược vào job-posts khi dựng service.
+    jobQualityCompanyTrigger: asValue<JobQualityCompanyTrigger>((companyId) => {
+      void container.resolve<JobQualityService>("jobQualityService").triggerCompany(companyId);
+    }),
+    // AD-29 bước 7 — kết quả lô hàng loạt giữ trong bộ nhớ: singleton bắt buộc. asFunction vì
+    // constructor nhận tuỳ chọn, không nhận cradle.
+    bulkModerationBatches: asFunction(() => new BulkModerationBatches()).singleton(),
+    // AD-29 bước 8 — hàng đợi việc sau lô duyệt: singleton bắt buộc (một lượt tại một thời điểm).
+    // Các phụ thuộc resolve lúc gọi ⇒ không tạo vòng DI với match-scores / candidate-outreach /
+    // job-alerts (các module đó đăng ký sau trong main.ts).
+    publishFollowUpService: asFunction(
+      ({ logger }: { logger: Logger }) =>
+        new PublishFollowUpService({
+          rescoreJob: (jobPostId, cache) =>
+            container.resolve<MatchScoreService>("matchScoreService").rescoreJob(jobPostId, cache),
+          createProfileCache: () => container.resolve<MatchScoreService>("matchScoreService").createCache(),
+          jobScoredListener: (jobPostId) => container.resolve<JobScoredListener>("jobScoredListener")(jobPostId),
+          autoOutreachTrigger: (companyId) => container.resolve<AutoOutreachTrigger>("autoOutreachTrigger")(companyId),
+          logger,
+        }),
+    ).singleton(),
     jobPostsService: asClass(JobPostsService).singleton(),
     jobPostsController: asClass(JobPostsController).singleton(),
   });
@@ -128,6 +163,21 @@ export function jobPostsRouter(container: AwilixContainer): Router {
   router.get("/admin/job-posts/stats", ...adminGuard, (req, res, next) => {
     void resolveController().moderationStats(req, res, next);
   });
+  // AD-29 bước 6 — id khớp bộ lọc (tối đa một lô) cho "Chọn tất cả tin trong vùng".
+  // Khai báo trước `/admin/job-posts/:id` để "ids" không bị hiểu là id tin.
+  router.get("/admin/job-posts/ids", ...adminGuard, validate(moderationIdsQuerySchema, "query"), (req, res, next) => {
+    void resolveController().moderationIds(req, res, next);
+  });
+  // AD-29 bước 7 — duyệt / từ chối hàng loạt (1–50 tin) và kết quả lô (khi lô chạy quá thời gian chờ).
+  router.post("/admin/job-posts/bulk-approve", ...adminGuard, validate(bulkApproveSchema), (req, res, next) => {
+    void resolveController().bulkApprove(req, res, next);
+  });
+  router.post("/admin/job-posts/bulk-reject", ...adminGuard, validate(bulkRejectSchema), (req, res, next) => {
+    void resolveController().bulkReject(req, res, next);
+  });
+  router.get("/admin/job-posts/bulk/:batchId", ...adminGuard, (req, res, next) => {
+    void resolveController().bulkResult(req, res, next);
+  });
   router.get("/admin/job-posts/:id", ...adminGuard, (req, res, next) => {
     void resolveController().moderationDetail(req, res, next);
   });
@@ -139,6 +189,10 @@ export function jobPostsRouter(container: AwilixContainer): Router {
   });
   router.post("/admin/job-posts/:id/retract", ...adminGuard, validate(retractJobPostSchema), (req, res, next) => {
     void resolveController().retract(req, res, next);
+  });
+  // AD-29 — chấm lại điểm chất lượng một tin (mọi trạng thái); không đổi trạng thái tin.
+  router.post("/admin/job-posts/:id/quality/rescore", ...adminGuard, (req, res, next) => {
+    void resolveController().rescoreQuality(req, res, next);
   });
 
   // ─── Public (Guest) ────────────────────────────────────────────────────

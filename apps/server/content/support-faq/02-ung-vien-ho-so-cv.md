@@ -149,4 +149,7 @@ questions:
 
 - Khi bật, nhà tuyển dụng có thể thấy hồ sơ của bạn trong kết quả tìm ứng viên cho tin của họ, nhưng **không thấy số điện thoại và email**.
 - Lời mời hiện ở **Lời mời ứng tuyển** (/job-invitations) và hết hạn sau **14 ngày**.
-- **Chấp nhận** sẽ tạo một hội thoại để hai bên trao đổi, và nhà tuyển dụng sẽ thấy email của bạn trong hội thoại. **Từ chối** thì nhà tuyển dụng được báo, không hoàn tác được.
+- **Nhận lời & ứng tuyển**: bạn chọn một CV đã lưu (cần có ít nhất một CV ở /cv) và có thể viết thư giới thiệu. Hồ sơ được gửi thẳng tới nhà tuyển dụng ở trạng thái **Đang xem xét**, xem ở **Ứng tuyển của tôi** (/applications) với nhãn **Được mời**, và không huỷ được. Một hội thoại cũng được tạo để hai bên trao đổi; nhà tuyển dụng sẽ thấy email của bạn trong hội thoại.
+- Nếu bạn nộp đơn thường vào một tin mà bạn đang có lời mời, việc nộp đơn được tính là nhận lời mời.
+- Lời mời đã chấp nhận trước đây mà chưa có đơn có nút **Ứng tuyển ngay**, khi tin còn tuyển.
+- **Từ chối** thì nhà tuyển dụng được báo, không hoàn tác được.
