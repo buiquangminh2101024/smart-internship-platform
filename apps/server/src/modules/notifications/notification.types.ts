@@ -144,6 +144,12 @@ export interface NotificationPayloadMap {
     /** true = có cờ chặn (ví dụ yêu cầu nộp tiền). */
     blocked: boolean;
   };
+  JOB_REPORT_RESOLVED: {
+    jobReportId: string;
+    jobPostTitle: string;
+    resolution: "TAKE_DOWN" | "DISMISS";
+    adminNote?: string | undefined;
+  };
 }
 
 // Khoá của map phải trùng khít enum Prisma: thêm giá trị vào enum mà quên khai

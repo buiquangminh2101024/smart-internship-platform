@@ -23,6 +23,7 @@ export const createJobReportSchema = z
   .object({
     reason: z.enum(REPORT_REASONS),
     description: z.string().trim().max(2000, "Mô tả tối đa 2000 ký tự").optional(),
+    evidenceUrls: z.array(z.string().url("URL minh chứng không hợp lệ")).max(5, "Tối đa 5 ảnh minh chứng").optional(),
   })
   .refine(
     (data) => data.reason !== "OTHER" || (!!data.description && data.description.trim().length >= 10),

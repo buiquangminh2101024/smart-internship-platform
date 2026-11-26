@@ -78,6 +78,7 @@ export const NOTIFICATION_GROUP_BY_TYPE: Record<NotificationType, NotificationGr
   PASSWORD_RESET_SUGGESTED: "ACCOUNT",
   SUPPORT_CONTACT_RECEIVED: "ACCOUNT",
   PROFILE_SKILLS_REMINDER: "ACCOUNT",
+  JOB_REPORT_RESOLVED: "ACCOUNT",
 };
 
 export const NOTIFICATION_GROUP_META: Record<NotificationGroup, { label: string; icon: string }> = {
@@ -99,6 +100,7 @@ export const NOTIFICATION_GROUP_META: Record<NotificationGroup, { label: string;
 const NOTIFICATION_TYPE_ICON: Partial<Record<NotificationType, string>> = {
   JOB_ALERT: "briefcase",
   PROFILE_SKILLS_REMINDER: "user-round-pen",
+  JOB_REPORT_RESOLVED: "shield-alert",
 };
 
 export function notificationIcon(type: NotificationType): string {
@@ -144,6 +146,7 @@ export const NOTIFICATION_ACTION_LABEL: Record<NotificationType, string> = {
   SUPPORT_CONTACT_RECEIVED: "Xem người dùng",
   // AD-26 — link trỏ về /profile.
   PROFILE_SKILLS_REMINDER: "Cập nhật hồ sơ",
+  JOB_REPORT_RESOLVED: "Xem thông báo",
 };
 
 /**

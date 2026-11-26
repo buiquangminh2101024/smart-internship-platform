@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CreateJobReportRequest, JobReportDto } from "@sip/shared-types";
-import { apiFetch } from "@/lib/api-client";
+import { apiFetch, apiUpload } from "@/lib/api-client";
 
 const checkKey = (jobId: string) => ["candidateJobReportCheck", jobId] as const;
 
@@ -28,6 +28,21 @@ export function useCreateJobReport(jobId: string) {
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: checkKey(jobId) });
+    },
+  });
+}
+
+export function useUploadJobReportEvidence() {
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await apiUpload<{ url: string }>(
+        "candidate",
+        "/job-reports/upload-evidence",
+        formData,
+      );
+      return res.url;
     },
   });
 }

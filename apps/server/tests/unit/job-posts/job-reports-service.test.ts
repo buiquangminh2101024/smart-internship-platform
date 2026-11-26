@@ -8,6 +8,7 @@ function buildTestContext() {
   const retractedJobs: any[] = [];
   const suspendedUsers: any[] = [];
   const qualityTriggers: string[] = [];
+  const notifications: any[] = [];
 
   const mockJob = {
     id: "job-1",
@@ -32,6 +33,7 @@ function buildTestContext() {
         reporterId: data.reporterId,
         reason: data.reason,
         description: data.description,
+        evidenceUrls: data.evidenceUrls ?? [],
         status: "PENDING",
         resolution: null,
         adminNote: null,
@@ -133,6 +135,11 @@ function buildTestContext() {
     prisma: prisma as any,
     logger: logger as any,
     jobQualityCompanyTrigger: (companyId: string) => qualityTriggers.push(companyId),
+    notificationsService: {
+      notify: async (type: string, userId: string, data: any) => {
+        notifications.push({ type, userId, data });
+      },
+    } as any,
   });
 
   return {
@@ -143,6 +150,7 @@ function buildTestContext() {
     retractedJobs,
     suspendedUsers,
     qualityTriggers,
+    notifications,
   };
 }
 
@@ -205,13 +213,16 @@ test("checkUserReport: kiểm tra chính xác trạng thái báo cáo đang ch�
 });
 
 test("executeAction: Admin chọn TAKE_DOWN thì gỡ tin, set RESOLVED và resolution = TAKE_DOWN", async () => {
-  const { service, retractedJobs, mockJob, qualityTriggers } = buildTestContext();
+  const { service, retractedJobs, mockJob, qualityTriggers, notifications } = buildTestContext();
   mockJob.status = "PUBLISHED";
 
   const created = await service.createReport("user-cand-1", "job-1", {
     reason: "SCAM",
     description: "Đa cấp",
+    evidenceUrls: ["https://res.cloudinary.com/demo/evidence.png"],
   });
+
+  assert.deepEqual(created.evidenceUrls, ["https://res.cloudinary.com/demo/evidence.png"]);
 
   const result = await service.executeAction("admin-1", created.id, {
     resolution: "TAKE_DOWN",
@@ -226,10 +237,14 @@ test("executeAction: Admin chọn TAKE_DOWN thì gỡ tin, set RESOLVED và reso
   assert.equal(retractedJobs[0].id, "job-1");
   // AD-29 Q4: một lần khi tạo báo cáo, một lần sau khi báo cáo được ghi RESOLVED.
   assert.deepEqual(qualityTriggers, ["comp-1", "comp-1"]);
+  assert.equal(notifications.length, 1);
+  assert.equal(notifications[0].type, "JOB_REPORT_RESOLVED");
+  assert.equal(notifications[0].userId, "user-cand-1");
+  assert.equal(notifications[0].data.resolution, "TAKE_DOWN");
 });
 
 test("executeAction: Admin chọn DISMISS thì giữ nguyên tin, set RESOLVED và resolution = DISMISS", async () => {
-  const { service, retractedJobs, auditLogs, mockJob, qualityTriggers } = buildTestContext();
+  const { service, retractedJobs, auditLogs, mockJob, qualityTriggers, notifications } = buildTestContext();
   mockJob.status = "PUBLISHED";
 
   const created = await service.createReport("user-cand-1", "job-1", {
@@ -252,6 +267,10 @@ test("executeAction: Admin chọn DISMISS thì giữ nguyên tin, set RESOLVED v
   assert.equal(auditLogs.some((l) => l.action === "JOB_REPORT_RESOLVED"), true);
   // Bỏ qua báo cáo cũng làm bớt một báo cáo đang chờ của công ty ⇒ chấm lại.
   assert.deepEqual(qualityTriggers, ["comp-1", "comp-1"]);
+  assert.equal(notifications.length, 1);
+  assert.equal(notifications[0].type, "JOB_REPORT_RESOLVED");
+  assert.equal(notifications[0].userId, "user-cand-1");
+  assert.equal(notifications[0].data.resolution, "DISMISS");
 });
 
 test("executeAction: ném 400 REPORT_ALREADY_PROCESSED khi báo cáo đã được xử lý trước đó", async () => {

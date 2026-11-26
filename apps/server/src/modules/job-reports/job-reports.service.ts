@@ -12,6 +12,7 @@ import type { AuditLogService } from "../audit-log/audit-log.service";
 import type { JobPostRepository } from "../job-posts/job-post.repository";
 import type { JobPostsService } from "../job-posts/job-posts.service";
 import type { JobQualityCompanyTrigger } from "../job-posts/job-quality.service";
+import type { NotificationsService } from "../notifications/notifications.service";
 import type { JobReportRepository } from "./job-report.repository";
 import type {
   AdminJobReportListQueryDto,
@@ -31,6 +32,7 @@ export class JobReportsService {
   private readonly prisma: PrismaClient;
   private readonly logger: Logger;
   private readonly jobQualityCompanyTrigger: JobQualityCompanyTrigger;
+  private readonly notificationsService: NotificationsService;
 
   constructor({
     jobPostsService,
@@ -41,6 +43,7 @@ export class JobReportsService {
     prisma,
     logger,
     jobQualityCompanyTrigger,
+    notificationsService,
   }: {
     jobPostsService: JobPostsService;
     jobReportRepository: JobReportRepository;
@@ -50,6 +53,7 @@ export class JobReportsService {
     prisma: PrismaClient;
     logger: Logger;
     jobQualityCompanyTrigger: JobQualityCompanyTrigger;
+    notificationsService: NotificationsService;
   }) {
     this.jobPostsService = jobPostsService;
     this.jobReportRepository = jobReportRepository;
@@ -59,6 +63,7 @@ export class JobReportsService {
     this.prisma = prisma;
     this.logger = logger;
     this.jobQualityCompanyTrigger = jobQualityCompanyTrigger;
+    this.notificationsService = notificationsService;
   }
 
   async createReport(
@@ -88,6 +93,7 @@ export class JobReportsService {
       reporterId,
       reason: dto.reason,
       description: dto.description ?? null,
+      evidenceUrls: dto.evidenceUrls ?? [],
     });
     // AD-29 Q4 — báo cáo mới (đang chờ) trừ điểm uy tín công ty ⇒ chấm lại tin đang chờ duyệt.
     this.jobQualityCompanyTrigger(job.companyId);
@@ -101,6 +107,7 @@ export class JobReportsService {
       reporterId: report.reporterId,
       reason: report.reason,
       description: report.description,
+      evidenceUrls: report.evidenceUrls ?? [],
       status: report.status,
       resolution: report.resolution,
       adminNote: report.adminNote,
@@ -245,6 +252,25 @@ export class JobReportsService {
     // JobQualityService gộp hai lần gọi, lượt sau thấy báo cáo đã ghi RESOLVED.
     this.jobQualityCompanyTrigger(report.job.companyId);
 
+    // Gửi thông báo kết quả xử lý báo cáo tới ứng viên (người đã báo cáo)
+    try {
+      await this.notificationsService.notify(
+        "JOB_REPORT_RESOLVED",
+        report.reporterId,
+        {
+          jobReportId: report.id,
+          jobPostTitle: report.job.title,
+          resolution: dto.resolution,
+          adminNote: dto.adminNote,
+        },
+      );
+    } catch (notifyErr) {
+      this.logger.error(
+        "Không thể gửi thông báo kết quả báo cáo tới ứng viên",
+        notifyErr instanceof Error ? { error: notifyErr.message } : undefined,
+      );
+    }
+
     const fullUpdated = await this.jobReportRepository.findById(id);
     return this.mapToAdminItem(fullUpdated!);
   }
@@ -263,6 +289,7 @@ export class JobReportsService {
       reporterName: report.reporter.candidate?.fullName ?? null,
       reason: report.reason,
       description: report.description,
+      evidenceUrls: report.evidenceUrls ?? [],
       status: report.status,
       resolution: report.resolution,
       adminNote: report.adminNote,

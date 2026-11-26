@@ -36,6 +36,7 @@ export const NOTIFICATION_GROUP_BY_TYPE: Record<NotificationType, NotificationGr
   ACCOUNT_ACTIVATED: "ACCOUNT",
   PASSWORD_RESET_SUGGESTED: "ACCOUNT",
   SUPPORT_CONTACT_RECEIVED: "ACCOUNT",
+  JOB_REPORT_RESOLVED: "ACCOUNT",
 };
 
 // Record<NotificationGroup, ...> ép liệt kê đủ nhóm của shared-types — nguồn cho

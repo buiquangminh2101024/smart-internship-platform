@@ -58,6 +58,7 @@ export function AdminJobReportDetailModal({
   const [selectedAction, setSelectedAction] = useState<ReportResolution>("TAKE_DOWN");
   const [adminNote, setAdminNote] = useState("");
   const [reasonText, setReasonText] = useState("");
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const executeActionMutation = useExecuteAdminJobReportAction();
@@ -113,16 +114,18 @@ export function AdminJobReportDetailModal({
         size="lg"
         labelledBy="report-detail-title"
       >
-        <form onSubmit={handleSubmitAction} className="flex max-h-[90vh] flex-col">
-          <DialogHeader
-            titleId="report-detail-title"
-            title="Chi tiết báo cáo vi phạm"
-            subtitle={`Mã báo cáo: #${report.id.slice(-8)} · Ngày tạo: ${formatDate(report.createdAt)}`}
-            onClose={onClose}
-            closeDisabled={isPending}
-          />
+        <form onSubmit={handleSubmitAction} className="flex max-h-[calc(100dvh-4rem)] flex-col overflow-hidden">
+          <div className="shrink-0">
+            <DialogHeader
+              titleId="report-detail-title"
+              title="Chi tiết báo cáo vi phạm"
+              subtitle={`Mã báo cáo: #${report.id.slice(-8)} · Ngày tạo: ${formatDate(report.createdAt)}`}
+              onClose={onClose}
+              closeDisabled={isPending}
+            />
+          </div>
 
-          <DialogBody className="grid gap-5 overflow-y-auto">
+          <DialogBody className="min-h-0 flex-1 overflow-y-auto">
             {/* Thông tin tin tuyển dụng bị báo cáo */}
             <div className="rounded-xl border border-border-default bg-surface-card p-4">
               <div className="flex flex-wrap items-start justify-between gap-3">
@@ -200,6 +203,46 @@ export function AdminJobReportDetailModal({
                 <p className="rounded-lg bg-surface-page p-3 text-sm text-text-body whitespace-pre-wrap">
                   {report.description || "(Ứng viên không cung cấp mô tả chi tiết)"}
                 </p>
+              </div>
+
+              {/* Minh chứng vi phạm kèm theo */}
+              <div className="grid gap-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-text-muted uppercase tracking-wider">
+                    Minh chứng đính kèm:
+                  </span>
+                  {report.evidenceUrls && report.evidenceUrls.length > 0 ? (
+                    <span className="text-xs font-medium text-brand-600">
+                      {report.evidenceUrls.length} ảnh
+                    </span>
+                  ) : null}
+                </div>
+                {report.evidenceUrls && report.evidenceUrls.length > 0 ? (
+                  <div className="flex flex-wrap gap-2.5 pt-1">
+                    {report.evidenceUrls.map((url, idx) => (
+                      <button
+                        key={url}
+                        type="button"
+                        onClick={() => setPreviewImageUrl(url)}
+                        className="group relative h-20 w-20 overflow-hidden rounded-lg border border-border-default bg-surface-page focus:outline-hidden focus:ring-2 focus:ring-brand-500 shadow-2xs cursor-pointer"
+                        title={`Xem ảnh minh chứng ${idx + 1}`}
+                      >
+                        <img
+                          src={url}
+                          alt={`Minh chứng ${idx + 1}`}
+                          className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/35 opacity-0 group-hover:opacity-100 transition-opacity text-white">
+                          <Icon name="maximize-2" size={16} />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs italic text-text-muted">
+                    (Ứng viên không đính kèm ảnh minh chứng)
+                  </p>
+                )}
               </div>
             </div>
 
@@ -365,23 +408,69 @@ export function AdminJobReportDetailModal({
             )}
           </DialogBody>
 
-          <DialogFooter>
-            <Button type="button" variant="secondary" onClick={onClose} disabled={isPending}>
-              Đóng
-            </Button>
-            {!isProcessed ? (
-              <Button
-                type="submit"
-                variant={selectedAction === "TAKE_DOWN" ? "danger" : "primary"}
-                loading={isPending}
-                icon={selectedAction === "TAKE_DOWN" ? "file-x" : "shield-check"}
-              >
-                {selectedAction === "TAKE_DOWN" ? "Xác nhận gỡ tin" : "Bỏ qua & Giữ tin"}
+          <div className="shrink-0">
+            <DialogFooter>
+              <Button type="button" variant="secondary" onClick={onClose} disabled={isPending}>
+                Đóng
               </Button>
-            ) : null}
-          </DialogFooter>
+              {!isProcessed ? (
+                <Button
+                  type="submit"
+                  variant={selectedAction === "TAKE_DOWN" ? "danger" : "primary"}
+                  loading={isPending}
+                  icon={selectedAction === "TAKE_DOWN" ? "file-x" : "shield-check"}
+                >
+                  {selectedAction === "TAKE_DOWN" ? "Xác nhận gỡ tin" : "Bỏ qua & Giữ tin"}
+                </Button>
+              ) : null}
+            </DialogFooter>
+          </div>
         </form>
       </Dialog>
+
+      {/* Dialog xem trước ảnh minh chứng phóng to */}
+      {previewImageUrl && (
+        <Dialog
+          open={Boolean(previewImageUrl)}
+          onClose={() => setPreviewImageUrl(null)}
+          size="lg"
+          labelledBy="preview-evidence-title"
+        >
+          <div className="flex flex-col max-h-[90vh]">
+            <DialogHeader
+              titleId="preview-evidence-title"
+              title="Ảnh minh chứng vi phạm"
+              onClose={() => setPreviewImageUrl(null)}
+            />
+            <DialogBody className="flex items-center justify-center p-4 overflow-auto">
+              <img
+                src={previewImageUrl}
+                alt="Minh chứng chi tiết"
+                className="max-h-[70vh] w-auto max-w-full rounded-lg object-contain border border-border-default shadow-lg"
+              />
+            </DialogBody>
+            <DialogFooter>
+              <Button
+                as="a"
+                href={previewImageUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                variant="secondary"
+                icon="external-link"
+              >
+                Mở tab mới
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => setPreviewImageUrl(null)}
+              >
+                Đóng
+              </Button>
+            </DialogFooter>
+          </div>
+        </Dialog>
+      )}
     </>
   );
 }

@@ -651,6 +651,33 @@ const templates: { [T in NotificationType]: Renderer<T> } = {
     };
   },
 
+  JOB_REPORT_RESOLVED: (data, ctx) => {
+    const isTakenDown = data.resolution === "TAKE_DOWN";
+    const title = isTakenDown
+      ? "Báo cáo tin tuyển dụng đã được xử lý"
+      : "Kết quả phản hồi báo cáo tin tuyển dụng";
+    const body = isTakenDown
+      ? `Báo cáo của bạn về tin "${data.jobPostTitle}" đã được Ban quản trị xác minh và gỡ bỏ tin vi phạm. Cảm ơn sự đóng góp của bạn!`
+      : `Báo cáo của bạn về tin "${data.jobPostTitle}" đã được Ban quản trị xem xét. Tin tuyển dụng chưa có dấu hiệu vi phạm theo quy định của hệ thống.`;
+    const link = "/notifications";
+    return {
+      title,
+      body,
+      link,
+      email: {
+        subject: `[Báo cáo vi phạm] ${title}`,
+        html: emailHtml(
+          title,
+          [
+            body,
+            data.adminNote ? `Phản hồi từ Ban quản trị: ${data.adminNote}` : "",
+          ].filter(Boolean),
+          { label: "Xem thông báo", url: absolute(ctx, link) },
+        ),
+      },
+    };
+  },
+
   // Tin nhắn cố ý không có loại notification: không ghi DB mỗi tin, chỉ push
   // realtime qua RealtimeNotifier.pushMessageToUser (Phase 9 bổ sung).
 };
