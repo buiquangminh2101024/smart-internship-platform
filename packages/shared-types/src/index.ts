@@ -653,7 +653,7 @@ export type PaymentStatus = "PENDING" | "COMPLETED" | "FAILED";
 
 export type TransactionStatus = "INIT" | "SUCCESS" | "FAILED";
 
-export type PaymentProvider = "VNPAY" | "MOMO";
+export type PaymentProvider = "VNPAY" | "MOMO" | "SEPAY";
 
 export interface SubscriptionPlan {
   id: string;
@@ -704,6 +704,12 @@ export interface CheckoutRequest {
 export interface CheckoutResponse {
   paymentUrl: string;
   orderCode: string;
+  /**
+   * Chỉ có với cổng checkout bằng form POST (SePay, AD-32): frontend tạo form ẩn
+   * `method="POST" action={action}` với các input `fields` rồi submit. Không có
+   * thì redirect bằng `paymentUrl` như VNPay/MoMo.
+   */
+  paymentForm?: { action: string; fields: Record<string, string> };
 }
 
 export interface PaymentStatusResponse {

@@ -18,6 +18,7 @@ import { RedisCompanyInviteCodeStore } from "./infrastructure/redis-company-invi
 import { CloudinaryMediaStorage } from "./infrastructure/cloudinary-media-storage";
 import { VnpayGatewayAdapter } from "./infrastructure/vnpay-gateway-adapter";
 import { MomoGatewayAdapter } from "./infrastructure/momo-gateway-adapter";
+import { SepayGatewayAdapter } from "./infrastructure/sepay-gateway-adapter";
 import { GeminiCatalogMatchVerifier } from "./infrastructure/gemini-catalog-match-verifier";
 import { UserRepository } from "./modules/users/user.repository";
 import { CompanyRepository } from "./modules/companies/company.repository";
@@ -81,6 +82,7 @@ export interface Cradle {
   employerIdentityCache: EmployerIdentityCache;
   vnpayGatewayAdapter: PaymentGatewayAdapter;
   momoGatewayAdapter: PaymentGatewayAdapter;
+  sepayGatewayAdapter: PaymentGatewayAdapter;
   paymentGatewayAdapters: Record<PaymentProvider, PaymentGatewayAdapter>;
   // Dùng chung bởi skills và education-catalog (Skill/University/Major cùng cơ
   // chế PENDING — docs/06-backend/cv-ai-extraction-phase2/PLAN.md Quyết định #3/#4).
@@ -125,10 +127,12 @@ export function buildContainer(): AwilixContainer<Cradle> {
     employerIdentityCache: asClass(EmployerIdentityCache).singleton(),
     vnpayGatewayAdapter: asClass(VnpayGatewayAdapter).singleton(),
     momoGatewayAdapter: asClass(MomoGatewayAdapter).singleton(),
+    sepayGatewayAdapter: asClass(SepayGatewayAdapter).singleton(),
     paymentGatewayAdapters: asFunction(
       (cradle: Cradle): Record<PaymentProvider, PaymentGatewayAdapter> => ({
         VNPAY: cradle.vnpayGatewayAdapter,
         MOMO: cradle.momoGatewayAdapter,
+        SEPAY: cradle.sepayGatewayAdapter,
       }),
     ).singleton(),
     catalogRateLimitService: asClass(CatalogRateLimitService).singleton(),

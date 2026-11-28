@@ -168,6 +168,7 @@ enum TransactionStatus {
 enum PaymentProvider {
   VNPAY
   MOMO
+  SEPAY
 }
 
 // Vòng đời xác thực doanh nghiệp khi Employer hoàn tất thủ tục (Phase 4):

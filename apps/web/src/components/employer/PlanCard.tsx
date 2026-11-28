@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 const PROVIDERS: { value: PaymentProvider; label: string }[] = [
   { value: "VNPAY", label: "VNPay" },
   { value: "MOMO", label: "Momo" },
+  { value: "SEPAY", label: "SePay" },
 ];
 
 function formatVnd(amount: number): string {
@@ -37,7 +38,7 @@ export function PlanCard({ plan, onCheckout, loading = false }: PlanCardProps) {
 
       <div className="grid gap-2">
         <span className="text-sm font-medium text-text-strong">Cổng thanh toán</span>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-x-4 gap-y-2">
           {PROVIDERS.map((option) => (
             <label key={option.value} className="flex items-center gap-2 text-sm text-text-body">
               <input

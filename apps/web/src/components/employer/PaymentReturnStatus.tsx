@@ -8,17 +8,31 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Icon } from "@/components/ui/Icon";
 
+type ReturnProvider = "vnpay" | "momo" | "sepay";
+
 interface PaymentReturnStatusProps {
-  provider: "vnpay" | "momo";
+  provider: ReturnProvider;
 }
+
+const PROVIDER_LABEL: Record<ReturnProvider, string> = { vnpay: "VNPay", momo: "Momo", sepay: "SePay" };
 
 // Cổng thanh toán không đảm bảo gọi IPN khi người dùng chủ động huỷ ngay
 // trên trang cổng (chưa để ngân hàng xử lý) — nên query param này CHỈ dùng để
 // hiển thị UI + tự báo huỷ cho backend (chuyển PENDING -> FAILED, xem
 // useReportPaymentCancellation), KHÔNG bao giờ dùng để tự kết luận thành
 // công (status thật vẫn luôn lấy từ backend, xem usePaymentStatus bên dưới).
-function isGatewayCancelled(provider: "vnpay" | "momo", searchParams: URLSearchParams): boolean {
+// SePay: server tự gắn `result=success|error|cancel` vào 3 return URL (AD-32).
+function isGatewayCancelled(provider: ReturnProvider, searchParams: URLSearchParams): boolean {
+  if (provider === "sepay") return searchParams.get("result") === "cancel";
   return provider === "momo" ? searchParams.get("resultCode") === "1006" : searchParams.get("vnp_ResponseCode") === "24";
+}
+
+// SePay về error_url khi thanh toán lỗi. Adapter chỉ xử lý IPN ORDER_PAID nên
+// đơn này sẽ kẹt PENDING nếu không báo — báo đóng đơn như khi huỷ, nhưng UI
+// hiện "không thành công" chứ không phải "bạn đã huỷ". IPN ORDER_PAID đến muộn
+// vẫn kích hoạt được gói (handleIpn không chặn theo trạng thái cũ).
+function isGatewayFailed(provider: ReturnProvider, searchParams: URLSearchParams): boolean {
+  return provider === "sepay" && searchParams.get("result") === "error";
 }
 
 function subscribeToNothing() {
@@ -57,6 +71,7 @@ export function PaymentReturnStatus({ provider }: PaymentReturnStatusProps) {
   const storedOrderCode = useSyncExternalStore(subscribeToNothing, getStoredOrderCode, getStoredOrderCodeServerSnapshot);
   const orderCode = storedOrderCode ?? orderCodeFromQuery;
   const cancelledByGateway = isGatewayCancelled(provider, searchParams);
+  const shouldReportClosed = cancelledByGateway || isGatewayFailed(provider, searchParams);
 
   const { data, isLoading, isError } = usePaymentStatus(orderCode);
   const reportCancellation = useReportPaymentCancellation();
@@ -81,14 +96,14 @@ export function PaymentReturnStatus({ provider }: PaymentReturnStatusProps) {
   // trước khi ngân hàng xử lý — chủ động báo cho backend đóng lại thành
   // FAILED, tránh đơn hàng kẹt PENDING vĩnh viễn (xem PaymentsService.reportClientCancellation).
   useEffect(() => {
-    if (!cancelledByGateway || !orderCode || data?.status !== "PENDING") return;
+    if (!shouldReportClosed || !orderCode || data?.status !== "PENDING") return;
     reportCancellation.mutate(orderCode, {
       onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["paymentStatus", orderCode] }),
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cancelledByGateway, orderCode, data?.status]);
+  }, [shouldReportClosed, orderCode, data?.status]);
 
-  const providerLabel = provider === "vnpay" ? "VNPay" : "Momo";
+  const providerLabel = PROVIDER_LABEL[provider];
 
   let content: React.ReactNode;
 
