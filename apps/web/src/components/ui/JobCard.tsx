@@ -50,19 +50,19 @@ export function JobCard({
     <Card padding="md" interactive={!!onClick || !!href} onClick={onClick} className={`grid gap-3${href ? " relative" : ""}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-surface-page text-sm font-semibold text-text-muted">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 border border-brand-100 text-sm font-extrabold text-brand-700">
             {company.charAt(0).toUpperCase()}
           </span>
           <div className="grid min-w-0 gap-0.5">
             {href ? (
               <Link
                 href={href}
-                className="truncate font-semibold text-text-strong outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:ring-2 focus-visible:after:ring-brand-300"
+                className="truncate text-[15px] font-bold text-text-strong outline-none after:absolute after:inset-0 after:rounded-2xl focus-visible:after:ring-2 focus-visible:after:ring-brand-300"
               >
                 {title}
               </Link>
             ) : (
-              <span className="truncate font-semibold text-text-strong">{title}</span>
+              <span className="truncate text-[15px] font-bold text-text-strong">{title}</span>
             )}
             <span className="inline-flex items-center gap-1 truncate text-sm text-text-muted">
               {company}

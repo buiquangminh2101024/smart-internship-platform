@@ -51,8 +51,8 @@ export function SideNavList({ items, size = "rail" }: { items: SideNavItem[]; si
   const pathname = usePathname();
   const drawer = size === "drawer";
   const row = drawer
-    ? "flex min-h-11 items-center gap-3 rounded-lg px-2.5 text-sm focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-500"
-    : "flex min-h-[38px] items-center gap-3 rounded-lg px-2 text-sm";
+    ? "flex min-h-11 items-center gap-3 rounded-[10px] px-3 text-[15px] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-500"
+    : "flex min-h-[42px] items-center gap-3 rounded-[10px] px-3.5 text-[15px]";
   const pill = drawer ? "text-[13px]" : "text-xs";
 
   function isActive(item: SideNavItem): boolean {
@@ -114,8 +114,8 @@ export function SideNavList({ items, size = "rail" }: { items: SideNavItem[]; si
         aria-current={isActive(item) ? "page" : undefined}
         className={`${row} transition-colors ${
           isActive(item)
-            ? "bg-brand-50 font-medium text-brand-700 shadow-[inset_3px_0_0_var(--color-brand-600)]"
-            : "text-text-body hover:bg-surface-hover hover:text-text-strong"
+            ? "bg-brand-50 font-bold text-brand-700 shadow-[inset_3px_0_0_var(--color-brand-500)]"
+            : "font-medium text-text-muted hover:bg-surface-hover hover:text-text-strong"
         }`}
       >
         {label}
@@ -136,12 +136,14 @@ export function SideNavList({ items, size = "rail" }: { items: SideNavItem[]; si
  */
 export function SideNav({ items, header, footer }: SideNavProps) {
   return (
-    <nav className="hidden w-60 flex-none flex-col gap-1 border-r border-l-[3px] border-border-subtle border-l-brand-500 bg-surface-card px-3 py-5 lg:flex">
-      {header ? <div className="px-2 pb-4">{header}</div> : null}
+    <nav className="hidden w-64 flex-none flex-col gap-1.5 border-r border-border-subtle bg-surface-card px-3 py-4 lg:flex">
+      {header ? <div className="px-1.5 pb-3">{header}</div> : null}
 
-      <SideNavList items={items} />
+      <div className="flex flex-1 flex-col gap-1">
+        <SideNavList items={items} />
+      </div>
 
-      {footer ? <div className="mt-auto pt-4">{footer}</div> : null}
+      {footer ? <div className="mt-auto border-t border-border-subtle pt-3">{footer}</div> : null}
     </nav>
   );
 }

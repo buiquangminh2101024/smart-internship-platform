@@ -97,6 +97,7 @@ enum NotificationType {
   JOB_ALERT // AD-26 — ứng viên: có tin mới phù hợp (gộp 1 thông báo/ứng viên/ngày)
   PROFILE_SKILLS_REMINDER // AD-26 — ứng viên: nhắc một lần thêm kỹ năng (tài khoản ≥ 24 giờ chưa có kỹ năng)
   JOB_POST_QUALITY_DROPPED // AD-29 — Admin: tin đang hiển thị được sửa và tụt xuống vùng đề xuất từ chối / mới có cờ chặn
+  JOB_REPORT_RESOLVED // Ứng viên: Báo cáo tin tuyển dụng vi phạm đã được Admin xử lý
 }
 
 // AD-16 M2 — lịch phỏng vấn. "Đã diễn ra" suy ra từ scheduledAt, không lưu COMPLETED.
@@ -1288,6 +1289,7 @@ model JobReport {
   reporter     User              @relation("ReportedJobReports", fields: [reporterId], references: [id], onDelete: Cascade)
   reason       ReportReason
   description  String?           @db.Text
+  evidenceUrls String[]          @default([])
   status       ReportStatus      @default(PENDING)
   resolution   ReportResolution?
   adminNote    String?           @db.Text

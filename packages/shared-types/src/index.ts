@@ -60,7 +60,9 @@ export type NotificationType =
   | "JOB_ALERT"
   | "PROFILE_SKILLS_REMINDER"
   // AD-29 — Admin: tin đang hiển thị được sửa và tụt xuống vùng đề xuất từ chối / mới có cờ chặn
-  | "JOB_POST_QUALITY_DROPPED";
+  | "JOB_POST_QUALITY_DROPPED"
+  // Ứng viên: Báo cáo tin tuyển dụng vi phạm đã được Admin xử lý
+  | "JOB_REPORT_RESOLVED";
 
 /** Loại vấn đề của form /support (AD-17). */
 export type SupportCategory = "ACCOUNT_SUSPENDED" | "OTHER";
@@ -2472,6 +2474,7 @@ export type ReportResolution = "TAKE_DOWN" | "DISMISS";
 export interface CreateJobReportRequest {
   reason: ReportReason;
   description?: string | undefined;
+  evidenceUrls?: string[] | undefined;
 }
 
 export interface JobReportDto {
@@ -2487,6 +2490,7 @@ export interface JobReportDto {
   reporterName?: string | null;
   reason: ReportReason;
   description: string | null;
+  evidenceUrls?: string[];
   status: ReportStatus;
   resolution: ReportResolution | null;
   adminNote: string | null;
@@ -2509,6 +2513,7 @@ export interface AdminJobReportListItem {
   reporterName: string | null;
   reason: ReportReason;
   description: string | null;
+  evidenceUrls?: string[];
   status: ReportStatus;
   resolution: ReportResolution | null;
   adminNote: string | null;

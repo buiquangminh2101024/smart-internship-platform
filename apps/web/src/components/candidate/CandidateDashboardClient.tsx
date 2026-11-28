@@ -65,161 +65,109 @@ export function CandidateDashboardClient() {
   const recentApplications = (applications || []).slice(0, 4);
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-8">
-      {/* ─── 1. Welcome & Greeting Banner ─────────────────────────── */}
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border-default pb-6">
+    <div className="mx-auto max-w-[1200px] space-y-7 px-5 py-8 sm:px-7">
+      {/* ─── 1. Editorial Greeting ──────────────────────────────────── */}
+      <div className="animate-fade-up flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <h1 className="text-2xl font-bold text-text-strong">
-              Xin chào, {displayName}! 👋
-            </h1>
-            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-pine-50 text-pine-700 border border-pine-200">
-              Sinh viên thực tập
-            </span>
-          </div>
-          <p className="text-sm text-text-muted">
-            Chào mừng bạn trở lại. Cùng theo dõi tiến độ tìm kiếm cơ hội thực tập hôm nay.
+          <span className="text-xs font-bold tracking-wider text-brand-600 uppercase">Không gian ứng viên</span>
+          <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-text-strong sm:text-4xl">
+            Xin chào, {displayName}
+          </h1>
+          <p className="mt-1.5 max-w-xl text-base text-text-muted">
+            Theo dõi tiến độ hồ sơ, lịch phỏng vấn và các cơ hội thực tập phù hợp với bạn.
           </p>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <Button as="a" href="/cv/templates" variant="secondary" size="sm" icon="wand-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2.5">
+          <Button as="a" href="/cv/templates" variant="secondary" icon="wand-2">
             Tạo CV mới
           </Button>
-          <Button as="a" href="/jobs" variant="primary" size="sm" icon="search">
-            Tìm việc thực tập
+          <Button as="a" href="/jobs" variant="primary" icon="search">
+            Khám phá việc làm
           </Button>
         </div>
       </div>
 
-      {/* ─── 2. Profile Completeness Widget ────────────────────────── */}
-      <div className="mb-6">
-        <ProfileCompletenessCard variant="compact" />
-      </div>
-
-      {/* ─── 3. Upcoming Interview Alert (if any) ────────────────────── */}
-      {nextInterview && (
-        <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50/80 p-4 shadow-xs">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-800">
-                <Icon name="calendar-clock" size={22} />
-              </span>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-amber-950 text-sm">Lịch phỏng vấn sắp tới!</span>
-                  <Badge tone="warning">
-                    {new Date(nextInterview.scheduledAt).toLocaleDateString("vi-VN", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </Badge>
-                </div>
-                <p className="mt-1 text-xs text-amber-900">
-                  Bạn có buổi phỏng vấn vị trí{" "}
-                  <span className="font-semibold">{nextInterview.jobPostTitle}</span> ({nextInterview.companyName}).
-                  Hình thức: {nextInterview.mode === "ONLINE" ? "Trực tuyến" : "Trực tiếp tại văn phòng"}.
-                  {nextInterview.location && !isMeetingLink && (
-                    <span className="block mt-0.5 font-medium">Địa điểm: {nextInterview.location}</span>
-                  )}
-                </p>
-              </div>
-            </div>
-            {isMeetingLink ? (
-              <Button as="a" href={nextInterview.location!} target="_blank" rel="noreferrer" variant="primary" size="sm" icon="video">
-                Vào phòng họp
-              </Button>
-            ) : (
-              <Button as="a" href="/applications" variant="secondary" size="sm" icon="eye">
-                Xem chi tiết
-              </Button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ─── 4. Quick Metrics Stats Cards ──────────────────────────── */}
-      <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      {/* ─── 2. Large Editorial KPI Cards ───────────────────────────── */}
+      <div className="animate-fade-up grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Link href="/applications" className="group">
-          <Card padding="md" className="transition-all hover:border-pine-400 hover:shadow-sm">
+          <Card padding="md" interactive className="h-full">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-text-muted">Đã ứng tuyển</span>
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-pine-50 text-pine-700 group-hover:scale-110 transition-transform">
-                <Icon name="briefcase-business" size={16} />
+              <span className="text-sm font-semibold text-text-muted">Đã ứng tuyển</span>
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 text-brand-600 transition-transform group-hover:scale-105">
+                <Icon name="briefcase-business" size={17} />
               </span>
             </div>
-            <div className="mt-2 text-2xl font-bold text-text-strong">
+            <div className="mt-3 font-mono text-4xl font-extrabold tabular-nums text-text-strong">
               {isLoadingApps ? "—" : applications?.length || 0}
             </div>
-            <span className="mt-1 text-[11px] text-pine-700 flex items-center gap-1 font-medium">
-              Xem lịch sử <Icon name="arrow-right" size={11} />
+            <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-600">
+              Xem lịch sử <Icon name="arrow-right" size={12} />
             </span>
           </Card>
         </Link>
 
         <Link href="/job-invitations" className="group">
-          <Card padding="md" className="transition-all hover:border-pine-400 hover:shadow-sm">
+          <Card padding="md" interactive className="h-full">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-text-muted">Lời mời nhận việc</span>
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-700 group-hover:scale-110 transition-transform">
-                <Icon name="mail" size={16} />
+              <span className="text-sm font-semibold text-text-muted">Lời mời nhận việc</span>
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 transition-transform group-hover:scale-105">
+                <Icon name="mail" size={17} />
               </span>
             </div>
-            <div className="mt-2 text-2xl font-bold text-text-strong">
+            <div className="mt-3 font-mono text-4xl font-extrabold tabular-nums text-text-strong">
               {invitations?.length || 0}
             </div>
-            <span className="mt-1 text-[11px] text-blue-700 flex items-center gap-1 font-medium">
-              Xem hộp thư <Icon name="arrow-right" size={11} />
+            <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
+              Xem hộp thư <Icon name="arrow-right" size={12} />
             </span>
           </Card>
         </Link>
 
         <Link href="/saved-jobs" className="group">
-          <Card padding="md" className="transition-all hover:border-pine-400 hover:shadow-sm">
+          <Card padding="md" interactive className="h-full">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-text-muted">Việc làm đã lưu</span>
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-50 text-purple-700 group-hover:scale-110 transition-transform">
-                <Icon name="bookmark" size={16} />
+              <span className="text-sm font-semibold text-text-muted">Việc làm đã lưu</span>
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-50 text-violet-600 transition-transform group-hover:scale-105">
+                <Icon name="bookmark" size={17} />
               </span>
             </div>
-            <div className="mt-2 text-2xl font-bold text-text-strong">
+            <div className="mt-3 font-mono text-4xl font-extrabold tabular-nums text-text-strong">
               {savedJobs?.length || 0}
             </div>
-            <span className="mt-1 text-[11px] text-purple-700 flex items-center gap-1 font-medium">
-              Xem danh sách lưu <Icon name="arrow-right" size={11} />
+            <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-violet-700">
+              Xem danh sách lưu <Icon name="arrow-right" size={12} />
             </span>
           </Card>
         </Link>
 
         <Link href="/cv" className="group">
-          <Card padding="md" className="transition-all hover:border-pine-400 hover:shadow-sm">
+          <Card padding="md" interactive className="h-full">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-text-muted">CV hiện có</span>
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-50 text-amber-700 group-hover:scale-110 transition-transform">
-                <Icon name="file-text" size={16} />
+              <span className="text-sm font-semibold text-text-muted">CV hiện có</span>
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600 transition-transform group-hover:scale-105">
+                <Icon name="file-text" size={17} />
               </span>
             </div>
-            <div className="mt-2 text-2xl font-bold text-text-strong">
+            <div className="mt-3 font-mono text-4xl font-extrabold tabular-nums text-text-strong">
               {isLoadingCvs ? "—" : cvs?.length || 0}
             </div>
-            <span className="mt-1 text-[11px] text-amber-700 flex items-center gap-1 font-medium">
-              Quản lý CV <Icon name="arrow-right" size={11} />
+            <span className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-amber-700">
+              Quản lý CV <Icon name="arrow-right" size={12} />
             </span>
           </Card>
         </Link>
       </div>
 
-      {/* ─── 5. Main Content: 2 Columns Split ──────────────────────── */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Left Column (2/3): Recent Applications & Top Recommended Jobs */}
-        <div className="flex flex-col gap-6 lg:col-span-2">
+      {/* ─── 3. Main Bento Grid (Left Main + Right 360px) ───────────── */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_360px]">
+        {/* Left Column: Recent Applications & Top Recommended Jobs */}
+        <div className="flex flex-col gap-6">
           {/* Recent Applications Card */}
-          <Card padding="md" className="flex flex-col">
-            <div className="flex items-center justify-between pb-3 border-b border-border-default mb-4">
-              <div className="flex items-center gap-2">
-                <Icon name="briefcase-business" size={18} className="text-pine-600" />
-                <h2 className="font-semibold text-text-strong text-base">Đơn ứng tuyển gần đây</h2>
+          <Card padding="none" className="overflow-hidden">
+            <div className="flex items-center justify-between border-b border-border-subtle px-6 py-4">
+              <div>
+                <h2 className="text-lg font-bold text-text-strong">Đơn ứng tuyển gần đây</h2>
+                <p className="text-xs text-text-muted">Trạng thái cập nhật trực tiếp khi nhà tuyển dụng xử lý hồ sơ.</p>
               </div>
               <Button as="a" href="/applications" variant="ghost" size="sm" iconAfter="chevron-right">
                 Xem tất cả
@@ -227,34 +175,40 @@ export function CandidateDashboardClient() {
             </div>
 
             {isLoadingApps ? (
-              <div className="py-8 flex items-center justify-center text-text-muted gap-2">
+              <div className="flex items-center justify-center gap-2 py-10 text-text-muted">
                 <Icon name="loader-circle" size={18} className="animate-spin" />
                 <span className="text-sm">Đang tải đơn ứng tuyển...</span>
               </div>
             ) : recentApplications.length === 0 ? (
-              <div className="py-8 text-center flex flex-col items-center justify-center gap-2 bg-neutral-50/50 rounded-lg border border-dashed border-border-default">
-                <Icon name="briefcase" size={32} className="text-text-muted opacity-40" />
-                <p className="text-sm text-text-body font-medium">Bạn chưa nộp đơn ứng tuyển nào</p>
-                <p className="text-xs text-text-muted">Hãy khám phá các cơ hội thực tập hấp dẫn và nộp hồ sơ ngay.</p>
+              <div className="m-6 flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border-default bg-surface-page/60 py-10 text-center">
+                <Icon name="briefcase" size={32} className="text-text-subtle" />
+                <p className="text-[15px] font-semibold text-text-strong">Bạn chưa nộp đơn ứng tuyển nào</p>
+                <p className="text-sm text-text-muted">Hãy khám phá các cơ hội thực tập hấp dẫn và nộp hồ sơ ngay.</p>
                 <Button as="a" href="/jobs" variant="secondary" size="sm" icon="search" className="mt-2">
                   Khám phá việc làm
                 </Button>
               </div>
             ) : (
-              <div className="flex flex-col divide-y divide-border-subtle">
+              <div className="divide-y divide-border-subtle">
                 {recentApplications.map((app) => {
                   const statusMeta = APPLICATION_STATUS_LABEL[app.status] || { label: app.status, tone: "neutral" };
                   const job = app.jobPost;
+                  const companyName = job.company?.name || "Doanh nghiệp";
                   return (
-                    <div key={app.id} className="py-3 flex items-center justify-between gap-4 hover:bg-neutral-50/50 rounded-lg px-2 transition-colors">
-                      <div className="min-w-0">
-                        <Link href={`/jobs/${job.id}`} className="font-medium text-sm text-text-strong hover:text-pine-700 truncate block">
-                          {job.title}
-                        </Link>
-                        <div className="flex items-center gap-2 mt-0.5 text-xs text-text-muted">
-                          <span>{job.company?.name || "Doanh nghiệp"}</span>
-                          <span>•</span>
-                          <span>{formatVnDate(app.createdAt)}</span>
+                    <div key={app.id} className="flex items-center justify-between gap-4 px-6 py-4 transition-colors hover:bg-surface-hover/60">
+                      <div className="flex min-w-0 items-center gap-3.5">
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-sm font-extrabold text-brand-700">
+                          {companyName.slice(0, 2).toUpperCase()}
+                        </span>
+                        <div className="min-w-0">
+                          <Link href={`/jobs/${job.id}`} className="block truncate text-[15px] font-bold text-text-strong hover:text-brand-600">
+                            {job.title}
+                          </Link>
+                          <div className="mt-0.5 flex items-center gap-2 text-sm text-text-muted">
+                            <span className="truncate">{companyName}</span>
+                            <span>·</span>
+                            <span className="font-mono text-xs">{formatVnDate(app.createdAt)}</span>
+                          </div>
                         </div>
                       </div>
                       <div className="shrink-0">
@@ -268,11 +222,11 @@ export function CandidateDashboardClient() {
           </Card>
 
           {/* Top Recommended Jobs Card */}
-          <Card padding="md" className="flex flex-col">
-            <div className="flex items-center justify-between pb-3 border-b border-border-default mb-4">
-              <div className="flex items-center gap-2">
-                <Icon name="sparkles" size={18} className="text-pine-600" />
-                <h2 className="font-semibold text-text-strong text-base">Việc làm phù hợp với bạn</h2>
+          <Card padding="none" className="overflow-hidden">
+            <div className="flex items-center justify-between border-b border-border-subtle px-6 py-4">
+              <div>
+                <h2 className="text-lg font-bold text-text-strong">Việc làm phù hợp với bạn</h2>
+                <p className="text-xs text-text-muted">Gợi ý dựa trên kỹ năng và chuyên ngành trong hồ sơ.</p>
               </div>
               <Button as="a" href="/recommended-jobs" variant="ghost" size="sm" iconAfter="chevron-right">
                 Xem tất cả
@@ -280,39 +234,39 @@ export function CandidateDashboardClient() {
             </div>
 
             {topRecommendations.length === 0 ? (
-              <div className="py-6 text-center text-text-muted text-sm bg-neutral-50/50 rounded-lg border border-dashed border-border-default">
-                <p className="font-medium">Chưa có gợi ý việc làm</p>
-                <p className="text-xs text-text-muted mt-1">Cập nhật kỹ năng trong hồ sơ để nhận gợi ý việc làm chính xác hơn.</p>
-                <Button as="a" href="/profile" variant="secondary" size="sm" icon="edit" className="mt-2">
+              <div className="m-6 rounded-xl border border-dashed border-border-default bg-surface-page/60 py-8 text-center">
+                <p className="text-[15px] font-semibold text-text-strong">Chưa có gợi ý việc làm</p>
+                <p className="mt-1 text-sm text-text-muted">Cập nhật kỹ năng trong hồ sơ để nhận gợi ý việc làm chính xác hơn.</p>
+                <Button as="a" href="/profile" variant="secondary" size="sm" icon="edit" className="mt-3">
                   Cập nhật kỹ năng
                 </Button>
               </div>
             ) : (
-              <div className="flex flex-col divide-y divide-border-subtle">
+              <div className="divide-y divide-border-subtle">
                 {topRecommendations.map((rec) => {
                   const job = rec.jobPost;
                   return (
-                    <div key={job.id} className="py-3.5 flex flex-col gap-2 hover:bg-neutral-50/50 rounded-lg px-2 transition-colors">
+                    <div key={job.id} className="flex flex-col gap-3 px-6 py-4 transition-colors hover:bg-surface-hover/60">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <Link href={`/jobs/${job.id}`} className="font-semibold text-sm text-text-strong hover:text-pine-700 truncate block">
+                          <Link href={`/jobs/${job.id}`} className="block truncate text-[15px] font-bold text-text-strong hover:text-brand-600">
                             {job.title}
                           </Link>
-                          <span className="text-xs text-text-muted block mt-0.5">{job.company?.name || "Doanh nghiệp"}</span>
+                          <span className="mt-0.5 block text-sm text-text-muted">{job.company?.name || "Doanh nghiệp"}</span>
                         </div>
-                        <div className="shrink-0 flex items-center gap-1.5">
+                        <div className="flex shrink-0 items-center gap-1.5">
                           <MatchScoreBadge score={rec.match.score} status={rec.match.status} />
-                          <span className="text-xs font-semibold text-pine-700">{rec.match.score}%</span>
+                          <span className="font-mono text-xs font-bold text-brand-700">{rec.match.score}%</span>
                         </div>
                       </div>
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-text-muted">
-                        <div className="flex items-center gap-3">
-                          <span className="flex items-center gap-1">
-                            <Icon name="banknote" size={13} />
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-text-muted">
+                        <div className="flex items-center gap-4">
+                          <span className="inline-flex items-center gap-1.5 font-mono text-xs font-semibold text-text-strong">
+                            <Icon name="banknote" size={14} className="text-brand-500" />
                             {formatSalary(job)}
                           </span>
-                          <span className="flex items-center gap-1">
-                            <Icon name="map-pin" size={13} />
+                          <span className="inline-flex items-center gap-1.5 text-xs">
+                            <Icon name="map-pin" size={14} />
                             {job.cityName || "Toàn quốc"}
                           </span>
                         </div>
@@ -328,13 +282,53 @@ export function CandidateDashboardClient() {
           </Card>
         </div>
 
-        {/* Right Column (1/3): Active CV Widget & Quick Tips */}
-        <div className="flex flex-col gap-6">
+        {/* Right Column: Upcoming Interview Dark Card + Profile Completeness + Default CV */}
+        <div className="flex flex-col gap-5">
+          {nextInterview && (
+            <div className="grid gap-4 rounded-2xl bg-[#0d1117] p-6 text-white shadow-[0_12px_32px_-6px_rgba(13,17,23,0.2)]">
+              <div className="flex items-center justify-between">
+                <Badge tone="warning">Phỏng vấn sắp tới</Badge>
+                <span className="font-mono text-xs text-slate-400">
+                  {new Date(nextInterview.scheduledAt).toLocaleDateString("vi-VN", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">{nextInterview.jobPostTitle}</h3>
+                <p className="mt-0.5 text-sm text-slate-400">{nextInterview.companyName}</p>
+              </div>
+              <div className="grid gap-2 rounded-xl bg-white/8 p-3.5 text-sm text-slate-200">
+                <div className="flex items-center gap-2">
+                  <Icon name={nextInterview.mode === "ONLINE" ? "video" : "map-pin"} size={15} className="shrink-0 text-brand-400" />
+                  <span>{nextInterview.mode === "ONLINE" ? "Trực tuyến" : "Trực tiếp tại văn phòng"}</span>
+                </div>
+                {nextInterview.location && !isMeetingLink && (
+                  <p className="text-xs text-slate-300">Địa điểm: {nextInterview.location}</p>
+                )}
+              </div>
+              {isMeetingLink ? (
+                <Button as="a" href={nextInterview.location!} target="_blank" rel="noreferrer" variant="primary" fullWidth icon="video">
+                  Vào phòng họp
+                </Button>
+              ) : (
+                <Button as="a" href="/applications" variant="secondary" fullWidth icon="eye">
+                  Xem chi tiết
+                </Button>
+              )}
+            </div>
+          )}
+
+          <ProfileCompletenessCard variant="compact" />
+
           {/* Active Default CV Widget */}
-          <Card padding="md" className="flex flex-col">
-            <div className="flex items-center justify-between pb-3 border-b border-border-default mb-3">
-              <span className="font-semibold text-text-strong text-sm flex items-center gap-2">
-                <Icon name="file-text" size={16} className="text-pine-600" />
+          <Card padding="md" className="flex flex-col gap-3">
+            <div className="flex items-center justify-between border-b border-border-subtle pb-3">
+              <span className="flex items-center gap-2 text-base font-bold text-text-strong">
+                <Icon name="file-text" size={17} className="text-brand-500" />
                 CV mặc định
               </span>
               <Button as="a" href="/cv" variant="ghost" size="sm">
@@ -343,14 +337,14 @@ export function CandidateDashboardClient() {
             </div>
 
             {defaultCv ? (
-              <div className="rounded-lg border border-border-subtle bg-neutral-50/60 p-3.5">
+              <div className="rounded-xl border border-border-subtle bg-surface-page p-3.5">
                 <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-pine-100 text-pine-700">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border-subtle bg-white text-brand-600">
                     <Icon name="file-text" size={18} />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-text-strong">{defaultCv.fileName}</p>
-                    <p className="text-xs text-text-muted mt-0.5">Cập nhật: {formatVnDate(defaultCv.uploadedAt)}</p>
+                    <p className="truncate text-sm font-bold text-text-strong">{defaultCv.fileName}</p>
+                    <p className="mt-0.5 font-mono text-xs text-text-muted">Cập nhật: {formatVnDate(defaultCv.uploadedAt)}</p>
                   </div>
                 </div>
                 <div className="mt-3 flex gap-2">
@@ -366,7 +360,7 @@ export function CandidateDashboardClient() {
               </div>
             ) : (
               <div className="py-4 text-center">
-                <p className="text-xs text-text-muted">Bạn chưa có CV mặc định để ứng tuyển nhanh.</p>
+                <p className="text-sm text-text-muted">Bạn chưa có CV mặc định để ứng tuyển nhanh.</p>
                 <Button as="a" href="/cv/templates" variant="primary" size="sm" icon="plus" className="mt-3 w-full">
                   Tạo CV ngay
                 </Button>
@@ -375,23 +369,23 @@ export function CandidateDashboardClient() {
           </Card>
 
           {/* Internship Tips Card */}
-          <Card padding="md" className="bg-pine-50/40 border-pine-200">
-            <div className="flex items-center gap-2 text-pine-800 font-semibold text-sm mb-3">
-              <Icon name="lightbulb" size={18} className="text-pine-600" />
+          <Card padding="md" tone="brand">
+            <div className="mb-3 flex items-center gap-2 text-sm font-bold text-brand-700">
+              <Icon name="lightbulb" size={17} className="text-brand-600" />
               <span>Mẹo tìm việc thực tập hiệu quả</span>
             </div>
-            <ul className="space-y-2.5 text-xs text-pine-950 leading-relaxed">
+            <ul className="space-y-2.5 text-sm leading-relaxed text-text-body">
               <li className="flex items-start gap-2">
-                <Icon name="check-circle" size={14} className="text-pine-600 shrink-0 mt-0.5" />
+                <Icon name="check-circle" size={15} className="mt-1 shrink-0 text-brand-600" />
                 <span>Hoàn thiện hồ sơ trên 80% để tăng 2x cơ hội được Nhà tuyển dụng chủ động gửi lời mời.</span>
               </li>
               <li className="flex items-start gap-2">
-                <Icon name="check-circle" size={14} className="text-pine-600 shrink-0 mt-0.5" />
-                <span>Nộp đơn sớm vào đầu tuần (Thứ Hai, Thứ Ba) giúp CV của bạn được HR duyệt đầu tiên.</span>
+                <Icon name="check-circle" size={15} className="mt-1 shrink-0 text-brand-600" />
+                <span>Nộp đơn sớm vào đầu tuần giúp CV của bạn được HR duyệt đầu tiên.</span>
               </li>
               <li className="flex items-start gap-2">
-                <Icon name="check-circle" size={14} className="text-pine-600 shrink-0 mt-0.5" />
-                <span>Đính kèm lời giới thiệu (Cover letter) ngắn gọn giải thích lý do bạn phù hợp với vị trí.</span>
+                <Icon name="check-circle" size={15} className="mt-1 shrink-0 text-brand-600" />
+                <span>Đính kèm lời giới thiệu ngắn gọn giải thích lý do bạn phù hợp với vị trí.</span>
               </li>
             </ul>
           </Card>

@@ -36,7 +36,7 @@ interface ButtonAsLink extends CommonProps {
 export type ButtonProps = ButtonAsButton | ButtonAsLink;
 
 const base =
-  "inline-flex items-center justify-center gap-2 rounded-lg font-semibold whitespace-nowrap transition-colors border";
+  "inline-flex items-center justify-center gap-2 rounded-[10px] font-semibold whitespace-nowrap transition-all duration-150 border active:scale-[0.98]";
 
 const sizeClasses: Record<Size, string> = {
   sm: "h-9 px-3 text-sm",

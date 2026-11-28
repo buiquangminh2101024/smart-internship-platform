@@ -14,6 +14,7 @@ export class JobReportRepository {
       reporterId: string;
       reason: ReportReason;
       description?: string | null | undefined;
+      evidenceUrls?: string[] | undefined;
     },
     tx?: Prisma.TransactionClient,
   ): Promise<JobReport> {
@@ -24,6 +25,7 @@ export class JobReportRepository {
         reporterId: data.reporterId,
         reason: data.reason,
         description: data.description ?? null,
+        evidenceUrls: data.evidenceUrls ?? [],
       },
     });
   }
