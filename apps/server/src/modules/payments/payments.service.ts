@@ -17,7 +17,14 @@ interface PaymentsConfig {
   DEV_SKIP_PAYMENT_GATEWAY: boolean;
   VNPAY_RETURN_URL: string;
   MOMO_RETURN_URL: string;
+  SEPAY_RETURN_URL: string;
 }
+
+type CheckoutResult = {
+  paymentUrl: string;
+  orderCode: string;
+  paymentForm?: { action: string; fields: Record<string, string> };
+};
 
 // Module `payments` sở hữu Payment/Transaction/PaymentCallbackLog/PaymentMethod
 // và cả 2 gateway adapter. Gọi ngược CompanySubscriptionRepository (thuộc
@@ -93,7 +100,7 @@ export class PaymentsService {
     amount: number;
     orderInfo: string;
     clientIp: string;
-  }): Promise<{ paymentUrl: string; orderCode: string }> {
+  }): Promise<CheckoutResult> {
     const paymentMethod = await this.requirePaymentMethod(params.provider);
     const payment = await this.paymentRepository.create({
       companySubscriptionId: params.companySubscriptionId,
@@ -108,7 +115,7 @@ export class PaymentsService {
     const adapter = this.paymentGatewayAdapters[params.provider];
     const orderCode = this.buildOrderCode(params.provider, payment.id);
 
-    const { paymentUrl } = await adapter.createCheckoutUrl({
+    const { paymentUrl, paymentForm } = await adapter.createCheckoutUrl({
       orderCode,
       amount: params.amount,
       orderInfo: params.orderInfo,
@@ -122,7 +129,8 @@ export class PaymentsService {
       status: "INIT",
     });
 
-    return { paymentUrl, orderCode };
+    // paymentForm chỉ có với SePay (checkout bằng form POST từ trình duyệt, AD-32).
+    return { paymentUrl, orderCode, ...(paymentForm ? { paymentForm } : {}) };
   }
 
   // DEV ONLY (DEV_SKIP_PAYMENT_GATEWAY=true) — bỏ qua redirect sang VNPay/Momo
@@ -134,7 +142,7 @@ export class PaymentsService {
     provider: PaymentProvider,
     paymentId: string,
     paymentMethodId: string,
-  ): Promise<{ paymentUrl: string; orderCode: string }> {
+  ): Promise<CheckoutResult> {
     this.logger.warn("DEV_SKIP_PAYMENT_GATEWAY bypass applied — never enable this in production", {
       paymentId,
       provider,
@@ -146,7 +154,12 @@ export class PaymentsService {
     await this.activateSubscriptionForPayment(paymentId);
     await this.recordCompletedPayment(paymentId);
 
-    const returnUrl = provider === "VNPAY" ? this.paymentsConfig.VNPAY_RETURN_URL : this.paymentsConfig.MOMO_RETURN_URL;
+    const returnUrls: Record<PaymentProvider, string> = {
+      VNPAY: this.paymentsConfig.VNPAY_RETURN_URL,
+      MOMO: this.paymentsConfig.MOMO_RETURN_URL,
+      SEPAY: this.paymentsConfig.SEPAY_RETURN_URL,
+    };
+    const returnUrl = returnUrls[provider];
     return { paymentUrl: `${returnUrl}?orderCode=${encodeURIComponent(orderCode)}`, orderCode };
   }
 
@@ -156,6 +169,13 @@ export class PaymentsService {
 
     const adapter = this.paymentGatewayAdapters[provider];
     const result = adapter.verifyAndParseIpn(raw);
+
+    // Thông báo hợp lệ nhưng không thuộc loại cần xử lý (vd. SePay TRANSACTION_VOID):
+    // đã ghi log ở trên, ack để cổng không gửi lại, không đổi trạng thái.
+    if (result.valid && result.ignored) {
+      this.logger.info("Payment IPN ignored", { provider, orderCode: result.orderCode, type: result.message });
+      return adapter.buildIpnAckResponse("SUCCESS");
+    }
 
     if (!result.valid || !result.orderCode) {
       this.logger.warn("Payment IPN signature invalid", { provider });
@@ -175,8 +195,26 @@ export class PaymentsService {
       }
     }
 
-    const transactionStatus: TransactionStatus = result.success ? "SUCCESS" : "FAILED";
-    const paymentStatus: PaymentStatus = result.success ? "COMPLETED" : "FAILED";
+    let success = result.success === true;
+
+    // AD-32: cổng báo số tiền (SePay — payload IPN không có chữ ký) thì phải
+    // khớp Payment.amount mới kích hoạt gói. Lệch ⇒ FAILED, vẫn ack để cổng
+    // khỏi gửi lại. VNPay/MoMo không điền amount nên không đi vào nhánh này.
+    if (success && result.amount !== undefined) {
+      const payment = await this.paymentRepository.findById(transaction.paymentId);
+      if (!payment || result.amount !== payment.amount) {
+        this.logger.error("Payment IPN amount mismatch — subscription NOT activated", {
+          provider,
+          orderCode: result.orderCode,
+          expected: payment?.amount,
+          received: result.amount,
+        });
+        success = false;
+      }
+    }
+
+    const transactionStatus: TransactionStatus = success ? "SUCCESS" : "FAILED";
+    const paymentStatus: PaymentStatus = success ? "COMPLETED" : "FAILED";
 
     await this.transactionRepository.updateStatus(transaction.id, {
       status: transactionStatus,
@@ -185,7 +223,7 @@ export class PaymentsService {
     });
     await this.paymentRepository.updateStatus(transaction.paymentId, paymentStatus);
 
-    if (result.success) {
+    if (success) {
       await this.activateSubscriptionForPayment(transaction.paymentId);
       await this.recordCompletedPayment(transaction.paymentId);
     }

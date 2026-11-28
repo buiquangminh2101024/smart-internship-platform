@@ -18,11 +18,18 @@ export interface CreateCheckoutParams {
 
 export interface CreateCheckoutResult {
   paymentUrl: string;
+  /**
+   * Chỉ cổng checkout bằng form POST từ trình duyệt (SePay, AD-32) điền trường này;
+   * khi đó `paymentUrl` = `paymentForm.action`. VNPay/MoMo không điền.
+   */
+  paymentForm?: { action: string; fields: Record<string, string> };
 }
 
 export interface RawIpnPayload {
-  /** VNPay: query params của GET callback. Momo: JSON body của POST callback. */
+  /** VNPay: query params của GET callback. Momo/SePay: JSON body của POST callback. */
   data: Record<string, unknown>;
+  /** Header của request IPN (tên viết thường). SePay xác thực bằng `x-secret-key`; VNPay/MoMo bỏ qua. */
+  headers?: Record<string, string | undefined>;
 }
 
 export interface IpnResult {
@@ -32,6 +39,10 @@ export interface IpnResult {
   providerTransactionId?: string;
   success?: boolean;
   message?: string;
+  /** Số tiền VND cổng báo đã thu. Có giá trị thì service đối chiếu với Payment.amount (SePay, AD-32). */
+  amount?: number;
+  /** true: thông báo hợp lệ nhưng không thuộc loại cần xử lý — chỉ ghi log, ack thành công. */
+  ignored?: boolean;
 }
 
 export type IpnAckOutcome =

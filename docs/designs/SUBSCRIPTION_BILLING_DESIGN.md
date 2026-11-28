@@ -136,6 +136,16 @@ interface PaymentGatewayAdapter {
 
 Không có `VNPAY_IPN_URL` — VNPay không nhận URL này qua request, phải điền thủ công trên trang quản trị sandbox VNPay (trỏ tới `{public-url}/api/payments/vnpay/ipn`).
 
+### 6.5 SePay — cổng thứ ba (AD-32, 2026-11-28)
+
+Chi tiết: `docs/06-backend/sepay-payment-gateway/PLAN.md`.
+
+- Checkout là **form POST từ trình duyệt** tới `SEPAY_CHECKOUT_URL` (sandbox `https://pay-sandbox.sepay.vn/v1/checkout/init`). `SepayGatewayAdapter` trả `paymentForm: { action, fields }` (kèm `paymentUrl = action`); frontend tạo form ẩn và submit. `order_invoice_number = orderCode`, `order_amount` là số VND nguyên.
+- Chữ ký: `field=value` nối bằng `,` theo thứ tự `order_amount, merchant, currency, operation, order_description, order_invoice_number, customer_id, payment_method, success_url, error_url, cancel_url`, bỏ trường rỗng, `HMAC-SHA256(SEPAY_SECRET_KEY)` mã hoá **base64**.
+- `success_url` / `error_url` / `cancel_url` đều là `SEPAY_RETURN_URL?orderCode=…&result=success|error|cancel`.
+- IPN `POST /payments/sepay/ipn` (URL điền trên dashboard SePay, không gửi theo đơn): xác thực header `X-Secret-Key` = `SEPAY_AUTH_TYPE_SECRET`; `ORDER_PAID` → thành công với `providerTransactionId = transaction.id`; loại thông báo khác chỉ ghi log. Service đối chiếu `order.order_amount` với `Payment.amount`, lệch thì FAILED và không kích hoạt gói.
+- Env: `SEPAY_MERCHANT_ID`, `SEPAY_SECRET_KEY` (Merchant Secret Key), `SEPAY_AUTH_TYPE_SECRET` (IPN Secret Key), `SEPAY_CHECKOUT_URL`, `SEPAY_RETURN_URL`.
+
 ## 7. Sweep hết hạn gói (chốt ở AD-6)
 
 `node-cron` (dependency mới), job `subscription-expiry.job.ts` trong module `subscriptions`, chạy mỗi giờ (`0 * * * *`): `UPDATE company_subscriptions SET status = 'EXPIRED' WHERE status = 'ACTIVE' AND end_date < now()`. Chỉ đổi `CompanySubscription.status` — **không** đụng tới `JobPost` (việc đóng tin `PUBLISHED` tương ứng là deliverable Phase 6, xem AD-6 mục 2 và `PROJECT_PHASES.md` Phase 6).

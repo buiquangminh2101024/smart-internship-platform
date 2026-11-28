@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const checkoutSchema = z.object({
   planId: z.string().trim().min(1, "Plan is required"),
-  provider: z.enum(["VNPAY", "MOMO"]),
+  provider: z.enum(["VNPAY", "MOMO", "SEPAY"]),
 });
 
 export const historyQuerySchema = z.object({
