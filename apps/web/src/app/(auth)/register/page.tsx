@@ -15,8 +15,31 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
 
   return (
     <div className="grid gap-6">
-      <div className="grid gap-1 text-center">
-        <h1 className="text-2xl font-semibold text-text-strong">
+      <div className="grid grid-cols-2 gap-1 rounded-xl border border-border-subtle bg-surface-page p-1">
+        <Link
+          href="/register"
+          className={`rounded-lg py-2 text-center text-sm font-semibold transition-all ${
+            role === "CANDIDATE"
+              ? "bg-white text-text-strong shadow-xs"
+              : "text-text-muted hover:text-text-strong"
+          }`}
+        >
+          Sinh viên
+        </Link>
+        <Link
+          href="/register?role=EMPLOYER"
+          className={`rounded-lg py-2 text-center text-sm font-semibold transition-all ${
+            role === "EMPLOYER"
+              ? "bg-white text-text-strong shadow-xs"
+              : "text-text-muted hover:text-text-strong"
+          }`}
+        >
+          Nhà tuyển dụng
+        </Link>
+      </div>
+
+      <div className="grid gap-1.5 text-center">
+        <h1 className="text-2xl font-extrabold tracking-tight text-text-strong">
           {role === "EMPLOYER" ? "Tạo tài khoản nhà tuyển dụng" : "Tạo hồ sơ miễn phí"}
         </h1>
         <p className="text-sm text-text-muted">
@@ -28,7 +51,7 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
         Đã có tài khoản?{" "}
         <Link
           href={role === "EMPLOYER" ? "/login?role=EMPLOYER" : "/login"}
-          className="font-medium text-pine-700 hover:underline"
+          className="font-semibold text-brand-600 hover:underline"
         >
           Đăng nhập
         </Link>

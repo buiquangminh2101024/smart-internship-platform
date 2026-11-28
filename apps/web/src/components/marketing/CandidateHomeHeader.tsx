@@ -77,12 +77,25 @@ export function CandidateHomeHeader() {
   }
 
   return (
-    <header className="sticky top-0 z-20 border-b border-border-subtle bg-white/95 backdrop-blur">
-      <div className="mx-auto flex h-[72px] max-w-6xl items-center gap-4 px-6 sm:gap-8">
-        <Link href="/" className="shrink-0 text-lg font-semibold text-pine-800">InternHub</Link>
-        <nav className="hidden flex-1 gap-6 md:flex" aria-label="Điều hướng chính">
+    <header className="sticky top-0 z-30 border-b border-border-subtle bg-white/90 backdrop-blur-xl">
+      <div className="mx-auto flex h-16 max-w-7xl items-center gap-4 px-4 sm:gap-8 sm:px-6">
+        <Link href="/" className="flex shrink-0 items-center gap-2.5">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-500 text-white shadow-xs">
+            <Icon name="layers" size={18} />
+          </span>
+          <span className="text-[18px] font-extrabold tracking-tight text-text-strong">
+            Intern<span className="text-brand-500">Hub</span>
+          </span>
+        </Link>
+        <nav className="hidden flex-1 gap-1 md:flex" aria-label="Điều hướng chính">
           {NAV_LINKS.map((link) => (
-            <Link key={link.label} href={link.href} className="text-sm text-text-body hover:text-pine-700">{link.label}</Link>
+            <Link
+              key={link.label}
+              href={link.href}
+              className="rounded-lg px-3.5 py-2 text-[15px] font-medium text-text-body transition-colors hover:bg-surface-hover hover:text-brand-600"
+            >
+              {link.label}
+            </Link>
           ))}
         </nav>
         {!hasHydrated ? (

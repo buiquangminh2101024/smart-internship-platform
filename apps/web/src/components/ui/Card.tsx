@@ -30,10 +30,10 @@ const toneClasses: Record<Tone, string> = {
 export function Card({ padding = "md", interactive = false, tone = "default", as, className = "", children, ...rest }: CardProps) {
   const Tag = as ?? "div";
   const classes = [
-    "rounded-xl border",
+    "rounded-2xl border shadow-[0_1px_3px_rgba(13,17,23,0.04)]",
     paddingClasses[padding],
     toneClasses[tone],
-    interactive ? "cursor-pointer transition-shadow hover:shadow-md" : "",
+    interactive ? "cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:border-border-default hover:shadow-[0_12px_32px_-6px_rgba(13,17,23,0.1)]" : "",
     className,
   ]
     .filter(Boolean)

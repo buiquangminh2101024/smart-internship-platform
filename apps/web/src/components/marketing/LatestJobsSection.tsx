@@ -18,9 +18,12 @@ export function LatestJobsSection() {
   const jobs = (data?.items ?? []).slice(0, 4);
 
   return (
-    <section className="mx-auto grid w-full max-w-6xl gap-5 px-6 py-16">
-      <div className="flex items-end gap-4">
-        <h2 className="flex-1 text-2xl font-semibold text-text-strong">Tin mới trong tuần</h2>
+    <section className="mx-auto grid w-full max-w-7xl gap-6 px-6 py-16">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <span className="text-xs font-bold tracking-wider text-brand-600 uppercase">Cơ hội mới nhất</span>
+          <h2 className="mt-1 text-2xl font-extrabold tracking-tight text-text-strong sm:text-3xl">Tin mới trong tuần</h2>
+        </div>
         <Button as="a" href="/jobs" variant="secondary" iconAfter="arrow-right">
           Xem tất cả tin
         </Button>

@@ -26,19 +26,22 @@ export function HeroSearchBar() {
   }
 
   return (
-    <Card padding="sm" className="flex max-w-xl flex-col gap-2 sm:flex-row">
-      <Input
-        icon="search"
-        placeholder="Vị trí, kỹ năng hoặc công ty"
-        className="flex-[1.4]"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
-      />
+    <Card padding="none" className="flex max-w-2xl flex-col gap-2 rounded-2xl border-border-default bg-white p-2 shadow-[0_20px_48px_-12px_rgba(13,17,23,0.12)] sm:flex-row sm:items-center">
+      <div className="flex-[1.5]">
+        <Input
+          icon="search"
+          placeholder="Vị trí, kỹ năng hoặc công ty..."
+          className="border-transparent bg-transparent focus:border-transparent focus:ring-0"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
+        />
+      </div>
+      <div className="hidden h-7 w-px bg-border-subtle sm:block" />
       <select
         value={cityId}
         onChange={(e) => setCityId(e.target.value)}
-        className="h-11 w-full flex-1 rounded-lg border border-border-default bg-white px-3 text-[15px] outline-none transition-colors focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+        className="h-11 w-full flex-1 rounded-xl border border-transparent bg-transparent px-3 text-[15px] font-medium text-text-body outline-none transition-colors hover:bg-surface-hover focus:bg-white"
       >
         <option value="">Tất cả khu vực</option>
         {(cities ?? []).map((city) => (
@@ -47,8 +50,8 @@ export function HeroSearchBar() {
           </option>
         ))}
       </select>
-      <Button type="button" icon="search" onClick={handleSearch}>
-        Tìm việc
+      <Button type="button" size="md" icon="search" onClick={handleSearch} className="shrink-0 sm:px-6">
+        Tìm cơ hội
       </Button>
     </Card>
   );
