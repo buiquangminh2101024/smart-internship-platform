@@ -28,6 +28,19 @@ export class PaymentsController {
     }
   };
 
+  // Chỉ chuyển đúng header cần để xác thực; header KHÔNG được ghi vào PaymentCallbackLog.
+  sepayIpn = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { status, body } = await this.paymentsService.handleIpn("SEPAY", {
+        data: (req.body ?? {}) as Record<string, unknown>,
+        headers: { "x-secret-key": req.get("x-secret-key") },
+      });
+      this.send(res, status, body);
+    } catch (error) {
+      next(error);
+    }
+  };
+
   private send(res: Response, status: number, body: unknown): void {
     if (body === undefined) {
       res.status(status).end();

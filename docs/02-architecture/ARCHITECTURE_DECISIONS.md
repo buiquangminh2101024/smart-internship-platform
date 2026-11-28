@@ -1255,3 +1255,39 @@ Phần xoá phiên khi chat hết hạn của chatbot (`lib/support-chat-stream.
 - Web: `lib/api-client.ts` (refresh ba kết quả), `lib/support-chat-stream.ts`, `hooks/useSocket.ts` (kiểu trả về), `lib/auth-errors.ts` mới, `LoginForm`, `RegisterForm`, `OtpForm`, `ResetPasswordForm`, trang đăng nhập Admin, `app/support/page.tsx` + `SupportContactForm` (nội dung điền sẵn).
 - AD-22: sau khi làm, chạy lại 5 bước kiểm và đổi trạng thái thành đã kiểm.
 - Còn lại (không làm): gia hạn refresh token khi còn hoạt động (phiên luôn hết sau 7 ngày), thu hồi refresh token cũ khi đăng nhập tài khoản khác cùng vai trò, cân bằng thời gian trả lời theo email có / không có tài khoản.
+
+## AD-32 — Thêm SePay làm cổng thanh toán thứ ba; port `PaymentGatewayAdapter` hỗ trợ checkout dạng form POST và IPN xác thực bằng header (bổ sung AD-6)
+
+**Ngày:** 2026-11-28 · **Phase liên quan:** 5 (Subscription & Payment). Plan: `docs/06-backend/sepay-payment-gateway/PLAN.md`.
+
+> **Trạng thái: ĐÃ DUYỆT (2026-11-28); ĐÃ TRIỂN KHAI; ĐÃ THỬ THÀNH CÔNG TRÊN SANDBOX SEPAY (2026-11-28).** Chủ dự án chọn sản phẩm *Cổng thanh toán* của SePay (sandbox), không dùng Webhook theo dõi chuyển khoản.
+
+**Bối cảnh:** sandbox MoMo đang lỗi, cần thêm một cổng để thử luồng thanh toán thật. MoMo và VNPay giữ nguyên. SePay khác hai cổng cũ ở hai điểm:
+
+- Checkout là **form HTML do trình duyệt POST** tới `https://pay-sandbox.sepay.vn/v1/checkout/init`, không có API trả về link như MoMo, cũng không phải link GET như VNPay.
+- IPN là POST JSON, xác thực bằng header `X-Secret-Key` (IPN Secret Key cấu hình trên dashboard); **payload không có chữ ký**.
+
+**Quyết định:**
+
+1. Thêm `SepayGatewayAdapter` (`infrastructure/sepay-gateway-adapter.ts`), đăng ký vào map `paymentGatewayAdapters` như VNPay/MoMo. Enum `PaymentProvider` thêm `SEPAY` (migration chỉ thêm giá trị enum), seed thêm `PaymentMethod` "SePay". Không dùng SDK `sepay-pg-node`: chỉ cần một HMAC-SHA256 base64 và một phép so sánh header, viết bằng `node:crypto` như hai cổng cũ.
+2. Mở rộng port ở mức tối thiểu, mọi trường đều tuỳ chọn nên VNPay/MoMo không phải sửa:
+   - `CreateCheckoutResult.paymentForm?: { action, fields }`. Có trường này thì frontend tạo form ẩn và submit; không có thì vẫn `location.href = paymentUrl`. `CheckoutResponse` ở shared-types thêm trường tương ứng.
+   - `RawIpnPayload.headers?` để adapter đọc `X-Secret-Key`.
+   - `IpnResult.amount?` và `IpnResult.ignored?`.
+3. Chữ ký checkout: các cặp `field=value` theo thứ tự cố định của SePay, nối bằng `,`, bỏ trường rỗng, HMAC-SHA256 với Merchant Secret Key, mã hoá base64. `X-Secret-Key` so bằng `timingSafeEqual`.
+4. **Kiểm tra số tiền:** khi adapter trả `amount` (hiện chỉ SePay), `PaymentsService.handleIpn` so với `Payment.amount`; lệch thì đánh dấu FAILED, không kích hoạt gói, vẫn trả 200. Đây là lớp bù cho việc payload IPN không được ký.
+5. `notification_type` khác `ORDER_PAID` (ví dụ `TRANSACTION_VOID`) chỉ ghi log, trả 200, không đổi trạng thái. Hoàn tiền nằm ngoài phạm vi.
+6. Return URL do server tự dựng theo từng đơn: `SEPAY_RETURN_URL?orderCode=…&result=success|error|cancel` (nằm trong chuỗi ký). Như VNPay/MoMo, trang return chỉ hiển thị; `result=cancel` chỉ dùng cho `reportClientCancellation` (PENDING → FAILED).
+
+**Phương án không chọn:**
+
+- *Webhook theo dõi chuyển khoản + "cấu trúc mã thanh toán" + tự sinh QR:* phải tự đối soát nội dung chuyển khoản, khác hẳn khuôn VNPay/MoMo; sandbox của sản phẩm này chỉ mô phỏng giao dịch thủ công.
+- *Server tự POST checkout/init rồi trả link:* SePay thiết kế cho trình duyệt POST, trang thanh toán gắn với phiên trình duyệt.
+- *Bỏ qua kiểm tra số tiền vì đã có `X-Secret-Key`:* lộ secret thì kẻ xấu gửi IPN với số tiền tuỳ ý; kiểm thêm số tiền rẻ và an toàn hơn.
+
+**Ảnh hưởng:**
+
+- Server: `prisma/schema.prisma` + migration `add_sepay_provider`, `scripts/seed.ts`, port `PaymentGatewayAdapter`, `shared/utils/payment-signing.ts`, adapter mới, `container.ts`, `shared/config/env.ts` (`SEPAY_CHECKOUT_URL`, `SEPAY_RETURN_URL`; bắt buộc 3 secret ở production), `modules/payments` (route `POST /payments/sepay/ipn`, controller, service), `subscriptions.dto.ts`. `.env.example`.
+- Shared types: `PaymentProvider` thêm `"SEPAY"`, `CheckoutResponse.paymentForm?`.
+- Web: `PlanCard`, trang subscription (submit form), trang return `/employer/subscription/return/sepay`, `PaymentReturnStatus`.
+- API_CONVENTIONS §12 và SUBSCRIPTION_BILLING_DESIGN §6 bổ sung SePay.

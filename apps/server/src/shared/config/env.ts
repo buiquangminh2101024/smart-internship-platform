@@ -87,6 +87,16 @@ const baseSchema = z.object({
   MOMO_IPN_URL: z.string().url().default("http://localhost:4000/api/payments/momo/ipn"),
   MOMO_REQUEST_TYPE: z.string().min(1).default("payWithATM"),
 
+  // SePay "Cổng thanh toán" (AD-32, docs/06-backend/sepay-payment-gateway/PLAN.md).
+  // SEPAY_SECRET_KEY = Merchant Secret Key (ký form checkout).
+  // SEPAY_AUTH_TYPE_SECRET = IPN Secret Key (SePay gửi trong header X-Secret-Key) — KHÁC key trên.
+  // IPN URL không có biến env: điền trên dashboard SePay ({public-url}/api/payments/sepay/ipn).
+  SEPAY_MERCHANT_ID: z.string().optional(),
+  SEPAY_SECRET_KEY: z.string().optional(),
+  SEPAY_AUTH_TYPE_SECRET: z.string().optional(),
+  SEPAY_CHECKOUT_URL: z.string().url().default("https://pay-sandbox.sepay.vn/v1/checkout/init"),
+  SEPAY_RETURN_URL: z.string().url().default("http://localhost:3000/employer/subscription/return/sepay"),
+
   // DEV ONLY: bỏ qua việc gọi cổng thanh toán thật (VNPay/Momo) khi checkout —
   // đánh dấu Payment/Transaction COMPLETED và kích hoạt CompanySubscription
   // ngay lập tức, dùng khi sandbox VNPay/Momo không dùng được (vd. tài khoản
@@ -204,6 +214,15 @@ const envSchema = baseSchema.superRefine((data, ctx) => {
   }
   if (data.NODE_ENV === "production" && !data.MOMO_SECRET_KEY) {
     ctx.addIssue({ code: "custom", path: ["MOMO_SECRET_KEY"], message: "MOMO_SECRET_KEY is required" });
+  }
+  if (data.NODE_ENV === "production" && !data.SEPAY_MERCHANT_ID) {
+    ctx.addIssue({ code: "custom", path: ["SEPAY_MERCHANT_ID"], message: "SEPAY_MERCHANT_ID is required" });
+  }
+  if (data.NODE_ENV === "production" && !data.SEPAY_SECRET_KEY) {
+    ctx.addIssue({ code: "custom", path: ["SEPAY_SECRET_KEY"], message: "SEPAY_SECRET_KEY is required" });
+  }
+  if (data.NODE_ENV === "production" && !data.SEPAY_AUTH_TYPE_SECRET) {
+    ctx.addIssue({ code: "custom", path: ["SEPAY_AUTH_TYPE_SECRET"], message: "SEPAY_AUTH_TYPE_SECRET is required" });
   }
   if (data.NODE_ENV === "production" && data.DEV_SKIP_PAYMENT_GATEWAY) {
     ctx.addIssue({

@@ -54,9 +54,10 @@ const skills = [
 
 // Phase 5 — Subscription & Payment. Giá VND cụ thể là số mẫu, chủ dự án tự
 // điều chỉnh lúc seed thật (xem docs/06-backend/phase-05-subscription-payment/PLAN.md).
-const paymentMethods: { displayName: string; processorType: "VNPAY" | "MOMO" }[] = [
+const paymentMethods: { displayName: string; processorType: "VNPAY" | "MOMO" | "SEPAY" }[] = [
   { displayName: "VNPay", processorType: "VNPAY" },
   { displayName: "Momo", processorType: "MOMO" },
+  { displayName: "SePay", processorType: "SEPAY" },
 ];
 
 // outreachInvitationDailyQuota / outreachPoolMultiplier: AD-23 mục 4,

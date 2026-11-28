@@ -116,6 +116,8 @@ Quy tắc chọn `401` vs `403`: `401` = "tôi không biết bạn là ai" (toke
 
 Ngoại lệ duy nhất của quy tắc "mọi response bọc `ApiResponse<T>`" ở mục 2: endpoint IPN/webhook của VNPay (`GET /payments/vnpay/ipn`) và Momo (`POST /payments/momo/ipn`) trả **đúng format mà cổng thanh toán yêu cầu** (không phải `ApiResponse`), vì đây là response đọc bởi hệ thống VNPay/Momo, không phải frontend — bọc `ApiResponse` sẽ khiến cổng thanh toán không nhận diện được và tiếp tục gọi lại IPN. Cả hai endpoint đều public (không `authenticate`), xác thực bằng chữ ký (HMAC) riêng của từng cổng thay vì JWT — chi tiết luồng/chữ ký: `docs/designs/SUBSCRIPTION_BILLING_DESIGN.md` mục 6. Mọi callback nhận được (kể cả không verify được chữ ký) đều ghi vào `PaymentCallbackLog` trước khi xử lý tiếp, để tra soát sau này.
 
+SePay (AD-32) thêm `POST /payments/sepay/ipn`: cũng public, nhưng xác thực bằng header `X-Secret-Key` (so khớp IPN Secret Key, `timingSafeEqual`) vì payload SePay không có chữ ký; server còn đối chiếu số tiền trong payload với `Payment.amount`. Phản hồi: 200 khi đã nhận (kể cả trùng, lệch tiền, hay `notification_type` không xử lý), 401 khi sai/thiếu `X-Secret-Key`, 404 khi không thấy đơn, 500 khi lỗi. Body rỗng.
+
 Trạng thái thanh toán thật sự **chỉ được set trong IPN handler đã verify chữ ký** — không bao giờ tin dữ liệu query param ở return URL (trang frontend nhận redirect từ cổng thanh toán qua trình duyệt người dùng, có thể bị giả mạo). Frontend ở trang return chỉ gọi `GET /subscriptions/payments/by-order-code/:orderCode` (route JSON thường, theo `ApiResponse`) để lấy trạng thái thật.
 
 ## 13. Ghi chú khi thêm module mới

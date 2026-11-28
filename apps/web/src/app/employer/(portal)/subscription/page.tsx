@@ -23,6 +23,24 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("vi-VN");
 }
 
+// SePay (AD-32) nhận checkout bằng form POST từ trình duyệt, không có link GET
+// như VNPay/MoMo — dựng form ẩn với đúng các trường server đã ký rồi submit.
+function submitPaymentForm(form: { action: string; fields: Record<string, string> }) {
+  const element = document.createElement("form");
+  element.method = "POST";
+  element.action = form.action;
+  element.style.display = "none";
+  for (const [name, value] of Object.entries(form.fields)) {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = name;
+    input.value = value;
+    element.appendChild(input);
+  }
+  document.body.appendChild(element);
+  element.submit();
+}
+
 function formatVnd(amount: number): string {
   return amount.toLocaleString("vi-VN") + " đ";
 }
@@ -44,7 +62,11 @@ export default function EmployerSubscriptionPage() {
       // Phòng khi return URL của cổng thanh toán không giữ nguyên toàn bộ
       // query string — trang return đọc lại orderCode từ đây trước tiên.
       window.sessionStorage.setItem("sip_pending_order_code", result.orderCode);
-      window.location.href = result.paymentUrl;
+      if (result.paymentForm) {
+        submitPaymentForm(result.paymentForm);
+      } else {
+        window.location.href = result.paymentUrl;
+      }
     } catch (err) {
       // Không hiển thị message chi tiết (lỗi cổng thanh toán, cấu hình, v.v.)
       // cho khách hàng — chỉ log ra console để dev tự tra, còn UI luôn chung
